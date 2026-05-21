@@ -4,6 +4,7 @@
 #endif
 
 #include "graphics-info.h"
+#include "coot-utils/coot-package-paths.hh"
 
 
 void
@@ -32,24 +33,10 @@ graphics_info_t::init() {
 
       geom_p->init_ccp4srs("srsdata"); // overridden by COOT_CCP4SRS_DIR and CCP4_LIB
 
-      // rotamer probabilitiles
-      // guess we shall rather use COOT_DATA_DIR and only as fallback PKGDATADIR?!
-      // maybe only for windows!?
-      //
-      // 20090920-PE, no, not only windows.  If they set
-      // COOT_DATA_DIR, let's use that instead of PKGDATADIR (useful
-      // for Justin Lecher and Gentoo who test before installing (and
-      // they need a way to specify the data dir (before installing
-      // it's not in PKGDATADIR)).
-      // 
-      std::string tables_dir = PKGDATADIR;
-
-      char *data_dir = getenv("COOT_DATA_DIR");
-      if (data_dir) {
-	tables_dir = data_dir;
-      }
-
-      tables_dir += "/rama-data";
+      // rotamer probability tables — resolved via coot::package_data_dir()
+      // which prefers $COOT_DATA_DIR (set by the bcoot wrapper) and falls
+      // back to the compile-time PKGDATADIR.
+      std::string tables_dir = coot::package_data_dir() + "/rama-data";
       rot_prob_tables.set_tables_dir(tables_dir);
 
       moving_atoms_asc = new atom_selection_container_t;

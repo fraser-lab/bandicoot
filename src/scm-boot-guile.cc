@@ -41,6 +41,7 @@
 #endif
 
 #include "utils/coot-utils.hh"
+#include "coot-utils/coot-package-paths.hh"
 #include "scm-boot-guile.hh"
 #include "boot-python.hh"
 #include "c-interface.h"
@@ -73,7 +74,7 @@ void inner_main(void *closure, int argc, char **argv) {
   SCM_RECORD_POSITIONS_P = 1;
 
   // this is not the right place.  We need to be in
-  std::string d1 = coot::util::append_dir_dir(PKGDATADIR, "scheme");
+  std::string d1 = coot::util::append_dir_dir(coot::package_data_dir(), "scheme");
   std::string d2;
   std::string scheme_dir = d1;
   char *e = getenv(COOT_SCHEME_DIR);

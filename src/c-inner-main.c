@@ -166,14 +166,17 @@ c_inner_main(void *closure, int argc, char** argv) {
 
   if (istat || !gui_lib) {	/* failed or env var was not defined*/
 
-/*    so that failed, let's build the hard-coded default directory and
-      stat it.  If it exists let's set gui_lib to that value. 
+/*    so that failed, let's build the default directory from
+      $COOT_DATA_DIR (or PKGDATADIR as fallback) and stat it.
 */
-    tmp_str = PKGDATADIR;
-    tmp_str = (char *) malloc (strlen(tmp_str) + 9);
-    strcpy (tmp_str, PKGDATADIR);
-    strcat (tmp_str, "/");	/* something else for Windwoes? */
-    strcat (tmp_str, "scheme");
+    {
+      const char *data_dir = getenv("COOT_DATA_DIR");
+      const char *base = (data_dir && data_dir[0]) ? data_dir : PKGDATADIR;
+      tmp_str = (char *) malloc (strlen(base) + 9);
+      strcpy (tmp_str, base);
+      strcat (tmp_str, "/");
+      strcat (tmp_str, "scheme");
+    }
     gui_lib = tmp_str;
     istat = stat(gui_lib, &buf);
 

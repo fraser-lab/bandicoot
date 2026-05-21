@@ -28,6 +28,7 @@
 
 #include "utils/coot-utils.hh"
 #include "coot-utils/coot-coord-utils.hh"
+#include "coot-utils/coot-package-paths.hh"
 
 #include "db-main.hh" // for matches_pdb_name
 #include "db-strands.hh"
@@ -43,8 +44,7 @@ coot::db_strands::db_strands() {
 
 	 // 20080403 recactivate this code
 	 // fall back to the db-main reference structures
-	 std::string d1(PKGDATADIR); // $prefix/share/coot
-	 // std::string d2 = coot::util::append_dir_dir(d1, "coot"); // no need for this
+	 std::string d1 = coot::package_data_dir(); // $prefix/share/coot
 	 std::string d3 = coot::util::append_dir_dir(d1, "reference-structures");
 	 ref_str_dir_str = d3;
 

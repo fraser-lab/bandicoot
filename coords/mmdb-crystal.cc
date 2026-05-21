@@ -34,9 +34,10 @@
 #if !defined _MSC_VER
 #include <unistd.h>
 #else
-#define PKGDATADIR "C:/coot/share"
 #define snprintf _snprintf
 #endif // _MSC_VER
+
+#include "coot-utils/coot-package-paths.hh"
 
 #include "Cartesian.h"
 
@@ -1125,9 +1126,8 @@ atom_selection_container_t read_standard_residues() {
    const char *filename = getenv(standard_env_dir.c_str());
    if (! filename) {
 
-      std::string standard_file_name = PKGDATADIR;
-      standard_file_name += "/";
-      standard_file_name += "standard-residues.pdb";
+      std::string standard_file_name =
+	 coot::package_data_dir() + "/standard-residues.pdb";
 
       struct stat buf;
       int status = stat(standard_file_name.c_str(), &buf);  

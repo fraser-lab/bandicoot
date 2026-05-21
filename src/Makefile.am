@@ -281,6 +281,7 @@ coot_fix_nomenclature_errors_SOURCES = \
 
 coot_bin_SOURCES = \
 	main.cc 		 \
+	bandicoot-version.h	 \
 	bandicoot_appkit.h	 \
 	bandicoot_appkit.mm	 \
 	atom-pull.hh		 \

@@ -41,7 +41,8 @@ pkginclude_HEADERS = peak-search.hh coot-trim.hh \
 	contacts-by-bricks.hh amp-reso.hh stack-and-pair.hh atom-tools.hh segmap.hh fast-eigens.hh strand-fragments.hh \
 	sfcalc-genmap.hh cablam-markup.hh slurp-map.hh merge-molecules.hh exp-fit.hh \
 	coot_shiftfield.h shiftfield.h fib-sphere.hh pepflip-using-difference-map.hh polar-atoms.hh \
-	fragment-container.hh map-index.hh atom-tree.hh jed-flip.hh atom-vertex.hh merge-C-and-N-terminii.hh
+	fragment-container.hh map-index.hh atom-tree.hh jed-flip.hh atom-vertex.hh merge-C-and-N-terminii.hh \
+	coot-package-paths.hh
 
 
 pkgincludedir = $(includedir)/coot/coot-utils
@@ -150,16 +151,13 @@ libcoot_map_heavy_la_LDFLAGS = $(SHARED_LDFLAGS)
 
 # lidia-core functions moved here because they use coot-utils functions
 #
-check_PROGRAMS = test-h-bonds testshelxreader test-hole test-elastic \
-		 test-spherical glyco-torsions test-tt-morph test-coot-probe test-chem-feat \
-		 test-cod-atom-types dictionary-atom-types cod-db-access \
-		 test-5-residue-fragments \
-		 make-cablam-like-stats test-cod-atom-types-from-sm-cif
+# Only programs whose source files are present in the bandicoot repo.
+# Most legacy upstream-Coot test programs were dropped from the public
+# repo; their _SOURCES/_LDADD blocks below are kept commented out for
+# reference but disabled here so `make` doesn't ask for missing files.
+check_PROGRAMS = dictionary-atom-types cod-db-access make-cablam-like-stats
 
-# wrong build order - delete from make check for now.
-# test-emma test-convolute test-coot-utils test-segmap
-
-bin_PROGRAMS = mmrrcc test-coot-utils
+bin_PROGRAMS = mmrrcc
 
 
 # test_zo_chi_table_SOURCES = test-zo-chi-table.cc

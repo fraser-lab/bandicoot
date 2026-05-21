@@ -69,6 +69,7 @@
 #include "coords/mmdb-crystal.h"
 
 #include "coot-utils/coot-map-utils.hh" // for make_rtop_orth_from()
+#include "coot-utils/coot-package-paths.hh"
 
 #include "coords/Cartesian.h"
 #include "coords/Bond_lines.h"
@@ -5268,7 +5269,7 @@ void write_restraints_cif_dictionary(const char *monomer_type, const char *file_
 #ifdef USE_PYTHON
 PyObject *get_pkgdatadir_py() {
 
-  std::string pkgdatadir = PKGDATADIR;
+  std::string pkgdatadir = coot::package_data_dir();
   return PyString_FromString(pkgdatadir.c_str());
 }
 #endif
@@ -5276,7 +5277,7 @@ PyObject *get_pkgdatadir_py() {
 #ifdef USE_GUILE
 SCM get_pkgdatadir_scm() {
 
-   std::string pkgdatadir = PKGDATADIR;
+   std::string pkgdatadir = coot::package_data_dir();
    return scm_from_locale_string(pkgdatadir.c_str());
 }
 #endif

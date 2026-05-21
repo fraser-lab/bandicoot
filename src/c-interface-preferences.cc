@@ -27,6 +27,7 @@
 #endif
 
 #include "compat/coot-sysdep.h"
+#include "coot-utils/coot-package-paths.hh"
 
 
 #ifndef HAVE_VECTOR
@@ -700,7 +701,7 @@ void save_preferences() {
   short int il;
   std::string preferences_name;
   std::string file_name;
-  std::string directory = PKGDATADIR;
+  std::string directory = coot::package_data_dir();
 
   // only save things if we didn't start with --no-startup-scripts
   //

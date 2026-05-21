@@ -63,11 +63,12 @@
 #include <sys/types.h> // for stating
 #include <sys/stat.h>
 
-#ifndef _MSC_VER 
+#ifndef _MSC_VER
 #include <unistd.h>
-#else
-#define PKGDATADIR "C:/coot/share"
 #endif
+
+#include "coot-utils/coot-package-paths.hh"
+#include "bandicoot-version.h"
 
 #include "globjects.h"
 
@@ -266,8 +267,7 @@ main (int argc, char *argv[]) {
 	 // only handles XPM, so we use a GdkPixbuf-based loader here. Scale
 	 // the source image down so the splash isn't huge.
 	 if (f == "") {
-	    std::string bs = PKGDATADIR;
-	    bs += "/pixmaps/bandicoot-splash.png";
+	    std::string bs = coot::package_pixmaps_dir() + "/bandicoot-splash.png";
 	    // Use a TOPLEVEL with no decorations + keep-above, instead of
 	    // GTK_WINDOW_POPUP, because POPUP windows on GTK-Quartz/Tahoe get
 	    // demoted in z-order shortly after they appear and end up hidden
@@ -323,8 +323,9 @@ main (int argc, char *argv[]) {
 
       std::string version_string = VERSION;
 #ifdef __APPLE__
-      std::string main_title = std::string("Bandicoot (Coot ") + version_string +
-                               ", built " __DATE__ " " __TIME__ ")";
+      std::string main_title =
+	 std::string("BANDICOOT ") + BANDICOOT_VERSION +
+	 " (Coot " + version_string + ")";
 #else
       std::string main_title = "Coot " + version_string;
 #endif
@@ -583,8 +584,7 @@ void load_gtk_resources() {
 
    // this needs to be called before gtk_init()
 
-   std::string gtkrcfile = PKGDATADIR;
-   gtkrcfile += "/cootrc";
+   std::string gtkrcfile = coot::package_data_dir() + "/cootrc";
 
    // over-ridden by user?
    char *s = getenv("COOT_RESOURCES_FILE");
@@ -604,21 +604,12 @@ void load_gtk_resources() {
 void
 setup_splash_screen() { 
 
-   // default location:
-   std::string splash_screen_pixmap_dir = PKGDATADIR;  
-   splash_screen_pixmap_dir += "/";
-   splash_screen_pixmap_dir += "pixmaps";
+   std::string splash_screen_pixmap_dir = coot::package_pixmaps_dir();
 
-   // over-ridden by user?
-   char *s = getenv("COOT_PIXMAPS_DIR");
-   if (s) {
-      splash_screen_pixmap_dir = s;
-   }
-
-   if (0) 
-      std::cout << "INFO:: splash_screen_pixmap_dir " 
+   if (0)
+      std::cout << "INFO:: splash_screen_pixmap_dir "
 		<< splash_screen_pixmap_dir << std::endl;
-   
+
    // now add splash_screen_pixmap_dir to the pixmaps_directories CList
    //
    add_pixmap_directory(splash_screen_pixmap_dir.c_str());
@@ -717,17 +708,9 @@ setup_screen_size_settings() {
 }
 
 
-void setup_application_icon(GtkWindow *window) { 
-      
-   std::string splash_screen_pixmap_dir = PKGDATADIR;  
-   splash_screen_pixmap_dir += "/";
-   splash_screen_pixmap_dir += "pixmaps";
+void setup_application_icon(GtkWindow *window) {
 
-   // over-ridden by user?
-   char *s = getenv("COOT_PIXMAPS_DIR");
-   if (s) {
-      splash_screen_pixmap_dir = s;
-   }
+   std::string splash_screen_pixmap_dir = coot::package_pixmaps_dir();
 
    // now add the application icon
    std::string app_icon_path =
@@ -862,11 +845,8 @@ void setup_symm_lib() {
 
       std::string symstring("SYMINFO=");
 
-      // using PKGDATADIR will work for those who compiler, not the
-      // binary users:
-      std::string standard_file_name = PKGDATADIR; // xxx/share/coot
-      standard_file_name += "/"; 
-      standard_file_name += "syminfo.lib";
+      std::string standard_file_name =
+	 coot::package_data_dir() + "/syminfo.lib";
 
       struct stat buf;
       int status = stat(standard_file_name.c_str(), &buf); 
@@ -903,18 +883,7 @@ void setup_rgb_reps() {
 #if 0 // this is old surface stuff. Removed from the build
    // c.f. coot::package_data_dir() which now does this wrapping for us:
    
-   // For binary installers, they use the environment variable:
-   char *env = getenv("COOT_DATA_DIR");
-
-   // Fall-back:
-   std::string standard_file_name = PKGDATADIR; // xxx/share/coot
-
-   if (env)
-      standard_file_name = env;
-
-   std::string colours_file = standard_file_name + "/";
-   std::string colours_def = "colours.def";
-   colours_file += colours_def;
+   std::string colours_file = coot::package_data_dir() + "/colours.def";
 
    struct stat buf;
    int status = stat(colours_file.c_str(), &buf); 
@@ -959,11 +928,9 @@ void check_reference_structures_dir() {
       }
    } else {
 
-      // check in the default place: pkgdatadir = $prefix/share/coot
-      std::string pkgdatadir = PKGDATADIR;
-      std::string ref_structs_dir = pkgdatadir;
-      ref_structs_dir += "/";
-      ref_structs_dir += "reference-structures";
+      // check in the default place: $COOT_DATA_DIR / $PKGDATADIR
+      std::string ref_structs_dir =
+	 coot::package_data_dir() + "/reference-structures";
       struct stat buf;
       int status = stat(ref_structs_dir.c_str(), &buf); 
       if (status != 0) { // file was not found in default location either

@@ -38,8 +38,6 @@
 #if !defined _MSC_VER
 #include <unistd.h>
 #else
-#define DATADIR "C:/coot/share"
-#define PKGDATADIR DATADIR
 // stop using these, use win-compat functions
 // #define S_ISDIR(m)  (((m) & S_IFMT) == S_IFDIR)
 // #define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)

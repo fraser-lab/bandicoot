@@ -39,6 +39,7 @@
 #include "c-interface-scm.hh"
 #include "coot-preferences.h"
 #include "utils/coot-utils.hh"
+#include "coot-utils/coot-package-paths.hh"
 
 
 // Return success status
@@ -812,15 +813,7 @@ graphics_info_t::fill_preferences_toolbar_icons(GtkWidget *preferences,
         g_print("BL ERROR:: something went wrong, icon is NULL\n");
         // try to read as filename (although then should be registered and
         // read in already, but let's try
-        std::string splash_screen_pixmap_dir = PKGDATADIR;  
-        splash_screen_pixmap_dir += "/";
-        splash_screen_pixmap_dir += "pixmaps";
-        
-        // over-ridden by user?
-        char *s = getenv("COOT_PIXMAPS_DIR");
-        if (s) {
-          splash_screen_pixmap_dir = s;
-        }
+        std::string splash_screen_pixmap_dir = coot::package_pixmaps_dir();
 
         // now add the icon
         std::string icon_path =

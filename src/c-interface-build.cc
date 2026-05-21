@@ -70,6 +70,7 @@
 #include "graphics-info.h"
 
 #include "coot-utils/coot-coord-utils.hh"
+#include "coot-utils/coot-package-paths.hh"
 #include "utils/coot-fasta.hh"
 
 #include "skeleton/BuildCas.h"
@@ -4358,10 +4359,7 @@ int find_secondary_structure_local(
 int find_nucleic_acids_local( float radius )
 {
    // check for data file
-   std::string nafile;
-   const char *cp = getenv("COOT_PREFIX");
-   if (cp) nafile = std::string(cp) + "/share/coot/nautilus_lib.pdb";
-   else    nafile = std::string(PKGDATADIR) + "/nautilus_lib.pdb";
+   std::string nafile = coot::package_data_dir() + "/nautilus_lib.pdb";
    if (!coot::file_exists(nafile)) {
       std::cout << "Ooops! Can't find nautilus data! - fail" << std::endl;
       return -1;

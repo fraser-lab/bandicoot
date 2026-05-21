@@ -31,17 +31,36 @@ different layout, build from source per [BUILD.md](BUILD.md).
    tar xf bandicoot-0.0.0.1-darwin-arm64.tar.gz
    ```
    This creates a `bandicoot-0.0.0.1/` directory with `bin/`, `lib/`,
-   `libexec/`, and `share/`.
+   `libexec/`, `share/`, and a `setup.sh` helper.
 
-2. (Optional) Add the install's `bin/` to your `PATH`:
+2. Run the one-time setup script:
    ```sh
-   export PATH="$PWD/bandicoot-0.0.0.1/bin:$PATH"
+   cd bandicoot-0.0.0.1
+   ./setup.sh
+   ```
+   This strips macOS quarantine flags, ad-hoc-signs the binaries so
+   Gatekeeper stays quiet on relaunches, registers Bandicoot with
+   Spotlight / Launchpad, and verifies the Homebrew / Miniconda
+   prerequisites above are installed. It is idempotent and never uses
+   `sudo`. Pass `--add-to-path` to also add `bandicoot-0.0.0.1/bin/` to
+   your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or
+   `~/.bash_profile` depending on your shell). The tag makes re-runs
+   idempotent and lets you find and remove the line later.
+
+3. (Optional) Add the install's `bin/` to your `PATH` manually if you
+   skipped `--add-to-path`:
+   ```sh
+   export PATH="$PWD/bin:$PATH"
    ```
 
-That's it — no relocation step is needed. Bandicoot's bundled
-binaries use `@rpath` / `@executable_path` so they resolve their own
-libraries via paths relative to the binary, wherever you put the
-tree.
+Data files (pixmaps, monomer dictionary, reference structures, GTK
+theme) are located at runtime via `COOT_DATA_DIR` (set by the `bcoot`
+wrapper) — so the install can be moved to a different directory later
+and will keep working.
+
+The bundled binaries already use `@rpath` / `@executable_path` so they
+resolve their own libraries via paths relative to the binary, wherever
+you put the tree.
 
 ## Launch
 
@@ -69,5 +88,10 @@ you launch from — clean those up if you want a fully clean removal.
   at your prefix.
 - **`dyld: Library not loaded: /opt/miniconda3/...`** — same, for
   Miniconda. Install the missing conda package.
-- **`Couldn't find pixmap file: bandicoot-splash.png`** — your extracted
-  tree is incomplete; re-extract from the tarball.
+- **A broken-image graphic appears on the splash, or "couldn't find
+  pixmap file: bandicoot-splash.png"** — the bcoot wrapper failed to
+  export `COOT_DATA_DIR` correctly. Make sure you launch through
+  `bin/bcoot` (not the bare `libexec/coot-bin`) and confirm the
+  extracted tree contains `share/coot/pixmaps/`.
+- **Spotlight / Launchpad can't find Bandicoot** — rerun `./setup.sh`;
+  the `.desktop` file is installed into `~/.local/share/applications/`.

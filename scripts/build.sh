@@ -89,6 +89,19 @@ if [ ! -d "${PREFIX}/share/themes/Raleigh" ] && \
     cp -R "${FFTW_PREFIX}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
 fi
 
+# Drop the end-user setup script + install instructions at the install
+# root so the tarball ships with them. Users extract, read INSTALL.md,
+# and run ./setup.sh once.
+if [ -f "${REPO_ROOT}/scripts/setup-install.sh" ]; then
+    cp "${REPO_ROOT}/scripts/setup-install.sh" "${PREFIX}/setup.sh"
+    chmod +x "${PREFIX}/setup.sh"
+    echo "==> copied setup.sh to ${PREFIX}/setup.sh"
+fi
+if [ -f "${REPO_ROOT}/INSTALL.md" ]; then
+    cp "${REPO_ROOT}/INSTALL.md" "${PREFIX}/INSTALL.md"
+    echo "==> copied INSTALL.md to ${PREFIX}/INSTALL.md"
+fi
+
 echo ""
 echo "Bandicoot installed in ${PREFIX}"
 echo "Launch with: ${PREFIX}/bin/bcoot"

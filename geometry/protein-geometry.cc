@@ -40,11 +40,11 @@
 #if !defined _MSC_VER
 #include <unistd.h>
 #else
-#define DATADIR "C:/coot/share"
-#define PKGDATADIR DATADIR
 #define S_ISDIR(m)  (((m) & S_IFMT) == S_IFDIR)
 #define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)
 #endif
+
+#include "coot-utils/coot-package-paths.hh"
 
 #include "clipper/core/clipper_util.h"
 
@@ -509,7 +509,7 @@ coot::protein_geometry::comp_id_to_file_name(const std::string &comp_id) const {
       char *cmld = getenv("COOT_MONOMER_LIB_DIR");
       std::string d;
       if (! cmld) {
-	 d = PKGDATADIR;
+	 d = coot::package_data_dir();
 	 d = util::append_dir_dir(d, "lib");
 	 d = util::append_dir_dir(d, "data");
 	 d = util::append_dir_dir(d, "monomers");

@@ -36,16 +36,20 @@ function check_for_no_graphics {
 }
 
 
-current_exe_dir=$(dirname $0)
+# Resolve symlinks portably so invocation via PATH (or a ~/bin shim)
+# still finds the real install root. macOS `readlink` doesn't reliably
+# support `-f` across versions, so walk the chain manually.
+unlinked_exe="$0"
+while [ -L "$unlinked_exe" ]; do
+    link_target="$(readlink "$unlinked_exe")"
+    case "$link_target" in
+        /*) unlinked_exe="$link_target" ;;
+        *)  unlinked_exe="$(dirname "$unlinked_exe")/$link_target" ;;
+    esac
+done
+unlinked_exe_dir="$(cd "$(dirname "$unlinked_exe")" 2>/dev/null && pwd)"
+COOT_PREFIX="$(dirname "$unlinked_exe_dir")"
 systype=$(uname)
-
-if [ $systype = Darwin ] ; then
-    COOT_PREFIX="$(cd "$(dirname "$current_exe_dir")" 2>/dev/null && pwd)"
-else
-    unlinked_exe=$(readlink -f $0)
-    unlinked_exe_dir=$(dirname $unlinked_exe)
-    COOT_PREFIX=$(dirname $unlinked_exe_dir)
-fi
 # echo COOT_PREFIX is $COOT_PREFIX
 
 

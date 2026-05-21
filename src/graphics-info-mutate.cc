@@ -31,8 +31,6 @@
 
 #if !defined _MSC_VER
 #include <unistd.h>
-#else
-#define PKGDATADIR "C:/coot/share"
 #endif
 
 #ifndef HAVE_STRING
