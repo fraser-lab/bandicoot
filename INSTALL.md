@@ -36,31 +36,11 @@ different layout, build from source per [BUILD.md](BUILD.md).
 2. Run the one-time setup script:
    ```sh
    cd bandicoot-0.0.0.1
-   ./setup.sh
+   ./setup.sh --add-to-path
    ```
-   This strips macOS quarantine flags, ad-hoc-signs the binaries so
-   Gatekeeper stays quiet on relaunches, registers Bandicoot with
-   Spotlight / Launchpad, and verifies the Homebrew / Miniconda
-   prerequisites above are installed. It is idempotent and never uses
-   `sudo`. Pass `--add-to-path` to also add `bandicoot-0.0.0.1/bin/` to
-   your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or
-   `~/.bash_profile` depending on your shell). The tag makes re-runs
-   idempotent and lets you find and remove the line later.
+   This script handles a few things that would otherwise make the install a lot more annoying than it is; the `--add-to-path` option adds `bandicoot-0.0.0.1/bin/` to your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or `~/.bash_profile` depending on your shell). If you don't want that to happen automatically, simply don't use the `--add-to-path` option.
 
-3. (Optional) Add the install's `bin/` to your `PATH` manually if you
-   skipped `--add-to-path`:
-   ```sh
-   export PATH="$PWD/bin:$PATH"
-   ```
-
-Data files (pixmaps, monomer dictionary, reference structures, GTK
-theme) are located at runtime via `COOT_DATA_DIR` (set by the `bcoot`
-wrapper) — so the install can be moved to a different directory later
-and will keep working.
-
-The bundled binaries already use `@rpath` / `@executable_path` so they
-resolve their own libraries via paths relative to the binary, wherever
-you put the tree.
+The install can be moved to a different folder and still work, though you would need to update the path in your `~/.zshrc` file.
 
 ## Launch
 
