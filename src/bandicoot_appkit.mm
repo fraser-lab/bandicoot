@@ -506,16 +506,23 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
         // callbacks like on_model_toolbar_*_activate still resolve.
         g_object_set_data(G_OBJECT(floater), "GladeParentKey", parent_toplevel);
 
-        // Size to roughly match the parent window's height (so all toolbar
-        // items can fit without triggering the overflow arrow at startup)
-        // and place the floater just to the right of the parent.
-        int px = 0, py = 0, pw = 0, ph = 0;
+        // Size to fill the available screen height (so every toolbar item
+        // fits without triggering the overflow arrow at startup) and wide
+        // enough that icons+text button labels render without clipping.
+        // Place the floater just to the right of the parent.
+        int px = 0, py = 0, pw = 0;
         gtk_window_get_position(GTK_WINDOW(parent_toplevel), &px, &py);
-        gtk_window_get_size(GTK_WINDOW(parent_toplevel), &pw, &ph);
-        gtk_window_set_default_size(GTK_WINDOW(floater), 220, ph > 400 ? ph : 700);
+        gtk_window_get_size(GTK_WINDOW(parent_toplevel), &pw, NULL);
+
+        GdkScreen *screen = gtk_widget_get_screen(parent_toplevel);
+        int screen_h = screen ? gdk_screen_get_height(screen) : 1000;
+        // Leave a margin for the macOS menu bar (~30px) and dock (~80px).
+        int floater_h = screen_h - 120;
+        if (floater_h < 600) floater_h = 600;
+        gtk_window_set_default_size(GTK_WINDOW(floater), 340, floater_h);
         gtk_window_move(GTK_WINDOW(floater), px + pw + 16, py);
     } else {
-        gtk_window_set_default_size(GTK_WINDOW(floater), 220, 700);
+        gtk_window_set_default_size(GTK_WINDOW(floater), 340, 900);
     }
 
     // Reparent the widget into the new floating window. gtk_widget_reparent
