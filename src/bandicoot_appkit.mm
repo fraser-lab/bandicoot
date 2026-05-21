@@ -536,3 +536,44 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
 
     gtk_widget_show_all(floater);
 }
+
+// --- Default placement for newly-realized top-level windows -----------------
+//
+// GTK-Quartz on Tahoe places windows with no explicit position in the
+// lower-left of the active screen, which feels wrong: every dialog the
+// user opens jumps to a corner instead of appearing near the click that
+// spawned it. We install one emission hook on GtkWidget's "realize"
+// signal at startup; it inspects each realized widget and, if it's a
+// GtkWindow with no explicit position-policy already set, picks a sane
+// one (center-on-parent for transient dialogs, near the mouse pointer
+// for everything else). Windows that explicitly chose a placement (e.g.
+// the splash uses GTK_WIN_POS_CENTER) are left alone.
+
+static gboolean bandicoot_window_realize_hook(GSignalInvocationHint *hint,
+                                              guint n_param_values,
+                                              const GValue *param_values,
+                                              gpointer data) {
+    if (n_param_values < 1) return TRUE;
+    GObject *obj = (GObject *)g_value_get_object(&param_values[0]);
+    if (!GTK_IS_WINDOW(obj)) return TRUE;
+
+    GtkWindow *win = GTK_WINDOW(obj);
+
+    GtkWindowPosition pos = GTK_WIN_POS_NONE;
+    g_object_get(win, "window-position", &pos, NULL);
+    if (pos != GTK_WIN_POS_NONE) return TRUE;
+
+    GtkWindow *transient_for = gtk_window_get_transient_for(win);
+    gtk_window_set_position(win, transient_for ? GTK_WIN_POS_CENTER_ON_PARENT
+                                               : GTK_WIN_POS_MOUSE);
+    return TRUE;
+}
+
+extern "C" void bandicoot_setup_window_positioning(void) {
+    guint realize_id = g_signal_lookup("realize", GTK_TYPE_WIDGET);
+    if (realize_id) {
+        g_signal_add_emission_hook(realize_id, 0,
+                                   bandicoot_window_realize_hook,
+                                   NULL, NULL);
+    }
+}

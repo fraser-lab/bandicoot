@@ -221,6 +221,11 @@ main (int argc, char *argv[]) {
       g_object_set(gtk_settings_get_default(), "gtk-menu-images", TRUE, NULL);
       // g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
       glutInit(&argc, argv);
+#ifdef __APPLE__
+      // Pick a sensible default position for every top-level window
+      // realized after this point (see bandicoot_appkit.h).
+      bandicoot_setup_window_positioning();
+#endif
    } else {
 
       // not needed from 2.36

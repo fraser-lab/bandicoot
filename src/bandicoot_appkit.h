@@ -42,6 +42,15 @@ void bandicoot_float_widget_in_window(GtkWidget *widget, const char *title);
 // shell wrapper script are background apps by default on macOS.
 void bandicoot_activate_app(void);
 
+// Install a global GTK emission hook that gives every newly-realized top-
+// level window a sane default position: GTK_WIN_POS_CENTER_ON_PARENT for
+// transient dialogs, GTK_WIN_POS_MOUSE otherwise. Windows that explicitly
+// set their own position policy (splash, etc.) are left alone. Without
+// this hook, GTK-Quartz on Tahoe places unpositioned windows in the
+// lower-left of the screen, far from whatever button spawned them.
+// Call once at startup, before any windows are realized.
+void bandicoot_setup_window_positioning(void);
+
 // Query AppKit's modifier flags directly. GTK-Quartz on Tahoe doesn't
 // populate event->state with the shift/control bits, so any code that
 // relies on event->state (e.g. shift-click for atom labeling) sees no
