@@ -408,6 +408,23 @@ main (int argc, char *argv[]) {
 	    // free of the main window's GL backing layer.
 	    bandicoot_float_widget_in_window(lookup_widget(window1, "model_toolbar"),
 	                                     "Model Tools");
+
+	    // Apply the user's preferred model-toolbar style at startup.
+	    // set_model_toolbar_style() just toggles a radio item, which only
+	    // emits "activate" if the state actually changes — so we call
+	    // gtk_menu_item_activate() directly to force the visual + button-
+	    // label updates done by the activation callback regardless of
+	    // Glade's initial radio state.
+	    {
+	       const char *mi_name;
+	       switch (graphics_info_t::model_toolbar_style_state) {
+	       case 1:  mi_name = "model_toolbar_icons1"; break;
+	       case 2:  mi_name = "model_toolbar_icons_and_text1"; break;
+	       default: mi_name = "model_toolbar_text1"; break;
+	       }
+	       GtkWidget *mi = lookup_widget(window1, mi_name);
+	       if (mi) gtk_menu_item_activate(GTK_MENU_ITEM(mi));
+	    }
 	 }
 #endif
 	 create_rot_trans_menutoolbutton_menu(window1);

@@ -228,8 +228,10 @@ short int graphics_info_t::model_toolbar_show_hide_state = 1;
 // the refinement toolbar position
 short int graphics_info_t::model_toolbar_position_state = coot::model_toolbar::RIGHT;
 
-// the refinement toolbar style
-short int graphics_info_t::model_toolbar_style_state = 1;
+// the refinement toolbar style — 1=icons, 2=icons+text, 3=text. Bandicoot
+// defaults to icons+text so button labels are visible on first launch
+// without the user having to flip a preference.
+short int graphics_info_t::model_toolbar_style_state = 2;
 
 // the main toolbar show/hide
 short int graphics_info_t::main_toolbar_show_hide_state = 1;
