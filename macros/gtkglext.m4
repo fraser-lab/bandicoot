@@ -1,0 +1,10 @@
+# AM_PATH_GTKGLEXT_1_0([MINIMUM-VERSION, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]]])
+# Check for GtkGLExt using pkg-config; sets GTKGLEXT_CFLAGS and GTKGLEXT_LIBS.
+AC_DEFUN([AM_PATH_GTKGLEXT_1_0],
+[
+  m4_ifval([$1],
+    [PKG_CHECK_MODULES([GTKGLEXT], [gtkglext-1.0 >= $1], [$2], [$3])],
+    [PKG_CHECK_MODULES([GTKGLEXT], [gtkglext-1.0], [$2], [$3])])
+  AC_SUBST([GTKGLEXT_CFLAGS])
+  AC_SUBST([GTKGLEXT_LIBS])
+])
