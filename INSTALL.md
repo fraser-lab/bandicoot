@@ -55,8 +55,6 @@ or, with `PATH` set:
 bcoot
 ```
 
-The Bandicoot splash should appear for ~2.5 s, then the main window.
-
 ## Uninstall
 
 Delete the extracted directory. Bandicoot writes its own runtime files
