@@ -605,6 +605,49 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     // is the simplest way to make those installs read a fresh
     // configuration instead of getting a toolbar populated with stale
     // identifiers that no longer resolve.
+    // ---- Schema-version migration ----
+    //
+    // Bandicoot's toolbar identifier scheme has churned during v0.0.0.2
+    // development (widget-class-name keys → indexed keys, etc.). When the
+    // identifier scheme changes, any saved NSToolbar configuration in
+    // NSUserDefaults from a prior version becomes invalid: macOS may
+    // restore a stale layout that references identifiers the new code
+    // doesn't recognise, producing a toolbar with mostly-missing items.
+    //
+    // To migrate cleanly we stamp a schema-version key into defaults each
+    // time install_native_toolbar runs. If the saved version doesn't
+    // match BANDICOOT_TOOLBAR_SCHEMA below, we delete every
+    // "NSToolbar Configuration bandicoot.*" entry so the next NSToolbar
+    // alloc starts fresh and applies our defaults. Bump the schema
+    // integer whenever the catalog's identifier format changes.
+    static const int BANDICOOT_TOOLBAR_SCHEMA = 1;
+    {
+        NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+        NSInteger stored = [ud integerForKey:@"BandicootToolbarSchema"];
+
+        FILE *log2 = fopen("/tmp/bandicoot-toolbar.log", "a");
+        if (!log2) log2 = stderr;
+        fprintf(log2, "[bandicoot-toolbar] schema stored=%ld current=%d\n",
+                (long)stored, BANDICOOT_TOOLBAR_SCHEMA);
+
+        if (stored != BANDICOOT_TOOLBAR_SCHEMA) {
+            // Migration: wipe every NSToolbar Configuration entry that
+            // points at the Bandicoot main toolbar (v1, v2, …).
+            NSDictionary *all = [ud dictionaryRepresentation];
+            for (NSString *k in [all allKeys]) {
+                if ([k hasPrefix:@"NSToolbar Configuration bandicoot."]) {
+                    fprintf(log2, "[bandicoot-toolbar] migration: removing '%s'\n",
+                            [k UTF8String]);
+                    [ud removeObjectForKey:k];
+                }
+            }
+            [ud setInteger:BANDICOOT_TOOLBAR_SCHEMA forKey:@"BandicootToolbarSchema"];
+            [ud synchronize];
+        }
+        fflush(log2);
+        if (log2 != stderr) fclose(log2);
+    }
+
     NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"bandicoot.main.v2"];
     toolbar.delegate = delegate;
     toolbar.displayMode = NSToolbarDisplayModeIconAndLabel;
