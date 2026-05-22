@@ -495,6 +495,12 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
     GtkWidget *floater = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(floater), title ? title : "Tools");
     gtk_window_set_resizable(GTK_WINDOW(floater), TRUE);
+    // Keep the sidebar floating above other Bandicoot windows so users
+    // can visually "dock" it against the main window's edge without
+    // losing it behind the main window on subsequent clicks. This is
+    // separate from transient_for (which would also group window-manager
+    // operations like move/minimize — we want stay-on-top only).
+    gtk_window_set_keep_above(GTK_WINDOW(floater), TRUE);
 
     if (parent_toplevel && GTK_IS_WINDOW(parent_toplevel)) {
         // Deliberately NOT calling gtk_window_set_transient_for() here.
