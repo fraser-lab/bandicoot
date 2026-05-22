@@ -497,8 +497,13 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
     gtk_window_set_resizable(GTK_WINDOW(floater), TRUE);
 
     if (parent_toplevel && GTK_IS_WINDOW(parent_toplevel)) {
-        gtk_window_set_transient_for(GTK_WINDOW(floater),
-                                     GTK_WINDOW(parent_toplevel));
+        // Deliberately NOT calling gtk_window_set_transient_for() here.
+        // On GTK-Quartz, transient windows inherit the parent's window-
+        // manager grouping, which makes the sidebar move/minimize in
+        // lockstep with the main window. We want the sidebar to be a
+        // fully-independent NSWindow that the user can position freely.
+        // The widget-callback hookup below (via GladeParentKey) is
+        // independent of transient_for and gives us what we need.
 
         // Coot's patched lookup_widget consults a "GladeParentKey" pointer
         // when a toplevel doesn't itself have the named hookup. Setting it
