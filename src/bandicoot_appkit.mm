@@ -506,18 +506,17 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
         // callbacks like on_model_toolbar_*_activate still resolve.
         g_object_set_data(G_OBJECT(floater), "GladeParentKey", parent_toplevel);
 
-        // Size the floater to match the parent window's height so the two
-        // windows pair visually, and wide enough that icons+text button
-        // labels render without clipping. Place the floater just to the
-        // right of the parent.
-        int px = 0, py = 0, pw = 0, ph = 0;
+        // Tentative default size — width wide enough for icons+text
+        // labels; height is set properly below from the toolbar's own
+        // natural requisition after show. Position just to the right
+        // of the parent window.
+        int px = 0, py = 0, pw = 0;
         gtk_window_get_position(GTK_WINDOW(parent_toplevel), &px, &py);
-        gtk_window_get_size(GTK_WINDOW(parent_toplevel), &pw, &ph);
-        if (ph < 600) ph = 600;
-        gtk_window_set_default_size(GTK_WINDOW(floater), 340, ph);
+        gtk_window_get_size(GTK_WINDOW(parent_toplevel), &pw, NULL);
+        gtk_window_set_default_size(GTK_WINDOW(floater), 340, 600);
         gtk_window_move(GTK_WINDOW(floater), px + pw + 16, py);
     } else {
-        gtk_window_set_default_size(GTK_WINDOW(floater), 340, 900);
+        gtk_window_set_default_size(GTK_WINDOW(floater), 340, 600);
     }
 
     // Reparent the widget into the new floating window. gtk_widget_reparent
@@ -530,6 +529,17 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
                      G_CALLBACK(gtk_widget_hide_on_delete), NULL);
 
     gtk_widget_show_all(floater);
+
+    // After show, GTK has computed the natural size of every toolitem.
+    // Resize the floater to match: width 340 px (room for icons+text
+    // labels), height = the reparented widget's natural height + a
+    // small bottom buffer so the last tool item isn't flush with the
+    // window edge.
+    GtkRequisition req = {0, 0};
+    gtk_widget_size_request(widget, &req);
+    if (req.height > 0) {
+        gtk_window_resize(GTK_WINDOW(floater), 340, req.height + 32);
+    }
 }
 
 // --- Default placement for newly-realized top-level windows -----------------
