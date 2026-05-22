@@ -11,30 +11,16 @@ from source instead, see [BUILD.md](BUILD.md).
   ```sh
   brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
   ```
-- Miniconda installed at `/opt/miniconda3` with the Coot scientific
-  libraries:
-  ```sh
-  conda install --override-channels -c bioconda -c conda-forge \
-    clipper libccp4 mmdb2 ssm
-  ```
-  `bioconda/clipper` 2.1.20180802 is the CCP4 crystallography library;
-  it ships all the `libclipper-*.2.dylib` files Bandicoot links against
-  in a single package. (It is unrelated to the conda-forge "clipper"
-  CLIP-seq Python tool.) `--override-channels` bypasses the Anaconda
-  default channels (`pkgs/main`, `pkgs/r`), which now require Terms-of-
-  Service acceptance and will otherwise abort a non-interactive install.
 
-  If you don't already have Miniconda at that exact path:
-  ```sh
-  curl -fsSL -o /tmp/miniconda.sh \
-    https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh
-  sudo mkdir -p /opt/miniconda3 && sudo chown "$USER":staff /opt/miniconda3
-  bash /tmp/miniconda.sh -b -u -p /opt/miniconda3
-  ```
+That's the entire runtime requirement. The Coot scientific libraries
+(clipper, mmdb2, ssm, ccp4c, fftw2, libc++) are bundled inside the
+tarball — you do **not** need to install them via conda. Miniconda is
+only required if you intend to rebuild Bandicoot from source against
+the same clipper / mmdb / ssm versions.
 
-The prebuilt binary expects Homebrew and Miniconda at those exact
-paths because their dependency references are absolute. If you need a
-different layout, build from source per [BUILD.md](BUILD.md).
+The prebuilt binary expects Homebrew at `/opt/homebrew` because
+homebrew dependency references are absolute. If you need a different
+layout, build from source per [BUILD.md](BUILD.md).
 
 ## Install
 
@@ -48,11 +34,31 @@ different layout, build from source per [BUILD.md](BUILD.md).
 2. Run the one-time setup script:
    ```sh
    cd bandicoot-0.0.0.1
-   ./setup.sh --add-to-path
+   ./setup.sh
    ```
-   This script handles a few things that would otherwise make the install a lot more annoying than it is; the `--add-to-path` option adds `bandicoot-0.0.0.1/bin/` to your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or `~/.bash_profile` depending on your shell). If you don't want that to happen automatically, simply don't use the `--add-to-path` option.
+   This strips macOS quarantine flags, ad-hoc-signs the binaries so
+   Gatekeeper stays quiet on relaunches, registers Bandicoot with
+   Spotlight / Launchpad, and verifies the Homebrew / Miniconda
+   prerequisites above are installed. It is idempotent and never uses
+   `sudo`. Pass `--add-to-path` to also add `bandicoot-0.0.0.1/bin/` to
+   your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or
+   `~/.bash_profile` depending on your shell). The tag makes re-runs
+   idempotent and lets you find and remove the line later.
 
-The install can be moved to a different folder and still work, though you would need to update the path in your `~/.zshrc` file.
+3. (Optional) Add the install's `bin/` to your `PATH` manually if you
+   skipped `--add-to-path`:
+   ```sh
+   export PATH="$PWD/bin:$PATH"
+   ```
+
+Data files (pixmaps, monomer dictionary, reference structures, GTK
+theme) are located at runtime via `COOT_DATA_DIR` (set by the `bcoot`
+wrapper) — so the install can be moved to a different directory later
+and will keep working.
+
+The bundled binaries already use `@rpath` / `@executable_path` so they
+resolve their own libraries via paths relative to the binary, wherever
+you put the tree.
 
 ## Launch
 
@@ -78,10 +84,9 @@ you launch from — clean those up if you want a fully clean removal.
   Homebrew package isn't installed, or Homebrew is at a non-standard
   prefix. Install the missing package, or rebuild from source pointed
   at your prefix.
-- **`dyld: Library not loaded: /opt/miniconda3/lib/libclipper-...`** —
-  install `bioconda/clipper`. For `libccp4c` → `bioconda/libccp4`; for
-  `libmmdb2` → `bioconda/mmdb2`; for `libssm` → `bioconda/ssm`. All
-  four come from the requirements command above.
+- **`dyld: Library not loaded: @rpath/libclipper-...`** — the bundled
+  copy of that library is missing from your extracted tree. Re-extract
+  the tarball; do not move individual files out of `lib/`.
 - **A broken-image graphic appears on the splash, or "couldn't find
   pixmap file: bandicoot-splash.png"** — the bcoot wrapper failed to
   export `COOT_DATA_DIR` correctly. Make sure you launch through

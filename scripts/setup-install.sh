@@ -9,8 +9,9 @@
 #      binary on first launch.
 #   2. Ad-hoc-codesigns the Mach-O files so Gatekeeper sees a (locally)
 #      valid signature instead of an unsigned binary.
-#   3. Checks Homebrew + Miniconda prerequisites and reports clearly if
-#      anything is missing.
+#   3. Checks Homebrew prerequisites and reports clearly if any are
+#      missing. (Clipper / mmdb2 / ssm / fftw2 ship inside the tarball
+#      now, so Miniconda is no longer a runtime dependency.)
 #   4. Installs .desktop / appdata.xml into ~/.local/share/applications/
 #      so Spotlight / Launchpad can find Bandicoot.
 #   5. Optionally adds the install's bin/ to PATH by writing a tagged
@@ -130,44 +131,10 @@ else
     fi
 fi
 
-echo "$ARROW Checking Miniconda at /opt/miniconda3..."
-CONDA_PREFIX="/opt/miniconda3"
-REQUIRED_CONDA="clipper-cif clipper-contrib clipper-core clipper-ccp4 \
-                clipper-mmdb clipper-minimol clipper-phs clipper-cns \
-                mmdb2 ssm"
-if [ ! -d "$CONDA_PREFIX/lib" ]; then
-    echo "    $WARN Miniconda lib dir not found at $CONDA_PREFIX/lib" >&2
-    echo "      Install Miniconda from https://docs.conda.io/, then:" >&2
-    echo "        conda install -c conda-forge $REQUIRED_CONDA" >&2
-    note_problem
-else
-    # Bandicoot dynamically loads lib<pkg>.dylib at runtime, so the
-    # check is "is the dylib physically on disk", not "is conda's package
-    # database aware of it". Some clipper/mmdb installs land the libs at
-    # /opt/miniconda3/lib without a tracked conda package (e.g. installed
-    # into a different env, or copied in by hand). Prefer the file check.
-    MISSING_CONDA=""
-    INSTALLED_LIST=""
-    if [ -x "$CONDA_PREFIX/bin/conda" ]; then
-        INSTALLED_LIST="$("$CONDA_PREFIX/bin/conda" list 2>/dev/null | awk '{print $1}')"
-    fi
-    for pkg in $REQUIRED_CONDA; do
-        if [ -f "$CONDA_PREFIX/lib/lib${pkg}.dylib" ]; then
-            continue   # dylib present on disk — good enough
-        fi
-        if echo "$INSTALLED_LIST" | grep -qx "$pkg"; then
-            continue   # tracked by conda — good enough
-        fi
-        MISSING_CONDA="$MISSING_CONDA $pkg"
-    done
-    if [ -n "$MISSING_CONDA" ]; then
-        echo "    $WARN missing conda packages (no lib<pkg>.dylib found):$MISSING_CONDA" >&2
-        echo "      To install:  conda install -c conda-forge$MISSING_CONDA" >&2
-        note_problem
-    else
-        echo "    $CHECK all required conda libraries present"
-    fi
-fi
+# clipper / mmdb2 / ssm / ccp4c / fftw2 / libc++ are now bundled into
+# the install tree (lib/), so this script no longer needs to verify
+# that the user has them installed via conda. Miniconda is still the
+# build environment for those libraries, but end users don't need it.
 
 # ----------------------------------------------------------------------
 # 4. .desktop + appdata.xml in user-local applications dir

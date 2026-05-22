@@ -65,6 +65,12 @@ make install
 echo "==> make_relocatable.sh ${PREFIX}"
 "${REPO_ROOT}/scripts/make_relocatable.sh" "${PREFIX}"
 
+# Copy clipper / mmdb2 / ssm / ccp4c / fftw2 / libc++ out of the conda
+# prefix into the install tree so the tarball stands alone — users don't
+# need to install those packages via conda after extracting.
+echo "==> bundle_conda_deps.sh ${PREFIX}"
+"${REPO_ROOT}/scripts/bundle_conda_deps.sh" "${PREFIX}" "${CONDA_PREFIX}"
+
 # Add the bcoot symlink (the wrapper computes its prefix from $0's
 # location, so a symlink in the same bin dir works).
 ln -sf coot "${PREFIX}/bin/bcoot"
