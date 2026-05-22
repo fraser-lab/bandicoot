@@ -1609,7 +1609,7 @@ gl_extras(GtkWidget* vbox1, short int try_stereo_flag) {
 	if (screen) {
 	   int sw = gdk_screen_get_width(screen);
 	   int sh = gdk_screen_get_height(screen);
-	   win_w = sw / 3;
+	   win_w = sw / 4;
 	   win_h = sh / 2;
 	   if (win_w < 600) win_w = 600;
 	   if (win_h < 500) win_h = 500;

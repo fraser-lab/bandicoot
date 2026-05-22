@@ -528,17 +528,36 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
     g_signal_connect(floater, "delete-event",
                      G_CALLBACK(gtk_widget_hide_on_delete), NULL);
 
+    // Disable the toolbar's overflow chevron BEFORE size_request, so
+    // GTK doesn't budget the toolbar's height around the chevron's
+    // collapse behaviour. With show-arrow off, every item is always
+    // visible — which is what we want for a dedicated tool window.
+    if (GTK_IS_TOOLBAR(widget)) {
+        gtk_toolbar_set_show_arrow(GTK_TOOLBAR(widget), FALSE);
+    }
+
     gtk_widget_show_all(floater);
 
-    // After show, GTK has computed the natural size of every toolitem.
-    // Resize the floater to match: width 340 px (room for icons+text
-    // labels), height = the reparented widget's natural height + a
-    // small bottom buffer so the last tool item isn't flush with the
-    // window edge.
-    GtkRequisition req = {0, 0};
-    gtk_widget_size_request(widget, &req);
-    if (req.height > 0) {
-        gtk_window_resize(GTK_WINDOW(floater), 340, req.height + 32);
+    // Sum the natural heights of the toolbar's individual children to
+    // get the total height needed when every item is visible.
+    // gtk_widget_size_request() on the GtkToolbar itself returns its
+    // *minimum* (just one item + chevron) on GTK-Quartz — useless here.
+    // Walking the children avoids that.
+    int natural_h = 0;
+    if (GTK_IS_CONTAINER(widget)) {
+        GList *kids = gtk_container_get_children(GTK_CONTAINER(widget));
+        for (GList *l = kids; l; l = l->next) {
+            GtkWidget *child = GTK_WIDGET(l->data);
+            GtkRequisition cr = {0, 0};
+            gtk_widget_size_request(child, &cr);
+            natural_h += cr.height;
+        }
+        g_list_free(kids);
+    }
+    if (natural_h > 0) {
+        // + 32 px buffer below the last item so it isn't flush with
+        // the window chrome, and a small allowance for the title bar.
+        gtk_window_resize(GTK_WINDOW(floater), 340, natural_h + 48);
     }
 }
 
