@@ -619,3 +619,51 @@ extern "C" void bandicoot_setup_window_positioning(void) {
                                    NULL, NULL);
     }
 }
+
+// --- Raise newly-mapped top-level windows to the front ---------------------
+//
+// Many Coot dialogs are cached: the first invocation creates the widget,
+// subsequent invocations call gtk_widget_show() on the same hidden window.
+// On GTK-Quartz/Tahoe, showing a previously-hidden window doesn't raise
+// it — it pops back into whatever z-order slot it last had, which is
+// usually behind the main window. Dialogs like "Accept Refinement?"
+// then go invisible on every refinement after the first.
+//
+// gtk_window_present() is the cross-platform fix in theory, but GTK 2's
+// Quartz backend doesn't reliably re-order the NSWindow either. We hook
+// the "map" signal (fires every time a window goes from unmapped to
+// mapped, including re-shows) and use AppKit directly to bring the
+// NSWindow forward.
+
+static gboolean bandicoot_window_map_hook(GSignalInvocationHint *hint,
+                                          guint n_param_values,
+                                          const GValue *param_values,
+                                          gpointer data) {
+    if (n_param_values < 1) return TRUE;
+    GObject *obj = (GObject *)g_value_get_object(&param_values[0]);
+    if (!GTK_IS_WINDOW(obj)) return TRUE;
+
+    GdkWindow *gdk_win = gtk_widget_get_window(GTK_WIDGET(obj));
+    if (!gdk_win) return TRUE;
+
+    NSWindow *ns_win = gdk_quartz_window_get_nswindow(gdk_win);
+    if (!ns_win) return TRUE;
+
+    // orderFront: raises without stealing keyboard focus. Use
+    // makeKeyAndOrderFront: if you want the window to also become
+    // focused — but for dialogs we usually want them visible but not
+    // necessarily key (e.g. a refinement-accept dialog shouldn't steal
+    // typing focus from a search box the user just opened).
+    [ns_win orderFront:nil];
+
+    return TRUE;
+}
+
+extern "C" void bandicoot_setup_window_raising(void) {
+    guint map_id = g_signal_lookup("map", GTK_TYPE_WIDGET);
+    if (map_id) {
+        g_signal_add_emission_hook(map_id, 0,
+                                   bandicoot_window_map_hook,
+                                   NULL, NULL);
+    }
+}

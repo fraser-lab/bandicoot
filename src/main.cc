@@ -223,8 +223,11 @@ main (int argc, char *argv[]) {
       glutInit(&argc, argv);
 #ifdef __APPLE__
       // Pick a sensible default position for every top-level window
-      // realized after this point (see bandicoot_appkit.h).
+      // realized after this point, and raise every newly-mapped window
+      // to the front (fixes cached-dialog re-show z-order). See
+      // bandicoot_appkit.h.
       bandicoot_setup_window_positioning();
+      bandicoot_setup_window_raising();
 #endif
    } else {
 

@@ -51,6 +51,15 @@ void bandicoot_activate_app(void);
 // Call once at startup, before any windows are realized.
 void bandicoot_setup_window_positioning(void);
 
+// Install a global GTK emission hook that raises every top-level window
+// to the front when it's mapped to the display. Fixes the cached-dialog
+// re-show bug where Coot's cached widgets (e.g. "Accept Refinement?")
+// pop back into the stale z-order slot they had last time — behind the
+// main window — instead of coming forward. Uses AppKit's [NSWindow
+// orderFront:] directly because GTK 2's Quartz backend doesn't reliably
+// re-order NSWindows on its own. Call once at startup, after gtk_init().
+void bandicoot_setup_window_raising(void);
+
 // Query AppKit's modifier flags directly. GTK-Quartz on Tahoe doesn't
 // populate event->state with the shift/control bits, so any code that
 // relies on event->state (e.g. shift-click for atom labeling) sees no
