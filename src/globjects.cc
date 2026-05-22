@@ -1599,9 +1599,23 @@ gl_extras(GtkWidget* vbox1, short int try_stereo_flag) {
 // 				     gl_context_y_size);
 
 	GtkWindow *window1 = GTK_WINDOW(lookup_widget(vbox1,"window1"));
-	gtk_window_set_default_size(window1,
-				    n_contexts * gl_context_x_size,
-				    n_contexts * gl_context_y_size);
+	// Default to a generously-sized main window — leave room for the
+	// floating Model Tools sidebar (~340 px) to its right plus a small
+	// margin, and a margin top/bottom for the macOS menu bar and dock.
+	// Falls back to the historic GL-context-sized window if the screen
+	// can't be queried.
+	int win_w = n_contexts * gl_context_x_size;
+	int win_h = n_contexts * gl_context_y_size;
+	GdkScreen *screen = gtk_widget_get_screen(GTK_WIDGET(window1));
+	if (screen) {
+	   int sw = gdk_screen_get_width(screen);
+	   int sh = gdk_screen_get_height(screen);
+	   win_w = sw - 340 - 80;     // sidebar width + margin
+	   win_h = sh - 120;          // menu bar + dock margin
+	   if (win_w < 800) win_w = 800;
+	   if (win_h < 600) win_h = 600;
+	}
+	gtk_window_set_default_size(window1, win_w, win_h);
 
      }
 
