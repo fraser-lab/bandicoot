@@ -511,41 +511,107 @@ static NSArray<NSString *> *catalog_gtk_toolbar(GtkWidget *gtk_toolbar,
     return order;
 }
 
+// Look up an icon file under $COOT_PIXMAPS_DIR / $COOT_DATA_DIR/pixmaps,
+// fall back to nil if the file doesn't exist. Lets us reference svg/png
+// icons by basename — same convention as Coot's existing pixmap lookups.
+static NSImage *image_from_pixmaps_dir(const char *basename) {
+    if (!basename || !*basename) return nil;
+    const char *dir = getenv("COOT_PIXMAPS_DIR");
+    char path[1024];
+    if (dir && *dir) {
+        snprintf(path, sizeof(path), "%s/%s", dir, basename);
+    } else {
+        const char *data = getenv("COOT_DATA_DIR");
+        if (!data || !*data) return nil;
+        snprintf(path, sizeof(path), "%s/pixmaps/%s", data, basename);
+    }
+    NSString *p = [NSString stringWithUTF8String:path];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:p]) return nil;
+    return [[NSImage alloc] initWithContentsOfFile:p];
+}
+
+// Table-driven catalog of Bandicoot-specific tool buttons. Each row is
+// one toolbar item: identifier-suffix, display label, Python command to
+// run on click, and the icon file basename (looked up under
+// share/coot/pixmaps/). Sourced from python/coot_toolbuttons.py's
+// list_of_toolbar_functions() — that lists everything Coot's old
+// "Toolbar Selection" dialog could add. We hardcode the subset that's
+// genuinely useful, since Python isn't initialised yet at toolbar-
+// install time.
+//
+// Special-cased: auto_open_mtz dispatches to a C callback (the Coot
+// menu handler) rather than a Python command — it's recognised by
+// having the python_cmd field be NULL.
+struct bandicoot_extra {
+    const char *ident_suffix;   // appended to "bandicoot.extra."
+    const char *label;
+    const char *python_cmd;     // NULL → auto_open_mtz special case
+    const char *icon_basename;  // file under share/coot/pixmaps/
+};
+
+static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
+    // Bandicoot's own File-menu shortcut.
+    {"auto_open_mtz",   "Auto-open MTZ",    NULL,                                          NULL},
+
+    // Refinement extensions (python/fitting.py, python/coot_toolbuttons.py)
+    {"sphere_refine",         "Sphere Refine",         "sphere_refine()",        "refine-1.svg"},
+    {"sphere_refine_plus",    "Sphere Refine +",       "sphere_refine_plus()",   "refine-1.svg"},
+    {"tandem_refine",         "Tandem Refine",         "refine_tandem_residues()", "refine-1.svg"},
+    {"sphere_regularize",     "Sphere Regularize",     "sphere_regularize()",    "regularize-1.svg"},
+    {"sphere_regularize_plus","Sphere Regularize +",   "sphere_regularize_plus()","regularize-1.svg"},
+    {"refine_residue",        "Refine Residue",        "refine_active_residue()","refine-1.svg"},
+    {"backrub_toggle",        "Backrub Rotamers",      "toggle_backrub_rotamers()","auto-fit-rotamer.svg"},
+    {"repeat_refine_zone",    "Repeat Refine Zone",    "repeat_refine_zone()",   "rrz.svg"},
+    {"cis_trans",             "Cis ↔ Trans",           "do_cis_trans_conversion_setup(1)","flip-peptide.svg"},
+
+    // Validation
+    {"update_atom_overlaps",  "Update Atom Overlaps",  "atom_overlaps_for_this_model()","auto-fit-rotamer.svg"},
+    {"interactive_dots",      "Interactive Dots",      "toggle_interactive_probe_dots()","probe-clash.svg"},
+    {"local_probe_dots",      "Local Probe Dots",      "probe_local_sphere_active_atom()","probe-clash.svg"},
+
+    // Building
+    {"undo_molecule_chooser", "Choose Undo Molecule",  "show_set_undo_molecule_chooser()","undo-1.svg"},
+    {"find_waters",           "Find Waters",           "wrapped_create_find_waters_dialog()","add-water.svg"},
+    {"split_water",           "Split Water",           "split_active_water()",   "add-water.svg"},
+    {"build_na",              "Build NA",              "find_nucleic_acids_local(6.0)","dna.svg"},
+    {"ligand_builder",        "Ligand Builder",        "start_ligand_builder_gui()","go-to-ligand.svg"},
+
+    // Display
+    {"full_screen_toggle",    "Full Screen",           "toggle_full_screen()",   "reset-view-32.svg"},
+    {"hydrogen_toggle",       "Toggle Hydrogens",      "toggle_hydrogen_display()","delete.svg"},
+};
+static const size_t BANDICOOT_EXTRAS_COUNT =
+    sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);
+
 // Add Bandicoot-specific extras to the catalog: items that aren't backed
-// by an existing GtkToolButton in either toolbar. Each one dispatches via
-// either a Python command string or a hardcoded callback (auto-open MTZ).
+// by an existing GtkToolButton in either toolbar. Each row in
+// BANDICOOT_EXTRAS becomes one NSToolbarItem dispatched via either a
+// Python command string or (for Auto-open MTZ) a hardcoded C callback.
 static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
                                      NSImage *fallback_icon) {
-    // --- Auto-open MTZ
-    {
-        NSString *ident = @"bandicoot.extra.auto_open_mtz";
+    for (size_t i = 0; i < BANDICOOT_EXTRAS_COUNT; ++i) {
+        const struct bandicoot_extra *e = &BANDICOOT_EXTRAS[i];
+        NSString *ident = [NSString stringWithFormat:@"bandicoot.extra.%s",
+                           e->ident_suffix];
         NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
-        [item setLabel:@"Auto-open MTZ"];
-        [item setPaletteLabel:@"Auto-open MTZ"];
+        [item setLabel:[NSString stringWithUTF8String:e->label]];
+        [item setPaletteLabel:[NSString stringWithUTF8String:e->label]];
         [item setTarget:[BandicootToolbarTarget shared]];
         [item setAction:@selector(dispatch:)];
-        if (fallback_icon) [item setImage:fallback_icon];
-        objc_setAssociatedObject(item, &kAutoOpenMtzKey,
-                                 @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [delegate.allowedIdentifiers addObject:ident];
-        delegate.itemsById[ident] = item;
-    }
 
-    // --- Sphere Refine (Python: sphere_refine() from fitting.py, radius 4.5 Å)
-    {
-        NSString *ident = @"bandicoot.extra.sphere_refine";
-        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
-        [item setLabel:@"Sphere Refine"];
-        [item setPaletteLabel:@"Sphere Refine"];
-        [item setTarget:[BandicootToolbarTarget shared]];
-        [item setAction:@selector(dispatch:)];
-        // Reuse the refine-1 icon if it's been registered in the icon cache;
-        // otherwise fall back to whatever icon we have at hand.
-        NSImage *icon = [NSImage imageNamed:@"refine-1"];
+        NSImage *icon = image_from_pixmaps_dir(e->icon_basename);
         [item setImage:icon ? icon : fallback_icon];
-        objc_setAssociatedObject(item, &kPythonCmdKey,
-                                 @"sphere_refine()",
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        if (e->python_cmd) {
+            objc_setAssociatedObject(item, &kPythonCmdKey,
+                                     [NSString stringWithUTF8String:e->python_cmd],
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        } else {
+            // Special case: Auto-open MTZ dispatches to a C callback.
+            objc_setAssociatedObject(item, &kAutoOpenMtzKey,
+                                     @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+
         [delegate.allowedIdentifiers addObject:ident];
         delegate.itemsById[ident] = item;
     }
