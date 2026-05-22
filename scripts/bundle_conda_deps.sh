@@ -38,6 +38,7 @@ TOPLEVEL_LIBS=(
     libssm.2.dylib
     libccp4c.0.dylib
     libc++.1.dylib
+    libintl.8.dylib
 )
 
 # FFTW2 single-precision lives in a sub-prefix under conda (artefact of
@@ -107,6 +108,46 @@ for lib in "${ALL_BUNDLED[@]}"; do
         install_name_tool -delete_rpath "@loader_path/../../lib/" \
                           "$path" 2>/dev/null || break
     done
+done
+
+echo "==> rewriting remaining external @rpath refs to absolute paths"
+
+# Conda-built coot-bin records @rpath/libcurl.4.dylib, libsqlite3.dylib,
+# libiconv.2.dylib as its dep paths because the conda libraries set
+# their install_names that way. With the conda rpath removed those
+# would fail dyld lookup, and bundling libcurl's transitive closure
+# (openssl, ssh2, idn2, brotli, zstd, nghttp2, kerberos, ...) is more
+# weight than is warranted. macOS ships system libcurl / libsqlite3 /
+# libiconv in the dyld cache at /usr/lib/<x>, which are ABI-stable and
+# the right call here.
+EXTERNAL_REWRITES=(
+    "libcurl.4.dylib=/usr/lib/libcurl.4.dylib"
+    "libsqlite3.dylib=/usr/lib/libsqlite3.dylib"
+    "libiconv.2.dylib=/usr/lib/libiconv.2.dylib"
+)
+
+rewrite_external_in() {
+    local file="$1"
+    file -b "$file" 2>/dev/null | grep -q "Mach-O" || return 0
+    chmod u+w "$file" 2>/dev/null
+    for pair in "${EXTERNAL_REWRITES[@]}"; do
+        local from="${pair%%=*}"
+        local to="${pair#*=}"
+        install_name_tool -change "@rpath/$from" "$to" "$file" 2>/dev/null || true
+    done
+}
+
+for d in libexec bin; do
+    [ -d "$PREFIX/$d" ] || continue
+    while IFS= read -r f; do rewrite_external_in "$f"; done \
+        < <(find "$PREFIX/$d" -type f -perm -u+x)
+done
+
+# Apply to bundled dylibs too — libintl depends on @rpath/libiconv.2.dylib,
+# and various libcoot-*.dylib may pull in libsqlite3 / libcurl.
+for dylib in "$PREFIX"/lib/*.dylib; do
+    [ -f "$dylib" ] || continue
+    rewrite_external_in "$dylib"
 done
 
 echo "==> dropping conda rpath from binaries in libexec/ and bin/"
