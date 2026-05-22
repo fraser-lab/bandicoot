@@ -448,21 +448,22 @@ static NSImage *image_for_tool_button(GtkToolButton *tb) {
     return nil;
 }
 
-// Build one NSToolbarItem from a GtkToolButton and add it to the delegate's
-// palette catalog. ident_prefix is "main." or "model." so identifiers stay
-// stable and don't collide between toolbars. Returns the assigned identifier,
-// or nil if the button can't be catalogued.
+// Build one NSToolbarItem from a GtkToolButton at a known position in its
+// parent toolbar and add it to the delegate's palette catalog. The ident
+// is `bandicoot.<prefix>.<index>` — the index comes from the child's
+// position in the Glade-XML-defined toolbar, which is stable across
+// builds. (gtk_widget_get_name() can't be used as the ID base: libglade
+// stores Coot's widget names as g_object_data on the toplevel rather than
+// calling gtk_widget_set_name, so gtk_widget_get_name() returns the class
+// name "GtkToolButton" for every tool button — and we'd dedup them all.)
 static NSString *catalog_gtk_tool_button(GtkToolButton *tb,
                                          NSString *ident_prefix,
+                                         int index,
                                          BandicootToolbarDelegate *delegate) {
     if (!tb || !GTK_IS_TOOL_BUTTON(tb)) return nil;
 
-    // Use the GtkToolButton's widget name as the stable ID base.
-    const char *wname = gtk_widget_get_name(GTK_WIDGET(tb));
-    if (!wname || !*wname) return nil;
-    NSString *ident = [NSString stringWithFormat:@"bandicoot.%@%s",
-                       ident_prefix, wname];
-    if (delegate.itemsById[ident]) return ident;   // already catalogued
+    NSString *ident = [NSString stringWithFormat:@"bandicoot.%@.%d",
+                       ident_prefix, index];
 
     const char *label_c = gtk_tool_button_get_label(tb);
     NSString *label = (label_c && *label_c)
@@ -490,7 +491,7 @@ static NSString *catalog_gtk_tool_button(GtkToolButton *tb,
 }
 
 // Walk a GtkToolbar's children, cataloguing every GtkToolButton found.
-// Returns an array of the identifiers in toolbar order, so the caller can
+// Returns an array of the identifiers in toolbar order so the caller can
 // use it to construct the "default visible" set when needed.
 static NSArray<NSString *> *catalog_gtk_toolbar(GtkWidget *gtk_toolbar,
                                                 NSString *ident_prefix,
@@ -498,11 +499,12 @@ static NSArray<NSString *> *catalog_gtk_toolbar(GtkWidget *gtk_toolbar,
     NSMutableArray *order = [NSMutableArray new];
     if (!gtk_toolbar || !GTK_IS_TOOLBAR(gtk_toolbar)) return order;
     GList *children = gtk_container_get_children(GTK_CONTAINER(gtk_toolbar));
+    int index = 0;
     for (GList *l = children; l; l = l->next) {
         GtkWidget *child = GTK_WIDGET(l->data);
         if (!GTK_IS_TOOL_BUTTON(child)) continue;
         NSString *ident = catalog_gtk_tool_button(GTK_TOOL_BUTTON(child),
-                                                  ident_prefix, delegate);
+                                                  ident_prefix, index++, delegate);
         if (ident) [order addObject:ident];
     }
     g_list_free(children);
@@ -565,13 +567,13 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
 
     // --- 1) Catalog the main toolbar (these will form the initial visible set)
     NSArray<NSString *> *main_idents = catalog_gtk_toolbar(gtk_toolbar,
-                                                            @"main.",
+                                                            @"main",
                                                             delegate);
 
     // --- 2) Catalog the model (side) toolbar so its buttons are available
     //         in the customize palette. They aren't shown by default.
     if (model_toolbar) {
-        catalog_gtk_toolbar(model_toolbar, @"model.", delegate);
+        catalog_gtk_toolbar(model_toolbar, @"model", delegate);
     }
 
     // --- 3) Catalog Bandicoot-specific extras (Auto-open MTZ, Sphere Refine).
@@ -597,7 +599,13 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     [delegate.allowedIdentifiers addObject:NSToolbarSpaceItemIdentifier];
     [delegate.allowedIdentifiers addObject:NSToolbarFlexibleSpaceItemIdentifier];
 
-    NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"bandicoot.main"];
+    // v2 identifier — the v1 (`bandicoot.main`) NSUserDefaults slot has
+    // stale item IDs from earlier builds where catalog_gtk_tool_button
+    // used the widget's class name as the key. Bumping the identifier
+    // is the simplest way to make those installs read a fresh
+    // configuration instead of getting a toolbar populated with stale
+    // identifiers that no longer resolve.
+    NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"bandicoot.main.v2"];
     toolbar.delegate = delegate;
     toolbar.displayMode = NSToolbarDisplayModeIconAndLabel;
     toolbar.sizeMode = NSToolbarSizeModeRegular;
@@ -634,7 +642,7 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
 extern "C" void bandicoot_run_toolbar_customization(void) {
     for (NSWindow *w in [NSApp windows]) {
         NSToolbar *tb = [w toolbar];
-        if (tb && [[tb identifier] isEqualToString:@"bandicoot.main"]) {
+        if (tb && [[tb identifier] isEqualToString:@"bandicoot.main.v2"]) {
             [tb runCustomizationPalette:nil];
             return;
         }
