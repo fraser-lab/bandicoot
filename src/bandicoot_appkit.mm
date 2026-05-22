@@ -635,6 +635,28 @@ extern "C" void bandicoot_setup_window_positioning(void) {
 // mapped, including re-shows) and use AppKit directly to bring the
 // NSWindow forward.
 
+// Deferred raise: fires on the next main-loop iteration, after every
+// "map" handler + GTK's own NSWindow setFrame/order chatter has
+// settled. Holds a weak ref to the GtkWindow so a dialog that's been
+// destroyed before the idle runs is safely skipped.
+static gboolean bandicoot_raise_idle(gpointer data) {
+    GtkWidget *widget = (GtkWidget *)data;
+    if (widget && GTK_IS_WINDOW(widget)) {
+        GdkWindow *gdk_win = gtk_widget_get_window(widget);
+        if (gdk_win) {
+            NSWindow *ns_win = gdk_quartz_window_get_nswindow(gdk_win);
+            if (ns_win && [ns_win isVisible]) {
+                // orderFrontRegardless: harder raise than orderFront:;
+                // ignores the macOS app-active check that can leave a
+                // window stuck behind another after a frame change.
+                [ns_win orderFrontRegardless];
+            }
+        }
+        g_object_unref(widget);
+    }
+    return G_SOURCE_REMOVE;
+}
+
 static gboolean bandicoot_window_map_hook(GSignalInvocationHint *hint,
                                           guint n_param_values,
                                           const GValue *param_values,
@@ -643,18 +665,10 @@ static gboolean bandicoot_window_map_hook(GSignalInvocationHint *hint,
     GObject *obj = (GObject *)g_value_get_object(&param_values[0]);
     if (!GTK_IS_WINDOW(obj)) return TRUE;
 
-    GdkWindow *gdk_win = gtk_widget_get_window(GTK_WIDGET(obj));
-    if (!gdk_win) return TRUE;
-
-    NSWindow *ns_win = gdk_quartz_window_get_nswindow(gdk_win);
-    if (!ns_win) return TRUE;
-
-    // orderFront: raises without stealing keyboard focus. Use
-    // makeKeyAndOrderFront: if you want the window to also become
-    // focused — but for dialogs we usually want them visible but not
-    // necessarily key (e.g. a refinement-accept dialog shouldn't steal
-    // typing focus from a search box the user just opened).
-    [ns_win orderFront:nil];
+    // Hold a ref so the widget can't be finalized before the idle
+    // callback runs (rare, but harmless to defend against).
+    g_object_ref(obj);
+    g_idle_add(bandicoot_raise_idle, obj);
 
     return TRUE;
 }
