@@ -15,6 +15,13 @@
 
 #include "bandicoot_appkit.h"
 
+// Forward-declare Coot's Python eval bridge so we can dispatch Bandicoot
+// toolbar items (e.g. Sphere Refine) to Coot's Python layer without
+// pulling cc-interface-scripting.hh into the Objective-C++ unit.
+// Declared with C++ linkage to match the actual definition in
+// src/c-interface.cc.
+void safe_python_command_by_char_star(const char *python_command);
+
 static char kGtkMenuItemKey;
 
 // Run on the next GLib main-loop iteration, i.e. after AppKit has fully
@@ -30,9 +37,14 @@ static gboolean bandicoot_fire_gtk_activate(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
+// Forward-declare so the menu target can call it without depending on the
+// later toolbar shim's declaration order.
+extern "C" void bandicoot_run_toolbar_customization(void);
+
 @interface BandicootMenuTarget : NSObject
 + (instancetype)shared;
 - (void)dispatch:(NSMenuItem *)sender;
+- (void)bandicootCustomizeToolbar:(id)sender;
 @end
 
 @implementation BandicootMenuTarget
@@ -48,6 +60,9 @@ static gboolean bandicoot_fire_gtk_activate(gpointer data) {
     if (gtk_item && GTK_IS_MENU_ITEM(gtk_item)) {
         g_idle_add(bandicoot_fire_gtk_activate, gtk_item);
     }
+}
+- (void)bandicootCustomizeToolbar:(id)sender {
+    bandicoot_run_toolbar_customization();
 }
 @end
 
@@ -205,11 +220,22 @@ extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
     [main_menu setAutoenablesItems:NO];
 
     // First slot is the application menu (Bandicoot > About / Quit etc.).
-    // Add a placeholder so the GTK-derived top-level items start at slot 1.
+    // Populate it with Bandicoot-specific items: macOS conventionally
+    // places "Customize Toolbar…" under View, but Coot 0.9 has no View
+    // menu so the app menu is the natural home (and where users tend to
+    // look for app-specific settings on macOS anyway).
     NSMenuItem *app_item = [[NSMenuItem alloc] initWithTitle:@""
                                                       action:nil
                                                keyEquivalent:@""];
     NSMenu *app_sub = [[NSMenu alloc] initWithTitle:@"Bandicoot"];
+
+    NSMenuItem *customize = [[NSMenuItem alloc]
+                             initWithTitle:@"Customize Toolbar…"
+                                    action:@selector(bandicootCustomizeToolbar:)
+                             keyEquivalent:@""];
+    [customize setTarget:[BandicootMenuTarget shared]];
+    [app_sub addItem:customize];
+
     [app_item setSubmenu:app_sub];
     [main_menu addItem:app_item];
 
@@ -227,33 +253,29 @@ extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
 }
 
 // ----- NSToolbar shim --------------------------------------------------------
+//
+// Bandicoot mirrors Coot's GtkToolbar (and selected items from the side
+// model_toolbar) into a native NSToolbar attached to the main NSWindow.
+// Customization is enabled — users can right-click the toolbar (or use
+// View → Customize Toolbar…) to drag/drop items from a palette. macOS
+// persists the user's layout in NSUserDefaults via the toolbar's
+// "bandicoot.main" identifier, so the choice survives across launches.
+//
+// The "allowed items" palette contains every GtkToolButton from both the
+// main toolbar and the sidebar's model toolbar, plus a few Bandicoot-
+// specific extras (Auto-open MTZ, Sphere Refine, …). Items are keyed by
+// their GtkToolButton widget name (e.g. "model_toolbar_refine_togglebutton")
+// so identifiers are stable across builds.
 
-// Coot's callbacks.c handler for File > Auto-open MTZ.
+// ---- Coot bridge declarations
 extern "C" void on_auto_open_mtz_activate(GtkMenuItem *menuitem, gpointer user_data);
+
+// ---- Dispatch idle-callbacks (run after AppKit's event-tracking loop)
 
 static gboolean bandicoot_fire_auto_open_mtz(gpointer data) {
     on_auto_open_mtz_activate(NULL, NULL);
     return G_SOURCE_REMOVE;
 }
-
-@interface BandicootCustomToolbarTarget : NSObject
-+ (instancetype)shared;
-- (void)autoOpenMtz:(id)sender;
-@end
-
-@implementation BandicootCustomToolbarTarget
-+ (instancetype)shared {
-    static BandicootCustomToolbarTarget *s;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ s = [BandicootCustomToolbarTarget new]; });
-    return s;
-}
-- (void)autoOpenMtz:(id)sender {
-    g_idle_add(bandicoot_fire_auto_open_mtz, NULL);
-}
-@end
-
-static char kGtkButtonKey;
 
 static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     GtkToolButton *tb = (GtkToolButton *)data;
@@ -265,6 +287,25 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     }
     return G_SOURCE_REMOVE;
 }
+
+static gboolean bandicoot_fire_python_command(gpointer data) {
+    char *cmd = (char *)data;
+    if (cmd) {
+        safe_python_command_by_char_star(cmd);
+        g_free(cmd);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+// ---- Toolbar item dispatch target
+//
+// One target object handles every NSToolbarItem. The item's associated-
+// object slots hold either a GtkToolButton* (for GTK-dispatched items) or
+// a Python command string (for Bandicoot extras like Sphere Refine).
+
+static char kGtkButtonKey;   // associated-object key for GtkToolButton *
+static char kPythonCmdKey;   // associated-object key for char *
+static char kAutoOpenMtzKey; // marker for the Auto-open MTZ item
 
 @interface BandicootToolbarTarget : NSObject
 + (instancetype)shared;
@@ -279,6 +320,19 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     return s;
 }
 - (void)dispatch:(NSToolbarItem *)sender {
+    // Python-dispatched items
+    NSString *py = objc_getAssociatedObject(sender, &kPythonCmdKey);
+    if (py) {
+        g_idle_add(bandicoot_fire_python_command,
+                   g_strdup([py UTF8String]));
+        return;
+    }
+    // Auto-open MTZ (Bandicoot-specific Coot menu shortcut)
+    if (objc_getAssociatedObject(sender, &kAutoOpenMtzKey)) {
+        g_idle_add(bandicoot_fire_auto_open_mtz, NULL);
+        return;
+    }
+    // Default: forward to the wrapped GtkToolButton's "clicked" signal
     NSValue *boxed = objc_getAssociatedObject(sender, &kGtkButtonKey);
     GtkToolButton *tb = (GtkToolButton *)[boxed pointerValue];
     if (tb && GTK_IS_TOOL_BUTTON(tb)) {
@@ -287,17 +341,23 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
 }
 @end
 
+// ---- NSToolbarDelegate
+//
+// Holds the full palette ("allowed"), the initial visible set ("default"),
+// and a dictionary mapping each identifier to a fully-built NSToolbarItem.
+
 @interface BandicootToolbarDelegate : NSObject <NSToolbarDelegate>
-@property (nonatomic, strong) NSMutableArray<NSString *> *itemIdentifiers;
+@property (nonatomic, strong) NSMutableArray<NSString *> *defaultIdentifiers;
+@property (nonatomic, strong) NSMutableArray<NSString *> *allowedIdentifiers;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSToolbarItem *> *itemsById;
 @end
 
 @implementation BandicootToolbarDelegate
 - (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)tb {
-    return _itemIdentifiers;
+    return _defaultIdentifiers;
 }
 - (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)tb {
-    return _itemIdentifiers;
+    return _allowedIdentifiers;
 }
 - (NSToolbarItem *)toolbar:(NSToolbar *)tb
      itemForItemIdentifier:(NSToolbarItemIdentifier)ident
@@ -388,7 +448,109 @@ static NSImage *image_for_tool_button(GtkToolButton *tb) {
     return nil;
 }
 
-extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar) {
+// Build one NSToolbarItem from a GtkToolButton and add it to the delegate's
+// palette catalog. ident_prefix is "main." or "model." so identifiers stay
+// stable and don't collide between toolbars. Returns the assigned identifier,
+// or nil if the button can't be catalogued.
+static NSString *catalog_gtk_tool_button(GtkToolButton *tb,
+                                         NSString *ident_prefix,
+                                         BandicootToolbarDelegate *delegate) {
+    if (!tb || !GTK_IS_TOOL_BUTTON(tb)) return nil;
+
+    // Use the GtkToolButton's widget name as the stable ID base.
+    const char *wname = gtk_widget_get_name(GTK_WIDGET(tb));
+    if (!wname || !*wname) return nil;
+    NSString *ident = [NSString stringWithFormat:@"bandicoot.%@%s",
+                       ident_prefix, wname];
+    if (delegate.itemsById[ident]) return ident;   // already catalogued
+
+    const char *label_c = gtk_tool_button_get_label(tb);
+    NSString *label = (label_c && *label_c)
+                      ? [NSString stringWithUTF8String:label_c]
+                      : ident;
+
+    NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
+    [item setLabel:label];
+    [item setPaletteLabel:label];
+    [item setTarget:[BandicootToolbarTarget shared]];
+    [item setAction:@selector(dispatch:)];
+
+    NSImage *img = image_for_tool_button(tb);
+    if (img) [item setImage:img];
+
+    if (!gtk_widget_is_sensitive(GTK_WIDGET(tb))) [item setEnabled:NO];
+
+    objc_setAssociatedObject(item, &kGtkButtonKey,
+                             [NSValue valueWithPointer:tb],
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    [delegate.allowedIdentifiers addObject:ident];
+    delegate.itemsById[ident] = item;
+    return ident;
+}
+
+// Walk a GtkToolbar's children, cataloguing every GtkToolButton found.
+// Returns an array of the identifiers in toolbar order, so the caller can
+// use it to construct the "default visible" set when needed.
+static NSArray<NSString *> *catalog_gtk_toolbar(GtkWidget *gtk_toolbar,
+                                                NSString *ident_prefix,
+                                                BandicootToolbarDelegate *delegate) {
+    NSMutableArray *order = [NSMutableArray new];
+    if (!gtk_toolbar || !GTK_IS_TOOLBAR(gtk_toolbar)) return order;
+    GList *children = gtk_container_get_children(GTK_CONTAINER(gtk_toolbar));
+    for (GList *l = children; l; l = l->next) {
+        GtkWidget *child = GTK_WIDGET(l->data);
+        if (!GTK_IS_TOOL_BUTTON(child)) continue;
+        NSString *ident = catalog_gtk_tool_button(GTK_TOOL_BUTTON(child),
+                                                  ident_prefix, delegate);
+        if (ident) [order addObject:ident];
+    }
+    g_list_free(children);
+    return order;
+}
+
+// Add Bandicoot-specific extras to the catalog: items that aren't backed
+// by an existing GtkToolButton in either toolbar. Each one dispatches via
+// either a Python command string or a hardcoded callback (auto-open MTZ).
+static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
+                                     NSImage *fallback_icon) {
+    // --- Auto-open MTZ
+    {
+        NSString *ident = @"bandicoot.extra.auto_open_mtz";
+        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
+        [item setLabel:@"Auto-open MTZ"];
+        [item setPaletteLabel:@"Auto-open MTZ"];
+        [item setTarget:[BandicootToolbarTarget shared]];
+        [item setAction:@selector(dispatch:)];
+        if (fallback_icon) [item setImage:fallback_icon];
+        objc_setAssociatedObject(item, &kAutoOpenMtzKey,
+                                 @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [delegate.allowedIdentifiers addObject:ident];
+        delegate.itemsById[ident] = item;
+    }
+
+    // --- Sphere Refine (Python: sphere_refine() from fitting.py, radius 4.5 Å)
+    {
+        NSString *ident = @"bandicoot.extra.sphere_refine";
+        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
+        [item setLabel:@"Sphere Refine"];
+        [item setPaletteLabel:@"Sphere Refine"];
+        [item setTarget:[BandicootToolbarTarget shared]];
+        [item setAction:@selector(dispatch:)];
+        // Reuse the refine-1 icon if it's been registered in the icon cache;
+        // otherwise fall back to whatever icon we have at hand.
+        NSImage *icon = [NSImage imageNamed:@"refine-1"];
+        [item setImage:icon ? icon : fallback_icon];
+        objc_setAssociatedObject(item, &kPythonCmdKey,
+                                 @"sphere_refine()",
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [delegate.allowedIdentifiers addObject:ident];
+        delegate.itemsById[ident] = item;
+    }
+}
+
+extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
+                                                 GtkWidget *model_toolbar) {
     if (!gtk_toolbar || !GTK_IS_TOOLBAR(gtk_toolbar)) return;
 
     GtkWidget *toplevel = gtk_widget_get_toplevel(gtk_toolbar);
@@ -397,74 +559,53 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar) {
     if (!win) return;
 
     BandicootToolbarDelegate *delegate = [BandicootToolbarDelegate new];
-    delegate.itemIdentifiers = [NSMutableArray new];
+    delegate.allowedIdentifiers = [NSMutableArray new];
+    delegate.defaultIdentifiers = [NSMutableArray new];
     delegate.itemsById = [NSMutableDictionary new];
 
-    int idx = 0;
-    int tool_btn_count = 0;
-    GList *children = gtk_container_get_children(GTK_CONTAINER(gtk_toolbar));
-    for (GList *l = children; l; l = l->next) {
-        GtkWidget *child = GTK_WIDGET(l->data);
+    // --- 1) Catalog the main toolbar (these will form the initial visible set)
+    NSArray<NSString *> *main_idents = catalog_gtk_toolbar(gtk_toolbar,
+                                                            @"main.",
+                                                            delegate);
 
-        // Separators -> NSToolbarSpaceItemIdentifier
-        if (GTK_IS_SEPARATOR_TOOL_ITEM(child)) {
-            [delegate.itemIdentifiers addObject:NSToolbarSpaceItemIdentifier];
-            continue;
-        }
+    // --- 2) Catalog the model (side) toolbar so its buttons are available
+    //         in the customize palette. They aren't shown by default.
+    if (model_toolbar) {
+        catalog_gtk_toolbar(model_toolbar, @"model.", delegate);
+    }
 
-        if (!GTK_IS_TOOL_BUTTON(child)) continue;
-        GtkToolButton *tb = GTK_TOOL_BUTTON(child);
+    // --- 3) Catalog Bandicoot-specific extras (Auto-open MTZ, Sphere Refine).
+    //         Use the first main item's icon as a fallback for ones lacking
+    //         their own.
+    NSImage *fallback_icon = nil;
+    if (main_idents.count > 0) {
+        fallback_icon = [delegate.itemsById[main_idents[0]] image];
+    }
+    catalog_bandicoot_extras(delegate, fallback_icon);
 
-        NSString *ident = [NSString stringWithFormat:@"bandicoot.tool.%d", idx++];
-        const char *label_c = gtk_tool_button_get_label(tb);
-        NSString *label = (label_c && *label_c)
-                          ? [NSString stringWithUTF8String:label_c]
-                          : @"";
-
-        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
-        [item setLabel:label];
-        [item setPaletteLabel:label];
-        [item setTarget:[BandicootToolbarTarget shared]];
-        [item setAction:@selector(dispatch:)];
-
-        NSImage *img = image_for_tool_button(tb);
-        if (img) [item setImage:img];
-
-        if (!gtk_widget_is_sensitive(GTK_WIDGET(tb))) [item setEnabled:NO];
-
-        // GtkToolButton is itself a GtkButton subclass, so gtk_button_clicked()
-        // works on it directly.
-        objc_setAssociatedObject(item, &kGtkButtonKey,
-                                 [NSValue valueWithPointer:tb],
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        [delegate.itemIdentifiers addObject:ident];
-        delegate.itemsById[ident] = item;
-        ++tool_btn_count;
-
-        // Insert the Bandicoot-specific Auto-open MTZ item immediately after
-        // the first GtkToolButton (Open Coords...), reusing its icon so the
-        // two file-open actions look alike.
-        if (tool_btn_count == 1) {
-            NSString *mtzId = @"bandicoot.tool.auto_open_mtz";
-            NSToolbarItem *mtzItem = [[NSToolbarItem alloc] initWithItemIdentifier:mtzId];
-            [mtzItem setLabel:@"Auto-open MTZ"];
-            [mtzItem setPaletteLabel:@"Auto-open MTZ"];
-            [mtzItem setTarget:[BandicootCustomToolbarTarget shared]];
-            [mtzItem setAction:@selector(autoOpenMtz:)];
-            if (img) [mtzItem setImage:img];
-            [delegate.itemIdentifiers addObject:mtzId];
-            delegate.itemsById[mtzId] = mtzItem;
+    // --- 4) Default visible set: today's behaviour — the main toolbar items,
+    //         with Auto-open MTZ inserted after the first one (Open Coords…).
+    //         Persisted user customizations override this via macOS autosave.
+    for (NSUInteger i = 0; i < main_idents.count; i++) {
+        [delegate.defaultIdentifiers addObject:main_idents[i]];
+        if (i == 0) {
+            [delegate.defaultIdentifiers addObject:@"bandicoot.extra.auto_open_mtz"];
         }
     }
-    g_list_free(children);
+
+    // --- 5) Always allow the standard system identifiers (spaces / customize).
+    [delegate.allowedIdentifiers addObject:NSToolbarSpaceItemIdentifier];
+    [delegate.allowedIdentifiers addObject:NSToolbarFlexibleSpaceItemIdentifier];
 
     NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"bandicoot.main"];
     toolbar.delegate = delegate;
     toolbar.displayMode = NSToolbarDisplayModeIconAndLabel;
     toolbar.sizeMode = NSToolbarSizeModeRegular;
-    toolbar.allowsUserCustomization = NO;
-    toolbar.autosavesConfiguration = NO;
+    // Customization on. macOS persists the user's layout in NSUserDefaults
+    // keyed on the toolbar's identifier ("bandicoot.main"), so their choice
+    // survives across launches.
+    toolbar.allowsUserCustomization = YES;
+    toolbar.autosavesConfiguration = YES;
 
     // Retain the delegate for the toolbar's lifetime.
     objc_setAssociatedObject(toolbar, "bandicoot.toolbar.delegate",
@@ -485,6 +626,19 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar) {
     // from undoing our hide and resurrecting the in-window toolbar.
     gtk_widget_set_no_show_all(gtk_toolbar, TRUE);
     gtk_widget_hide(gtk_toolbar);
+}
+
+// Show the system Customize Toolbar… sheet on the main window's toolbar.
+// Invoked from a menu item; safe to call from any thread because
+// runCustomizationPalette: hops to the main thread internally.
+extern "C" void bandicoot_run_toolbar_customization(void) {
+    for (NSWindow *w in [NSApp windows]) {
+        NSToolbar *tb = [w toolbar];
+        if (tb && [[tb identifier] isEqualToString:@"bandicoot.main"]) {
+            [tb runCustomizationPalette:nil];
+            return;
+        }
+    }
 }
 
 extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *title) {

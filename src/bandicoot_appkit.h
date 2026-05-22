@@ -25,10 +25,22 @@ void bandicoot_install_native_menubar(GtkWidget *menubar);
 double bandicoot_get_backing_scale_factor(void);
 
 // Mirror a GtkToolbar into a native NSToolbar attached to the toplevel
-// NSWindow's title bar. Walks toolbar's children, builds NSToolbarItems with
-// images from each GtkToolButton's GtkImage, and forwards clicks to the
-// corresponding GtkToolButton's "clicked" signal. Hides the in-window toolbar.
-void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar);
+// NSWindow's title bar. Walks gtk_toolbar's children to build the initial
+// visible set, and walks model_toolbar (the sidebar) to populate the
+// customize-palette catalog with every other available tool button.
+// User-customization is enabled (right-click → Customize Toolbar… or
+// call bandicoot_run_toolbar_customization), and macOS autosaves the
+// user's layout in NSUserDefaults keyed on "bandicoot.main".
+//
+// model_toolbar may be NULL — in that case only the main toolbar's items
+// (plus Bandicoot extras) populate the palette.
+void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
+                                      GtkWidget *model_toolbar);
+
+// Show the Customize Toolbar… sheet for the Bandicoot main toolbar.
+// Wired up from a menu item in the View menu so users can find it
+// without right-clicking on the toolbar.
+void bandicoot_run_toolbar_customization(void);
 
 // Reparent a GtkToolbar (or any widget) into a new toplevel GtkWindow,
 // making it transient to its current toplevel. The new window gets its

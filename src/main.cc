@@ -411,11 +411,17 @@ main (int argc, char *argv[]) {
 	 // effect (otherwise the toolbar attaches to an unrealized window and
 	 // never appears in the chrome).
 	 if (!getenv("BANDICOOT_NO_NATIVE_MENU")) {
-	    bandicoot_install_native_toolbar(lookup_widget(window1, "main_toolbar"));
+	    // Install the native NSToolbar with the model_toolbar's items
+	    // in its customize-palette catalog too — must run BEFORE the
+	    // float_widget_in_window call that reparents model_toolbar out
+	    // of window1's tree (we walk model_toolbar's children inside
+	    // install_native_toolbar to build the palette).
+	    GtkWidget *model_tb = lookup_widget(window1, "model_toolbar");
+	    bandicoot_install_native_toolbar(lookup_widget(window1, "main_toolbar"),
+	                                     model_tb);
 	    // Float the side toolbar (model_toolbar) in its own window so it's
 	    // free of the main window's GL backing layer.
-	    bandicoot_float_widget_in_window(lookup_widget(window1, "model_toolbar"),
-	                                     "Model Tools");
+	    bandicoot_float_widget_in_window(model_tb, "Model Tools");
 
 	    // Apply the user's preferred model-toolbar style at startup.
 	    // set_model_toolbar_style() just toggles a radio item, which only
