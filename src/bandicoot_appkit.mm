@@ -538,12 +538,13 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
 
     gtk_widget_show_all(floater);
 
-    // Sum the natural heights of the toolbar's individual children to
-    // get the total height needed when every item is visible.
-    // gtk_widget_size_request() on the GtkToolbar itself returns its
-    // *minimum* (just one item + chevron) on GTK-Quartz — useless here.
-    // Walking the children avoids that.
+    // Sum the natural heights and find the max natural width across
+    // the toolbar's individual children. gtk_widget_size_request() on
+    // the GtkToolbar itself returns its *minimum* (just one item +
+    // chevron) on GTK-Quartz — useless here. Walking the children
+    // gives us the real dimensions each item wants.
     int natural_h = 0;
+    int max_child_w = 0;
     if (GTK_IS_CONTAINER(widget)) {
         GList *kids = gtk_container_get_children(GTK_CONTAINER(widget));
         for (GList *l = kids; l; l = l->next) {
@@ -551,13 +552,19 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
             GtkRequisition cr = {0, 0};
             gtk_widget_size_request(child, &cr);
             natural_h += cr.height;
+            if (cr.width > max_child_w) max_child_w = cr.width;
         }
         g_list_free(kids);
     }
     if (natural_h > 0) {
         // + 32 px buffer below the last item so it isn't flush with
         // the window chrome, and a small allowance for the title bar.
-        gtk_window_resize(GTK_WINDOW(floater), 340, natural_h + 48);
+        // Width = widest item + 24 px for left/right padding around
+        // the toolbar column, with an 80 px floor in case the items
+        // somehow report 0.
+        int win_w = max_child_w > 0 ? max_child_w + 24 : 340;
+        if (win_w < 80) win_w = 80;
+        gtk_window_resize(GTK_WINDOW(floater), win_w, natural_h + 48);
     }
 }
 
