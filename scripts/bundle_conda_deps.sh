@@ -39,6 +39,7 @@ TOPLEVEL_LIBS=(
     libccp4c.0.dylib
     libc++.1.dylib
     libintl.8.dylib
+    libiconv.2.dylib
 )
 
 # FFTW2 single-precision lives in a sub-prefix under conda (artefact of
@@ -123,7 +124,6 @@ echo "==> rewriting remaining external @rpath refs to absolute paths"
 EXTERNAL_REWRITES=(
     "libcurl.4.dylib=/usr/lib/libcurl.4.dylib"
     "libsqlite3.dylib=/usr/lib/libsqlite3.dylib"
-    "libiconv.2.dylib=/usr/lib/libiconv.2.dylib"
 )
 
 rewrite_external_in() {
