@@ -512,8 +512,11 @@ static NSArray<NSString *> *catalog_gtk_toolbar(GtkWidget *gtk_toolbar,
 }
 
 // Look up an icon file under $COOT_PIXMAPS_DIR / $COOT_DATA_DIR/pixmaps,
-// fall back to nil if the file doesn't exist. Lets us reference svg/png
-// icons by basename — same convention as Coot's existing pixmap lookups.
+// fall back to nil if the file doesn't exist. Sets the NSImage's `size`
+// to a toolbar-sized 24×24 so it lays out at the same scale as items
+// rendered from GtkImage via GTK_ICON_SIZE_LARGE_TOOLBAR. (NSImage's
+// underlying bitmap is unchanged — `size` is the intended-display size
+// the toolbar uses for layout; AppKit scales at draw time.)
 static NSImage *image_from_pixmaps_dir(const char *basename) {
     if (!basename || !*basename) return nil;
     const char *dir = getenv("COOT_PIXMAPS_DIR");
@@ -527,7 +530,9 @@ static NSImage *image_from_pixmaps_dir(const char *basename) {
     }
     NSString *p = [NSString stringWithUTF8String:path];
     if (![[NSFileManager defaultManager] fileExistsAtPath:p]) return nil;
-    return [[NSImage alloc] initWithContentsOfFile:p];
+    NSImage *img = [[NSImage alloc] initWithContentsOfFile:p];
+    if (img) [img setSize:NSMakeSize(24, 24)];
+    return img;
 }
 
 // Table-driven catalog of Bandicoot-specific tool buttons. Each row is
