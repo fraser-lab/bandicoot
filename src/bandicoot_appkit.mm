@@ -14,6 +14,7 @@
 #include <gdk/gdkquartz.h>
 
 #include <string>   // for Quicksave's filename munging
+#include <sys/stat.h>  // for stat() — verifying Quicksave wrote a file
 
 #include "bandicoot_appkit.h"
 
@@ -346,12 +347,15 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
     }
     std::string qs = base + qs_suffix + ext;
 
-    int rc = save_coordinates(imol, qs.c_str());
-    if (rc == 1) {
+    // save_coordinates() return value is unreliable on Coot 0.9 — the
+    // header comment says 1=success/0=fail but in practice it returns 0
+    // even on successful writes. stat the file after to determine truth.
+    (void)save_coordinates(imol, qs.c_str());
+    struct stat st;
+    if (stat(qs.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
         fprintf(stdout, "[bandicoot] Quicksave: wrote %s\n", qs.c_str());
     } else {
-        fprintf(stdout, "[bandicoot] Quicksave: save_coordinates failed (rc=%d) for %s\n",
-                rc, qs.c_str());
+        fprintf(stdout, "[bandicoot] Quicksave: write failed for %s\n", qs.c_str());
     }
     fflush(stdout);
     return G_SOURCE_REMOVE;
@@ -391,8 +395,13 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
 static const char *bandicoot_py3_extras_src =
 "# Bandicoot py3 replacements for the (broken-on-py3) Coot Python suite.\n"
 "# Defined once on first Python dispatch from a Bandicoot toolbar item.\n"
+"# Coot 0.9's `coot_load_modules.py` uses Python-2 syntax (execfile, etc.)\n"
+"# and crashes on first run under py3, so the alias file\n"
+"# `redefine_functions.py` that normally maps active_residue_py →\n"
+"# active_residue (and similar) is never loaded. Call the *_py SWIG names\n"
+"# directly here.\n"
 "def _bc_aa_check(label):\n"
-"    aa = active_residue()\n"
+"    aa = active_residue_py()\n"
 "    if not aa:\n"
 "        print('[bandicoot] %s: no active residue; click an atom first' % label)\n"
 "        return None\n"
@@ -403,7 +412,7 @@ static const char *bandicoot_py3_extras_src =
 "    if aa is None: return\n"
 "    imol, ch, rn, ins, _, _ = aa\n"
 "    central = [ch, rn, ins]\n"
-"    near = residues_near_residue(imol, central, radius) or []\n"
+"    near = residues_near_residue_py(imol, central, radius) or []\n"
 "    seen = {(ch, rn, ins)}\n"
 "    rs = [central]\n"
 "    for r in near:\n"
@@ -416,9 +425,11 @@ static const char *bandicoot_py3_extras_src =
 "            if nr not in seen:\n"
 "                seen.add(nr); rs.append([ch, rn+dr, ins])\n"
 "    if use_map:\n"
-"        refine_residues(imol, rs)\n"
+"        refine_residues_py(imol, rs)\n"
 "    else:\n"
-"        regularize_residues(imol, rs)\n"
+"        regularize_residues_py(imol, rs)\n"
+"    print('[bandicoot] %s refine/regularize: %d residues around %s/%d' % \\\n"
+"          ('Map-restrained' if use_map else 'Geometry-only', len(rs), ch, rn))\n"
 "\n"
 "def sphere_refine(radius=4.5):        _bc_sphere_generic(True,  radius, False)\n"
 "def sphere_refine_plus(radius=4.5):   _bc_sphere_generic(True,  radius, True)\n"
@@ -430,7 +441,8 @@ static const char *bandicoot_py3_extras_src =
 "    if aa is None: return\n"
 "    imol, ch, rn, ins, _, _ = aa\n"
 "    rs = [[ch, rn+i, ins] for i in range(-3, 4)]\n"
-"    refine_residues(imol, rs)\n"
+"    refine_residues_py(imol, rs)\n"
+"    print('[bandicoot] Tandem Refine: %s/%d-%d' % (ch, rn-3, rn+3))\n"
 "\n"
 "# Toggle state lives in module globals so each click flips it.\n"
 "_bc_backrub_on = False\n"
