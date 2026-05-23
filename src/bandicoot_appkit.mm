@@ -13,6 +13,8 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkquartz.h>
 
+#include <string>   // for Quicksave's filename munging
+
 #include "bandicoot_appkit.h"
 
 // Forward-declare Coot's Python eval bridge so we can dispatch Bandicoot
@@ -21,6 +23,16 @@
 // Declared with C++ linkage to match the actual definition in
 // src/c-interface.cc.
 void safe_python_command_by_char_star(const char *python_command);
+
+// Forward-declare Coot C-interface functions we need for the Quicksave
+// toolbar action. These live inside BEGIN_C_DECLS in c-interface.h, so
+// extern "C" matches the actual linkage.
+extern "C" {
+    int first_coords_imol(void);
+    const char *molecule_name(int imol);
+    int save_coordinates(int imol, const char *filename);
+    short int is_valid_model_molecule(int imol);
+}
 
 static char kGtkMenuItemKey;
 
@@ -270,12 +282,60 @@ extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
 // ---- Coot bridge declarations
 extern "C" void on_auto_open_mtz_activate(GtkMenuItem *menuitem, gpointer user_data);
 
-// ---- Dispatch idle-callbacks (run after AppKit's event-tracking loop)
+// ---- Bandicoot-specific actions (run as g_idle_add callbacks)
 
-static gboolean bandicoot_fire_auto_open_mtz(gpointer data) {
+// Auto-open MTZ: forward to Coot's existing File-menu handler.
+static gboolean bandicoot_action_auto_open_mtz(gpointer data) {
     on_auto_open_mtz_activate(NULL, NULL);
     return G_SOURCE_REMOVE;
 }
+
+// Quicksave: write the first coord molecule to <basename>-quicksave<ext>
+// next to the file it was loaded from. Overwrites on each press, so a
+// model can be checkpointed without filling a directory with N-numbered
+// auto-saves. Bandicoot-only; doesn't exist in upstream Coot 0.9.
+static gboolean bandicoot_action_quicksave(gpointer data) {
+    int imol = first_coords_imol();
+    if (imol < 0 || !is_valid_model_molecule(imol)) {
+        fprintf(stdout, "[bandicoot] Quicksave: no model molecule loaded\n");
+        fflush(stdout);
+        return G_SOURCE_REMOVE;
+    }
+    const char *name = molecule_name(imol);
+    if (!name || !*name) {
+        fprintf(stdout, "[bandicoot] Quicksave: imol %d has no filename\n", imol);
+        fflush(stdout);
+        return G_SOURCE_REMOVE;
+    }
+
+    // Split off the extension. Use the last '.' in the BASENAME so a
+    // dotted directory like /home/.coot/foo doesn't fool us.
+    std::string n(name);
+    size_t slash = n.find_last_of('/');
+    size_t dot   = n.find_last_of('.');
+    std::string base, ext;
+    if (dot != std::string::npos &&
+        (slash == std::string::npos || dot > slash)) {
+        base = n.substr(0, dot);
+        ext  = n.substr(dot);   // includes leading '.'
+    } else {
+        base = n;
+        ext  = ".pdb";
+    }
+    std::string qs = base + "-quicksave" + ext;
+
+    int rc = save_coordinates(imol, qs.c_str());
+    if (rc == 1) {
+        fprintf(stdout, "[bandicoot] Quicksave: wrote %s\n", qs.c_str());
+    } else {
+        fprintf(stdout, "[bandicoot] Quicksave: save_coordinates failed (rc=%d) for %s\n",
+                rc, qs.c_str());
+    }
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+// ---- Dispatch idle-callbacks (run after AppKit's event-tracking loop)
 
 static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     GtkToolButton *tb = (GtkToolButton *)data;
@@ -299,13 +359,15 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
 
 // ---- Toolbar item dispatch target
 //
-// One target object handles every NSToolbarItem. The item's associated-
-// object slots hold either a GtkToolButton* (for GTK-dispatched items) or
-// a Python command string (for Bandicoot extras like Sphere Refine).
+// One target object handles every NSToolbarItem. Each item carries one of
+// three associated-object slots that select its dispatch mechanism:
+//   kCCallbackKey  → an NSValue wrapping a void(*)(gpointer) (g_idle_add fn)
+//   kPythonCmdKey  → an NSString with a Python expression to eval
+//   kGtkButtonKey  → an NSValue wrapping the GtkToolButton * to "click"
 
-static char kGtkButtonKey;   // associated-object key for GtkToolButton *
-static char kPythonCmdKey;   // associated-object key for char *
-static char kAutoOpenMtzKey; // marker for the Auto-open MTZ item
+static char kGtkButtonKey;
+static char kPythonCmdKey;
+static char kCCallbackKey;
 
 @interface BandicootToolbarTarget : NSObject
 + (instancetype)shared;
@@ -320,16 +382,18 @@ static char kAutoOpenMtzKey; // marker for the Auto-open MTZ item
     return s;
 }
 - (void)dispatch:(NSToolbarItem *)sender {
-    // Python-dispatched items
+    // C-callback items (Bandicoot extras like Quicksave / Auto-open MTZ)
+    NSValue *cb = objc_getAssociatedObject(sender, &kCCallbackKey);
+    if (cb) {
+        GSourceFunc fn = (GSourceFunc)[cb pointerValue];
+        if (fn) g_idle_add(fn, NULL);
+        return;
+    }
+    // Python-dispatched items (Bandicoot extras like Sphere Refine)
     NSString *py = objc_getAssociatedObject(sender, &kPythonCmdKey);
     if (py) {
         g_idle_add(bandicoot_fire_python_command,
                    g_strdup([py UTF8String]));
-        return;
-    }
-    // Auto-open MTZ (Bandicoot-specific Coot menu shortcut)
-    if (objc_getAssociatedObject(sender, &kAutoOpenMtzKey)) {
-        g_idle_add(bandicoot_fire_auto_open_mtz, NULL);
         return;
     }
     // Default: forward to the wrapped GtkToolButton's "clicked" signal
@@ -536,54 +600,54 @@ static NSImage *image_from_pixmaps_dir(const char *basename) {
 }
 
 // Table-driven catalog of Bandicoot-specific tool buttons. Each row is
-// one toolbar item: identifier-suffix, display label, Python command to
-// run on click, and the icon file basename (looked up under
-// share/coot/pixmaps/). Sourced from python/coot_toolbuttons.py's
-// list_of_toolbar_functions() — that lists everything Coot's old
-// "Toolbar Selection" dialog could add. We hardcode the subset that's
-// genuinely useful, since Python isn't initialised yet at toolbar-
-// install time.
+// one toolbar item with exactly one dispatch mechanism: a C callback
+// pointer OR a Python expression string. Most rows are sourced from
+// python/coot_toolbuttons.py's list_of_toolbar_functions() — that lists
+// everything Coot's old "Toolbar Selection" dialog could add. We
+// hardcode the subset that's genuinely useful, since Python isn't
+// initialised yet at toolbar-install time.
 //
-// Special-cased: auto_open_mtz dispatches to a C callback (the Coot
-// menu handler) rather than a Python command — it's recognised by
-// having the python_cmd field be NULL.
+// Items with c_callback set bypass Python and run as a g_idle_add
+// callback (matches the dispatch pattern of the rest of bandicoot_appkit).
 struct bandicoot_extra {
-    const char *ident_suffix;   // appended to "bandicoot.extra."
+    const char *ident_suffix;     // appended to "bandicoot.extra."
     const char *label;
-    const char *python_cmd;     // NULL → auto_open_mtz special case
-    const char *icon_basename;  // file under share/coot/pixmaps/
+    GSourceFunc c_callback;       // non-NULL → call directly; else python_cmd
+    const char *python_cmd;       // ignored when c_callback != NULL
+    const char *icon_basename;    // file under share/coot/pixmaps/
 };
 
 static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
-    // Bandicoot's own File-menu shortcut.
-    {"auto_open_mtz",   "Auto-open MTZ",    NULL,                                          NULL},
+    // Bandicoot-specific actions implemented in C
+    {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL},
+    {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png"},
 
     // Refinement extensions (python/fitting.py, python/coot_toolbuttons.py)
-    {"sphere_refine",         "Sphere Refine",         "sphere_refine()",        "refine-1.svg"},
-    {"sphere_refine_plus",    "Sphere Refine +",       "sphere_refine_plus()",   "refine-1.svg"},
-    {"tandem_refine",         "Tandem Refine",         "refine_tandem_residues()", "refine-1.svg"},
-    {"sphere_regularize",     "Sphere Regularize",     "sphere_regularize()",    "regularize-1.svg"},
-    {"sphere_regularize_plus","Sphere Regularize +",   "sphere_regularize_plus()","regularize-1.svg"},
-    {"refine_residue",        "Refine Residue",        "refine_active_residue()","refine-1.svg"},
-    {"backrub_toggle",        "Backrub Rotamers",      "toggle_backrub_rotamers()","auto-fit-rotamer.svg"},
-    {"repeat_refine_zone",    "Repeat Refine Zone",    "repeat_refine_zone()",   "rrz.svg"},
-    {"cis_trans",             "Cis ↔ Trans",           "do_cis_trans_conversion_setup(1)","flip-peptide.svg"},
+    {"sphere_refine",         "Sphere Refine",         NULL, "sphere_refine()",        "refine-1.svg"},
+    {"sphere_refine_plus",    "Sphere Refine +",       NULL, "sphere_refine_plus()",   "refine-1.svg"},
+    {"tandem_refine",         "Tandem Refine",         NULL, "refine_tandem_residues()", "refine-1.svg"},
+    {"sphere_regularize",     "Sphere Regularize",     NULL, "sphere_regularize()",    "regularize-1.svg"},
+    {"sphere_regularize_plus","Sphere Regularize +",   NULL, "sphere_regularize_plus()","regularize-1.svg"},
+    {"refine_residue",        "Refine Residue",        NULL, "refine_active_residue()","refine-1.svg"},
+    {"backrub_toggle",        "Backrub Rotamers",      NULL, "toggle_backrub_rotamers()","auto-fit-rotamer.svg"},
+    {"repeat_refine_zone",    "Repeat Refine Zone",    NULL, "repeat_refine_zone()",   "rrz.svg"},
+    {"cis_trans",             "Cis ↔ Trans",           NULL, "do_cis_trans_conversion_setup(1)","flip-peptide.svg"},
 
     // Validation
-    {"update_atom_overlaps",  "Update Atom Overlaps",  "atom_overlaps_for_this_model()","auto-fit-rotamer.svg"},
-    {"interactive_dots",      "Interactive Dots",      "toggle_interactive_probe_dots()","probe-clash.svg"},
-    {"local_probe_dots",      "Local Probe Dots",      "probe_local_sphere_active_atom()","probe-clash.svg"},
+    {"update_atom_overlaps",  "Update Atom Overlaps",  NULL, "atom_overlaps_for_this_model()","auto-fit-rotamer.svg"},
+    {"interactive_dots",      "Interactive Dots",      NULL, "toggle_interactive_probe_dots()","probe-clash.svg"},
+    {"local_probe_dots",      "Local Probe Dots",      NULL, "probe_local_sphere_active_atom()","probe-clash.svg"},
 
     // Building
-    {"undo_molecule_chooser", "Choose Undo Molecule",  "show_set_undo_molecule_chooser()","undo-1.svg"},
-    {"find_waters",           "Find Waters",           "wrapped_create_find_waters_dialog()","add-water.svg"},
-    {"split_water",           "Split Water",           "split_active_water()",   "add-water.svg"},
-    {"build_na",              "Build NA",              "find_nucleic_acids_local(6.0)","dna.svg"},
-    {"ligand_builder",        "Ligand Builder",        "start_ligand_builder_gui()","go-to-ligand.svg"},
+    {"undo_molecule_chooser", "Choose Undo Molecule",  NULL, "show_set_undo_molecule_chooser()","undo-1.svg"},
+    {"find_waters",           "Find Waters",           NULL, "wrapped_create_find_waters_dialog()","add-water.svg"},
+    {"split_water",           "Split Water",           NULL, "split_active_water()",   "add-water.svg"},
+    {"build_na",              "Build NA",              NULL, "find_nucleic_acids_local(6.0)","dna.svg"},
+    {"ligand_builder",        "Ligand Builder",        NULL, "start_ligand_builder_gui()","go-to-ligand.svg"},
 
     // Display
-    {"full_screen_toggle",    "Full Screen",           "toggle_full_screen()",   "reset-view-32.svg"},
-    {"hydrogen_toggle",       "Toggle Hydrogens",      "toggle_hydrogen_display()","delete.svg"},
+    {"full_screen_toggle",    "Full Screen",           NULL, "toggle_full_screen()",   "reset-view-32.svg"},
+    {"hydrogen_toggle",       "Toggle Hydrogens",      NULL, "toggle_hydrogen_display()","delete.svg"},
 };
 static const size_t BANDICOOT_EXTRAS_COUNT =
     sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);
@@ -591,7 +655,7 @@ static const size_t BANDICOOT_EXTRAS_COUNT =
 // Add Bandicoot-specific extras to the catalog: items that aren't backed
 // by an existing GtkToolButton in either toolbar. Each row in
 // BANDICOOT_EXTRAS becomes one NSToolbarItem dispatched via either a
-// Python command string or (for Auto-open MTZ) a hardcoded C callback.
+// C callback or a Python expression.
 static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
                                      NSImage *fallback_icon) {
     for (size_t i = 0; i < BANDICOOT_EXTRAS_COUNT; ++i) {
@@ -607,14 +671,14 @@ static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
         NSImage *icon = image_from_pixmaps_dir(e->icon_basename);
         [item setImage:icon ? icon : fallback_icon];
 
-        if (e->python_cmd) {
+        if (e->c_callback) {
+            objc_setAssociatedObject(item, &kCCallbackKey,
+                                     [NSValue valueWithPointer:(void *)e->c_callback],
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        } else if (e->python_cmd) {
             objc_setAssociatedObject(item, &kPythonCmdKey,
                                      [NSString stringWithUTF8String:e->python_cmd],
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        } else {
-            // Special case: Auto-open MTZ dispatches to a C callback.
-            objc_setAssociatedObject(item, &kAutoOpenMtzKey,
-                                     @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
 
         [delegate.allowedIdentifiers addObject:ident];
@@ -656,15 +720,18 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     }
     catalog_bandicoot_extras(delegate, fallback_icon);
 
-    // --- 4) Default visible set: today's behaviour — the main toolbar items,
-    //         with Auto-open MTZ inserted after the first one (Open Coords…).
-    //         Persisted user customizations override this via macOS autosave.
+    // --- 4) Default visible set: the main toolbar items in their original
+    //         order, with Auto-open MTZ inserted after Open Coords and
+    //         Quicksave appended at the end (Bandicoot's two file-action
+    //         additions). Persisted user customizations override this via
+    //         macOS autosave.
     for (NSUInteger i = 0; i < main_idents.count; i++) {
         [delegate.defaultIdentifiers addObject:main_idents[i]];
         if (i == 0) {
             [delegate.defaultIdentifiers addObject:@"bandicoot.extra.auto_open_mtz"];
         }
     }
+    [delegate.defaultIdentifiers addObject:@"bandicoot.extra.quicksave"];
 
     // --- 5) Always allow the standard system identifiers (spaces / customize).
     [delegate.allowedIdentifiers addObject:NSToolbarSpaceItemIdentifier];
