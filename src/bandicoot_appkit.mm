@@ -334,7 +334,17 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
         base = n;
         ext  = ".pdb";
     }
-    std::string qs = base + "-quicksave" + ext;
+    // If base already ends with "-quicksave", strip it — otherwise each
+    // press cascades the suffix (foo-quicksave-quicksave-quicksave.pdb).
+    // save_coordinates() updates the molecule's name to the saved path,
+    // so molecule_name() on the next press returns the quicksave path.
+    static const std::string qs_suffix = "-quicksave";
+    if (base.size() >= qs_suffix.size() &&
+        base.compare(base.size() - qs_suffix.size(),
+                     qs_suffix.size(), qs_suffix) == 0) {
+        base.resize(base.size() - qs_suffix.size());
+    }
+    std::string qs = base + qs_suffix + ext;
 
     int rc = save_coordinates(imol, qs.c_str());
     if (rc == 1) {
@@ -360,9 +370,114 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
+// Most of Coot 0.9's Python ecosystem is Python-2-syntax (`print "..."`
+// without parens, `execfile()`, etc.) and fails to import under the
+// Python 3 interpreter Bandicoot is built against. Of the 106 .py files
+// shipped, only ~14 compile cleanly — fitting.py, coot_utils.py,
+// coot_gui.py, generic_objects.py are all broken. Functions like
+// sphere_refine(), toggle_backrub_rotamers() etc. are simply undefined
+// in the running interpreter, so dispatching them via PyRun_SimpleString
+// throws a silent NameError and the toolbar button does nothing.
+//
+// Rather than port the whole upstream Coot Python suite to py3, Bandicoot
+// re-defines just the handful of functions its toolbar references — in
+// py3-compatible form, using only the SWIG-exposed C bindings (which DO
+// work). We lazy-load these on the first Python dispatch so the
+// definitions are guaranteed to be in scope by the time the user's click
+// reaches PyRun_SimpleString.
+//
+// Keep the block ASCII / no fancy quotes, and indent with spaces (Python
+// is strict about this).
+static const char *bandicoot_py3_extras_src =
+"# Bandicoot py3 replacements for the (broken-on-py3) Coot Python suite.\n"
+"# Defined once on first Python dispatch from a Bandicoot toolbar item.\n"
+"def _bc_aa_check(label):\n"
+"    aa = active_residue()\n"
+"    if not aa:\n"
+"        print('[bandicoot] %s: no active residue; click an atom first' % label)\n"
+"        return None\n"
+"    return aa\n"
+"\n"
+"def _bc_sphere_generic(use_map, radius, expand):\n"
+"    aa = _bc_aa_check('Sphere refine/regularize')\n"
+"    if aa is None: return\n"
+"    imol, ch, rn, ins, _, _ = aa\n"
+"    central = [ch, rn, ins]\n"
+"    near = residues_near_residue(imol, central, radius) or []\n"
+"    seen = {(ch, rn, ins)}\n"
+"    rs = [central]\n"
+"    for r in near:\n"
+"        t = tuple(r[:3])\n"
+"        if t not in seen:\n"
+"            seen.add(t); rs.append(r[:3])\n"
+"    if expand:\n"
+"        for dr in (-1, 1):\n"
+"            nr = (ch, rn+dr, ins)\n"
+"            if nr not in seen:\n"
+"                seen.add(nr); rs.append([ch, rn+dr, ins])\n"
+"    if use_map:\n"
+"        refine_residues(imol, rs)\n"
+"    else:\n"
+"        regularize_residues(imol, rs)\n"
+"\n"
+"def sphere_refine(radius=4.5):        _bc_sphere_generic(True,  radius, False)\n"
+"def sphere_refine_plus(radius=4.5):   _bc_sphere_generic(True,  radius, True)\n"
+"def sphere_regularize(radius=4.5):    _bc_sphere_generic(False, radius, False)\n"
+"def sphere_regularize_plus(radius=4.5): _bc_sphere_generic(False, radius, True)\n"
+"\n"
+"def refine_tandem_residues():\n"
+"    aa = _bc_aa_check('Tandem Refine')\n"
+"    if aa is None: return\n"
+"    imol, ch, rn, ins, _, _ = aa\n"
+"    rs = [[ch, rn+i, ins] for i in range(-3, 4)]\n"
+"    refine_residues(imol, rs)\n"
+"\n"
+"# Toggle state lives in module globals so each click flips it.\n"
+"_bc_backrub_on = False\n"
+"def toggle_backrub_rotamers():\n"
+"    global _bc_backrub_on\n"
+"    _bc_backrub_on = not _bc_backrub_on\n"
+"    set_rotamer_search_mode(1 if _bc_backrub_on else 0)\n"
+"    print('[bandicoot] Backrub rotamers:', 'on' if _bc_backrub_on else 'off')\n"
+"\n"
+"_bc_probe_on = False\n"
+"def toggle_interactive_probe_dots():\n"
+"    global _bc_probe_on\n"
+"    _bc_probe_on = not _bc_probe_on\n"
+"    s = 1 if _bc_probe_on else 0\n"
+"    set_do_probe_dots_on_rotamers_and_chis(s)\n"
+"    set_do_probe_dots_post_refine(s)\n"
+"    print('[bandicoot] Interactive probe dots:', 'on' if _bc_probe_on else 'off')\n"
+"\n"
+"_bc_hydrogens_on = True\n"
+"def toggle_hydrogen_display():\n"
+"    global _bc_hydrogens_on\n"
+"    _bc_hydrogens_on = not _bc_hydrogens_on\n"
+"    s = 1 if _bc_hydrogens_on else 0\n"
+"    for i in range(graphics_n_molecules()):\n"
+"        if is_valid_model_molecule(i):\n"
+"            set_draw_hydrogens(i, s)\n"
+"    print('[bandicoot] Hydrogens:', 'on' if _bc_hydrogens_on else 'off')\n"
+"\n"
+"_bc_fullscreen_on = False\n"
+"def toggle_full_screen():\n"
+"    global _bc_fullscreen_on\n"
+"    _bc_fullscreen_on = not _bc_fullscreen_on\n"
+"    full_screen(1 if _bc_fullscreen_on else 0)\n";
+
 static gboolean bandicoot_fire_python_command(gpointer data) {
     char *cmd = (char *)data;
     if (cmd) {
+        // Lazy-load the py3 replacement module on first Python dispatch.
+        // safe_python_command_by_char_star routes through PyRun_SimpleString,
+        // which prints any tracebacks to stderr but doesn't propagate them
+        // — so failed function calls (NameError, AttributeError) silently
+        // no-op. Defining the functions up front makes the dispatch work.
+        static gboolean inited = FALSE;
+        if (!inited) {
+            safe_python_command_by_char_star(bandicoot_py3_extras_src);
+            inited = TRUE;
+        }
         safe_python_command_by_char_star(cmd);
         g_free(cmd);
     }
