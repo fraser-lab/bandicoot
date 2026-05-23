@@ -479,6 +479,9 @@ static const char *bandicoot_py3_extras_src =
 
 static gboolean bandicoot_fire_python_command(gpointer data) {
     char *cmd = (char *)data;
+    fprintf(stdout, "[bandicoot-dispatch] python cmd: %s\n",
+            cmd ? cmd : "(null)");
+    fflush(stdout);
     if (cmd) {
         // Lazy-load the py3 replacement module on first Python dispatch.
         // safe_python_command_by_char_star routes through PyRun_SimpleString,
@@ -487,10 +490,35 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
         // no-op. Defining the functions up front makes the dispatch work.
         static gboolean inited = FALSE;
         if (!inited) {
+            fprintf(stdout, "[bandicoot-dispatch] running py3 extras init\n");
+            fflush(stdout);
             safe_python_command_by_char_star(bandicoot_py3_extras_src);
+            // Reach into Python to verify the init succeeded — and force
+            // any error tracebacks to flush so they actually reach stderr.
+            safe_python_command_by_char_star(
+                "import sys\n"
+                "sys.stdout.flush(); sys.stderr.flush()\n"
+                "print('[bandicoot-init] sphere_refine defined:',\n"
+                "      'sphere_refine' in dir(), flush=True)\n"
+                "print('[bandicoot-init] active_residue_py in scope:',\n"
+                "      'active_residue_py' in dir(), flush=True)\n");
             inited = TRUE;
         }
-        safe_python_command_by_char_star(cmd);
+        // Wrap the user command so Python's stdout/stderr are flushed
+        // before and after — otherwise print() output may sit in a buffer
+        // and never reach the terminal in a GUI app.
+        size_t n = strlen(cmd) + 256;
+        char *wrapped = (char *)g_malloc(n);
+        snprintf(wrapped, n,
+                 "import sys; sys.stdout.flush(); sys.stderr.flush()\n"
+                 "try:\n"
+                 "    %s\n"
+                 "except Exception as e:\n"
+                 "    import traceback; traceback.print_exc()\n"
+                 "sys.stdout.flush(); sys.stderr.flush()\n",
+                 cmd);
+        safe_python_command_by_char_star(wrapped);
+        g_free(wrapped);
         g_free(cmd);
     }
     return G_SOURCE_REMOVE;
