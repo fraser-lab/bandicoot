@@ -484,40 +484,49 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
     fflush(stdout);
     if (cmd) {
         // Lazy-load the py3 replacement module on first Python dispatch.
-        // safe_python_command_by_char_star routes through PyRun_SimpleString,
-        // which prints any tracebacks to stderr but doesn't propagate them
-        // — so failed function calls (NameError, AttributeError) silently
-        // no-op. Defining the functions up front makes the dispatch work.
+        // Use os.write(1, ...) for any diagnostic prints from inside
+        // Python — Coot's embedded Python redirects sys.stdout to
+        // somewhere user-invisible, so regular print() output never
+        // reaches the terminal. os.write to fd 1 bypasses sys.stdout and
+        // lands in the same stream as the C-side fprintfs above.
         static gboolean inited = FALSE;
         if (!inited) {
             fprintf(stdout, "[bandicoot-dispatch] running py3 extras init\n");
             fflush(stdout);
             safe_python_command_by_char_star(bandicoot_py3_extras_src);
-            // Reach into Python to verify the init succeeded — and force
-            // any error tracebacks to flush so they actually reach stderr.
+            fprintf(stdout, "[bandicoot-dispatch] init returned, probing\n");
+            fflush(stdout);
+            // Probe via os.write so output bypasses sys.stdout.
             safe_python_command_by_char_star(
-                "import sys\n"
-                "sys.stdout.flush(); sys.stderr.flush()\n"
-                "print('[bandicoot-init] sphere_refine defined:',\n"
-                "      'sphere_refine' in dir(), flush=True)\n"
-                "print('[bandicoot-init] active_residue_py in scope:',\n"
-                "      'active_residue_py' in dir(), flush=True)\n");
+                "import os\n"
+                "def _bcw(s):\n"
+                "    try: os.write(1, (s + '\\n').encode('utf-8'))\n"
+                "    except Exception: pass\n"
+                "_bcw('[bandicoot-init] sphere_refine defined: ' + str('sphere_refine' in dir()))\n"
+                "_bcw('[bandicoot-init] active_residue_py in scope: ' + str('active_residue_py' in dir()))\n"
+                "_bcw('[bandicoot-init] refine_residues_py in scope: ' + str('refine_residues_py' in dir()))\n");
+            fprintf(stdout, "[bandicoot-dispatch] probe returned\n");
+            fflush(stdout);
             inited = TRUE;
         }
-        // Wrap the user command so Python's stdout/stderr are flushed
-        // before and after — otherwise print() output may sit in a buffer
-        // and never reach the terminal in a GUI app.
-        size_t n = strlen(cmd) + 256;
+        // Wrap the user command so any exception traceback is captured
+        // and written to fd 1 directly (bypassing sys.stderr too).
+        size_t n = strlen(cmd) + 512;
         char *wrapped = (char *)g_malloc(n);
         snprintf(wrapped, n,
-                 "import sys; sys.stdout.flush(); sys.stderr.flush()\n"
+                 "import os, traceback\n"
                  "try:\n"
                  "    %s\n"
-                 "except Exception as e:\n"
-                 "    import traceback; traceback.print_exc()\n"
-                 "sys.stdout.flush(); sys.stderr.flush()\n",
+                 "    os.write(1, b'[bandicoot-dispatch] python cmd ok\\n')\n"
+                 "except Exception:\n"
+                 "    os.write(1, b'[bandicoot-dispatch] python cmd raised:\\n')\n"
+                 "    os.write(1, traceback.format_exc().encode('utf-8'))\n",
                  cmd);
+        fprintf(stdout, "[bandicoot-dispatch] running wrapped cmd\n");
+        fflush(stdout);
         safe_python_command_by_char_star(wrapped);
+        fprintf(stdout, "[bandicoot-dispatch] wrapped cmd returned\n");
+        fflush(stdout);
         g_free(wrapped);
         g_free(cmd);
     }
