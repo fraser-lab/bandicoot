@@ -29,6 +29,7 @@ void safe_python_command_by_char_star(const char *python_command);
 // extern "C" matches the actual linkage.
 extern "C" {
     int first_coords_imol(void);
+    int go_to_atom_molecule_number(void);   // currently-focused molecule
     const char *molecule_name(int imol);
     int save_coordinates(int imol, const char *filename);
     short int is_valid_model_molecule(int imol);
@@ -290,12 +291,23 @@ static gboolean bandicoot_action_auto_open_mtz(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Quicksave: write the first coord molecule to <basename>-quicksave<ext>
-// next to the file it was loaded from. Overwrites on each press, so a
-// model can be checkpointed without filling a directory with N-numbered
-// auto-saves. Bandicoot-only; doesn't exist in upstream Coot 0.9.
+// Quicksave: write the currently-focused molecule to
+// <basename>-quicksave<ext> next to the file it was loaded from.
+// Overwrites on each press, so a model can be checkpointed without
+// filling a directory with N-numbered auto-saves. Bandicoot-only;
+// doesn't exist in upstream Coot 0.9.
+//
+// Picking the molecule: Coot's Go-To-Atom dialog stores its currently-
+// focused molecule and that's the most reliable signal of "the one the
+// user is editing" — they navigated there to make edits. Fall back to
+// first_coords_imol() if go-to-atom hasn't been used yet (which is also
+// what the original Quicksave did, so behaviour for fresh sessions is
+// unchanged).
 static gboolean bandicoot_action_quicksave(gpointer data) {
-    int imol = first_coords_imol();
+    int imol = go_to_atom_molecule_number();
+    if (imol < 0 || !is_valid_model_molecule(imol)) {
+        imol = first_coords_imol();
+    }
     if (imol < 0 || !is_valid_model_molecule(imol)) {
         fprintf(stdout, "[bandicoot] Quicksave: no model molecule loaded\n");
         fflush(stdout);
