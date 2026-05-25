@@ -32,6 +32,28 @@ extern "C" {
     const char *molecule_name(int imol);
     int save_coordinates(int imol, const char *filename);
     short int is_valid_model_molecule(int imol);
+
+    // C functions backing the toolbar toggles and one-shot actions
+    // below. All declared inside BEGIN_C_DECLS in c-interface.h.
+    int  graphics_n_molecules(void);
+    void set_draw_hydrogens(int imol, int istat);
+    void do_cis_trans_conversion_setup(int istate);
+    void set_rotamer_search_mode(int mode);
+    void set_do_probe_dots_on_rotamers_and_chis(short int state);
+    void set_do_probe_dots_post_refine(short int state);
+    void full_screen(int mode);
+
+    // Sphere/Tandem refine implementations live in bandicoot_refine.cc
+    // so the .cc file can pull in Coot's C++ headers for the active
+    // atom + neighbor-finding + refine APIs (which take/return C++
+    // types and aren't usable from this .mm unit without dragging in
+    // a lot of Coot's internals). Signature matches GSourceFunc so they
+    // can be wired into BANDICOOT_EXTRAS.c_callback directly.
+    gboolean bandicoot_action_sphere_refine(gpointer);
+    gboolean bandicoot_action_sphere_refine_plus(gpointer);
+    gboolean bandicoot_action_sphere_regularize(gpointer);
+    gboolean bandicoot_action_sphere_regularize_plus(gpointer);
+    gboolean bandicoot_action_refine_tandem(gpointer);
 }
 
 static char kGtkMenuItemKey;
@@ -355,6 +377,69 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
     } else {
         fprintf(stdout, "[bandicoot] Quicksave: write failed for %s\n", qs.c_str());
     }
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+// ---- Toggle actions (5 of the simpler Python-replaced items)
+//
+// Each one wraps a Coot C-interface call with primitive args. State for
+// the on/off toggles lives in C statics; each click flips and applies.
+// Replaces the previously-shelved Python equivalents — these don't need
+// Python or the SWIG layer.
+
+static gboolean bandicoot_action_backrub_toggle(gpointer data) {
+    static gboolean on = FALSE;
+    on = !on;
+    set_rotamer_search_mode(on ? 1 : 0);
+    fprintf(stdout, "[bandicoot] Backrub rotamers: %s\n", on ? "on" : "off");
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean bandicoot_action_interactive_dots_toggle(gpointer data) {
+    static gboolean on = FALSE;
+    on = !on;
+    short int s = on ? 1 : 0;
+    set_do_probe_dots_on_rotamers_and_chis(s);
+    set_do_probe_dots_post_refine(s);
+    fprintf(stdout, "[bandicoot] Interactive probe dots: %s\n", on ? "on" : "off");
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean bandicoot_action_hydrogen_toggle(gpointer data) {
+    static gboolean on = TRUE;  // Coot starts with hydrogens visible
+    on = !on;
+    int state = on ? 1 : 0;
+    int n = graphics_n_molecules();
+    for (int i = 0; i < n; ++i) {
+        if (is_valid_model_molecule(i)) {
+            set_draw_hydrogens(i, state);
+        }
+    }
+    fprintf(stdout, "[bandicoot] Hydrogens: %s\n", on ? "on" : "off");
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean bandicoot_action_full_screen_toggle(gpointer data) {
+    static gboolean on = FALSE;
+    on = !on;
+    full_screen(on ? 1 : 0);
+    fprintf(stdout, "[bandicoot] Full screen: %s\n", on ? "on" : "off");
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
+
+// Cis ↔ Trans isn't really a toggle — it enters Coot's interactive
+// peptide-flip pick mode. Calling with state=1 turns the pick mode on;
+// the user then clicks an atom and Coot performs the conversion + exits
+// the mode automatically. Each press of the toolbar button re-arms the
+// mode for one more flip.
+static gboolean bandicoot_action_cis_trans(gpointer data) {
+    do_cis_trans_conversion_setup(1);
+    fprintf(stdout, "[bandicoot] Cis↔Trans: click an atom to flip\n");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }
@@ -801,17 +886,29 @@ struct bandicoot_extra {
 };
 
 static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
-    // Bandicoot-specific actions implemented in C
+    // File
     {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL},
     {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png"},
 
-    // Python-dispatched extras (Sphere Refine, Tandem Refine, Backrub
-    // Rotamers, Interactive Dots, Local Probe Dots, Toggle Hydrogens,
-    // Full Screen, etc.) lived here briefly during v0.0.0.2 development
-    // but were removed because the underlying Coot Python interface
-    // can't be enabled on Python 3 without a port of Coot's C-side
-    // PyString_FromString → PyUnicode_FromString. See build.sh's
-    // comment and [[bandicoot-coot-py-broken]] for the full story.
+    // Refinement (C++ implementations live in bandicoot_refine.cc — they
+    // use Coot's C++ active-atom / neighbor-finding / refine APIs)
+    {"sphere_refine",         "Sphere Refine",         bandicoot_action_sphere_refine,         NULL, "refine-1.svg"},
+    {"sphere_refine_plus",    "Sphere Refine +",       bandicoot_action_sphere_refine_plus,    NULL, "refine-1.svg"},
+    {"refine_tandem",         "Tandem Refine",         bandicoot_action_refine_tandem,         NULL, "refine-1.svg"},
+    {"sphere_regularize",     "Sphere Regularize",     bandicoot_action_sphere_regularize,     NULL, "regularize-1.svg"},
+    {"sphere_regularize_plus","Sphere Regularize +",   bandicoot_action_sphere_regularize_plus,NULL, "regularize-1.svg"},
+    {"cis_trans",             "Cis ↔ Trans",           bandicoot_action_cis_trans,             NULL, "flip-peptide.svg"},
+
+    // Validation / Display toggles (C only — wrap one Coot set_*
+    // function call each, with on/off state in a static)
+    {"backrub_toggle",     "Backrub Rotamers",  bandicoot_action_backrub_toggle,            NULL, "auto-fit-rotamer.svg"},
+    {"interactive_dots",   "Interactive Dots",  bandicoot_action_interactive_dots_toggle,   NULL, "probe-clash.svg"},
+    {"hydrogen_toggle",    "Toggle Hydrogens",  bandicoot_action_hydrogen_toggle,           NULL, "delete.svg"},
+    {"full_screen_toggle", "Full Screen",       bandicoot_action_full_screen_toggle,        NULL, "reset-view-32.svg"},
+
+    // Local Probe Dots is omitted — wraps the external `probe` binary
+    // via Coot's Python layer, which can't be enabled until Coot's
+    // C-side Python interface gets a py3 port. See build.sh's comment.
 };
 static const size_t BANDICOOT_EXTRAS_COUNT =
     sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);

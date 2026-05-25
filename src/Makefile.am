@@ -284,6 +284,7 @@ coot_bin_SOURCES = \
 	bandicoot-version.h	 \
 	bandicoot_appkit.h	 \
 	bandicoot_appkit.mm	 \
+	bandicoot_refine.cc	 \
 	atom-pull.hh		 \
 	boot-python.hh           \
 	boot-python.cc           \
