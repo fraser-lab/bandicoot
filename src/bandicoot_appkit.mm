@@ -363,10 +363,23 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
 
 static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     GtkToolButton *tb = (GtkToolButton *)data;
-    // GtkToolButton inherits from GtkToolItem (not GtkButton). The "clicked"
-    // signal lives on GtkToolButton itself; emitting it triggers Coot's
-    // libglade-wired handlers exactly as a real user click would.
-    if (tb && GTK_IS_TOOL_BUTTON(tb)) {
+    if (!tb || !GTK_IS_TOOL_BUTTON(tb)) return G_SOURCE_REMOVE;
+
+    // GtkToggleToolButton subclasses (Real Space Refine Zone, Regularize
+    // Zone, Auto Fit Rotamer, etc. — most of the sidebar refinement
+    // tools) have their callbacks wired to the "toggled" signal, not
+    // "clicked". Emitting "clicked" leaves the active state unchanged
+    // and "toggled" never fires. Flip the active state instead — GTK
+    // emits "toggled" as a side effect and the connected handler runs.
+    //
+    // GtkRadioToolButton is also a subclass of GtkToggleToolButton, so
+    // this check covers both. GtkMenuToolButton is a regular
+    // GtkToolButton subclass and responds correctly to "clicked".
+    if (GTK_IS_TOGGLE_TOOL_BUTTON(tb)) {
+        GtkToggleToolButton *ttb = GTK_TOGGLE_TOOL_BUTTON(tb);
+        gboolean cur = gtk_toggle_tool_button_get_active(ttb);
+        gtk_toggle_tool_button_set_active(ttb, !cur);
+    } else {
         g_signal_emit_by_name(tb, "clicked");
     }
     return G_SOURCE_REMOVE;
