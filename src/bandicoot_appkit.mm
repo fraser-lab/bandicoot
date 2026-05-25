@@ -389,24 +389,26 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
 // Python or the SWIG layer.
 
 static gboolean bandicoot_action_backrub_toggle(gpointer data) {
+    // Rotamer-search-mode constants from src/rotamer-search-modes.hh:
+    //   0 = ROTAMERSEARCHAUTOMATIC  (the default — picks mode per residue)
+    //   1 = ROTAMERSEARCHHIGHRES    (rigid-body fit)
+    //   2 = ROTAMERSEARCHLOWRES     (backrub — what we want for "on")
+    // Earlier mistake: passed 1 for "on" (rigid-body) which silently
+    // did the wrong thing.
     static gboolean on = FALSE;
     on = !on;
-    set_rotamer_search_mode(on ? 1 : 0);
+    set_rotamer_search_mode(on ? 2 /*LOWRES = backrub*/ : 0 /*AUTOMATIC*/);
     fprintf(stdout, "[bandicoot] Backrub rotamers: %s\n", on ? "on" : "off");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }
 
-static gboolean bandicoot_action_interactive_dots_toggle(gpointer data) {
-    static gboolean on = FALSE;
-    on = !on;
-    short int s = on ? 1 : 0;
-    set_do_probe_dots_on_rotamers_and_chis(s);
-    set_do_probe_dots_post_refine(s);
-    fprintf(stdout, "[bandicoot] Interactive probe dots: %s\n", on ? "on" : "off");
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
+// Interactive Dots removed from the catalog (see BANDICOOT_EXTRAS).
+// The action body would have called set_do_probe_dots_on_rotamers_and_chis
+// and set_do_probe_dots_post_refine, but the downstream do_interactive_probe()
+// is gated by `#if defined USE_GUILE && defined USE_GUILE_GTK && !defined
+// WINDOWS_MINGW` and Bandicoot doesn't build with guile-gtk. So the button
+// would set flags that nothing reads.
 
 static gboolean bandicoot_action_hydrogen_toggle(gpointer data) {
     static gboolean on = TRUE;  // Coot starts with hydrogens visible
@@ -902,13 +904,16 @@ static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
     // Validation / Display toggles (C only — wrap one Coot set_*
     // function call each, with on/off state in a static)
     {"backrub_toggle",     "Backrub Rotamers",  bandicoot_action_backrub_toggle,            NULL, "auto-fit-rotamer.svg"},
-    {"interactive_dots",   "Interactive Dots",  bandicoot_action_interactive_dots_toggle,   NULL, "probe-clash.svg"},
     {"hydrogen_toggle",    "Toggle Hydrogens",  bandicoot_action_hydrogen_toggle,           NULL, "delete.svg"},
     {"full_screen_toggle", "Full Screen",       bandicoot_action_full_screen_toggle,        NULL, "reset-view-32.svg"},
 
-    // Local Probe Dots is omitted — wraps the external `probe` binary
-    // via Coot's Python layer, which can't be enabled until Coot's
-    // C-side Python interface gets a py3 port. See build.sh's comment.
+    // Omitted (would set a flag nothing reads, or call a stub):
+    //   Interactive Dots — depends on graphics_info_t::do_interactive_probe(),
+    //     which is gated by `#if USE_GUILE && USE_GUILE_GTK` and Bandicoot
+    //     doesn't build with guile-gtk.
+    //   Local Probe Dots — wraps the external `probe` binary via Coot's
+    //     Python layer; same blocker as the rest of the deferred
+    //     Python items. See build.sh's comment.
 };
 static const size_t BANDICOOT_EXTRAS_COUNT =
     sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);
