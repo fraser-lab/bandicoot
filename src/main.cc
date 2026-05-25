@@ -419,6 +419,9 @@ main (int argc, char *argv[]) {
 	    GtkWidget *model_tb = lookup_widget(window1, "model_toolbar");
 	    bandicoot_install_native_toolbar(lookup_widget(window1, "main_toolbar"),
 	                                     model_tb);
+	    // Restore native right-click → "Customize Toolbar…" context menu
+	    // that GTK-Quartz's contentView would otherwise intercept.
+	    bandicoot_install_right_click_handler();
 	    // Float the side toolbar (model_toolbar) in its own window so it's
 	    // free of the main window's GL backing layer.
 	    bandicoot_float_widget_in_window(model_tb, "Model Tools");

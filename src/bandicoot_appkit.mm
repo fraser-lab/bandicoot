@@ -388,51 +388,46 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
 // Replaces the previously-shelved Python equivalents — these don't need
 // Python or the SWIG layer.
 
-static gboolean bandicoot_action_backrub_toggle(gpointer data) {
-    // Rotamer-search-mode constants from src/rotamer-search-modes.hh:
-    //   0 = ROTAMERSEARCHAUTOMATIC  (the default — picks mode per residue)
-    //   1 = ROTAMERSEARCHHIGHRES    (rigid-body fit)
-    //   2 = ROTAMERSEARCHLOWRES     (backrub — what we want for "on")
-    // Earlier mistake: passed 1 for "on" (rigid-body) which silently
-    // did the wrong thing.
-    static gboolean on = FALSE;
-    on = !on;
-    set_rotamer_search_mode(on ? 2 /*LOWRES = backrub*/ : 0 /*AUTOMATIC*/);
+// Toggle "apply" functions. Each takes desired state via the gpointer
+// (1 = on, 0 = off) and applies it to Coot. The visual on/off state
+// lives on the NSButton subview these are wired through — see
+// BandicootToggleTarget below. Cleaner than keeping a parallel C
+// static, since the button is the user-visible source of truth.
+
+static gboolean bandicoot_action_backrub_apply(gpointer data) {
+    // ROTAMERSEARCHLOWRES = 2 is "backrub"; ROTAMERSEARCHAUTOMATIC = 0
+    // is Coot's default per-residue selection. See rotamer-search-modes.hh.
+    int on = GPOINTER_TO_INT(data);
+    set_rotamer_search_mode(on ? 2 : 0);
     fprintf(stdout, "[bandicoot] Backrub rotamers: %s\n", on ? "on" : "off");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }
 
-// Interactive Dots removed from the catalog (see BANDICOOT_EXTRAS).
-// The action body would have called set_do_probe_dots_on_rotamers_and_chis
-// and set_do_probe_dots_post_refine, but the downstream do_interactive_probe()
-// is gated by `#if defined USE_GUILE && defined USE_GUILE_GTK && !defined
-// WINDOWS_MINGW` and Bandicoot doesn't build with guile-gtk. So the button
-// would set flags that nothing reads.
-
-static gboolean bandicoot_action_hydrogen_toggle(gpointer data) {
-    static gboolean on = TRUE;  // Coot starts with hydrogens visible
-    on = !on;
-    int state = on ? 1 : 0;
+static gboolean bandicoot_action_hydrogen_apply(gpointer data) {
+    int on = GPOINTER_TO_INT(data);
     int n = graphics_n_molecules();
     for (int i = 0; i < n; ++i) {
-        if (is_valid_model_molecule(i)) {
-            set_draw_hydrogens(i, state);
-        }
+        if (is_valid_model_molecule(i)) set_draw_hydrogens(i, on);
     }
     fprintf(stdout, "[bandicoot] Hydrogens: %s\n", on ? "on" : "off");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }
 
-static gboolean bandicoot_action_full_screen_toggle(gpointer data) {
-    static gboolean on = FALSE;
-    on = !on;
-    full_screen(on ? 1 : 0);
+static gboolean bandicoot_action_full_screen_apply(gpointer data) {
+    int on = GPOINTER_TO_INT(data);
+    full_screen(on);
     fprintf(stdout, "[bandicoot] Full screen: %s\n", on ? "on" : "off");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }
+
+// Interactive Dots removed from the catalog (see BANDICOOT_EXTRAS).
+// graphics_info_t::do_interactive_probe() is gated by `#if defined
+// USE_GUILE && defined USE_GUILE_GTK && !defined WINDOWS_MINGW` and
+// Bandicoot doesn't build with guile-gtk. So the button would set
+// flags that nothing reads.
 
 // Cis ↔ Trans isn't really a toggle — it enters Coot's interactive
 // peptide-flip pick mode. Calling with state=1 turns the pick mode on;
@@ -641,6 +636,40 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
 static char kGtkButtonKey;
 static char kPythonCmdKey;
 static char kCCallbackKey;
+static char kToggleApplyKey;   // associated object on NSButton (toggle subview):
+                               // NSValue wrapping a GSourceFunc that takes
+                               // GPOINTER_TO_INT(state).
+
+// ---- Toggle button target
+//
+// Used for NSToolbarItems whose `view` is an NSButton configured as
+// NSButtonTypePushOnPushOff. AppKit auto-flips the button's `state` on
+// click; this target reads the new state and dispatches it (as an int
+// payload) to the registered C "apply" function via g_idle_add.
+//
+// One target instance handles every toggle button — discrimination is by
+// the associated-object lookup on `sender`.
+
+@interface BandicootToggleTarget : NSObject
++ (instancetype)shared;
+- (void)toggle:(NSButton *)sender;
+@end
+
+@implementation BandicootToggleTarget
++ (instancetype)shared {
+    static BandicootToggleTarget *s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ s = [BandicootToggleTarget new]; });
+    return s;
+}
+- (void)toggle:(NSButton *)sender {
+    NSValue *box = objc_getAssociatedObject(sender, &kToggleApplyKey);
+    GSourceFunc fn = box ? (GSourceFunc)[box pointerValue] : NULL;
+    if (!fn) return;
+    int on = (sender.state == NSControlStateValueOn) ? 1 : 0;
+    g_idle_add(fn, GINT_TO_POINTER(on));
+}
+@end
 
 @interface BandicootToolbarTarget : NSObject
 + (instancetype)shared;
@@ -885,27 +914,36 @@ struct bandicoot_extra {
     GSourceFunc c_callback;       // non-NULL → call directly; else python_cmd
     const char *python_cmd;       // ignored when c_callback != NULL
     const char *icon_basename;    // file under share/coot/pixmaps/
+    // For toggle items: c_callback above goes UNUSED; instead the
+    // NSToolbarItem gets a view=NSButton(PushOnPushOff) whose target
+    // dispatches `toggle_apply` with the new state via GPOINTER_TO_INT.
+    // is_toggle_initial is the button's starting state (0=off, 1=on)
+    // — set to 1 for Toggle Hydrogens since Coot starts with hydrogens
+    // visible.
+    GSourceFunc toggle_apply;     // non-NULL → render as NSButton toggle
+    int toggle_initial;
 };
 
 static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
     // File
-    {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL},
-    {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png"},
+    {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL,             NULL, 0},
+    {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png",  NULL, 0},
 
     // Refinement (C++ implementations live in bandicoot_refine.cc — they
     // use Coot's C++ active-atom / neighbor-finding / refine APIs)
-    {"sphere_refine",         "Sphere Refine",         bandicoot_action_sphere_refine,         NULL, "refine-1.svg"},
-    {"sphere_refine_plus",    "Sphere Refine +",       bandicoot_action_sphere_refine_plus,    NULL, "refine-1.svg"},
-    {"refine_tandem",         "Tandem Refine",         bandicoot_action_refine_tandem,         NULL, "refine-1.svg"},
-    {"sphere_regularize",     "Sphere Regularize",     bandicoot_action_sphere_regularize,     NULL, "regularize-1.svg"},
-    {"sphere_regularize_plus","Sphere Regularize +",   bandicoot_action_sphere_regularize_plus,NULL, "regularize-1.svg"},
-    {"cis_trans",             "Cis ↔ Trans",           bandicoot_action_cis_trans,             NULL, "flip-peptide.svg"},
+    {"sphere_refine",         "Sphere Refine",         bandicoot_action_sphere_refine,         NULL, "refine-1.svg",      NULL, 0},
+    {"sphere_refine_plus",    "Sphere Refine +",       bandicoot_action_sphere_refine_plus,    NULL, "refine-1.svg",      NULL, 0},
+    {"refine_tandem",         "Tandem Refine",         bandicoot_action_refine_tandem,         NULL, "refine-1.svg",      NULL, 0},
+    {"sphere_regularize",     "Sphere Regularize",     bandicoot_action_sphere_regularize,     NULL, "regularize-1.svg",  NULL, 0},
+    {"sphere_regularize_plus","Sphere Regularize +",   bandicoot_action_sphere_regularize_plus,NULL, "regularize-1.svg",  NULL, 0},
+    {"cis_trans",             "Cis ↔ Trans",           bandicoot_action_cis_trans,             NULL, "flip-peptide.svg",  NULL, 0},
 
-    // Validation / Display toggles (C only — wrap one Coot set_*
-    // function call each, with on/off state in a static)
-    {"backrub_toggle",     "Backrub Rotamers",  bandicoot_action_backrub_toggle,            NULL, "auto-fit-rotamer.svg"},
-    {"hydrogen_toggle",    "Toggle Hydrogens",  bandicoot_action_hydrogen_toggle,           NULL, "delete.svg"},
-    {"full_screen_toggle", "Full Screen",       bandicoot_action_full_screen_toggle,        NULL, "reset-view-32.svg"},
+    // Toggles — rendered as NSButton subviews so AppKit shows their
+    // on/off state visually. c_callback unused; the NSButton's target
+    // dispatches toggle_apply with the new state on each press.
+    {"backrub_toggle",     "Backrub Rotamers",  NULL, NULL, "auto-fit-rotamer.svg", bandicoot_action_backrub_apply,    0},
+    {"hydrogen_toggle",    "Toggle Hydrogens",  NULL, NULL, "delete.svg",           bandicoot_action_hydrogen_apply,   1},
+    {"full_screen_toggle", "Full Screen",       NULL, NULL, "reset-view-32.svg",    bandicoot_action_full_screen_apply,0},
 
     // Omitted (would set a flag nothing reads, or call a stub):
     //   Interactive Dots — depends on graphics_info_t::do_interactive_probe(),
@@ -928,23 +966,57 @@ static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
         const struct bandicoot_extra *e = &BANDICOOT_EXTRAS[i];
         NSString *ident = [NSString stringWithFormat:@"bandicoot.extra.%s",
                            e->ident_suffix];
-        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
-        [item setLabel:[NSString stringWithUTF8String:e->label]];
-        [item setPaletteLabel:[NSString stringWithUTF8String:e->label]];
-        [item setTarget:[BandicootToolbarTarget shared]];
-        [item setAction:@selector(dispatch:)];
-
+        NSString *label = [NSString stringWithUTF8String:e->label];
         NSImage *icon = image_from_pixmaps_dir(e->icon_basename);
-        [item setImage:icon ? icon : fallback_icon];
+        if (!icon) icon = fallback_icon;
 
-        if (e->c_callback) {
-            objc_setAssociatedObject(item, &kCCallbackKey,
-                                     [NSValue valueWithPointer:(void *)e->c_callback],
+        NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:ident];
+        [item setLabel:label];
+        [item setPaletteLabel:label];
+
+        if (e->toggle_apply) {
+            // Toggle items: render as an NSButton subview so AppKit
+            // shows the on/off state visually (NSButtonTypePushOnPushOff
+            // gives the standard bordered "pressed" look when on). The
+            // button's `state` is the truth — the apply function reads
+            // it via BandicootToggleTarget.
+            NSRect rect = NSMakeRect(0, 0, 40, 32);
+            NSButton *btn = [[NSButton alloc] initWithFrame:rect];
+            [btn setButtonType:NSButtonTypePushOnPushOff];
+            [btn setBezelStyle:NSBezelStyleRegularSquare];
+            [btn setBordered:YES];
+            [btn setTitle:@""];
+            if (icon) [btn setImage:icon];
+            [btn setImagePosition:NSImageOnly];
+            [btn setState:e->toggle_initial ? NSControlStateValueOn
+                                            : NSControlStateValueOff];
+            [btn setTarget:[BandicootToggleTarget shared]];
+            [btn setAction:@selector(toggle:)];
+            // Stash the apply function so the toggle target can find it.
+            objc_setAssociatedObject(btn, &kToggleApplyKey,
+                                     [NSValue valueWithPointer:(void *)e->toggle_apply],
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        } else if (e->python_cmd) {
-            objc_setAssociatedObject(item, &kPythonCmdKey,
-                                     [NSString stringWithUTF8String:e->python_cmd],
-                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [item setView:btn];
+            // Setting both view and image is harmless; the view wins
+            // for display, but the image-only fallback in the palette
+            // (item summary) still wants something.
+            if (icon) [item setImage:icon];
+        } else {
+            // Regular click-once items: standard NSToolbarItem with
+            // image + target/action dispatch through BandicootToolbarTarget.
+            [item setTarget:[BandicootToolbarTarget shared]];
+            [item setAction:@selector(dispatch:)];
+            if (icon) [item setImage:icon];
+
+            if (e->c_callback) {
+                objc_setAssociatedObject(item, &kCCallbackKey,
+                                         [NSValue valueWithPointer:(void *)e->c_callback],
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            } else if (e->python_cmd) {
+                objc_setAssociatedObject(item, &kPythonCmdKey,
+                                         [NSString stringWithUTF8String:e->python_cmd],
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
         }
 
         [delegate.allowedIdentifiers addObject:ident];
@@ -1094,6 +1166,60 @@ extern "C" void bandicoot_run_toolbar_customization(void) {
             return;
         }
     }
+}
+
+// ---- Right-click context menu on the toolbar
+//
+// NSToolbar normally pops a context menu on right-click (Icon Only /
+// Text Only / Customize Toolbar…). On GTK-Quartz with Tahoe the contentView
+// (GTK GL area) intercepts right-clicks before they reach NSToolbar's own
+// handlers — so the user only gets the menu when right-clicking the title
+// bar (which is above contentView). Restore it via an NSEvent local
+// monitor that checks if the click landed in the toolbar strip (between
+// contentLayoutRect.maxY and the start of the title bar) and pops our own
+// menu there.
+
+static id bandicoot_right_click_monitor = nil;
+
+static void bandicoot_show_toolbar_menu(NSWindow *win, NSEvent *event) {
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
+    NSMenuItem *customize = [[NSMenuItem alloc]
+                             initWithTitle:@"Customize Toolbar…"
+                                    action:@selector(bandicootCustomizeToolbar:)
+                             keyEquivalent:@""];
+    [customize setTarget:[BandicootMenuTarget shared]];
+    [menu addItem:customize];
+    // popUpContextMenu:withEvent:forView: needs a view to anchor on; the
+    // window's contentView is the cleanest pick.
+    [NSMenu popUpContextMenu:menu withEvent:event forView:win.contentView];
+}
+
+static BOOL bandicoot_click_is_in_toolbar(NSWindow *win, NSEvent *event) {
+    if (![win.toolbar isVisible]) return NO;
+    // contentLayoutRect is the area below the toolbar in window
+    // coordinates (origin at bottom-left). Anything above its maxY and
+    // below the title bar is the toolbar strip. Title-bar height varies
+    // by macOS, but the NSWindowStyleMaskTitled portion is roughly 28pt
+    // — and we only want to NOT trigger on title-bar clicks (which have
+    // their own context menu we shouldn't override).
+    NSPoint p = event.locationInWindow;
+    NSRect contentRect = win.contentLayoutRect;
+    CGFloat title_top = NSHeight(win.frame) - 28.0;  // approx title-bar bottom
+    return (p.y >= NSMaxY(contentRect)) && (p.y < title_top);
+}
+
+extern "C" void bandicoot_install_right_click_handler(void) {
+    if (bandicoot_right_click_monitor) return;  // idempotent
+    bandicoot_right_click_monitor =
+        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskRightMouseDown
+                                              handler:^NSEvent *(NSEvent *e) {
+            NSWindow *w = e.window;
+            if (w && bandicoot_click_is_in_toolbar(w, e)) {
+                bandicoot_show_toolbar_menu(w, e);
+                return nil;  // consume — don't let the click fall through to contentView
+            }
+            return e;
+        }];
 }
 
 extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *title) {

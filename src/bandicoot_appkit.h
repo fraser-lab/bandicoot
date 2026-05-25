@@ -42,6 +42,13 @@ void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
 // without right-clicking on the toolbar.
 void bandicoot_run_toolbar_customization(void);
 
+// Install an NSEvent local monitor that pops a "Customize Toolbar…"
+// context menu when the user right-clicks anywhere in the toolbar
+// strip. Restores macOS-native right-click behaviour that GTK-Quartz's
+// contentView otherwise intercepts on Tahoe. Call once at startup
+// after bandicoot_install_native_toolbar.
+void bandicoot_install_right_click_handler(void);
+
 // Reparent a GtkToolbar (or any widget) into a new toplevel GtkWindow,
 // making it transient to its current toplevel. The new window gets its
 // own NSWindow which is not bound by the main window's GL backing layer,
