@@ -751,6 +751,20 @@ static char kToggleApplyKey;   // associated object on NSButton (toggle subview)
  willBeInsertedIntoToolbar:(BOOL)flag {
     return _itemsById[ident];
 }
+// Lock the first five default items so they can't be dragged out or
+// reordered in the customize sheet. macOS 13+ (Sonoma) added this
+// delegate method specifically for "non-removable" toolbar items.
+- (NSSet<NSToolbarItemIdentifier> *)toolbarImmovableItemIdentifiers:(NSToolbar *)tb
+    API_AVAILABLE(macos(13.0))
+{
+    return [NSSet setWithArray:@[
+        @"bandicoot.main.0",                // Open Coords
+        @"bandicoot.extra.auto_open_mtz",
+        @"bandicoot.extra.quicksave",
+        @"bandicoot.main.2",                // Display Manager
+        @"bandicoot.main.3",                // Go to Atom
+    ]];
+}
 @end
 
 // Convert a GdkPixbuf into an NSImage. Caller takes ownership of returned NSImage.
@@ -1082,18 +1096,27 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     }
     catalog_bandicoot_extras(delegate, fallback_icon);
 
-    // --- 4) Default visible set: the main toolbar items in their original
-    //         order, with Auto-open MTZ inserted after Open Coords and
-    //         Quicksave appended at the end (Bandicoot's two file-action
-    //         additions). Persisted user customizations override this via
-    //         macOS autosave.
-    for (NSUInteger i = 0; i < main_idents.count; i++) {
-        [delegate.defaultIdentifiers addObject:main_idents[i]];
-        if (i == 0) {
-            [delegate.defaultIdentifiers addObject:@"bandicoot.extra.auto_open_mtz"];
-        }
-    }
-    [delegate.defaultIdentifiers addObject:@"bandicoot.extra.quicksave"];
+    // --- 4) Default visible set, in user-requested order. The first
+    //         five are also locked via toolbarImmovableItemIdentifiers:
+    //         in the delegate — keep this list and the locked set in
+    //         sync if either changes.
+    //
+    //         Hard-coded identifiers used here:
+    //           bandicoot.main.0 = Open Coords     (from main_toolbar)
+    //           bandicoot.main.2 = Display Manager (from main_toolbar)
+    //           bandicoot.main.3 = Go to Atom      (from main_toolbar)
+    //         Indices match Coot 0.9's frozen main_toolbar Glade layout
+    //         — verified in the diagnostic build's catalog dump.
+    [delegate.defaultIdentifiers addObjectsFromArray:@[
+        @"bandicoot.main.0",                  // 1. Open Coords         (locked)
+        @"bandicoot.extra.auto_open_mtz",     // 2. Auto-open MTZ       (locked)
+        @"bandicoot.extra.quicksave",         // 3. Quicksave           (locked)
+        @"bandicoot.main.2",                  // 4. Display Manager     (locked)
+        @"bandicoot.main.3",                  // 5. Go to Atom          (locked)
+        @"bandicoot.extra.sphere_refine",     // 6. Sphere Refine
+        @"bandicoot.extra.refine_tandem",     // 7. Tandem Refine
+        @"bandicoot.extra.hydrogen_toggle",   // 8. Toggle Hydrogens
+    ]];
 
     // --- 5) Always allow the standard system identifiers (spaces / customize).
     [delegate.allowedIdentifiers addObject:NSToolbarSpaceItemIdentifier];
@@ -1120,7 +1143,7 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     // "NSToolbar Configuration bandicoot.*" entry so the next NSToolbar
     // alloc starts fresh and applies our defaults. Bump the schema
     // integer whenever the catalog's identifier format changes.
-    static const int BANDICOOT_TOOLBAR_SCHEMA = 2;
+    static const int BANDICOOT_TOOLBAR_SCHEMA = 3;
     {
         NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
         NSInteger stored = [ud integerForKey:@"BandicootToolbarSchema"];
