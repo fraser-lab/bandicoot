@@ -79,7 +79,22 @@ extern "C" void bandicoot_run_toolbar_customization(void);
 + (instancetype)shared;
 - (void)dispatch:(NSMenuItem *)sender;
 - (void)bandicootCustomizeToolbar:(id)sender;
+- (void)bandicootSetToolbarDisplayModeIconAndLabel:(id)sender;
+- (void)bandicootSetToolbarDisplayModeIconOnly:(id)sender;
+- (void)bandicootSetToolbarDisplayModeLabelOnly:(id)sender;
 @end
+
+// Helper used by the toolbar-display-mode menu items: find the
+// Bandicoot main NSToolbar (by identifier) and apply a new display mode.
+static void bandicoot_set_toolbar_display_mode(NSToolbarDisplayMode mode) {
+    for (NSWindow *w in [NSApp windows]) {
+        NSToolbar *tb = [w toolbar];
+        if (tb && [[tb identifier] isEqualToString:@"bandicoot.main.v2"]) {
+            tb.displayMode = mode;
+            return;
+        }
+    }
+}
 
 @implementation BandicootMenuTarget
 + (instancetype)shared {
@@ -97,6 +112,15 @@ extern "C" void bandicoot_run_toolbar_customization(void);
 }
 - (void)bandicootCustomizeToolbar:(id)sender {
     bandicoot_run_toolbar_customization();
+}
+- (void)bandicootSetToolbarDisplayModeIconAndLabel:(id)sender {
+    bandicoot_set_toolbar_display_mode(NSToolbarDisplayModeIconAndLabel);
+}
+- (void)bandicootSetToolbarDisplayModeIconOnly:(id)sender {
+    bandicoot_set_toolbar_display_mode(NSToolbarDisplayModeIconOnly);
+}
+- (void)bandicootSetToolbarDisplayModeLabelOnly:(id)sender {
+    bandicoot_set_toolbar_display_mode(NSToolbarDisplayModeLabelOnly);
 }
 @end
 
@@ -1182,15 +1206,45 @@ extern "C" void bandicoot_run_toolbar_customization(void) {
 static id bandicoot_right_click_monitor = nil;
 
 static void bandicoot_show_toolbar_menu(NSWindow *win, NSEvent *event) {
+    NSToolbar *tb = win.toolbar;
+    BandicootMenuTarget *target = [BandicootMenuTarget shared];
+    NSToolbarDisplayMode mode = tb ? tb.displayMode : NSToolbarDisplayModeIconAndLabel;
+
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
-    NSMenuItem *customize = [[NSMenuItem alloc]
-                             initWithTitle:@"Customize Toolbar…"
-                                    action:@selector(bandicootCustomizeToolbar:)
-                             keyEquivalent:@""];
-    [customize setTarget:[BandicootMenuTarget shared]];
-    [menu addItem:customize];
-    // popUpContextMenu:withEvent:forView: needs a view to anchor on; the
-    // window's contentView is the cleanest pick.
+    [menu setAutoenablesItems:NO];
+
+    // Display-mode radio entries — match the standard NSToolbar context
+    // menu (Icon and Text / Icon Only / Text Only). Checkmark reflects
+    // the toolbar's current mode.
+    NSMenuItem *m;
+    m = [menu addItemWithTitle:@"Icon and Text"
+                        action:@selector(bandicootSetToolbarDisplayModeIconAndLabel:)
+                 keyEquivalent:@""];
+    [m setTarget:target];
+    [m setState:(mode == NSToolbarDisplayModeIconAndLabel) ? NSControlStateValueOn
+                                                            : NSControlStateValueOff];
+
+    m = [menu addItemWithTitle:@"Icon Only"
+                        action:@selector(bandicootSetToolbarDisplayModeIconOnly:)
+                 keyEquivalent:@""];
+    [m setTarget:target];
+    [m setState:(mode == NSToolbarDisplayModeIconOnly) ? NSControlStateValueOn
+                                                        : NSControlStateValueOff];
+
+    m = [menu addItemWithTitle:@"Text Only"
+                        action:@selector(bandicootSetToolbarDisplayModeLabelOnly:)
+                 keyEquivalent:@""];
+    [m setTarget:target];
+    [m setState:(mode == NSToolbarDisplayModeLabelOnly) ? NSControlStateValueOn
+                                                         : NSControlStateValueOff];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+    m = [menu addItemWithTitle:@"Customize Toolbar…"
+                        action:@selector(bandicootCustomizeToolbar:)
+                 keyEquivalent:@""];
+    [m setTarget:target];
+
     [NSMenu popUpContextMenu:menu withEvent:event forView:win.contentView];
 }
 
