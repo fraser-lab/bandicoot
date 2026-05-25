@@ -18,16 +18,14 @@
 
 #include "bandicoot_appkit.h"
 
-// Forward-declare Coot's Python eval bridge so we can dispatch Bandicoot
-// toolbar items (e.g. Sphere Refine) to Coot's Python layer without
-// pulling cc-interface-scripting.hh into the Objective-C++ unit.
-// Declared with C++ linkage to match the actual definition in
-// src/c-interface.cc.
-void safe_python_command_by_char_star(const char *python_command);
-
 // Forward-declare Coot C-interface functions we need for the Quicksave
 // toolbar action. These live inside BEGIN_C_DECLS in c-interface.h, so
 // extern "C" matches the actual linkage.
+//
+// Note: Coot's safe_python_command_by_char_star et al. are not usable
+// from Bandicoot because USE_PYTHON is deliberately undefined in
+// build.sh — see the comment there. Python-dispatched toolbar items
+// are therefore not exposed in BANDICOOT_EXTRAS.
 extern "C" {
     int first_coords_imol(void);
     int go_to_atom_molecule_number(void);   // currently-focused molecule
@@ -374,24 +372,15 @@ static gboolean bandicoot_fire_tool_clicked(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Most of Coot 0.9's Python ecosystem is Python-2-syntax (`print "..."`
-// without parens, `execfile()`, etc.) and fails to import under the
-// Python 3 interpreter Bandicoot is built against. Of the 106 .py files
-// shipped, only ~14 compile cleanly — fitting.py, coot_utils.py,
-// coot_gui.py, generic_objects.py are all broken. Functions like
-// sphere_refine(), toggle_backrub_rotamers() etc. are simply undefined
-// in the running interpreter, so dispatching them via PyRun_SimpleString
-// throws a silent NameError and the toolbar button does nothing.
-//
-// Rather than port the whole upstream Coot Python suite to py3, Bandicoot
-// re-defines just the handful of functions its toolbar references — in
-// py3-compatible form, using only the SWIG-exposed C bindings (which DO
-// work). We lazy-load these on the first Python dispatch so the
-// definitions are guaranteed to be in scope by the time the user's click
-// reaches PyRun_SimpleString.
-//
-// Keep the block ASCII / no fancy quotes, and indent with spaces (Python
-// is strict about this).
+// Python toolbar-item dispatch was attempted in v0.0.0.2 development
+// and shelved. Background: Coot 0.9's C interface uses Python 2 API
+// (PyString_FromString, etc.) and won't compile against Python 3
+// without a port. Without USE_PYTHON defined, safe_python_command_*
+// are no-ops, so any toolbar item that tried to dispatch a Python
+// expression would do nothing. The Python-dispatched extras have
+// been removed from BANDICOOT_EXTRAS until Coot's C interface gets
+// a py3 port (a separate piece of work).
+#if 0  // disabled — see comment above
 static const char *bandicoot_py3_extras_src =
 "# Bandicoot py3 replacements for the (broken-on-py3) Coot Python suite.\n"
 "# Defined once on first Python dispatch from a Bandicoot toolbar item.\n"
@@ -483,21 +472,28 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
             cmd ? cmd : "(null)");
     fflush(stdout);
     if (cmd) {
+        // Trivial GIL sanity test — confirms PyRun executes Python at
+        // all in this dispatch context. If we don't see "GIL TEST" in
+        // the terminal, even the GIL-acquiring wrapper isn't enough
+        // (Python interpreter dead, fd 1 redirected, etc).
+        fprintf(stdout, "[bandicoot-dispatch] GIL sanity test\n");
+        fflush(stdout);
+        bandicoot_run_python(
+            "import os; os.write(1, b'[bandicoot-py] GIL TEST OK\\n')");
+        fprintf(stdout, "[bandicoot-dispatch] sanity test returned\n");
+        fflush(stdout);
+
         // Lazy-load the py3 replacement module on first Python dispatch.
-        // Use os.write(1, ...) for any diagnostic prints from inside
-        // Python — Coot's embedded Python redirects sys.stdout to
-        // somewhere user-invisible, so regular print() output never
-        // reaches the terminal. os.write to fd 1 bypasses sys.stdout and
-        // lands in the same stream as the C-side fprintfs above.
         static gboolean inited = FALSE;
         if (!inited) {
             fprintf(stdout, "[bandicoot-dispatch] running py3 extras init\n");
             fflush(stdout);
-            safe_python_command_by_char_star(bandicoot_py3_extras_src);
+            bandicoot_run_python(bandicoot_py3_extras_src);
             fprintf(stdout, "[bandicoot-dispatch] init returned, probing\n");
             fflush(stdout);
-            // Probe via os.write so output bypasses sys.stdout.
-            safe_python_command_by_char_star(
+            // Probe via os.write so output bypasses sys.stdout (which
+            // Coot's embedded interpreter redirects somewhere unseen).
+            bandicoot_run_python(
                 "import os\n"
                 "def _bcw(s):\n"
                 "    try: os.write(1, (s + '\\n').encode('utf-8'))\n"
@@ -524,7 +520,7 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
                  cmd);
         fprintf(stdout, "[bandicoot-dispatch] running wrapped cmd\n");
         fflush(stdout);
-        safe_python_command_by_char_star(wrapped);
+        bandicoot_run_python(wrapped);
         fprintf(stdout, "[bandicoot-dispatch] wrapped cmd returned\n");
         fflush(stdout);
         g_free(wrapped);
@@ -532,6 +528,7 @@ static gboolean bandicoot_fire_python_command(gpointer data) {
     }
     return G_SOURCE_REMOVE;
 }
+#endif  // 0 — Python dispatch disabled until Coot's py3 port
 
 // ---- Toolbar item dispatch target
 //
@@ -565,13 +562,10 @@ static char kCCallbackKey;
         if (fn) g_idle_add(fn, NULL);
         return;
     }
-    // Python-dispatched items (Bandicoot extras like Sphere Refine)
-    NSString *py = objc_getAssociatedObject(sender, &kPythonCmdKey);
-    if (py) {
-        g_idle_add(bandicoot_fire_python_command,
-                   g_strdup([py UTF8String]));
-        return;
-    }
+    // Python-dispatched items are not currently supported (USE_PYTHON
+    // disabled in build.sh — see comment there). kPythonCmdKey is left
+    // in the dispatch table for when Coot's Python interface gets a
+    // py3 port.
     // Default: forward to the wrapped GtkToolButton's "clicked" signal
     NSValue *boxed = objc_getAssociatedObject(sender, &kGtkButtonKey);
     GtkToolButton *tb = (GtkToolButton *)[boxed pointerValue];
@@ -798,32 +792,13 @@ static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
     {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL},
     {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png"},
 
-    // Refinement extensions (python/fitting.py, python/coot_toolbuttons.py)
-    {"sphere_refine",         "Sphere Refine",         NULL, "sphere_refine()",        "refine-1.svg"},
-    {"sphere_refine_plus",    "Sphere Refine +",       NULL, "sphere_refine_plus()",   "refine-1.svg"},
-    {"tandem_refine",         "Tandem Refine",         NULL, "refine_tandem_residues()", "refine-1.svg"},
-    {"sphere_regularize",     "Sphere Regularize",     NULL, "sphere_regularize()",    "regularize-1.svg"},
-    {"sphere_regularize_plus","Sphere Regularize +",   NULL, "sphere_regularize_plus()","regularize-1.svg"},
-    {"refine_residue",        "Refine Residue",        NULL, "refine_active_residue()","refine-1.svg"},
-    {"backrub_toggle",        "Backrub Rotamers",      NULL, "toggle_backrub_rotamers()","auto-fit-rotamer.svg"},
-    {"repeat_refine_zone",    "Repeat Refine Zone",    NULL, "repeat_refine_zone()",   "rrz.svg"},
-    {"cis_trans",             "Cis ↔ Trans",           NULL, "do_cis_trans_conversion_setup(1)","flip-peptide.svg"},
-
-    // Validation
-    {"update_atom_overlaps",  "Update Atom Overlaps",  NULL, "atom_overlaps_for_this_model()","auto-fit-rotamer.svg"},
-    {"interactive_dots",      "Interactive Dots",      NULL, "toggle_interactive_probe_dots()","probe-clash.svg"},
-    {"local_probe_dots",      "Local Probe Dots",      NULL, "probe_local_sphere_active_atom()","probe-clash.svg"},
-
-    // Building
-    {"undo_molecule_chooser", "Choose Undo Molecule",  NULL, "show_set_undo_molecule_chooser()","undo-1.svg"},
-    {"find_waters",           "Find Waters",           NULL, "wrapped_create_find_waters_dialog()","add-water.svg"},
-    {"split_water",           "Split Water",           NULL, "split_active_water()",   "add-water.svg"},
-    {"build_na",              "Build NA",              NULL, "find_nucleic_acids_local(6.0)","dna.svg"},
-    {"ligand_builder",        "Ligand Builder",        NULL, "start_ligand_builder_gui()","go-to-ligand.svg"},
-
-    // Display
-    {"full_screen_toggle",    "Full Screen",           NULL, "toggle_full_screen()",   "reset-view-32.svg"},
-    {"hydrogen_toggle",       "Toggle Hydrogens",      NULL, "toggle_hydrogen_display()","delete.svg"},
+    // Python-dispatched extras (Sphere Refine, Tandem Refine, Backrub
+    // Rotamers, Interactive Dots, Local Probe Dots, Toggle Hydrogens,
+    // Full Screen, etc.) lived here briefly during v0.0.0.2 development
+    // but were removed because the underlying Coot Python interface
+    // can't be enabled on Python 3 without a port of Coot's C-side
+    // PyString_FromString → PyUnicode_FromString. See build.sh's
+    // comment and [[bandicoot-coot-py-broken]] for the full story.
 };
 static const size_t BANDICOOT_EXTRAS_COUNT =
     sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);
@@ -934,7 +909,7 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     // "NSToolbar Configuration bandicoot.*" entry so the next NSToolbar
     // alloc starts fresh and applies our defaults. Bump the schema
     // integer whenever the catalog's identifier format changes.
-    static const int BANDICOOT_TOOLBAR_SCHEMA = 1;
+    static const int BANDICOOT_TOOLBAR_SCHEMA = 2;
     {
         NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
         NSInteger stored = [ud integerForKey:@"BandicootToolbarSchema"];

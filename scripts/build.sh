@@ -53,6 +53,14 @@ echo "==> ./configure --prefix=${PREFIX}"
     --with-glut-prefix="${BREW_PREFIX}" \
     --with-boost="${BREW_PREFIX}" \
     PYTHON="${CONDA_PREFIX}/bin/python3"
+# NOTE: deliberately not passing --with-python. Coot 0.9's C source is
+# Python-2-flavoured throughout (PyString_FromString, etc.) and won't
+# compile against Python 3 without a substantial port. Without --with-
+# python, USE_PYTHON stays undefined; Coot's safe_python_command_*
+# functions become no-ops; nothing in Bandicoot's toolbar dispatches
+# through Python. C-callback toolbar items (Quicksave, Auto-open MTZ)
+# still work. Porting Coot's Python C interface to py3 is deferred —
+# see [[bandicoot-coot-py-broken]] for the full background.
 
 echo "==> make -j${JOBS}"
 make -j"${JOBS}"
