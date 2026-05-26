@@ -1,39 +1,24 @@
 # Bandicoot
 
-Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/)
-0.9.8.95, the structural biology macromolecular model-building program. It
-keeps Coot 0.9's full functionality while replacing the in-window GTK menu
-bar and toolbar with native macOS chrome, so the OpenGL drawing area can
-own the entire window content view without fighting GTK widgets for
-pixels.
+Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/) 0.9.8.95, the structural biology macromolecular model-building program. It
+keeps Coot 0.9's full functionality while changing several UI elements in order for the app to function in MacOS Tahoe (26.x) on Apple Silicon.
 
-Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not
+**NOTE:** Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not
 built or tested on other macOS releases, Linux, or Windows.
 
 ## Why a fork?
 
-Coot 0.9.8.95 builds and runs on macOS Tahoe, but several long-standing
-GTK-Quartz interactions render the user interface unusable:
+Coot 0.9.8.95 builds and runs on macOS Tahoe, but several long-standing GTK-Quartz interactions render the user interface unusable. Bandicoot addresses each of these with macOS-specific fixes layered on top of upstream Coot. See the end of this document for a list of major changes from Coot 0.9.8.95.
 
-- The `_NSOpenGLViewBackingLayer` that GtkGLExt-Quartz attaches to the
-  main `NSWindow`'s `contentView` covers any in-window GTK widget (menu
-  bar, toolbars, status bar) with opaque GL pixels.
-- `event->state` from GTK-Quartz arrives with the button mask set but
-  no modifier flags (shift, control), so shift-click for atom labels
-  never fires.
-- A single physical click on Tahoe produces 2-3 GTK button-press
-  events, which toggles any add/remove handler (such as the atom-label
-  list) on and off.
-- The freeglut on Homebrew silently fails to render text via either
-  `glutStrokeCharacter` or `glutBitmapCharacter`, so atom labels and
-  coordinate-axis markers don't appear.
-- Retina backing-scale handling is missing in several places, causing
-  the GL viewport and atom picking to misbehave.
+## Quick start
 
-Bandicoot addresses each of these with macOS-specific fixes layered on
-top of upstream Coot. The patches are isolated to a handful of
-`#ifdef __APPLE__` sites plus a new `bandicoot_appkit.{h,mm}` shim that
-wraps AppKit `NSMenu`, `NSToolbar`, and text-rendering APIs.
+If you have a prebuilt binary tarball
+(`bandicoot-0.0.0.1-darwin-arm64.tar.gz`), see [INSTALL.md](INSTALL.md):
+untar it anywhere and launch `<extracted>/bin/bcoot`.
+
+To build from source instead, see [BUILD.md](BUILD.md). You'll need a
+handful of Homebrew packages and a Miniconda environment that supplies
+Clipper, MMDB2, FFTW2, and a few others.
 
 ## What changed vs Coot 0.9.8.95
 
@@ -78,18 +63,6 @@ wraps AppKit `NSMenu`, `NSToolbar`, and text-rendering APIs.
 The executable on disk is called `bcoot` (a symlink to the existing
 `coot` wrapper script).
 
-## Quick start
-
-If you have a prebuilt binary tarball
-(`bandicoot-0.0.0.1-darwin-arm64.tar.gz`), see [INSTALL.md](INSTALL.md):
-untar it anywhere and launch `<extracted>/bin/bcoot`. The shipped
-binaries use `@rpath`/`@executable_path` so no per-install relocation
-is needed.
-
-To build from source instead, see [BUILD.md](BUILD.md). You'll need a
-handful of Homebrew packages and a Miniconda environment that supplies
-Clipper, MMDB2, FFTW2, and a few others.
-
 ## License
 
 Bandicoot inherits the **GNU General Public License v3** from upstream
@@ -97,14 +70,6 @@ Coot. The full text of the license is in [COPYING](COPYING).
 
 The Bandicoot-specific patches are licensed under the same GPL v3
 terms.
-
-## Known limitations (v0.0.0.1)
-
-- The bottom corners of both windows do not accept resize on Tahoe.
-  Top/sides work. This is a GTK-Quartz interaction not introduced by
-  Bandicoot.
-- Pre-existing Coot 0.9.8.95 bugs (such as Regularize Zone selecting
-  the full chain instead of the picked zone) carry through unchanged.
 
 ## Credits
 
