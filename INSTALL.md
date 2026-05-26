@@ -12,58 +12,37 @@ from source instead, see [BUILD.md](BUILD.md).
   brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
   ```
 
-That's the entire runtime requirement. The Coot scientific libraries
-(clipper, mmdb2, ssm, ccp4c, fftw2, libc++) are bundled inside the
-tarball — you do **not** need to install them via conda. Miniconda is
-only required if you intend to rebuild Bandicoot from source against
-the same clipper / mmdb / ssm versions.
+**NOTE:** The Coot scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++) are bundled inside the tarball — you do **not** need to install them via conda. Miniconda is
+only required if you intend to rebuild Bandicoot from source against the same clipper / mmdb / ssm versions.
 
-The prebuilt binary expects Homebrew at `/opt/homebrew` because
-homebrew dependency references are absolute. If you need a different
-layout, build from source per [BUILD.md](BUILD.md).
+**NOTE:** Homebrew _has to be_ installed in the default path of `/opt/homebrew`, or the binary distribution of Bandicoot won't work. If you wish to have Homebrew in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
 
 ## Install
 
 1. Extract the tarball anywhere:
    ```sh
-   tar xf bandicoot-0.0.0.1-darwin-arm64.tar.gz
+   tar xf bandicoot-<version>-darwin-arm64.tar.gz
    ```
-   This creates a `bandicoot-0.0.0.1/` directory with `bin/`, `lib/`,
+   This creates a `bandicoot-<version>/` directory with `bin/`, `lib/`,
    `libexec/`, `share/`, and a `setup.sh` helper.
+
+    **NOTE:** In this case, `<version>` is a placeholder for the Bandicoot version number. E.g. for Bandicoot v.0.0.0.3 the tarball will have the filename `bandicoot-0.0.0.3-darwin-arm64.tar.gz`
 
 2. Run the one-time setup script:
    ```sh
-   cd bandicoot-0.0.0.1
+   cd bandicoot-<version> --add-to-path
    ./setup.sh
    ```
-   This strips macOS quarantine flags, ad-hoc-signs the binaries so
-   Gatekeeper stays quiet on relaunches, registers Bandicoot with
-   Spotlight / Launchpad, and verifies the Homebrew / Miniconda
-   prerequisites above are installed. It is idempotent and never uses
-   `sudo`. Pass `--add-to-path` to also add `bandicoot-0.0.0.1/bin/` to
-   your PATH (writes a tagged `export PATH=...` line to `~/.zshrc` or
-   `~/.bash_profile` depending on your shell). The tag makes re-runs
-   idempotent and lets you find and remove the line later.
 
-3. (Optional) Add the install's `bin/` to your `PATH` manually if you
-   skipped `--add-to-path`:
+  **NOTE:** If you don't want install to add the Bandicoot path to your `PATH`, omit the `--add-to-path` option. You can add the path manually:
    ```sh
    export PATH="$PWD/bin:$PATH"
    ```
 
-Data files (pixmaps, monomer dictionary, reference structures, GTK
-theme) are located at runtime via `COOT_DATA_DIR` (set by the `bcoot`
-wrapper) — so the install can be moved to a different directory later
-and will keep working.
-
-The bundled binaries already use `@rpath` / `@executable_path` so they
-resolve their own libraries via paths relative to the binary, wherever
-you put the tree.
-
 ## Launch
 
 ```sh
-./bandicoot-0.0.0.1/bin/bcoot
+./bandicoot-<version>/bin/bcoot
 ```
 
 or, with `PATH` set:
