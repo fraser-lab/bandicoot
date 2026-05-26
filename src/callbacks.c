@@ -66,6 +66,13 @@
 #include "generic-display-objects-c.h"
 #include "curlew.h"
 
+/* Bandicoot: defined in bandicoot_refine.cc (C linkage). Used by the
+ * Rotamer-Selection and Edit-Chi-Angles cancel handlers below to wipe
+ * preview dots that our Interactive Dots toggle left on screen during
+ * the cycle/edit session. Without this, cancelling the dialog leaves
+ * the last-cycled rotamer's dots visible. */
+void bandicoot_clear_probe_dot_objects(void);
+
 /* This is our data identification string to store
  * data in list items
  */
@@ -3452,6 +3459,13 @@ on_rotamer_selection_cancel_button_clicked
    int imol;
 
    clear_up_moving_atoms();
+   /* Bandicoot: wipe any probe dots left behind by Interactive Dots
+      cycling through rotamers. clear_up_moving_atoms above hides the
+      intermediate-atoms display object; our rotamer-cycle dots are
+      stored as persistent "Molecule N: <type>" objects that survive
+      that teardown. */
+   bandicoot_clear_probe_dot_objects();
+   graphics_draw();
    type = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dialog), "type"));
 
    /* if this is a add-alt conf dialog, undo (the addition of the alt
@@ -5084,6 +5098,11 @@ on_edit_chi_angles_cancel_button_clicked
 
   GtkWidget *widget = lookup_widget(GTK_WIDGET(button), "edit_chi_angles_dialog");
   clear_up_moving_atoms();	/* and remove the graphics object */
+  /* Bandicoot: wipe any probe dots left behind by Interactive Dots
+     during chi-angle editing — see the rotamer-cancel handler for the
+     same rationale. */
+  bandicoot_clear_probe_dot_objects();
+  graphics_draw();
   unset_moving_atom_move_chis();
   store_window_position(COOT_EDIT_CHI_DIALOG, widget);
   gtk_widget_destroy(widget);

@@ -23,9 +23,10 @@
 
 #include "graphics-info.h"
 #include "coot-utils/coot-coord-utils.hh"
+#include "coot-utils/atom-overlaps.hh"
 #include "c-interface.h"  // for is_valid_map_molecule, write_pdb_file
 #include "cc-interface.hh"  // for regularize_residues
-#include "c-interface-generic-objects.h"  // for close_generic_object
+#include "c-interface-generic-objects.h"  // for close_generic_object, new_generic_object_*, etc.
 
 extern "C" {
     gboolean bandicoot_action_sphere_refine(gpointer data);
@@ -38,18 +39,206 @@ extern "C" {
 }
 
 // Close every generic-display-object whose name matches a probe-dot
-// family. Local Probe Dots (external `probe` via handle_read_draw_probe_
-// dots_unformatted) names its objects "wide contact" / "close contact" /
-// "small overlap" / "bad overlap" / "H-bonds". Interactive Dots (post-
-// accept via coot_all_atom_contact_dots) prefixes those with "Molecule N: "
-// and also adds "Molecule N: clashes". Without this helper the two
-// families overlay each other on the canvas (confusing). Call this
-// before either dot-generation path so the new dots are the only ones
-// visible.
+// family. Three distinct naming conventions exist:
+//
+//   * External probe binary (Local Probe Dots) via handle_read_draw_
+//     probe_dots_unformatted — space-separated names:
+//        "wide contact", "close contact", "small overlap",
+//        "bad overlap", "H-bonds"
+//
+//   * Coot's internal atom_overlaps (coot_all_atom_contact_dots,
+//     post-refine dots) — hyphen-separated names with "Molecule N: "
+//     prefix. Types come from overlap_delta_to_contact_type:
+//        "Molecule N: wide-contact", "Molecule N: close-contact",
+//        "Molecule N: small-overlap", "Molecule N: big-overlap",
+//        "Molecule N: clash", "Molecule N: H-bond",
+//        "Molecule N: vdw-surface", "Molecule N: clashes"
+//
+//   * In-flight preview (do_interactive_coot_probe) — hyphen-separated
+//     names with "Intermediate Atoms " prefix. Same type set.
+//
+// The substring list below covers all three. Without this helper the
+// post-refine "Molecule N: wide-contact" objects survived our clear
+// because they don't contain "wide contact" (space) — they have a
+// hyphen. That bug let Interactive Dots accumulate on screen even
+// when the user toggled it off.
+// Render post-refine contact dots for the LOCAL refined region only,
+// not the entire molecule. Mirrors `coot_all_atom_contact_dots(imol)`
+// in c-interface-ligands.cc:3603 but operates on moving_atoms_asc->mol
+// rather than molecules[imol].atom_sel.mol. Result objects use the
+// same "Molecule N: <type>" naming so they slot into the existing
+// clear/overwrite machinery (bandicoot_clear_probe_dot_objects).
+//
+// Two scenarios feed this funnel:
+//
+//   - Real-space refine (multi-residue): moving_atoms_asc->mol already
+//     contains the refined residues PLUS their restraint neighbours,
+//     so passing it straight to atom_overlaps_container_t is correct.
+//
+//   - Rotamer / chi edit (single residue): moving_atoms_asc->mol has
+//     ONLY the rotated residue with new coords — no neighbours at all,
+//     so all-atom dots would find nothing. We build a temporary mmdb
+//     that combines the rotated residue (new coords from moving) with
+//     its spatial neighbours from molecules[imol] (original coords),
+//     then run atom_overlaps on the merged mol. The merged mol is
+//     freed before return.
+//
+// Must be called BEFORE clear_up_moving_atoms() runs — moving_atoms_asc
+// is gone after that.
+//
+// Defined as a static member of graphics_info_t because moving_atoms_asc
+// is a private static field. Declared in graphics-info.h next to the
+// existing do_interactive_coot_probe.
+static int bc_count_residues_in_mol(mmdb::Manager *mol) {
+    int count = 0;
+    if (!mol) return 0;
+    int n_models = mol->GetNumberOfModels();
+    for (int imod = 1; imod <= n_models; ++imod) {
+        mmdb::Model *model_p = mol->GetModel(imod);
+        if (!model_p) continue;
+        int n_chains = model_p->GetNumberOfChains();
+        for (int ich = 0; ich < n_chains; ++ich) {
+            mmdb::Chain *chain_p = model_p->GetChain(ich);
+            if (chain_p) count += chain_p->GetNumberOfResidues();
+        }
+    }
+    return count;
+}
+
+static mmdb::Residue *bc_first_residue_in_mol(mmdb::Manager *mol) {
+    if (!mol) return NULL;
+    int n_models = mol->GetNumberOfModels();
+    for (int imod = 1; imod <= n_models; ++imod) {
+        mmdb::Model *model_p = mol->GetModel(imod);
+        if (!model_p) continue;
+        int n_chains = model_p->GetNumberOfChains();
+        for (int ich = 0; ich < n_chains; ++ich) {
+            mmdb::Chain *chain_p = model_p->GetChain(ich);
+            if (!chain_p) continue;
+            int n_res = chain_p->GetNumberOfResidues();
+            if (n_res > 0) return chain_p->GetResidue(0);
+        }
+    }
+    return NULL;
+}
+
+void graphics_info_t::bandicoot_render_local_post_refine_dots(int imol) {
+    if (!moving_atoms_asc) return;
+    if (!moving_atoms_asc->mol) return;
+    if (moving_atoms_asc->n_selected_atoms <= 0) return;
+
+    graphics_info_t g;
+    bool ignore_waters = true;
+
+    // Build the mol we'll feed to atom_overlaps. Default = moving_atoms_asc->mol.
+    // For the single-residue case (rotamer/chi), build a richer temp mol.
+    mmdb::Manager *mol_for_dots = moving_atoms_asc->mol;
+    mmdb::Manager *temp_mol = NULL;
+
+    int n_moving_res = bc_count_residues_in_mol(moving_atoms_asc->mol);
+    if (n_moving_res == 1 && imol >= 0 && imol < (int)g.molecules.size() &&
+        is_valid_model_molecule(imol)) {
+        mmdb::Residue *moving_res = bc_first_residue_in_mol(moving_atoms_asc->mol);
+        mmdb::Manager *full_mol = g.molecules[imol].atom_sel.mol;
+        if (moving_res && full_mol) {
+            // Spatial neighbours within 6 Å of the rotated residue's atoms.
+            // Use the moving residue itself (with NEW coords) as the query;
+            // residues_near_residue measures coords, so cross-mol is fine.
+            std::vector<mmdb::Residue *> neighbours =
+                coot::residues_near_residue(moving_res, full_mol, 6.0f);
+
+            // Drop any neighbour matching the moving residue's spec —
+            // that's the original un-rotated copy in full_mol, which would
+            // double-up with our moving_res entry.
+            coot::residue_spec_t moving_spec(moving_res);
+            std::vector<mmdb::Residue *> res_vec;
+            res_vec.push_back(moving_res);
+            for (size_t i = 0; i < neighbours.size(); ++i) {
+                if (!(coot::residue_spec_t(neighbours[i]) == moving_spec)) {
+                    res_vec.push_back(neighbours[i]);
+                }
+            }
+
+            std::pair<bool, mmdb::Manager *> merged =
+                coot::util::create_mmdbmanager_from_residue_vector(res_vec, full_mol);
+            if (merged.first && merged.second) {
+                temp_mol = merged.second;
+                mol_for_dots = temp_mol;
+            }
+        }
+    }
+
+    // Spike length 0.5, ball radius 0.25 — same params as the upstream
+    // all-atom variant for consistent dot density / appearance.
+    coot::atom_overlaps_container_t overlaps(
+        mol_for_dots,
+        g.Geom_p(),
+        ignore_waters,
+        0.5f, 0.25f);
+    coot::atom_overlaps_dots_container_t c = overlaps.all_atom_contact_dots(0.5, true);
+
+    // Colour lookup — small enough to inline here; matches the upstream
+    // colour_map in coot_all_atom_contact_dots so visual style is identical.
+    std::map<std::string, coot::colour_holder> colour_map;
+    const char *names[] = {
+        "blue", "sky", "sea", "greentint", "green", "orange", "orangered",
+        "yellow", "yellowtint", "red", "#55dd55", "hotpink", "grey",
+        "magenta", "royalblue", NULL,
+    };
+    for (const char **n = names; *n; ++n) {
+        colour_map[*n] = coot::generic_display_object_t::colour_values_from_colour_name(*n);
+    }
+
+    typedef std::map<std::string,
+                     std::vector<coot::atom_overlaps_dots_container_t::dot_t> > dot_map_t;
+    for (dot_map_t::const_iterator it = c.dots.begin(); it != c.dots.end(); ++it) {
+        const std::string &type = it->first;
+        const std::vector<coot::atom_overlaps_dots_container_t::dot_t> &v = it->second;
+        std::string obj_name = "Molecule " + coot::util::int_to_string(imol) + ": " + type;
+        int obj = generic_object_index(obj_name);
+        if (obj == -1)
+            obj = new_generic_object_number_for_molecule(obj_name, imol);
+        else
+            generic_object_clear(obj);
+        int point_size = (type == "vdw-surface") ? 1 : 2;
+        for (unsigned int i = 0; i < v.size(); ++i) {
+            const std::string &col_inner = v[i].col;
+            to_generic_object_add_point_internal(obj, col_inner,
+                                                 colour_map[col_inner],
+                                                 point_size, v[i].pos);
+        }
+        if (type != "vdw-surface")
+            set_display_generic_object_simple(obj, 1);
+    }
+
+    // Clash spikes — single line object, hot-pink, matches upstream.
+    std::string clashes_name = "Molecule " + coot::util::int_to_string(imol) + ": clashes";
+    int clashes_obj = generic_object_index(clashes_name);
+    if (clashes_obj == -1)
+        clashes_obj = new_generic_object_number_for_molecule(clashes_name, imol);
+    else
+        generic_object_clear(clashes_obj);
+    for (unsigned int i = 0; i < c.clashes.size(); ++i) {
+        const auto &cl = c.clashes[i];
+        to_generic_object_add_line(clashes_obj, "#ff59b4", 2,
+                                   cl.first.x(),  cl.first.y(),  cl.first.z(),
+                                   cl.second.x(), cl.second.y(), cl.second.z());
+    }
+    set_display_generic_object_simple(clashes_obj, 1);
+
+    // Free the temp mol if we built one for the rotamer/chi merge case.
+    if (temp_mol) delete temp_mol;
+}
+
 extern "C" void bandicoot_clear_probe_dot_objects(void) {
     static const char *kDotSubstrings[] = {
-        "wide contact", "close contact", "small overlap",
-        "bad overlap",  "H-bonds",       "clashes",
+        // hyphen variants (internal atom-overlaps types)
+        "wide-contact", "close-contact", "small-overlap", "big-overlap",
+        "H-bond", "vdw-surface",
+        // space variants (external `probe` binary types)
+        "wide contact", "close contact", "small overlap", "bad overlap",
+        // catches singular "clash" and plural "clashes" from both
+        "clash",
         NULL,
     };
     int nobjs = static_cast<int>(graphics_info_t::generic_objects_p->size());

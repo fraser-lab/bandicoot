@@ -43,6 +43,10 @@ extern "C" {
     void set_do_probe_dots_post_refine(short int state);
     void set_do_coot_probe_dots_during_refine(short int state);
     void full_screen(int mode);
+    void graphics_draw(void);
+    // Defined in bandicoot_refine.cc; closes every generic-display-object
+    // whose name matches a probe-dot family.
+    void bandicoot_clear_probe_dot_objects(void);
 
     // Sphere/Tandem refine implementations live in bandicoot_refine.cc
     // so the .cc file can pull in Coot's C++ headers for the active
@@ -450,26 +454,41 @@ static gboolean bandicoot_action_full_screen_apply(gpointer data) {
 }
 
 // Interactive Dots: enable/disable Coot's pure-C++ probe-dots overlay
-// during AND after interactive refinement.
+// across every refinement / rotamer-cycle / chi-edit interaction.
 //
-// Two flags work together to give the user-visible behaviour:
+// Three flags work together:
 //   - do_coot_probe_dots_during_refine_flag: live preview dots while
-//     dragging atoms (rendered into "Intermediate Atoms <type>" generic
-//     objects, vanish when intermediate atoms are torn down on
-//     accept/reject).
+//     dragging atoms during real-space refine (rendered into
+//     "Intermediate Atoms <type>" objects, vanish when intermediate
+//     atoms are torn down on accept/reject).
 //   - do_probe_dots_post_refine_flag: triggers Bandicoot's post-accept
-//     hook in graphics-info.cc which calls coot_all_atom_contact_dots
-//     to populate persistent "Molecule N: <type>" dots on the updated
-//     model. Reject doesn't reach the hook, so old dots persist.
+//     hook (graphics-info.cc) which routes through setup_for_probe_
+//     dots_on_chis_molprobity → do_probe_dots_on_rotamers_and_chis
+//     (Bandicoot funnel) → bandicoot_render_local_post_refine_dots.
+//     Persistent "Molecule N: <type>" dots scoped to the refined region.
+//   - do_probe_dots_on_rotamers_and_chis_flag: same funnel, triggered
+//     by rotamer cycling (Rotamers dialog) and chi-angle editing (Edit
+//     Chi Angles or mouse-drag chi rotation).
 //
-// Both use Coot's C++ atom_overlaps_container_t — NOT the guile-gtk-
-// gated do_interactive_probe() path.
+// All paths use Coot's C++ atom_overlaps_container_t — NOT the guile-
+// gtk-gated do_interactive_probe() (dead in this build).
 static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
     set_do_coot_probe_dots_during_refine(on);
     set_do_probe_dots_post_refine(on);
-    fprintf(stdout, "[bandicoot] Interactive Dots: %s (preview + post-accept)\n",
-            on ? "on" : "off");
+    set_do_probe_dots_on_rotamers_and_chis(on);
+    // Toggling OFF clears the currently-drawn dots (both Local Probe
+    // Dots and Interactive Dots families). This is Art's longstanding
+    // wishlist item — upstream Coot has no clear-dots UI, just toggles
+    // that affect FUTURE refinements but leave current dots on screen.
+    // Toggling ON does nothing extra; new dots arrive on the next
+    // refinement / rotamer cycle.
+    if (!on) {
+        bandicoot_clear_probe_dot_objects();
+        graphics_draw();
+    }
+    fprintf(stdout, "[bandicoot] Interactive Dots: %s (refine+rotamer+chi%s)\n",
+            on ? "on" : "off", on ? "" : "; cleared existing dots");
     fflush(stdout);
     return G_SOURCE_REMOVE;
 }

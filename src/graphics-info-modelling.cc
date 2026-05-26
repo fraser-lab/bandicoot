@@ -5271,9 +5271,27 @@ void graphics_info_t::move_molecule_here_combobox_changed(GtkWidget *combobox, g
 
 
 
+// Forward declaration for Bandicoot's dot clearer (defined in
+// bandicoot_refine.cc). Used by do_probe_dots_on_rotamers_and_chis
+// just below. File-scope rather than function-scope because C++
+// disallows extern "C" inside function bodies.
+extern "C" void bandicoot_clear_probe_dot_objects(void);
+
 void
 graphics_info_t::do_probe_dots_on_rotamers_and_chis() {
 
+   // Bandicoot: single funnel for rotamer-cycle / edit-chi / chi-drag /
+   // post-refine dots. Upstream's do_interactive_probe is gated by
+   // USE_GUILE_GTK (and the Python fallback by USE_PYTHON), both off
+   // here, so it's a no-op. We clear any cross-family dot objects and
+   // render local dots using moving_atoms_asc->mol. Guard ensures we
+   // skip when there's nothing to dot — direct-call sites (chi drag in
+   // globjects.cc) may invoke us under unusual states.
+   if (moving_atoms_asc && moving_atoms_asc->mol &&
+       moving_atoms_asc->n_selected_atoms > 0) {
+      bandicoot_clear_probe_dot_objects();
+      bandicoot_render_local_post_refine_dots(imol_moving_atoms);
+   }
    do_interactive_probe();
 }
 

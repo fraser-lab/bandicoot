@@ -99,6 +99,12 @@
 
 #include "geometry/dict-utils.hh"
 
+// (Bandicoot dot machinery is funnelled through
+// graphics_info_t::do_probe_dots_on_rotamers_and_chis() in
+// graphics-info-modelling.cc. The post-refine accept path here calls
+// setup_for_probe_dots_on_chis_molprobity which ends with that
+// function, so no extra wiring is needed in this file.)
+
 // return a vector of the current valid map molecules
 std::vector<int>
 graphics_info_t::valid_map_molecules() const {
@@ -1630,15 +1636,12 @@ graphics_info_t::accept_moving_atoms() {
    }
 
    if (do_probe_dots_post_refine_flag) {
+      // setup_for_probe_dots_on_chis_molprobity ends with a call to
+      // do_probe_dots_on_rotamers_and_chis(), which we've redirected
+      // to clear + render local dots from moving_atoms_asc->mol.
+      // Must run BEFORE clear_up_moving_atoms() below — our renderer
+      // depends on moving_atoms_asc being alive.
       setup_for_probe_dots_on_chis_molprobity(imol_moving_atoms);
-      // Bandicoot post-accept dots: see file-scope externs near top of
-      // this file (`coot_all_atom_contact_dots` /
-      // `bandicoot_clear_probe_dot_objects`). The upstream call above
-      // dead-ends in guile-gtk/python in our build; the two calls below
-      // do the actual work in C++ (clear cross-family dots, then
-      // repopulate the persistent "Molecule N: <type>" overview).
-      bandicoot_clear_probe_dot_objects();
-      coot_all_atom_contact_dots(imol_moving_atoms);
    }
 
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)

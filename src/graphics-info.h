@@ -3631,6 +3631,11 @@ public:
    // not const because it manipulates generic graphics objects
    void do_interactive_coot_probe(); // coot probe
 
+   // Bandicoot: render contact dots for the JUST-REFINED region only,
+   // using moving_atoms_asc->mol. Called from accept_moving_atoms when
+   // do_probe_dots_post_refine_flag is on. Body in bandicoot_refine.cc.
+   static void bandicoot_render_local_post_refine_dots(int imol);
+
    // can be private?
    void setup_for_probe_dots_on_chis_molprobity(int imol);
    static coot::Cartesian probe_dots_on_chis_molprobity_centre;
