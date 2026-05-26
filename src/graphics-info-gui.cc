@@ -414,6 +414,19 @@ update_accept_reject_dialog_with_results(GtkWidget *accept_reject_dialog,
 }
 
 
+// Null the static pointer when the dialog widget dies. Without this,
+// closing the dialog via its X button leaves graphics_info_t::accept_
+// reject_dialog dangling; the next refinement teardown then calls
+// gtk_widget_destroy on freed memory and SEGVs (Bandicoot v0.0.0.3
+// fix for the ~10-min-into-refinement crash at
+// graphics-info-modelling.cc:733).
+static void
+bandicoot_accept_reject_dialog_destroyed_cb(GtkWidget *w, gpointer /*user_data*/) {
+   if (graphics_info_t::accept_reject_dialog == w) {
+      graphics_info_t::accept_reject_dialog = NULL;
+   }
+}
+
 GtkWidget *
 wrapped_create_accept_reject_refinement_dialog() {
 
@@ -423,8 +436,14 @@ wrapped_create_accept_reject_refinement_dialog() {
   } else {
      if (graphics_info_t::accept_reject_dialog)
         w = graphics_info_t::accept_reject_dialog;
-     else
+     else {
         w = create_accept_reject_refinement_dialog();
+        // Connect once at creation: handler nulls the static pointer
+        // whenever this dialog dies, no matter who triggered the destroy.
+        g_signal_connect(G_OBJECT(w), "destroy",
+                         G_CALLBACK(bandicoot_accept_reject_dialog_destroyed_cb),
+                         NULL);
+     }
   }
   graphics_info_t::accept_reject_dialog = w;
   return w;

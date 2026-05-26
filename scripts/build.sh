@@ -79,6 +79,19 @@ echo "==> make_relocatable.sh ${PREFIX}"
 echo "==> bundle_conda_deps.sh ${PREFIX}"
 "${REPO_ROOT}/scripts/bundle_conda_deps.sh" "${PREFIX}" "${CONDA_PREFIX}"
 
+# Bundle the gdk-pixbuf SVG loader (from Homebrew's librsvg) + all
+# raster loaders so Coot's .svg toolbar icons render on testers'
+# machines without requiring `brew install librsvg`. See
+# scripts/bundle_pixbuf_loaders.sh header.
+echo "==> bundle_pixbuf_loaders.sh ${PREFIX}"
+"${REPO_ROOT}/scripts/bundle_pixbuf_loaders.sh" "${PREFIX}" "${BREW_PREFIX}"
+
+# Bundle external CLI tools (currently: `probe` for Local Probe Dots).
+# Override the probe source via PROBE_SRC=<path>; default targets the
+# CCP4 9.0.014_arm install path.
+echo "==> bundle_external_tools.sh ${PREFIX}"
+"${REPO_ROOT}/scripts/bundle_external_tools.sh" "${PREFIX}" "${PROBE_SRC:-}"
+
 # Add the bcoot symlink (the wrapper computes its prefix from $0's
 # location, so a symlink in the same bin dir works).
 ln -sf coot "${PREFIX}/bin/bcoot"

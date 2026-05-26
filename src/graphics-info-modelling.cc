@@ -730,7 +730,18 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function_and_draw()
          g.clear_moving_atoms_object();
          if (accept_reject_dialog_docked_flag == coot::DIALOG) {
 	       // this calls clear_up_moving_atoms() and clears atom pull restraint.
-	       gtk_widget_destroy(accept_reject_dialog);
+	       // Null guard + immediate-null: accept_reject_dialog becomes a
+	       // dangling pointer if the user dismissed the dialog via the
+	       // window's close button — nothing else nulls the static
+	       // pointer. The destroy-signal handler installed in
+	       // wrapped_create_accept_reject_refinement_dialog() addresses
+	       // that case at the source, but this guard is the belt-and-
+	       // braces fix for the SEGV at this site (Bandicoot v0.0.0.3
+	       // bug fix; crashes after ~10 min interactive refinement).
+	       if (accept_reject_dialog) {
+	          gtk_widget_destroy(accept_reject_dialog);
+	          accept_reject_dialog = NULL;
+	       }
          }
       }
 

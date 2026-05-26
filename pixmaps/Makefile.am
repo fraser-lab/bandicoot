@@ -77,6 +77,7 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   refine-1.png stock-zoom-follow-window-12.svg stock-zoom-follow-window-12.png \
   rama_all.png rama_gly.png rama_pro.png rama_non_gly_pro.png \
   curlew-long.png curlew-128-filled.svg \
+  refine-sphere-1.png regularize-sphere-1.png refine-tandem-1.png \
   bandicoot-splash.png
 
 if CLIPPER_TOP8000

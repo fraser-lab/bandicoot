@@ -1631,6 +1631,14 @@ graphics_info_t::accept_moving_atoms() {
 
    if (do_probe_dots_post_refine_flag) {
       setup_for_probe_dots_on_chis_molprobity(imol_moving_atoms);
+      // Bandicoot post-accept dots: see file-scope externs near top of
+      // this file (`coot_all_atom_contact_dots` /
+      // `bandicoot_clear_probe_dot_objects`). The upstream call above
+      // dead-ends in guile-gtk/python in our build; the two calls below
+      // do the actual work in C++ (clear cross-family dots, then
+      // repopulate the persistent "Molecule N: <type>" overview).
+      bandicoot_clear_probe_dot_objects();
+      coot_all_atom_contact_dots(imol_moving_atoms);
    }
 
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)

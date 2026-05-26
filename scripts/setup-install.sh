@@ -12,9 +12,11 @@
 #   3. Checks Homebrew prerequisites and reports clearly if any are
 #      missing. (Clipper / mmdb2 / ssm / fftw2 ship inside the tarball
 #      now, so Miniconda is no longer a runtime dependency.)
-#   4. Installs .desktop / appdata.xml into ~/.local/share/applications/
+#   4. Regenerates the gdk-pixbuf loaders.cache for the bundled image
+#      loaders so .svg icons (water-drop, etc.) render correctly.
+#   5. Installs .desktop / appdata.xml into ~/.local/share/applications/
 #      so Spotlight / Launchpad can find Bandicoot.
-#   5. Optionally adds the install's bin/ to PATH by writing a tagged
+#   6. Optionally adds the install's bin/ to PATH by writing a tagged
 #      `export PATH=...` line to your shell rc (use --add-to-path).
 #
 # Idempotent: re-running is safe. Never uses sudo.
@@ -40,7 +42,7 @@ for arg in "$@"; do
         --add-to-path)  ADD_TO_PATH=1 ;;
         --no-codesign)  SKIP_SIGN=1 ;;
         -h|--help)
-            sed -n '2,18p' "$0"
+            sed -n '2,20p' "$0"
             echo "Flags:"
             echo "  --add-to-path   add Bandicoot's bin/ to PATH via your shell rc"
             echo "  --no-codesign   skip the ad-hoc codesign step"
@@ -137,7 +139,54 @@ fi
 # build environment for those libraries, but end users don't need it.
 
 # ----------------------------------------------------------------------
-# 4. .desktop + appdata.xml in user-local applications dir
+# 4. regenerate gdk-pixbuf loaders.cache for the bundled loaders
+# ----------------------------------------------------------------------
+#
+# Bandicoot ships its own copy of the gdk-pixbuf loaders (PNG / JPEG /
+# SVG / ...) under lib/gdk-pixbuf-2.0/2.10.0/loaders/. The companion
+# loaders.cache file lists each loader's absolute path, so it has to be
+# (re)generated on the user's machine — wherever they extracted the
+# tarball. coot.in points GTK at this cache via GDK_PIXBUF_MODULE_FILE.
+
+PIXBUF_LOADERS_DIR="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+PIXBUF_CACHE="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+QUERY_BIN="$HOMEBREW_PREFIX/bin/gdk-pixbuf-query-loaders"
+
+if [ -d "$PIXBUF_LOADERS_DIR" ]; then
+    echo "$ARROW Generating gdk-pixbuf loaders.cache..."
+    if [ ! -x "$QUERY_BIN" ]; then
+        echo "    $WARN $QUERY_BIN not found." >&2
+        echo "      Install Homebrew's gtk+ (it pulls gdk-pixbuf):" >&2
+        echo "        brew install gtk+" >&2
+        note_problem
+    else
+        # Enumerate the bundled loaders explicitly so the cache lists
+        # the install-relative paths and not whatever is on $PATH.
+        LOADER_FILES=()
+        while IFS= read -r f; do
+            LOADER_FILES+=("$f")
+        done < <(find "$PIXBUF_LOADERS_DIR" -type f \( -name '*.so' -o -name '*.dylib' \) | sort)
+        if [ "${#LOADER_FILES[@]}" -eq 0 ]; then
+            echo "    $WARN no loaders found under $PIXBUF_LOADERS_DIR" >&2
+            note_problem
+        else
+            # GDK_PIXBUF_MODULEDIR is informational here — the explicit
+            # file args determine which loaders enter the cache.
+            if GDK_PIXBUF_MODULEDIR="$PIXBUF_LOADERS_DIR" \
+               "$QUERY_BIN" "${LOADER_FILES[@]}" > "$PIXBUF_CACHE.tmp" 2>/dev/null; then
+                mv "$PIXBUF_CACHE.tmp" "$PIXBUF_CACHE"
+                echo "    $CHECK wrote $PIXBUF_CACHE (${#LOADER_FILES[@]} loaders)"
+            else
+                rm -f "$PIXBUF_CACHE.tmp"
+                echo "    $WARN gdk-pixbuf-query-loaders failed" >&2
+                note_problem
+            fi
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------------
+# 5. .desktop + appdata.xml in user-local applications dir
 # ----------------------------------------------------------------------
 
 echo "$ARROW Registering app metadata for Spotlight / Launchpad..."
@@ -159,7 +208,7 @@ if [ -f "$INSTALL_DIR/share/appdata/coot.appdata.xml" ]; then
 fi
 
 # ----------------------------------------------------------------------
-# 5. optional PATH-via-shell-rc
+# 6. optional PATH-via-shell-rc
 # ----------------------------------------------------------------------
 
 if [ "$ADD_TO_PATH" -eq 1 ]; then

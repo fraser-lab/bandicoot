@@ -41,6 +41,7 @@ extern "C" {
     void set_rotamer_search_mode(int mode);
     void set_do_probe_dots_on_rotamers_and_chis(short int state);
     void set_do_probe_dots_post_refine(short int state);
+    void set_do_coot_probe_dots_during_refine(short int state);
     void full_screen(int mode);
 
     // Sphere/Tandem refine implementations live in bandicoot_refine.cc
@@ -54,6 +55,7 @@ extern "C" {
     gboolean bandicoot_action_sphere_regularize(gpointer);
     gboolean bandicoot_action_sphere_regularize_plus(gpointer);
     gboolean bandicoot_action_refine_tandem(gpointer);
+    gboolean bandicoot_action_local_probe_dots(gpointer);
 }
 
 static char kGtkMenuItemKey;
@@ -447,11 +449,30 @@ static gboolean bandicoot_action_full_screen_apply(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Interactive Dots removed from the catalog (see BANDICOOT_EXTRAS).
-// graphics_info_t::do_interactive_probe() is gated by `#if defined
-// USE_GUILE && defined USE_GUILE_GTK && !defined WINDOWS_MINGW` and
-// Bandicoot doesn't build with guile-gtk. So the button would set
-// flags that nothing reads.
+// Interactive Dots: enable/disable Coot's pure-C++ probe-dots overlay
+// during AND after interactive refinement.
+//
+// Two flags work together to give the user-visible behaviour:
+//   - do_coot_probe_dots_during_refine_flag: live preview dots while
+//     dragging atoms (rendered into "Intermediate Atoms <type>" generic
+//     objects, vanish when intermediate atoms are torn down on
+//     accept/reject).
+//   - do_probe_dots_post_refine_flag: triggers Bandicoot's post-accept
+//     hook in graphics-info.cc which calls coot_all_atom_contact_dots
+//     to populate persistent "Molecule N: <type>" dots on the updated
+//     model. Reject doesn't reach the hook, so old dots persist.
+//
+// Both use Coot's C++ atom_overlaps_container_t — NOT the guile-gtk-
+// gated do_interactive_probe() path.
+static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
+    int on = GPOINTER_TO_INT(data);
+    set_do_coot_probe_dots_during_refine(on);
+    set_do_probe_dots_post_refine(on);
+    fprintf(stdout, "[bandicoot] Interactive Dots: %s (preview + post-accept)\n",
+            on ? "on" : "off");
+    fflush(stdout);
+    return G_SOURCE_REMOVE;
+}
 
 // Cis ↔ Trans isn't really a toggle — it enters Coot's interactive
 // peptide-flip pick mode. Calling with state=1 turns the pick mode on;
@@ -969,27 +990,26 @@ static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
 
     // Refinement (C++ implementations live in bandicoot_refine.cc — they
     // use Coot's C++ active-atom / neighbor-finding / refine APIs)
-    {"sphere_refine",         "Sphere Refine",         bandicoot_action_sphere_refine,         NULL, "refine-1.svg",      NULL, 0},
-    {"sphere_refine_plus",    "Sphere Refine +",       bandicoot_action_sphere_refine_plus,    NULL, "refine-1.svg",      NULL, 0},
-    {"refine_tandem",         "Tandem Refine",         bandicoot_action_refine_tandem,         NULL, "refine-1.svg",      NULL, 0},
-    {"sphere_regularize",     "Sphere Regularize",     bandicoot_action_sphere_regularize,     NULL, "regularize-1.svg",  NULL, 0},
-    {"sphere_regularize_plus","Sphere Regularize +",   bandicoot_action_sphere_regularize_plus,NULL, "regularize-1.svg",  NULL, 0},
+    {"sphere_refine",         "Sphere Refine",         bandicoot_action_sphere_refine,         NULL, "refine-sphere-1.png",     NULL, 0},
+    {"sphere_refine_plus",    "Sphere Refine +",       bandicoot_action_sphere_refine_plus,    NULL, "refine-sphere-1.png",     NULL, 0},
+    {"refine_tandem",         "Tandem Refine",         bandicoot_action_refine_tandem,         NULL, "refine-tandem-1.png",     NULL, 0},
+    {"sphere_regularize",     "Sphere Regularize",     bandicoot_action_sphere_regularize,     NULL, "regularize-sphere-1.png", NULL, 0},
+    {"sphere_regularize_plus","Sphere Regularize +",   bandicoot_action_sphere_regularize_plus,NULL, "regularize-sphere-1.png", NULL, 0},
     {"cis_trans",             "Cis ↔ Trans",           bandicoot_action_cis_trans,             NULL, "flip-peptide.svg",  NULL, 0},
+    {"local_probe_dots",      "Local Probe Dots",      bandicoot_action_local_probe_dots,      NULL, "probe-clash.svg",   NULL, 0},
 
     // Toggles — rendered as NSButton subviews so AppKit shows their
     // on/off state visually. c_callback unused; the NSButton's target
     // dispatches toggle_apply with the new state on each press.
-    {"backrub_toggle",     "Backrub Rotamers",  NULL, NULL, "auto-fit-rotamer.svg", bandicoot_action_backrub_apply,    0},
-    {"hydrogen_toggle",    "Toggle Hydrogens",  NULL, NULL, "delete.svg",           bandicoot_action_hydrogen_apply,   1},
-    {"full_screen_toggle", "Full Screen",       NULL, NULL, "reset-view-32.svg",    bandicoot_action_full_screen_apply,0},
+    {"backrub_toggle",        "Backrub Rotamers",  NULL, NULL, "auto-fit-rotamer.svg", bandicoot_action_backrub_apply,           0},
+    {"hydrogen_toggle",       "Toggle Hydrogens",  NULL, NULL, "delete.svg",           bandicoot_action_hydrogen_apply,          1},
+    {"full_screen_toggle",    "Full Screen",       NULL, NULL, "reset-view-32.svg",    bandicoot_action_full_screen_apply,       0},
+    {"interactive_dots_toggle","Interactive Dots", NULL, NULL, "probe-clash.svg",      bandicoot_action_interactive_dots_apply,  0},
 
-    // Omitted (would set a flag nothing reads, or call a stub):
-    //   Interactive Dots — depends on graphics_info_t::do_interactive_probe(),
-    //     which is gated by `#if USE_GUILE && USE_GUILE_GTK` and Bandicoot
-    //     doesn't build with guile-gtk.
-    //   Local Probe Dots — wraps the external `probe` binary via Coot's
-    //     Python layer; same blocker as the rest of the deferred
-    //     Python items. See build.sh's comment.
+    // Interactive Dots — uses Coot's INTERNAL probe (do_interactive_coot_
+    //   probe / atom_overlaps_container_t), not the guile-gtk-gated
+    //   do_interactive_probe() path. Refinement timeout already invokes
+    //   it when the flag is on; we just toggle the flag.
 };
 static const size_t BANDICOOT_EXTRAS_COUNT =
     sizeof(BANDICOOT_EXTRAS) / sizeof(BANDICOOT_EXTRAS[0]);
@@ -1115,7 +1135,8 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
         @"bandicoot.main.3",                  // 5. Go to Atom          (locked)
         @"bandicoot.extra.sphere_refine",     // 6. Sphere Refine
         @"bandicoot.extra.refine_tandem",     // 7. Tandem Refine
-        @"bandicoot.extra.hydrogen_toggle",   // 8. Toggle Hydrogens
+        @"bandicoot.extra.local_probe_dots",  // 8. Local Probe Dots
+        @"bandicoot.extra.hydrogen_toggle",   // 9. Toggle Hydrogens
     ]];
 
     // --- 5) Always allow the standard system identifiers (spaces / customize).
@@ -1143,7 +1164,7 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     // "NSToolbar Configuration bandicoot.*" entry so the next NSToolbar
     // alloc starts fresh and applies our defaults. Bump the schema
     // integer whenever the catalog's identifier format changes.
-    static const int BANDICOOT_TOOLBAR_SCHEMA = 3;
+    static const int BANDICOOT_TOOLBAR_SCHEMA = 4;
     {
         NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
         NSInteger stored = [ud integerForKey:@"BandicootToolbarSchema"];
