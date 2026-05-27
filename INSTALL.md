@@ -11,17 +11,9 @@ from source instead, see [BUILD.md](BUILD.md).
   ```sh
   brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
   ```
-- Miniconda installed at `/opt/miniconda3` (Python 3.13 from the
-  standard distribution is sufficient)
+- Miniconda installed at `/opt/miniconda3` (installation instructions are [here](https://www.anaconda.com/docs/getting-started/miniconda/install/mac-cli-install))
 
-**NOTE:** Starting in v0.1.0.0, Bandicoot embeds Python so it can
-talk to Phenix (live model/map updates during refinement). The
-`libpython3.13.dylib` from Miniconda is loaded at runtime; that is
-why Miniconda is now listed as a runtime requirement. The Coot
-scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++)
-are still bundled inside the tarball.
-
-**NOTE:** Homebrew _has to be_ installed in the default path of `/opt/homebrew`, or the binary distribution of Bandicoot won't work. If you wish to have Homebrew in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
+**NOTE:** Homebrew _has to be_ installed in `/opt/homebrew` and Miniconda _has to be_ installed in `/opt/miniconda` or the binary distribution of Bandicoot won't work. If you wish to have Homebrew and Miniconda in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
 
 ## Install
 
@@ -79,3 +71,13 @@ you launch from — clean those up if you want a fully clean removal.
   extracted tree contains `share/coot/pixmaps/`.
 - **Spotlight / Launchpad can't find Bandicoot** — rerun `./setup.sh`;
   the `.desktop` file is installed into `~/.local/share/applications/`.
+
+
+## Notes
+
+- Starting in v0.1.0.0, Bandicoot embeds Python so it can
+talk to Phenix (live model/map updates during refinement). The
+`libpython3.13.dylib` from Miniconda is loaded at runtime; that is
+why Miniconda is now listed as a runtime requirement. The Coot
+scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++)
+are still bundled inside the tarball.
