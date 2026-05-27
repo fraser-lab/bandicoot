@@ -12,13 +12,13 @@ def cairoplot_pathology_plots(mtz, fp, sigfp):
     import cairo
     import cairoplot
     try: 
-        print "getting data for", mtz
+        print("getting data for", mtz)
         data = coot.pathology_data(mtz, fp, sigfp)
         # print len(data), data
         prefix,tail = os.path.splitext(mtz)
         for i in range(4):
             png_file_name = prefix + "-" + str(i) + ".png"
-            print "making plot", png_file_name
+            print("making plot", png_file_name)
             yt = 'I'
             xt = 'Resolution'
             if i == 1:
@@ -40,11 +40,12 @@ def cairoplot_pathology_plots(mtz, fp, sigfp):
                                    axis = True)
 
     except TypeError as e:
-                print "caught TypeError:", e
+                print("caught TypeError:", e)
 
 # these can be I, SIGI also
 #
 def pathology_plots(mtz, fp, sigfp):
+    pass  # body removed in upstream; kept as stub for Py3 parse
 
 # these can be I, SIGI also
 #
@@ -107,7 +108,7 @@ def plots(mtz, fp, sigfp):
             s = 8
             # If this is F data the the y axis min should be 0.
             # The x-axis min should be 0.
-            print "making plot", png_file_name
+            print("making plot", png_file_name)
             l = plt.scatter(xdata, ydata, s, alpha=0.2)
             plt.savefig(png_file_name)
             

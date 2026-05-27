@@ -53,8 +53,7 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
             imol_both = copy_molecule(imol)
 
          # make a backup copy of the original terminal residues
-         atom_selection = "//" + chain_id + "/" + str(min(start_resno, stop_resno) - 1) + \
-                          "-"  + str(max(start_resno, stop_resno) + 1)
+         atom_selection = "//" + chain_id + "/" + str(min(start_resno, stop_resno) - 1) + "-"  + str(max(start_resno, stop_resno) + 1)
          imol_fragment_backup = new_molecule_by_atom_selection(imol, atom_selection)
          set_mol_displayed(imol_fragment_backup, 0)
 
@@ -121,8 +120,7 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
             max_result = fragment_list[0][1]
             for i, (imol_fragment, result) in enumerate(fragment_list):
                label_str   = " Loop " + chr(65 + i) + " "
-               replace_str = "replace_fragment(" + str(imol) + ", " + str(imol_fragment) + \
-                                                 ", \"" + atom_selection + "\"), "
+               replace_str = "replace_fragment(" + str(imol) + ", " + str(imol_fragment) + ", \"" + atom_selection + "\"), "
                #display_ls  = map(lambda (x, y): "set_mol_displayed(" + str(x) + ", 0)", fragment_list)
 
                #buttons.append([label_str, "(" + replace_str + ', '.join(display_ls) + ")"])
@@ -135,14 +133,9 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
                      max_result = fragment_list[i+1][1]
 
             fragment_list.append([imol_fragment_backup, -99999.])
-            close_ls    = map(lambda (x, y): "close_molecule(" + str(x) + ")", fragment_list)
+            close_ls    = map(lambda xy: "close_molecule(" + str(xy[0]) + ")", fragment_list)
             go_function = "(" + ', '.join(close_ls) + ")"
-            cancel_function = "(delete_residue_range(" + str(imol) + ", \"" + str(chain_id) + \
-                              "\", " + str(min(start_resno, stop_resno)) + \
-                              ", " + str(max(start_resno, stop_resno)) + \
-                              "), replace_fragment(" + str(imol) + ", " + \
-                              str(imol_fragment_backup) + ", \"" + atom_selection + "\"), " + \
-                              ', '.join(close_ls) + ")"
+            cancel_function = "(delete_residue_range(" + str(imol) + ", \"" + str(chain_id) + "\", " + str(min(start_resno, stop_resno)) + ", " + str(max(start_resno, stop_resno)) + "), replace_fragment(" + str(imol) + ", " + str(imol_fragment_backup) + ", \"" + atom_selection + "\"), " + ', '.join(close_ls) + ")"
             
             
             # only show if more than 1 loop left
@@ -187,7 +180,7 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
    sequence = string.upper(sequence)
    
    if (valid_model_molecule_qm(imol) == 0):
-      print "Molecule number %(a)i is not a valid model molecule" %{"a":imol}
+      print("Molecule number %(a)i is not a valid model molecule" %{"a":imol})
    else:
 
       # -----------------------------------------------
@@ -202,7 +195,7 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
       else:
          direction = "forwards"
 
-      print "direction is ", direction
+      print("direction is ", direction)
 
       set_refinement_immediate_replacement(1)
 
@@ -214,7 +207,7 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
 
       for i in range(abs(start_resno - stop_resno) + 1):
 
-         print "add-terminal-residue: residue number: ",resno
+         print("add-terminal-residue: residue number: ",resno)
          status = add_terminal_residue(imol, chain_id, resno, "auto", 1)
          if status:
             # first do a refinement of what we have 
@@ -225,7 +218,7 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
             else:
                resno = resno - 1
          else:
-            print "Failure in fit-gap at residue ",resno
+            print("Failure in fit-gap at residue ",resno)
 
             
 
@@ -235,7 +228,7 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
       # only if sequence is hasnt been assigned
       
       if (not sequence == "" and not has_sequence_qm(imol, chain_id)):
-         print "mutate-and-autofit-residue-range ",imol, chain_id, start_resno,stop_resno, sequence
+         print("mutate-and-autofit-residue-range ",imol, chain_id, start_resno,stop_resno, sequence)
          if direction == "forwards":
             mutate_and_autofit_residue_range(imol, chain_id,
                                              start_resno, stop_resno,
@@ -250,9 +243,9 @@ def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
       # -----------------------------------------------
       
       if residue_exists_qm(imol,chain_id,start_resno - 1,""):
-         print "Test finds"
+         print("Test finds")
       else:
-         print "Test: not there"
+         print("Test: not there")
 
       if residue_exists_qm(imol,chain_id,start_resno - 1,""):
          low_end = start_resno - 1
@@ -298,29 +291,29 @@ def de_clash (imol,chain_id,resno_start,resno_end):
 
     resno = resno_start
     while resno <= resno_end:
-	   auto_fit_best_rotamer(resno,"","",chain_id,imol,-1,1,0.1)
+           auto_fit_best_rotamer(resno,"","",chain_id,imol,-1,1,0.1)
            resno = resno + 1
 
 # calculate the average of 20% lowest density at all atom_positions in fragment
 def low_density_average(imol_map, imol, chain_id, start_resno, stop_resno):
 
-	map_coords = []
-	map_density = []
-	for resno in range(start_resno, stop_resno + 1):
-		atom_ls = residue_info(imol, chain_id, resno, "")  # ignoring ins_code
-		for atom in atom_ls:
-			# we only take main chain + CB into account
-			if atom[0][0] in [' N  ', ' CA ', ' CB ', ' C  ', ' O  ']:  
-				map_coords.append(atom[2])
+        map_coords = []
+        map_density = []
+        for resno in range(start_resno, stop_resno + 1):
+                atom_ls = residue_info(imol, chain_id, resno, "")  # ignoring ins_code
+                for atom in atom_ls:
+                        # we only take main chain + CB into account
+                        if atom[0][0] in [' N  ', ' CA ', ' CB ', ' C  ', ' O  ']:  
+                                map_coords.append(atom[2])
 
-	for [x, y, z] in map_coords:
-		map_density.append(density_at_point(imol_map, x, y,  z))
+        for [x, y, z] in map_coords:
+                map_density.append(density_at_point(imol_map, x, y,  z))
 
-	map_density.sort()  # sort ascending
+        map_density.sort()  # sort ascending
 
-	cut_off = len(map_density) // 5
-	if (cut_off <= 0):
-		cut_off = 1   # take at least one point
+        cut_off = len(map_density) // 5
+        if (cut_off <= 0):
+                cut_off = 1   # take at least one point
 
-	map_average = sum(map_density[0:cut_off]) / float(cut_off)  # make it a float
-	return map_average
+        map_average = sum(map_density[0:cut_off]) / float(cut_off)  # make it a float
+        return map_average

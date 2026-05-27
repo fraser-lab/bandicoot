@@ -97,10 +97,25 @@ COOT_REF_STRUCTS=$COOT_PREFIX/share/coot/reference-structures
 # Used by Bandicoot's Local Probe Dots (forks reduce + probe).
 REDUCE_HET_DICT=$COOT_PREFIX/share/coot/reduce_wwPDB_het_dict.txt
  
+# COOT_PYTHON_DIR points at the directory holding coot_load_modules.py
+# and the rest of the Python module tree. Bandicoot ships against Py3
+# (auto-detected at install time by setup.sh); we discover the actual
+# python<MAJOR.MINOR> dir under lib/ so this works across Python
+# upgrades without re-edits. Fallback chain handles legacy py2 layouts.
 if [ "$systype" != "${systype/MINGW32_NT/}" ] ; then
    COOT_PYTHON_DIR=$COOT_PREFIX/python27/lib/site-packages/coot
 else
-   COOT_PYTHON_DIR=$COOT_PREFIX/lib/python2.7/site-packages/coot
+   _bcoot_pyver_dir=""
+   for _d in "$COOT_PREFIX"/lib/python3.*/site-packages/coot; do
+      [ -d "$_d" ] && _bcoot_pyver_dir="$_d" && break
+   done
+   if [ -n "$_bcoot_pyver_dir" ]; then
+      COOT_PYTHON_DIR="$_bcoot_pyver_dir"
+   else
+      # Legacy Py2 layout (kept for source-compat with upstream Coot)
+      COOT_PYTHON_DIR=$COOT_PREFIX/lib/python2.7/site-packages/coot
+   fi
+   unset _bcoot_pyver_dir _d
 fi
 
 # Added 20090429 - take this out when trying internationalization.

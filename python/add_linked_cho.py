@@ -10,13 +10,12 @@ def add_pyranose_pseudo_ring_plane_restraints(comp_id):
     restraints = monomer_restraints(comp_id)
 
     if (not isinstance(restraints, dict)):
-        print "failed to get %s restraints" %comp_id
+        print("failed to get %s restraints" %comp_id)
     else:
         plane_restraints = restraints["_chem_comp_plane_atom"]
         new_plane_restraints = [["pseudo-ring-1", [" C1 ", " C2 ", " C4 ", " C5 "], 0.01],
                                 ["pseudo-ring-2", [" C2 ", " C3 ", " C5 ", " O5 "], 0.01],
-                                ["pseudo-ring-3", [" C3 ", " C4 ", " O5 ", " C1 "], 0.01]] + \
-                                filter_out("pseudo-ring-", plane_restraints) # should be list already
+                                ["pseudo-ring-3", [" C3 ", " C4 ", " O5 ", " C1 "], 0.01]] + filter_out("pseudo-ring-", plane_restraints) # should be list already
         restraints["_chem_comp_plane_atom"] = new_plane_restraints
 
         set_monomer_restraints(comp_id, restraints)
@@ -47,16 +46,14 @@ def multi_add_linked_residue(imol, res_spec, residues_to_add):
         set_dragged_refinement_steps_per_frame(300)
 
         if (not isinstance(current_residue_spec, list)):
-            print "WARNING:: OOps not a proper res_spec %s with residue_to_add: %s" \
-                  %(current_residue_spec, residue_to_add)
+            print("WARNING:: OOps not a proper res_spec %s with residue_to_add: %s" %(current_residue_spec, residue_to_add))
             return False
         else:
             if not residue_to_add:
                 return "done" # odd return?! why?
             else:
-                if (not isinstance(residue_to_add, list) and \
-                    not len(residue_to_add) == 2):
-                    print "WARNING:: Oops - not a residue_link string pair when adding new_res_pair"
+                if (not isinstance(residue_to_add, list) and not len(residue_to_add) == 2):
+                    print("WARNING:: Oops - not a residue_link string pair when adding new_res_pair")
                 else:
                     new_res = residue_to_add[0]
                     new_link = residue_to_add[1]
@@ -299,7 +296,7 @@ def add_linked_residue_add_cho_function(imol, parent, res_pair):
             neighbs = residues_near_residue(aa_imol, res_spec, 4)
             c = map_to_model_correlation(imol, [res_spec], neighbs, 0,
                                          imol_refinement_map())
-            print "######## new residue %s density correlation: %s" %(res_spec, c)
+            print("######## new residue %s density correlation: %s" %(res_spec, c))
             if (not isNumber(c)):
                 return False
             else:
@@ -327,11 +324,11 @@ def add_linked_residue_add_cho_function(imol, parent, res_pair):
     # main line
     #
     if (not isinstance(parent, list)):
-        print "WARNING:: OOps not a proper res_spec %s with residue_to_add: %s" %(parent, res_pair)
+        print("WARNING:: OOps not a proper res_spec %s with residue_to_add: %s" %(parent, res_pair))
         return False
     else:
         if not (len(res_pair) == 2):
-            print "Oops - not a residue-link string pair when adding res-pair", res_pair
+            print("Oops - not a residue-link string pair when adding res-pair", res_pair)
             return False
         else:
             # OK! Go!
@@ -369,7 +366,7 @@ def add_linked_residue_add_cho_function(imol, parent, res_pair):
                 else:
                     # ------------ bad fit -----------------
                     # delete residue and restore others
-                    print "----------- That was not well fitting. Deleting:", preped_new_res_spec
+                    print("----------- That was not well fitting. Deleting:", preped_new_res_spec)
                     delete_extra_restraints_for_residue_spec(imol,
                                                              preped_new_res_spec)
                     delete_residue_by_spec(*preped_new_res_spec)
@@ -408,7 +405,7 @@ def add_linked_residue_tree(imol, parent, tree):
 
     def is_just_an_ASN_qm(imol, glyco_tree):
 
-        print "glyco-tree:", glyco_tree
+        print("glyco-tree:", glyco_tree)
         if not isinstance(glyco_tree, list):
             return False
         else:
@@ -444,7 +441,7 @@ def add_linked_residue_tree(imol, parent, tree):
         if new_m > 0:
             set_default_temperature_factor_for_new_atoms(new_m)
     except:
-        print "BL INFO:: not changing default B for new carb atoms"
+        print("BL INFO:: not changing default B for new carb atoms")
 
     # prevent tree building if there is already a partial tree here
     # (only proceed with the one ASN)
@@ -460,7 +457,7 @@ def add_linked_residue_tree(imol, parent, tree):
         # Hmmm.
         if not ((start_tree == []) or (is_just_an_ASN_qm(aa_imol, start_tree))):
             info_dialog("Must start on Single ASN")
-            print "start_tree:", start_tree
+            print("start_tree:", start_tree)
         else:
             # OK, continue
             start_pos_view = add_view_here("Glyco Tree Start Pos")

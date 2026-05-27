@@ -8,20 +8,19 @@ def new_molecule_with_nudged_residues(imol, residue_spec,
     resno_end = residue_spec_to_res_no(residue_spec) + residue_delta
 
     if debug():
-        print "imol:", imol
-        print "residue_spec:", residue_spec
-        print "residue_delta:", residue_delta
-        print "resno_start:", resno_start
-        print "resno_end:", resno_end
-        print "nudge_by:", nudge_by
+        print("imol:", imol)
+        print("residue_spec:", residue_spec)
+        print("residue_delta:", residue_delta)
+        print("resno_start:", resno_start)
+        print("resno_end:", resno_end)
+        print("nudge_by:", nudge_by)
 
     status = nudge_residue_sequence(imol_new, chain_id, resno_start, resno_end,
                                     nudge_by, 1)
 
     if (status == 0):
         # fail
-        s = "Failed to nudge around " + chain_id + " " + \
-            str(residue_spec_to_res_no(residue_spec))
+        s = "Failed to nudge around " + chain_id + " " + str(residue_spec_to_res_no(residue_spec))
         add_status_bar_text(s)
         close_molecule(imol_new)
         return -1  # return a bad new molecule id
@@ -41,7 +40,7 @@ def nudge_residues_gui(imol, residue_spec):
         try:
             rd = int(rdt)
         except:
-            print "BL WARNING:: could not convert %s to a number, set to 1 then." %rdt
+            print("BL WARNING:: could not convert %s to a number, set to 1 then." %rdt)
             # or shall we bail!?
             rd = 1
         residue_delta = rd
@@ -58,13 +57,9 @@ def nudge_residues_gui(imol, residue_spec):
     label_1 = gtk.Label(" Nudge by ")
     label_2 = gtk.Label(" residues ")
     label_n = gtk.Label(" Nudge ")
-    res_lab = " residues up and down from " + \
-              residue_spec_to_chain_id(residue_spec) + " " + \
-              str(residue_spec_to_res_no(residue_spec))
+    res_lab = " residues up and down from " + residue_spec_to_chain_id(residue_spec) + " " + str(residue_spec_to_res_no(residue_spec))
     label_a = gtk.Label(res_lab)
-    m_lab = " Nudging residues from Molecule:\n   " + \
-            str(imol) + ": " + \
-            strip_path(molecule_name(imol))
+    m_lab = " Nudging residues from Molecule:\n   " + str(imol) + ": " + strip_path(molecule_name(imol))
     label_m = gtk.Label(m_lab)
     entry = gtk.Entry()
     h_sep = gtk.HSeparator()

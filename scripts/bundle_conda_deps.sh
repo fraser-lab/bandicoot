@@ -150,21 +150,34 @@ for dylib in "$PREFIX"/lib/*.dylib; do
     rewrite_external_in "$dylib"
 done
 
-echo "==> dropping conda rpath from binaries in libexec/ and bin/"
+echo "==> normalising conda rpath on binaries in libexec/ and bin/"
+# Bandicoot v0.1.0.0: we now ship with embedded Python (--with-python), so
+# libpython3.13.dylib must resolve via the conda lib dir at runtime. Keep
+# exactly one conda-lib LC_RPATH on every executable. Earlier versions
+# stripped the rpath entirely (because Coot's other deps were all bundled
+# via @rpath/@executable_path); now Python forces the conda dep back in.
+# Lab members all have conda installed for Phenix/CCP4 anyway, so this
+# remains acceptable.
 
 for d in libexec bin; do
     [ -d "$PREFIX/$d" ] || continue
     while IFS= read -r f; do
         file -b "$f" 2>/dev/null | grep -q "Mach-O" || continue
         chmod u+w "$f"
-        # Repeatedly delete in case install_name_tool added multiple
-        # copies across runs.
-        while otool -l "$f" 2>/dev/null | \
-              awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
-              grep -qx "$CONDA_PREFIX_ARG/lib"; do
-            install_name_tool -delete_rpath "$CONDA_PREFIX_ARG/lib" \
-                              "$f" 2>/dev/null || break
+        # Collapse to exactly one conda rpath: delete duplicates, then add
+        # one if missing. (install_name_tool can otherwise accumulate them
+        # across rebuilds.)
+        while [ "$(otool -l "$f" 2>/dev/null | \
+                   awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
+                   grep -cx "$CONDA_PREFIX_ARG/lib")" -gt 1 ]; do
+            install_name_tool -delete_rpath "$CONDA_PREFIX_ARG/lib" "$f" 2>/dev/null || break
         done
+        # Add if entirely missing.
+        if ! otool -l "$f" 2>/dev/null | \
+             awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
+             grep -qx "$CONDA_PREFIX_ARG/lib"; then
+            install_name_tool -add_rpath "$CONDA_PREFIX_ARG/lib" "$f" 2>/dev/null || true
+        fi
     done < <(find "$PREFIX/$d" -type f -perm -u+x)
 done
 

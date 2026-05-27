@@ -8,6 +8,6 @@
 #ifndef BANDICOOT_VERSION_H
 #define BANDICOOT_VERSION_H
 
-#define BANDICOOT_VERSION "0.0.0.3"
+#define BANDICOOT_VERSION "0.1.0.0"
 
 #endif

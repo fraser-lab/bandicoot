@@ -33,7 +33,7 @@ import pygtk, gtk, pango
 try:
    import gobject
 except:
-   print "WARNING:: no gobject available"
+   print("WARNING:: no gobject available")
 
 import types
 from types import *
@@ -156,7 +156,7 @@ def coot_gui(own_gtk_main=False):
                     try:
                        arg[i] = arg[i].strip('"')
                     except:
-                       print "BL WARNING:: unknown type of argument!"
+                       print("BL WARNING:: unknown type of argument!")
 
           python_function = tmp_command + "(*arg)"
 #          print "BL DEBUG:: python func and args are", python_function, tmp_command, arg
@@ -164,7 +164,7 @@ def coot_gui(own_gtk_main=False):
           try:
              res = eval(python_function)
           except SyntaxError:
-             exec python_function in locals()
+             exec(python_function, locals())
              res = None
              return True
           except:
@@ -207,20 +207,17 @@ def coot_gui(own_gtk_main=False):
                 res = False
                 his = False
              else:
-                exec entry_text in globals()
+                exec(entry_text, globals())
                 res = None
                 his = True
          except:
           guile_function = test_and_translate_guile(entry_text)
           if guile_function:
-             print "BL INFO::  We have a guile command!"
-             insert_normal_text("BL INFO:: Detected guile scripting!\n\
-             You should use python commands!!\n\
-             But I'm a nice guy and translated it for you, this time...!\n")
+             print("BL INFO::  We have a guile command!")
+             insert_normal_text("BL INFO:: Detected guile scripting!\n You should use python commands!!\n But I'm a nice guy and translated it for you, this time...!\n")
           else:
              # I don't need to see this - and its often not right (not a syntax error)
-             # insert_normal_text("BL WARNING:: Python syntax error!\n\
-             # (Or you attempted to use an invalid guile command...)\n")
+             # insert_normal_text("BL WARNING:: Python syntax error!\n # (Or you attempted to use an invalid guile command...)\n")
              type_error, error_value = sys.exc_info()[:2]
              error = str(error_value)
              insert_normal_text("Python error:\n") 
@@ -240,10 +237,10 @@ def coot_gui(own_gtk_main=False):
                 insert_normal_text(error + "\n")
                 insert_normal_text(str(type_error) + "\n")
           else:
-             print "BL WARNING:: None input"
+             print("BL WARNING:: None input")
 
        if res is not None:
-             print "INFO:: result:", res
+             print("INFO:: result:", res)
              insert_normal_text(str(res) + "\n")
 
        if his:
@@ -452,7 +449,7 @@ def generic_single_entry(function_label, entry_1_default_text, go_button_label, 
     if isinstance(entry_1_default_text,types.StringTypes):
        smiles_entry.set_text(entry_1_default_text)
     else:
-       print "BL WARNING:: entry_1_default_text was no string!!"
+       print("BL WARNING:: entry_1_default_text was no string!!")
    
     cancel_button.connect("clicked", delete_event)
 
@@ -486,19 +483,19 @@ def generic_double_entry(label_1, label_2,
        return False
 
     def go_function_event(*args):
-	if check_button:
-	        handle_go_function(tlc_entry.get_text(), smiles_entry.get_text(), check_button.get_active())
-	else:
-        	handle_go_function(tlc_entry.get_text(), smiles_entry.get_text())
+        if check_button:
+                handle_go_function(tlc_entry.get_text(), smiles_entry.get_text(), check_button.get_active())
+        else:
+                handle_go_function(tlc_entry.get_text(), smiles_entry.get_text())
         delete_event()
 
     def key_press_event(widget, event, tlc_entry, smiles_entry, check_button):
         if (event.keyval == 65293):
-		if check_button:
-			handle_go_function(tlc_entry.get_text(), smiles_entry.get_text(), check_button.get_active())
-	        else:
-			handle_go_function(tlc_entry.get_text(), smiles_entry.get_text())
-           	delete_event()
+                if check_button:
+                        handle_go_function(tlc_entry.get_text(), smiles_entry.get_text(), check_button.get_active())
+                else:
+                        handle_go_function(tlc_entry.get_text(), smiles_entry.get_text())
+                delete_event()
 
     window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     window.set_title('Coot')
@@ -525,16 +522,16 @@ def generic_double_entry(label_1, label_2,
 
     if type(check_button_label) is StringType:
 
-	def check_callback(*args):
-		active_state = c_button.get_active()
-		handle_check_button_function(active_state)
+        def check_callback(*args):
+                active_state = c_button.get_active()
+                handle_check_button_function(active_state)
 
-	c_button = gtk.CheckButton(check_button_label)
-	vbox.pack_start(c_button, False, False, 2)
-	c_button.connect("toggled", check_callback)
-	check_button = c_button
+        c_button = gtk.CheckButton(check_button_label)
+        vbox.pack_start(c_button, False, False, 2)
+        c_button.connect("toggled", check_callback)
+        check_button = c_button
     else:
-	check_button = False 	# the check-button when we don't want to see it
+        check_button = False    # the check-button when we don't want to see it
 
     vbox.pack_start(h_sep, True, False, 3)
     vbox.pack_start(hbox3, False, False, 0)
@@ -544,12 +541,12 @@ def generic_double_entry(label_1, label_2,
     if isinstance(entry_1_default_text,types.StringTypes):
        tlc_entry.set_text(entry_1_default_text)
     else:
-       print "BL WARNING:: entry_1_default_text was no string!!"
+       print("BL WARNING:: entry_1_default_text was no string!!")
  
     if isinstance(entry_2_default_text,types.StringTypes):
        smiles_entry.set_text(entry_2_default_text)
     else:
-       print "BL WARNING:: entry_2_default_text was no string!!"
+       print("BL WARNING:: entry_2_default_text was no string!!")
 
     go_button.connect("clicked", go_function_event)
     cancel_button.connect("clicked", delete_event)
@@ -629,8 +626,8 @@ def generic_multiple_entries_with_check_button(entry_info_list, check_button_inf
        if type(check_button_info[0]) is StringType:
 
           def check_callback(*args):
-		active_state = c_button.get_active()
-		check_button_info[1] = active_state
+                active_state = c_button.get_active()
+                check_button_info[1] = active_state
                 
           c_button = gtk.CheckButton(check_button_info[0])
           vbox.pack_start(c_button, False, False, 2)
@@ -714,7 +711,7 @@ def check_libcheck_logfile(logfile_name):
     lines = fp.readlines()
     for line in lines:
         if "WARNING: no such keyword :FILE" in line:
-           print "BL WARNING:: libcheck didn't seem to run ok! Please check output carefully!!"
+           print("BL WARNING:: libcheck didn't seem to run ok! Please check output carefully!!")
         else: pass
     fp.close()
 
@@ -843,14 +840,14 @@ def interesting_things_with_fix_maybe(title, baddie_list):
        set_rotation_centre(*coords)
 
    def callback_func2(widget,mol_no,atom_info):
-       print "Attempt to go to chain: %s resno: %s atom-name: %s" %(atom_info[0],atom_info[1],atom_info[2])
+       print("Attempt to go to chain: %s resno: %s atom-name: %s" %(atom_info[0],atom_info[1],atom_info[2]))
        set_go_to_atom_molecule(mol_no)
        success = set_go_to_atom_chain_residue_atom_name(*atom_info)
        if success == 0:           # failed?!
           new_name = unmangle_hydrogen_name(atom_info[2])
           success2 = set_go_to_atom_chain_residue_atom_name(atom_info[0],atom_info[1],new_name)
           if success2 == 0:
-             print "Failed to centre on demangled name: ", new_name
+             print("Failed to centre on demangled name: ", new_name)
              set_go_to_atom_chain_residue_atom_name(atom_info[0],atom_info[1]," CA ")
 
    # main body
@@ -875,7 +872,7 @@ def interesting_things_with_fix_maybe(title, baddie_list):
    for baddie_items in baddie_list:
 
        if baddie_items == '' :
-          print 'Done'
+          print('Done')
        else:
           hbox = gtk.HBox(False,0) # hbox to contain Baddie button and
                                    # and fix it button
@@ -951,7 +948,7 @@ def fill_option_menu_with_mol_options(menu, filter_function):
               menu.set_active(0)
               mol_ls.append(mol_no)
            else:
-              print "OOps molecule name for molecule %s is %s" %(mol_no_ls,label_str)
+              print("OOps molecule name for molecule %s is %s" %(mol_no_ls,label_str))
     return mol_ls
 
 # Fill an option menu with maps and return the list of maps
@@ -985,7 +982,7 @@ def fill_option_menu_with_number_options(menu, number_list, default_option_value
        if (default_option_value == number):
           count = number_list.index(number)
           menu.set_active(count)
-          print "setting menu active ", default_option_value, count
+          print("setting menu active ", default_option_value, count)
 
 # Helper function for molecule chooser.  Not really for users.
 # 
@@ -1008,10 +1005,10 @@ def get_option_menu_active_molecule(option_menu, model_mol_list):
        
           return int(imol_model)
        except:
-          print "INFO:: could not get active_item"
+          print("INFO:: could not get active_item")
           return False
     else:
-       print "get_option_menu_active_molecule(): Failed children length test : ",children, model_mol_list
+       print("get_option_menu_active_molecule(): Failed children length test : ",children, model_mol_list)
        return False
 
 def get_combobox_active_molecule(combobox, model_mol_list):
@@ -1028,10 +1025,10 @@ def get_combobox_active_molecule(combobox, model_mol_list):
        
           return int(imol_model)
        except:
-          print "INFO:: could not get active_item"
+          print("INFO:: could not get active_item")
           return False
     else:
-       print "get_combobox_active_molecule(): Failed children length test : ", children, model_mol_list
+       print("get_combobox_active_molecule(): Failed children length test : ", children, model_mol_list)
        return False
 
 # BL says:: we do it for gtk_combobox instead! option_menu is deprecated
@@ -1051,10 +1048,10 @@ def get_option_menu_active_item(option_menu, item_list):
           all_model = model[active_item][0]
           return all_model
        except:
-          print "INFO:: could not get active_item"
+          print("INFO:: could not get active_item")
           return False
    else:
-       print "get_option_menu_active_item(): Failed children length test : ", children, item_list
+       print("get_option_menu_active_item(): Failed children length test : ", children, item_list)
        return False
 
 # Typically option_menu_fill_function is
@@ -1071,14 +1068,14 @@ def molecule_chooser_gui_generic(chooser_label, callback_function, option_menu_f
         active_mol_no = get_option_menu_active_molecule(option_menu, model_mol_list)
         try:
            active_mol_no = int(active_mol_no)
-           print "INFO: operating on molecule number ", active_mol_no
+           print("INFO: operating on molecule number ", active_mol_no)
            try:
               callback_function(active_mol_no)
            except:
-              print "BL INFO:: problem in callback_function", callback_function.func_name
+              print("BL INFO:: problem in callback_function", callback_function.func_name)
            delete_event()
         except:
-           print "Failed to get a (molecule) number"
+           print("Failed to get a (molecule) number")
 
     window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     window.set_title('Coot')
@@ -1144,7 +1141,7 @@ def generic_chooser_and_entry(chooser_label, entry_hint_text,
                               default_entry_text, callback_function,
                               always_dismiss_on_ok_clicked=True):
 
-   print "BL DEBUG:: --- deal with always_dissmiss...", always_dismiss_on_ok_clicked
+   print("BL DEBUG:: --- deal with always_dissmiss...", always_dismiss_on_ok_clicked)
    # cf = lambda text, dummy: callback_function(text)
    generic_chooser_and_entry_and_check_button(chooser_label, entry_hint_text,
                                               default_entry_text, False,
@@ -1171,7 +1168,7 @@ def generic_chooser_and_entry_and_check_button(chooser_label, entry_hint_text,
 
       try:
          active_mol_no = int(active_mol_no)
-         print "INFO: operating on molecule number ", active_mol_no
+         print("INFO: operating on molecule number ", active_mol_no)
          text = entry.get_text()
          if check_button:
             check_button_state = check_button.get_active()
@@ -1186,7 +1183,7 @@ def generic_chooser_and_entry_and_check_button(chooser_label, entry_hint_text,
             else:
                return True
       except:
-         print "Failed to get a (molecule) number"
+         print("Failed to get a (molecule) number")
 
    window = gtk.Window(gtk.WINDOW_TOPLEVEL)
    window.set_title('Coot')
@@ -1266,7 +1263,7 @@ def generic_chooser_entry_and_file_selector(chooser_label, chooser_filter,
               callback_function(active_mol_no, text, file_sel_text)
            delete_event()
         except:
-           print "Failed to get a (molecule) number"
+           print("Failed to get a (molecule) number")
 
     window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     label = gtk.Label(chooser_label)
@@ -1341,7 +1338,7 @@ def generic_chooser_and_file_selector(chooser_label,
            callback_function(active_mol_no, file_sel_text)
            delete_event()
         except:
-           print "Failed to get a (molecule) number"
+           print("Failed to get a (molecule) number")
 
     window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     label = gtk.Label(chooser_label)
@@ -1412,8 +1409,9 @@ def coot_menubar_menu(menu_label):
        coot_main_menubar.append(menuitem)
        menuitem.show()
        return menu
-   except: print """BL WARNING:: could not import coot_python module!!\n
-                    Some things, esp. extensions, may be crippled!"""
+   except:
+      print("""BL WARNING:: could not import coot_python module!!
+                    Some things, esp. extensions, may be crippled!""")
 
 
 # Given that we have a menu (e.g. one called "Extensions") provide a
@@ -1497,7 +1495,7 @@ def interesting_residues_gui(imol, title, interesting_residues):
              residues, centre_atoms))
 
    else:
-      print "BL WARNING:: no valid molecule", imol
+      print("BL WARNING:: no valid molecule", imol)
 
                 
 # If a toolbutton with label button_label is not found in the coot main
@@ -1532,8 +1530,8 @@ def coot_toolbar_button(button_label, cb_function,
    try:
       import coot_python
    except:
-      print """BL WARNING:: could not import coot_python module!!
-      So we cannot make toolbar_buttons!"""
+      print("""BL WARNING:: could not import coot_python module!!
+      So we cannot make toolbar_buttons!""")
       return False
    
    coot_main_toolbar = coot_python.main_toolbar()
@@ -1582,7 +1580,7 @@ def coot_toolbar_button(button_label, cb_function,
             if callable(function):
                function(*args)
             else:
-               print "BL ERROR:: cannot evaluate or call function", function
+               print("BL ERROR:: cannot evaluate or call function", function)
       #toolbutton.connect("clicked", lambda w: eval(cb_function))
       toolbutton.connect("clicked", cb_wrapper, cb_function)
       toolbutton.show()
@@ -1596,7 +1594,7 @@ def coot_toolbar_button(button_label, cb_function,
          try:
             toolbutton.set_icon_widget(icon_name)
          except:
-            print "BL INFO::  icon name/widget given but could not add the icon"
+            print("BL INFO::  icon name/widget given but could not add the icon")
 
    return toolbutton
 
@@ -1618,8 +1616,8 @@ def coot_toolbar_combobox(label, entry_list, cb_function, tooltip=""):
    try:
       import coot_python
    except:
-      print """BL WARNING:: could not import coot_python module!!
-      So we cannot make a toolbar combobox!"""
+      print("""BL WARNING:: could not import coot_python module!!
+      So we cannot make a toolbar combobox!""")
       return False
    
    coot_main_toolbar = coot_python.main_toolbar()
@@ -1631,8 +1629,7 @@ def coot_toolbar_combobox(label, entry_list, cb_function, tooltip=""):
       if label in f: 
          found_combobox = f[1]
    if found_combobox:
-      s = "BL WARNING:: already have a comboxbox with name %s. Please " +\
-          "try again!" %found_combobox
+      s = "BL WARNING:: already have a comboxbox with name %s. Please " + "try again!" %found_combobox
       info_dialog(s)
       return False
    else:
@@ -1671,7 +1668,7 @@ def coot_toolbar_combobox(label, entry_list, cb_function, tooltip=""):
             if callable(function):
                function(*args)
             else:
-               print "BL ERROR:: cannot evaluate or call function", function
+               print("BL ERROR:: cannot evaluate or call function", function)
 
       combobox.connect("changed", cb_wrapper, cb_function)
       toolitem.add(combobox)
@@ -1724,41 +1721,41 @@ def toolbar_label_list():
 #
 def generic_button_dialog(dialog_name, button_list):
 
-	def delete_event(*args):
-		window.destroy()
-		return False
+        def delete_event(*args):
+                window.destroy()
+                return False
 
-	# main body
-	window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-	scrolled_win = gtk.ScrolledWindow()
-	outside_vbox = gtk.VBox(False, 2)
-	inside_vbox = gtk.VBox(False, 0)
+        # main body
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        scrolled_win = gtk.ScrolledWindow()
+        outside_vbox = gtk.VBox(False, 2)
+        inside_vbox = gtk.VBox(False, 0)
 
-	window.set_default_size(250,250)
-	window.set_title(dialog_name)
-	inside_vbox.set_border_width(4)
+        window.set_default_size(250,250)
+        window.set_title(dialog_name)
+        inside_vbox.set_border_width(4)
 
-	window.add(outside_vbox)
-	outside_vbox.add(scrolled_win)
-	scrolled_win.add_with_viewport(inside_vbox)
-	scrolled_win.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_ALWAYS)
+        window.add(outside_vbox)
+        outside_vbox.add(scrolled_win)
+        scrolled_win.add_with_viewport(inside_vbox)
+        scrolled_win.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_ALWAYS)
 
-	for button_item in button_list:
-		if button_item and len(button_item)==2:
-			button_label = button_item[0]
-			action = button_item[1]
+        for button_item in button_list:
+                if button_item and len(button_item)==2:
+                        button_label = button_item[0]
+                        action = button_item[1]
 
-			button = gtk.Button(button_label)
-			inside_vbox.pack_start(button, False, False, 2)
-			button.connect("clicked", action)
-			button.show()
+                        button = gtk.Button(button_label)
+                        inside_vbox.pack_start(button, False, False, 2)
+                        button.connect("clicked", action)
+                        button.show()
 
-	outside_vbox.set_border_width(4)
-	ok_button = gtk.Button("  OK  ")
-	outside_vbox.pack_start(ok_button, False, False, 6)
-	ok_button.connect("clicked", delete_event)
+        outside_vbox.set_border_width(4)
+        ok_button = gtk.Button("  OK  ")
+        outside_vbox.pack_start(ok_button, False, False, 6)
+        ok_button.connect("clicked", delete_event)
 
-	window.show_all()
+        window.show_all()
 
 
 # Generic interesting things gui: user passes a function that takes 4
@@ -1769,25 +1766,25 @@ def generic_button_dialog(dialog_name, button_list):
 # 
 def generic_interesting_things(imol,gui_title_string,residue_test_func):
 
-	if valid_model_molecule_qm(imol):
+        if valid_model_molecule_qm(imol):
 
-		interesting_residues = residues_matching_criteria(imol, residue_test_func)
-		for i in range(len(interesting_residues)): interesting_residues[i][0] = imol
-		centre_atoms = map(residue_spec, interesting_residues)
-		if centre_atoms:
-			# BL says:: ignoring "Atom in residue name failure" for nor
-			interesting_things_gui(gui_title_string,
-			map(lambda interesting_residue, centre_atom:
-			[interesting_residue[0] + " " 
-			+ interesting_residue[1] + " " 
-			+ str(interesting_residue[2]) + " " 
-			+ interesting_residue[3] + " " 
-			+ centre_atom[0] + " " + centre_atom[1]]
-			+ interesting_residue[1:len(interesting_residue)] + centre_atom,
-			interesting_residues, centre_atoms)
-			)
-	else:
-		print "BL WARNING:: no valid model molecule ", imol
+                interesting_residues = residues_matching_criteria(imol, residue_test_func)
+                for i in range(len(interesting_residues)): interesting_residues[i][0] = imol
+                centre_atoms = map(residue_spec, interesting_residues)
+                if centre_atoms:
+                        # BL says:: ignoring "Atom in residue name failure" for nor
+                        interesting_things_gui(gui_title_string,
+                        map(lambda interesting_residue, centre_atom:
+                        [interesting_residue[0] + " " 
+                        + interesting_residue[1] + " " 
+                        + str(interesting_residue[2]) + " " 
+                        + interesting_residue[3] + " " 
+                        + centre_atom[0] + " " + centre_atom[1]]
+                        + interesting_residue[1:len(interesting_residue)] + centre_atom,
+                        interesting_residues, centre_atoms)
+                        )
+        else:
+                print("BL WARNING:: no valid model molecule ", imol)
 
 # A gui that makes a generic number chooser the go function is a
 # function that takes the value of the active menu item - as a
@@ -1807,7 +1804,7 @@ def generic_number_chooser(number_list, default_option_value, hint_text,
 #           print "BL DEBUG:: active_number is:", active_number
            go_function(active_number)
         except:
-           print "Failed to get execute function"
+           print("Failed to get execute function")
         delete_event()
 
 
@@ -1874,14 +1871,14 @@ def entry_do_button(vbox, hint_text,
 # return the option-menu and model molecule list:
 def generic_molecule_chooser(hbox, hint_text):
 
-	menu = gtk.Menu()
+        menu = gtk.Menu()
 # BL says:: option menu is depricated, so we use combox instead, maybe!?!
-	option_menu = gtk.combo_box_new_text()
-	label = gtk.Label(hint_text)
-	model_mol_list = fill_option_menu_with_coordinates_mol_options(option_menu)
+        option_menu = gtk.combo_box_new_text()
+        label = gtk.Label(hint_text)
+        model_mol_list = fill_option_menu_with_coordinates_mol_options(option_menu)
 
-	hbox.pack_start(label, False, False, 2)
-	hbox.pack_start(option_menu, True, True, 2)
+        hbox.pack_start(label, False, False, 2)
+        hbox.pack_start(option_menu, True, True, 2)
         return [option_menu, model_mol_list]
 
 # Return an entry, the widget is inserted into the hbox passed to
@@ -1891,27 +1888,27 @@ def file_selector_entry(hbox, hint_text, default_file_name = False):
 
    if (file_chooser_selector_state() == 0 or gtk.pygtk_version < (2,3,90)):
 
-	vbox = gtk.VBox(False, 0)
+        vbox = gtk.VBox(False, 0)
 
-	def file_func1(*args):
-		def file_ok_sel(*args):
-			t = fs_window.get_filename()
-			print t
-			entry.set_text(t)
-			fs_window.destroy()
+        def file_func1(*args):
+                def file_ok_sel(*args):
+                        t = fs_window.get_filename()
+                        print(t)
+                        entry.set_text(t)
+                        fs_window.destroy()
 
-		fs_window = gtk.FileSelection("file selection")
-		fs_window.ok_button.connect("clicked", file_ok_sel)
-		fs_window.cancel_button.connect("clicked",
-				lambda w: fs_window.destroy())
-		fs_window.show()
+                fs_window = gtk.FileSelection("file selection")
+                fs_window.ok_button.connect("clicked", file_ok_sel)
+                fs_window.cancel_button.connect("clicked",
+                                lambda w: fs_window.destroy())
+                fs_window.show()
 
-	entry = entry_do_button(vbox, hint_text,
+        entry = entry_do_button(vbox, hint_text,
                             "  File...  ", file_func1,
                             default_file_name)
 
-	hbox.pack_start(vbox, False, False, 2)
-	vbox.show()
+        hbox.pack_start(vbox, False, False, 2)
+        vbox.show()
         return entry
      
    else:
@@ -1925,16 +1922,16 @@ def file_chooser_entry(hbox, hint_text, default_file_name = False):
 
    if gtk.pygtk_version > (2,3,90):
 
-	vbox = gtk.VBox(False, 0)
+        vbox = gtk.VBox(False, 0)
 
-	def file_func1(*args):
-		def file_ok_sel(*args):
-			t = fc_window.get_filename()
-			print t
-			entry.set_text(t)
-			fc_window.destroy()
+        def file_func1(*args):
+                def file_ok_sel(*args):
+                        t = fc_window.get_filename()
+                        print(t)
+                        entry.set_text(t)
+                        fc_window.destroy()
 
-		fc_window = gtk.FileChooserDialog("file selection",
+                fc_window = gtk.FileChooserDialog("file selection",
                                                   None,
                                                   gtk.FILE_CHOOSER_ACTION_OPEN,
                                                   (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
@@ -1945,14 +1942,14 @@ def file_chooser_entry(hbox, hint_text, default_file_name = False):
                 elif response == gtk.RESPONSE_CANCEL:
                    fc_window.destroy()
 
-	entry = entry_do_button(vbox, hint_text, "  File...  ",
+        entry = entry_do_button(vbox, hint_text, "  File...  ",
                             file_func1, default_file_name)
 
-	hbox.pack_start(vbox, False, False, 2)
-	vbox.show()
+        hbox.pack_start(vbox, False, False, 2)
+        vbox.show()
         return entry
    else:
-        print "PyGtk 2.3.90 or later required for this function!"
+        print("PyGtk 2.3.90 or later required for this function!")
         return False
 
 # The gui for the strand placement function
@@ -1968,13 +1965,13 @@ def place_strand_here_gui():
 #
 def cootaneer_gui(imol):
 
-	def delete_event(*args):
-		window.destroy()
-		return False
+        def delete_event(*args):
+                window.destroy()
+                return False
 
-	def go_function_event(widget, imol):
-           print "apply the sequence info here\n"
-           print "then cootaneer\n"
+        def go_function_event(widget, imol):
+           print("apply the sequence info here\n")
+           print("then cootaneer\n")
 
            # no active atom won't do.  We need
            # to find the nearest atom in imol to (rotation-centre).
@@ -1984,7 +1981,7 @@ def cootaneer_gui(imol):
 
            n_atom = closest_atom(imol)
            if n_atom:
-              imol	= n_atom[0]
+              imol      = n_atom[0]
               chain_id = n_atom[1]
               resno    = n_atom[2]
               inscode  = n_atom[3]
@@ -1992,66 +1989,64 @@ def cootaneer_gui(imol):
               alt_conf = n_atom[5]
               cootaneer_results = cootaneer(imol_map, imol, [chain_id, resno, inscode, 
                                                              at_name, alt_conf])
-              print "Cootaneering status:", cootaneer_results
+              print("Cootaneering status:", cootaneer_results)
               if (cootaneer_results == 0):
-                 s = "Insufficiently confident in alignment to make a fit." + \
-                     "\n" + \
-                     "Perhaps you could improve or extend this fragment."
+                 s = "Insufficiently confident in alignment to make a fit." + "\n" + "Perhaps you could improve or extend this fragment."
                  window.destroy()
                  info_dialog(s)
            else:
-              print "BL WARNING:: no close atom found!"
+              print("BL WARNING:: no close atom found!")
               window.destroy()
 
 
-	def add_text_to_text_box(text_box, description):
-		start = text_box.get_start_iter()
-		text_box.create_tag("tag", foreground="black", 
-			background = "#c0e6c0")
-		text_box.insert_with_tags_by_name(start, description, "tag")
+        def add_text_to_text_box(text_box, description):
+                start = text_box.get_start_iter()
+                text_box.create_tag("tag", foreground="black", 
+                        background = "#c0e6c0")
+                text_box.insert_with_tags_by_name(start, description, "tag")
 
-	# return the (entry . textbuffer/box)
-	#
-	def entry_text_pair_frame(seq_info):
+        # return the (entry . textbuffer/box)
+        #
+        def entry_text_pair_frame(seq_info):
 
-		frame = gtk.Frame()
-		vbox = gtk.VBox(False, 3)
-		entry = gtk.Entry()
-		textview = gtk.TextView()
+                frame = gtk.Frame()
+                vbox = gtk.VBox(False, 3)
+                entry = gtk.Entry()
+                textview = gtk.TextView()
                 textview.set_wrap_mode(gtk.WRAP_WORD_CHAR)
-		text_box = textview.get_buffer()
-		chain_id_label = gtk.Label("Chain ID")
-		sequence_label = gtk.Label("Sequence")
-	
-		frame.add(vbox)
-		vbox.pack_start(chain_id_label, False, False, 2)
-		vbox.pack_start(entry, False, False, 2)
-		vbox.pack_start(sequence_label, False, False, 2)
-		vbox.pack_start(textview, False, False, 2)
-		add_text_to_text_box(text_box, seq_info[1])
-		entry.set_text(seq_info[0])
-		return [frame, entry, text_box]
+                text_box = textview.get_buffer()
+                chain_id_label = gtk.Label("Chain ID")
+                sequence_label = gtk.Label("Sequence")
+        
+                frame.add(vbox)
+                vbox.pack_start(chain_id_label, False, False, 2)
+                vbox.pack_start(entry, False, False, 2)
+                vbox.pack_start(sequence_label, False, False, 2)
+                vbox.pack_start(textview, False, False, 2)
+                add_text_to_text_box(text_box, seq_info[1])
+                entry.set_text(seq_info[0])
+                return [frame, entry, text_box]
 
-	# main body
-	imol_map = imol_refinement_map()
-	if (imol_map == -1):
+        # main body
+        imol_map = imol_refinement_map()
+        if (imol_map == -1):
            show_select_map_dialog()
-           print "BL DEBUG:: probably should wait here for input!?"
-	
-	window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-	outside_vbox = gtk.VBox(False, 2)
-	inside_vbox = gtk.VBox(False, 2)
-	h_sep = gtk.HSeparator()
-	buttons_hbox = gtk.HBox(True, 2)
-	go_button = gtk.Button("  Cootaneer!  ")
-	cancel_button = gtk.Button("  Cancel  ")
+           print("BL DEBUG:: probably should wait here for input!?")
+        
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        outside_vbox = gtk.VBox(False, 2)
+        inside_vbox = gtk.VBox(False, 2)
+        h_sep = gtk.HSeparator()
+        buttons_hbox = gtk.HBox(True, 2)
+        go_button = gtk.Button("  Cootaneer!  ")
+        cancel_button = gtk.Button("  Cancel  ")
 
-	seq_info_ls = sequence_info(imol)
+        seq_info_ls = sequence_info(imol)
         # print "BL DEBUG:: sequence_list and imol is", seq_info_ls, imol
 
         if not seq_info_ls:
            s = "No sequence assigned for molecule number " + str(imol)
-           print s
+           print(s)
            info_dialog(s)
         else:
 
@@ -2070,7 +2065,7 @@ def cootaneer_gui(imol):
            go_button.connect("clicked", go_function_event, imol)
 
            window.add(outside_vbox)
-           window.show_all()	
+           window.show_all()    
 
 
 # The gui for saving views
@@ -2192,7 +2187,7 @@ def dialog_box_of_buttons_with_check_button(window_name, geometry,
    ok_button = gtk.Button(close_button_label)
    outside_vbox.pack_end(ok_button, False, False, 0)
    ok_button.connect("clicked", close_cb_func, window, post_close_hook)
-	
+        
    window.show_all()
    return [inside_vbox, window]
 
@@ -2294,7 +2289,7 @@ def dialog_box_of_pairs_of_buttons(imol, window_name, geometry, buttons, close_b
         scrolled_win.add_with_viewport(inside_vbox)
         scrolled_win.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_ALWAYS)
 
-	for button_info in buttons:
+        for button_info in buttons:
            #print "button_info ", button_info
            if type(button_info) is ListType:
               button_label_1 = button_info[0][0]
@@ -2334,71 +2329,71 @@ def dialog_box_of_buttons_with_widget(window_name, geometry,
                                       buttons, extra_widget,
                                       close_button_label):
 
-	def add_text_to_text_widget(text_box, description):
-		textbuffer = text_box.get_buffer()
-		start = textbuffer.get_start_iter()
-		textbuffer.create_tag("tag", foreground="black", 
-						background = "#c0e6c0")
-		textbuffer.insert_with_tags_by_name(start, description, "tag")
+        def add_text_to_text_widget(text_box, description):
+                textbuffer = text_box.get_buffer()
+                start = textbuffer.get_start_iter()
+                textbuffer.create_tag("tag", foreground="black", 
+                                                background = "#c0e6c0")
+                textbuffer.insert_with_tags_by_name(start, description, "tag")
 
-	# main line
-	window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-	scrolled_win = gtk.ScrolledWindow()
-	outside_vbox = gtk.VBox(False, 2)
-	inside_vbox = gtk.VBox(False, 0)
+        # main line
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        scrolled_win = gtk.ScrolledWindow()
+        outside_vbox = gtk.VBox(False, 2)
+        inside_vbox = gtk.VBox(False, 0)
         h_sep = gtk.HSeparator()
 
         window.set_default_size(geometry[0], geometry[1])
-	window.set_title(window_name)
-	inside_vbox.set_border_width(2)
-	window.add(outside_vbox)
-	outside_vbox.pack_start(scrolled_win, True, True, 0) # expand fill padding
-	scrolled_win.add_with_viewport(inside_vbox)
-	scrolled_win.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_ALWAYS)
+        window.set_title(window_name)
+        inside_vbox.set_border_width(2)
+        window.add(outside_vbox)
+        outside_vbox.pack_start(scrolled_win, True, True, 0) # expand fill padding
+        scrolled_win.add_with_viewport(inside_vbox)
+        scrolled_win.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_ALWAYS)
 
-	for button_info in buttons:
-		button_label = button_info[0]
-		callback = button_info[1]
-		if len(button_info)==2:
-			description = False
-		else:
-			description = button_info[2]
-		button = gtk.Button(button_label)
+        for button_info in buttons:
+                button_label = button_info[0]
+                callback = button_info[1]
+                if len(button_info)==2:
+                        description = False
+                else:
+                        description = button_info[2]
+                button = gtk.Button(button_label)
 
 # BL says:: in python we should pass the callback as a string
-		if type(callback) is StringType:
-			def callback_func(button,call):
-				eval(call)
-			button.connect("clicked", callback_func, callback)
+                if type(callback) is StringType:
+                        def callback_func(button,call):
+                                eval(call)
+                        button.connect("clicked", callback_func, callback)
                 elif (type(callback) is ListType):
                    def callback_func(button, call):
                       for item in call:
                          eval(item)
                    button.connect("clicked", callback_func, callback) 
-		else:
-			button.connect("clicked", callback)
+                else:
+                        button.connect("clicked", callback)
 
-		if type(description) is StringType:
-			text_box = gtk.TextView()
-			text_box.set_editable(False)
-			add_text_to_text_widget(text_box, description)
-			inside_vbox.pack_start(text_box, False, False, 2)
-			text_box.realize()
+                if type(description) is StringType:
+                        text_box = gtk.TextView()
+                        text_box.set_editable(False)
+                        add_text_to_text_widget(text_box, description)
+                        inside_vbox.pack_start(text_box, False, False, 2)
+                        text_box.realize()
 # BL says:: not working here
-#			text_box.thaw()
+#                       text_box.thaw()
 
-		inside_vbox.pack_start(button, False, False, 2)
+                inside_vbox.pack_start(button, False, False, 2)
 
         # for the extra widget
         inside_vbox.pack_start(h_sep, False, False, 2)
         inside_vbox.pack_start(extra_widget, False, False, 2)
         
-	outside_vbox.set_border_width(2)
-	ok_button = gtk.Button(close_button_label)
-	outside_vbox.pack_end(ok_button, False, False, 0)
-	ok_button.connect("clicked", lambda w: window.destroy())
-	
-	window.show_all()
+        outside_vbox.set_border_width(2)
+        ok_button = gtk.Button(close_button_label)
+        outside_vbox.pack_end(ok_button, False, False, 0)
+        ok_button.connect("clicked", lambda w: window.destroy())
+        
+        window.show_all()
 
 # A dialog box with radiobuttons e.g. to cycle thru loops
 #
@@ -2416,7 +2411,7 @@ def dialog_box_of_radiobuttons(window_name, geometry, buttons,
                                selected_button = 0,
                                cancel_button_label = "",
                                cancel_function = False):
-	
+        
    def go_function_event(widget, button_ls):
       eval(go_button_function)
       window.destroy()
@@ -2428,7 +2423,7 @@ def dialog_box_of_radiobuttons(window_name, geometry, buttons,
          eval(cancel_function)
       window.destroy()
       return False
-	
+        
    # main line
    window = gtk.Window(gtk.WINDOW_TOPLEVEL)
    scrolled_win = gtk.ScrolledWindow()
@@ -2471,7 +2466,7 @@ def dialog_box_of_radiobuttons(window_name, geometry, buttons,
       cancel_button = gtk.Button(cancel_button_label)
       button_hbox.pack_start(cancel_button, True, True, 6)
       cancel_button.connect("clicked", cancel_function_cb)
-		
+                
    # switch on the first or selected button
    # somehow I need to emit the toggled signal too (shouldnt have to!?)
    button_ls[selected_button].set_active(True)
@@ -2514,32 +2509,32 @@ def views_panel_gui():
 # 
 def nudge_screen_centre_paule_gui():
 
-	zsc = 0.02
+        zsc = 0.02
 # BL says:: in python we need some helper functn, no 'proper' lambda
 # axis 0-2 = x,y,z and 0=+ and 1=-
-	def nudge_screen_func(axis, operand):
-		nudge = zsc * zoom_factor()
-		rc = rotation_centre()
-		if operand == 0:
-			rc[axis] += nudge
-		elif operand == 1:
-			rc[axis] -= nudge
-		else:
-			# We should never be here
-			print "BL WARNING:: something went wrong!!!"
-		set_rotation_centre(*rc)
+        def nudge_screen_func(axis, operand):
+                nudge = zsc * zoom_factor()
+                rc = rotation_centre()
+                if operand == 0:
+                        rc[axis] += nudge
+                elif operand == 1:
+                        rc[axis] -= nudge
+                else:
+                        # We should never be here
+                        print("BL WARNING:: something went wrong!!!")
+                set_rotation_centre(*rc)
 
-	buttons = [ 
-		["Nudge +X", lambda func: nudge_screen_func(0,0)],
-		["Nudge -X", lambda func: nudge_screen_func(0,1)],
-		["Nudge +Y", lambda func: nudge_screen_func(1,0)],
-		["Nudge -Y", lambda func: nudge_screen_func(1,1)],
-		["Nudge +Z", lambda func: nudge_screen_func(2,0)],
-		["Nudge -Z", lambda func: nudge_screen_func(2,1)],
-	]
+        buttons = [ 
+                ["Nudge +X", lambda func: nudge_screen_func(0,0)],
+                ["Nudge -X", lambda func: nudge_screen_func(0,1)],
+                ["Nudge +Y", lambda func: nudge_screen_func(1,0)],
+                ["Nudge -Y", lambda func: nudge_screen_func(1,1)],
+                ["Nudge +Z", lambda func: nudge_screen_func(2,0)],
+                ["Nudge -Z", lambda func: nudge_screen_func(2,1)],
+        ]
 
-	dialog_box_of_buttons("Nudge Screen Centre", [200,240], buttons, "  Close ")
-		
+        dialog_box_of_buttons("Nudge Screen Centre", [200,240], buttons, "  Close ")
+                
 
 # nudge screen centre box.  Useful when Ctrl left-mouse has been
 # taken over by another function.
@@ -2548,35 +2543,35 @@ def nudge_screen_centre_paule_gui():
 # 
 def nudge_screen_centre_gui():
 
-	zsc = 0.02
+        zsc = 0.02
 # BL says:: in python we need some helper functn, no 'proper' lambda
 # axis 0-2 = x,y,z and 0=+ and 1=-
-	def nudge_screen_func(axis, operand):
-		nudge_factor = zsc * zoom_factor()
-		rc = rotation_centre()
+        def nudge_screen_func(axis, operand):
+                nudge_factor = zsc * zoom_factor()
+                rc = rotation_centre()
                 mat = view_matrix_transp()
                 nudge_vector = []
                 for i in range(axis, axis + 7, 3):
                    nudge_vector.append(mat[i])
-		if operand == 0:
+                if operand == 0:
                    rc = map(lambda x, y: x + y, rc, nudge_vector)
-		elif operand == 1:
+                elif operand == 1:
                    rc = map(lambda x, y: x - y, rc, nudge_vector)
-		else:
-			# We should never be here
-			print "BL WARNING:: something went wrong!!!"
-		set_rotation_centre(*rc)
+                else:
+                        # We should never be here
+                        print("BL WARNING:: something went wrong!!!")
+                set_rotation_centre(*rc)
 
-	buttons = [ 
-		["Nudge +X", lambda func: nudge_screen_func(0,0)],
-		["Nudge -X", lambda func: nudge_screen_func(0,1)],
-		["Nudge +Y", lambda func: nudge_screen_func(1,0)],
-		["Nudge -Y", lambda func: nudge_screen_func(1,1)],
-		["Nudge +Z", lambda func: nudge_screen_func(2,0)],
-		["Nudge -Z", lambda func: nudge_screen_func(2,1)],
-	]
+        buttons = [ 
+                ["Nudge +X", lambda func: nudge_screen_func(0,0)],
+                ["Nudge -X", lambda func: nudge_screen_func(0,1)],
+                ["Nudge +Y", lambda func: nudge_screen_func(1,0)],
+                ["Nudge -Y", lambda func: nudge_screen_func(1,1)],
+                ["Nudge +Z", lambda func: nudge_screen_func(2,0)],
+                ["Nudge -Z", lambda func: nudge_screen_func(2,1)],
+        ]
 
-	dialog_box_of_buttons("Nudge Screen Centre", [200,240], buttons, "  Close ")
+        dialog_box_of_buttons("Nudge Screen Centre", [200,240], buttons, "  Close ")
 
 # as nudge_screen_centre_gui but with clipping and zoom control
 def nudge_screen_centre_extra_gui():
@@ -2586,8 +2581,8 @@ def nudge_screen_centre_extra_gui():
 # BL says:: in python we need some helper functn, no 'proper' lambda
 # axis 0-2 = x,y,z and 0=+ and 1=-
    def nudge_screen_func(axis, operand):
-	nudge_factor = zsc * zoom_factor()
-	rc = rotation_centre()
+        nudge_factor = zsc * zoom_factor()
+        rc = rotation_centre()
         mat = view_matrix_transp()
         nudge_vector = []
         for i in range(axis, axis + 7, 3):
@@ -2598,17 +2593,17 @@ def nudge_screen_centre_extra_gui():
            rc = map(lambda x, y: x - y, rc, nudge_vector)
         else:
            # We should never be here
-           print "BL WARNING:: something went wrong!!!"
+           print("BL WARNING:: something went wrong!!!")
         set_rotation_centre(*rc)
 
    buttons = [ 
-		["Nudge +X", lambda func: nudge_screen_func(0,0)],
-		["Nudge -X", lambda func: nudge_screen_func(0,1)],
-		["Nudge +Y", lambda func: nudge_screen_func(1,0)],
-		["Nudge -Y", lambda func: nudge_screen_func(1,1)],
-		["Nudge +Z", lambda func: nudge_screen_func(2,0)],
-		["Nudge -Z", lambda func: nudge_screen_func(2,1)],
-	]
+                ["Nudge +X", lambda func: nudge_screen_func(0,0)],
+                ["Nudge -X", lambda func: nudge_screen_func(0,1)],
+                ["Nudge +Y", lambda func: nudge_screen_func(1,0)],
+                ["Nudge -Y", lambda func: nudge_screen_func(1,1)],
+                ["Nudge +Z", lambda func: nudge_screen_func(2,0)],
+                ["Nudge -Z", lambda func: nudge_screen_func(2,1)],
+        ]
 
    # and this is for the clipping and zooming
    vbox = gtk.VBox(False, 0)
@@ -2661,7 +2656,7 @@ def make_difference_map_gui():
       return False
 
    def go_function_event(widget):
-      print "make diff map here\n"
+      print("make diff map here\n")
       active_mol_no_ref = get_option_menu_active_molecule(option_menu_ref_mol, map_molecule_list_ref)
       active_mol_no_sec = get_option_menu_active_molecule(option_menu_sec_mol, map_molecule_list_sec)
       scale_text = scale_entry.get_text()
@@ -2669,7 +2664,7 @@ def make_difference_map_gui():
       try:
          scale = float(scale_text)
       except:
-         print "can't decode scale", scale_text
+         print("can't decode scale", scale_text)
       if (scale):
          difference_map(active_mol_no_ref, active_mol_no_sec, scale)
       delete_event()
@@ -2728,7 +2723,7 @@ def cis_peptides_gui(imol):
          for atom in atom_list:
             atom_name = atom[0][0]
             if (atom_name == ' CA '):
-               print "BL DEBUG:: returning ", atom
+               print("BL DEBUG:: returning ", atom)
                return atom     # check me
 
    def make_list_of_cis_peps(imol, list_of_cis_peps):
@@ -2807,11 +2802,11 @@ def transform_map_using_lsq_matrix_gui():
         radius = float(radius_text)
         cont = True
      except:
-        print "BL ERROR:: conversion from input text to numbers failed"
+        print("BL ERROR:: conversion from input text to numbers failed")
         
      if (cont):
         if (not valid_map_molecule_qm(imol_map)):
-           print "Must set the refinement map"
+           print("Must set the refinement map")
         else:
            imol_copy = copy_molecule(active_mol_mov)
            new_map_number = transform_map_using_lsq_matrix(active_mol_ref, chain_id_ref,
@@ -2822,11 +2817,9 @@ def transform_map_using_lsq_matrix_gui():
            set_molecule_name(imol_copy,
                              "Transformed copy of " + strip_path(molecule_name(active_mol_mov)))
 
-           s =  "Transformed map: from map " + str(imol_map) + \
-               " by matrix that created coords " + str(imol_copy)
+           s =  "Transformed map: from map " + str(imol_map) + " by matrix that created coords " + str(imol_copy)
            set_molecule_name(new_map_number,
-                             "Transformed map: from map " + str(imol_map) + \
-                             " by matrix that created coords " + str(imol_copy))
+                             "Transformed map: from map " + str(imol_map) + " by matrix that created coords " + str(imol_copy))
            
            set_mol_active(imol_copy, 0)
            set_mol_displayed(imol_copy, 0)
@@ -2868,8 +2861,7 @@ def transform_map_using_lsq_matrix_gui():
   buttons_hbox = gtk.HBox(False, 2)
   cancel_button = gtk.Button("  Cancel  ")
   ok_button = gtk.Button("  Transform  ")
-  usage = "Note that this will transform the current refinement map " + \
-          "to around the screen centre"
+  usage = "Note that this will transform the current refinement map " + "to around the screen centre"
   usage_label = gtk.Label(usage)
   h_sep = gtk.HSeparator()
   frame_info_ref = atom_sel_frame("Reference")
@@ -2918,7 +2910,7 @@ def ncs_ligand_gui():
       return False
 
    def go_button_function(widget):
-      print "ncs ligand function here\n"
+      print("ncs ligand function here\n")
       active_mol_no_ref = get_option_menu_active_molecule(option_menu_ref_mol, molecule_list_ref)
       active_mol_no_lig = get_option_menu_active_molecule(option_menu_lig_mol, molecule_list_lig)
       chain_id_lig = chain_id_lig_entry.get_text()
@@ -2928,7 +2920,7 @@ def ncs_ligand_gui():
       try:
          resno_start = int(resno_start_entry.get_text())
       except:
-         print "can't decode resno_start", resno_start_entry.get_text()
+         print("can't decode resno_start", resno_start_entry.get_text())
          
       resno_end_t = resno_end_entry.get_text()
       try:
@@ -2937,13 +2929,11 @@ def ncs_ligand_gui():
          if (resno_end_t == ""):
             resno_end = resno_start
          else:
-            print "can't decode resno_end", resno_end_t
+            print("can't decode resno_end", resno_end_t)
 
       if (resno_end and resno_start):
          make_ncs_ghosts_maybe(active_mol_no_ref)
-         print "ncs ligand with", active_mol_no_ref, \
-               chain_id_ref, active_mol_no_lig, chain_id_lig, \
-               resno_start, resno_end
+         print("ncs ligand with", active_mol_no_ref, chain_id_ref, active_mol_no_lig, chain_id_lig, resno_start, resno_end)
          ncs_ligand(active_mol_no_ref,
                     chain_id_ref,
                     active_mol_no_lig,
@@ -3012,11 +3002,7 @@ def ncs_ligand_gui():
    resno_start_entry.set_text("1")
 
    #tooltips = gtk.Tooltips()
-   chain_tip = "'A' is a reasonable guess at the NCS master chain id.  " + \
-               "If your ligand (specified below) is NOT bound to the protein's " + \
-               "'A' chain, then you will need to change this chain and also " + \
-               "make sure that the master molecule is specified appropriately " + \
-               "in the Draw->NCS Ghost Control window."
+   chain_tip = "'A' is a reasonable guess at the NCS master chain id.  " + "If your ligand (specified below) is NOT bound to the protein's " + "'A' chain, then you will need to change this chain and also " + "make sure that the master molecule is specified appropriately " + "in the Draw->NCS Ghost Control window."
    resno_tip = "Leave blank for a single residue"
    if gtk.pygtk_version >= (2,12):
       chain_id_ref_entry.set_tooltip_text(chain_tip)
@@ -3124,12 +3110,12 @@ def superpose_ligand_gui():
       try:
          resno_ref = int(resno_ref_entry.get_text())
       except:
-         print "can't decode reference resno", resno_ref_entry.get_text()
+         print("can't decode reference resno", resno_ref_entry.get_text())
          
       try:
          resno_mov = int(resno_mov_entry.get_text())
       except:
-         print "can't decode moving resno", resno_mov_entry.get_text()
+         print("can't decode moving resno", resno_mov_entry.get_text())
          
 
       if (resno_ref and resno_mov):
@@ -3220,8 +3206,7 @@ def gui_overlap_ligands(imol_ligand, imol_ref, chain_id_ref, res_no_ref):
         if (not residue_has_hetatms_qm(imol_ref, chain_id_ref, res_no_ref, "")):
             return False
         else:
-            print "----------- overlap-ligands %s %s %s %s ------------" \
-            %(imol_ligand, imol_ref, chain_id_ref, res_no_ref)
+            print("----------- overlap-ligands %s %s %s %s ------------" %(imol_ligand, imol_ref, chain_id_ref, res_no_ref))
             # this can return the rtop operator or the False (for fail of course).
             match_ligand_torsions(imol_ligand, imol_ref, chain_id_ref, res_no_ref)
             ret = overlap_ligands(imol_ligand, imol_ref, chain_id_ref, res_no_ref)
@@ -3280,7 +3265,7 @@ def key_bindings_gui():
             s += "The shortcut should still work though."
             def binding_func():
                info_dialog(s)
-               print "INFO::", s
+               print("INFO::", s)
          
          button.connect("clicked", lambda func: apply(binding_func))
          
@@ -3372,21 +3357,12 @@ def coot_news_info(*args):
    import threading
    import urllib
    global text_1, text_2
-   url = "http:" + \
-         "//www.biop.ox.ac.uk/coot/software" + \
-         "/binaries/pre-releases/PRE-RELEASE-NOTES"
+   url = "http:" + "//www.biop.ox.ac.uk/coot/software" + "/binaries/pre-releases/PRE-RELEASE-NOTES"
 
    def test_string():
       import time
       time.sleep(2)
-      ret = "assssssssssssssssssssssssssssssssssssssss\n\n" + \
-            "assssssssssssssssssssssssssssssssssssssss\n\n" + \
-            "assssssssssssssssssssssssssssssssssssssss\n\n" + \
-            "\n-----\n" + \
-            "bill asssssssssssssssssssssssssssssssssssss\n\n" + \
-            "fred asssssssssssssssssssssssssssssssssssss\n\n" + \
-            "george sssssssssssssssssssssssssssssssssssss\n\n" + \
-            "\n-----\n"
+      ret = "assssssssssssssssssssssssssssssssssssssss\n\n" + "assssssssssssssssssssssssssssssssssssssss\n\n" + "assssssssssssssssssssssssssssssssssssssss\n\n" + "\n-----\n" + "bill asssssssssssssssssssssssssssssssssssss\n\n" + "fred asssssssssssssssssssssssssssssssssssss\n\n" + "george sssssssssssssssssssssssssssssssssssss\n\n" + "\n-----\n"
       return ret
 
    def stop():
@@ -3422,7 +3398,7 @@ def coot_news_info(*args):
 
    def coot_news_error_handle(key, *args):
       # not used currently
-      print "error: news: error in %s with args %s" %(key, args)
+      print("error: news: error in %s with args %s" %(key, args))
 
    def get_news():
       # no threading for now. Doesnt do the right thing
@@ -3555,13 +3531,13 @@ def cootaneer_gui_bl():
       # doesnt need to do anything
       status = refine_check_button.get_active()
       if (status):
-         print "INFO:: refinement on"
+         print("INFO:: refinement on")
       else:
-         print "INFO:: refinement off"
+         print("INFO:: refinement off")
 
    def go_function_event(widget):
-      print "apply the sequence info here\n"
-      print "then cootaneer\n"
+      print("apply the sequence info here\n")
+      print("then cootaneer\n")
 
       # no active atom won't do.  We need
       # to find the nearest atom in imol to (rotation-centre).
@@ -3586,9 +3562,7 @@ def cootaneer_gui_bl():
             cootaneer_result = cootaneer(imol_map, imol, [chain_id, res_no, ins_code, 
                                                           at_name, alt_conf])
             if (cootaneer_result == 0):
-               s = "Insufficiently confident in alignment to make a fit." + \
-                   "\n" + \
-                   "Perhaps you could improve or extend this fragment."
+               s = "Insufficiently confident in alignment to make a fit." + "\n" + "Perhaps you could improve or extend this fragment."
                info_dialog(s)
             refine_qm = refine_check_button.get_active()
          # refine?
@@ -3638,7 +3612,7 @@ def cootaneer_gui_bl():
             print(e)
             print("DEBUG:: seq_info_ls: ", seq_info_ls)
       else:
-         print "BL WARNING:: no filename"
+         print("BL WARNING:: no filename")
 
    def fill_table_with_sequences(*args):
       # fills the table with sequences if they have been associated with the model imol
@@ -3682,8 +3656,8 @@ def cootaneer_gui_bl():
          active_mol_no = get_option_menu_active_molecule(option_menu, model_mol_list)
          imol = int(active_mol_no)
          imol_map = imol_refinement_map()
-         print "apply the sequence info here\n"
-         print "then cootaneer\n"
+         print("apply the sequence info here\n")
+         print("then cootaneer\n")
 
          # no active atom won't do.  We need
          # to find the nearest atom in imol to (rotation-centre).
@@ -3696,18 +3670,16 @@ def cootaneer_gui_bl():
 
             n_atom = closest_atom(imol)
             if n_atom:
-               imol	= n_atom[0]
+               imol     = n_atom[0]
                chain_id = n_atom[1]
-               res_no	= n_atom[2]
+               res_no   = n_atom[2]
                ins_code = n_atom[3]
-               at_name	= n_atom[4]
+               at_name  = n_atom[4]
                alt_conf = n_atom[5]
                cootaneer_result = cootaneer(imol_map, imol, [chain_id, res_no, ins_code, 
                                                              at_name, alt_conf])
                if (cootaneer_result == 0):
-                  s = "Insufficiently confident in alignment to make a fit." + \
-                      "\n" + \
-                      "Perhaps you could improve or extend this fragment."
+                  s = "Insufficiently confident in alignment to make a fit." + "\n" + "Perhaps you could improve or extend this fragment."
                   info_dialog(s)
                else:
                   refine_qm = refine_check_button.get_active()
@@ -3731,17 +3703,17 @@ def cootaneer_gui_bl():
                   if (refine_qm):
                      fit_chain(imol, chain_id)
             else:
-               print "BL WARNING:: no close atom found!"
+               print("BL WARNING:: no close atom found!")
          else:
-            print "BL ERROR:: something went wrong assigning the sequence"
+            print("BL ERROR:: something went wrong assigning the sequence")
 
       def chain_toggled(widget):
          # doesnt need to do anything
          status = chain_check_button.get_active()
          if(status):
-            print "BL INFO:: assign chain_id too"
+            print("BL INFO:: assign chain_id too")
          else:
-            print "BL INFO:: do not assign chain_id"
+            print("BL INFO:: do not assign chain_id")
 
       frame = gtk.Frame()
       vbox = gtk.VBox(False, 3)
@@ -3867,7 +3839,7 @@ def cootaneer_gui_bl():
          pair = [chain_id, seq_in]
          if (len(chain_id) == 0) or (
              "Cut and Paste Sequence to here or import a sequence file") in pair:
-            print "ERROR:: the input contains an invalid chain and/or sequence"
+            print("ERROR:: the input contains an invalid chain and/or sequence")
             write_sequence = False
          seq_all.append(pair)
 
@@ -4308,15 +4280,9 @@ def alignment_mismatches_gui(imol):
                chain_id = res_info[2]
                res_no   = res_info[3]
                ins_code = res_info[4]
-               button_1_label = "Mutate " + chain_id + \
-                                " " + str(res_no) + \
-                                " " + residue_name(imol, chain_id, res_no, ins_code) + \
-                                " to " + res_info[0]
+               button_1_label = "Mutate " + chain_id + " " + str(res_no) + " " + residue_name(imol, chain_id, res_no, ins_code) + " to " + res_info[0]
                button_1_action = ["set_go_to_atom_molecule(" + str(imol) + ")",
-                                  "set_go_to_atom_chain_residue_atom_name(\'" + \
-                                  chain_id + "\', " + \
-                                  str(res_no) + ", " + \
-                                  "\'" + get_sensible_atom_name(res_info) + "\')"]
+                                  "set_go_to_atom_chain_residue_atom_name(\'" + chain_id + "\', " + str(res_no) + ", " + "\'" + get_sensible_atom_name(res_info) + "\')"]
                ret_buttons.append([button_1_label, button_1_action])
             return ret_buttons
 
@@ -4326,13 +4292,9 @@ def alignment_mismatches_gui(imol):
                chain_id = res_info[2]
                res_no   = res_info[3]
                ins_code = res_info[4]
-               button_1_label = "Delete " + chain_id + \
-                                " " + str(res_no)
+               button_1_label = "Delete " + chain_id + " " + str(res_no)
                button_1_action = ["set_go_to_atom_molecule(" + str(imol) + ")",
-                                  "set_go_to_atom_chain_residue_atom_name(\'" + \
-                                  chain_id + "\', " + \
-                                  str(res_no) + ", " + \
-                                  "\'" + get_sensible_atom_name(res_info) + "\')"]
+                                  "set_go_to_atom_chain_residue_atom_name(\'" + chain_id + "\', " + str(res_no) + ", " + "\'" + get_sensible_atom_name(res_info) + "\')"]
                ret_buttons.append([button_1_label, button_1_action])
             return ret_buttons
 
@@ -4342,21 +4304,13 @@ def alignment_mismatches_gui(imol):
                chain_id = res_info[2]
                res_no   = res_info[3]
                ins_code = res_info[4]
-               button_1_label = "Insert " + chain_id + \
-                                " " + str(res_no)
+               button_1_label = "Insert " + chain_id + " " + str(res_no)
                #button_1_action = "info_dialog(" + button_1_label + ")"
                # oh dear, will that work? I dont think I can pass asignments
                # here. Need to rethink this! FIXME
                # messy but should work (without too much hazzle)
                button_1_action = ["info_dialog(\'" + button_1_label + "\')",
-                                  "set_go_to_atom_chain_residue_atom_name(\'" + \
-                                  chain_id + "\', " + \
-                                  "nearest_residue_by_sequence(" + \
-                                  str(imol) + ", \'" + \
-                                  chain_id + "\', " + \
-                                  str(res_no) + ", " + \
-                                  "\'" + ins_code + "\')[2], " + \
-                                  "\' CA \')"]
+                                  "set_go_to_atom_chain_residue_atom_name(\'" + chain_id + "\', " + "nearest_residue_by_sequence(" + str(imol) + ", \'" + chain_id + "\', " + str(res_no) + ", " + "\'" + ins_code + "\')[2], " + "\' CA \')"]
                ret_buttons.append([button_1_label, button_1_action])
             return ret_buttons
 
@@ -4379,7 +4333,7 @@ def alignment_mismatches_gui(imol):
 def wrapper_alignment_mismatches_gui(imol):
 
    seq_info = sequence_info(imol)
-   print "BL DEBUG:: sequence_info", seq_info
+   print("BL DEBUG:: sequence_info", seq_info)
    if seq_info:
       alignment_mismatches_gui(imol)
    else:
@@ -4425,9 +4379,9 @@ def residue_range_gui(func, function_text, go_button_label):
    # pressed)
    def remove_from_residue_range_widget(widget):
       for ls in residue_range_widgets:
-	 if (widget == ls[0]):
-		 rem = ls
-		 break
+         if (widget == ls[0]):
+                 rem = ls
+                 break
       residue_range_widgets.remove(rem)
 
    #
@@ -4502,7 +4456,7 @@ def residue_range_gui(func, function_text, go_button_label):
          res_no_2 = int(res_no_2_txt)
          return [chain_id, res_no_1, res_no_2]
       except:
-         print "did not understand %s and %s as numbers - fail residue range" %(res_no_1_txt, res_no_2_txt)
+         print("did not understand %s and %s as numbers - fail residue range" %(res_no_1_txt, res_no_2_txt))
          return False
 
    #
@@ -4511,13 +4465,13 @@ def residue_range_gui(func, function_text, go_button_label):
       residue_ranges = []
       for residue_range_widget in residue_range_widgets:
          ls = make_residue_range(residue_range_widget)
-	 residue_ranges.append(ls)
+         residue_ranges.append(ls)
       saved_residue_ranges = residue_ranges
 
    # range_info is list [chain_id, res_no_1, res_no_2]
    #
    def fill_with_previous_range(range_info, vbox_info):
-      print "fill_with_previous_range using", range_info
+      print("fill_with_previous_range using", range_info)
       entry_1 = vbox_info[1]
       entry_2 = vbox_info[2]
       entry_3 = vbox_info[3]
@@ -4533,7 +4487,7 @@ def residue_range_gui(func, function_text, go_button_label):
    def fill_residue_range_widgets_previous_data(previous_ranges,
                                                 first_vbox_info,
                                                 residue_range_vbox):
-      print "first one", previous_ranges[0]
+      print("first one", previous_ranges[0])
       if previous_ranges:
          if previous_ranges[0]:
             fill_with_previous_range(previous_ranges[0], first_vbox_info)
@@ -4542,7 +4496,7 @@ def residue_range_gui(func, function_text, go_button_label):
             if rang:
                vbox_info = make_residue_range_frame(residue_range_vbox)
                residue_range_vbox.pack_start(vbox_info[0], False, False, 2)
-               print "next one", rang
+               print("next one", rang)
                residue_range_widgets.append(vbox_info)
                fill_with_previous_range(rang, vbox_info)
 
@@ -4561,7 +4515,7 @@ def residue_range_gui(func, function_text, go_button_label):
       if (type(imol) is IntType):
          func(imol, residue_ranges)
       else:
-         print "BL INFO:: couldn't get valid imol!!"
+         print("BL INFO:: couldn't get valid imol!!")
       window.destroy()
       return False
       
@@ -4634,7 +4588,7 @@ def solvent_ligands_gui():
    global random_jiggle_n_trials
    #
    def add_ligand_func(imol, tlc):
-      print "Add a %s to molecule %s here" %(tlc, imol)
+      print("Add a %s to molecule %s here" %(tlc, imol))
       imol_ligand = get_monomer(tlc)
       if (valid_model_molecule_qm(imol_ligand)):
          # delete hydrogens from the ligand if the master molecule
@@ -4643,7 +4597,7 @@ def solvent_ligands_gui():
             if (not molecule_has_hydrogens(imol)):
                delete_residue_hydrogens(imol_ligand, "A", 1, "", "")
          if (valid_map_molecule_qm(imol_refinement_map())):
-            print "========  jiggling!  ======== "
+            print("========  jiggling!  ======== ")
 
             merge_molecules([imol_ligand], imol)
 
@@ -4673,7 +4627,7 @@ def solvent_ligands_gui():
             with_auto_accept([refine_residues, imol, [[aa_chain_id, aa_res_no, ""]]])
 
          else:
-            print "======== not jiggling - no map ======== "
+            print("======== not jiggling - no map ======== ")
             if valid_model_molecule_qm(imol):
                merge_molecules([imol_ligand], imol)
                set_mol_active(imol_ligand, 0)
@@ -4785,11 +4739,7 @@ def user_mods_gui(imol, pdb_file_name):
          ins_code  = atom_spec[3]
          atom_name = atom_spec[4]
          alt_conf  = atom_spec[5]
-         label = set_string + " " + \
-                 chain_id + " " + str(res_no) + \
-                 atom_name + " : " + \
-                 info_string + " " + \
-                 " score %2.2f" % score
+         label = set_string + " " + chain_id + " " + str(res_no) + atom_name + " : " + info_string + " " + " score %2.2f" % score
          func = [cmd2str(set_go_to_atom_molecule, imol),
                  cmd2str(set_go_to_atom_chain_residue_atom_name,
                          chain_id, res_no, atom_name)]
@@ -4802,10 +4752,7 @@ def user_mods_gui(imol, pdb_file_name):
       for no_flip_item in no_flip_list:
          specs = no_flip_item[0]
          info_string = no_flip_item[1]
-         label = "No Adjustment " + \
-                 " ".join(map(atom_spec_to_string, specs)) + \
-                 " " + \
-                 info_string
+         label = "No Adjustment " + " ".join(map(atom_spec_to_string, specs)) + " " + info_string
          atom_spec = specs[0]
          chain_id  = atom_spec[1]
          res_no    = atom_spec[2]
@@ -4847,8 +4794,7 @@ def user_mods_gui(imol, pdb_file_name):
       map(lambda c: c.destroy(), children)
       # add back
       if not filter_flag:
-         buttons = make_no_adj_buttons(no_adj_list) + \
-                  make_flip_buttons(flip_list)
+         buttons = make_no_adj_buttons(no_adj_list) + make_flip_buttons(flip_list)
       else:
          # filter
          buttons = make_flip_buttons(filter_buttons(flip_list))
@@ -4876,7 +4822,7 @@ def rename_residue_gui_simple():
    if (not active_atom):
       info_dialog("No Residue Here")
    else:
-      print active_atom
+      print(active_atom)
       generic_single_entry("Rename this residue", "ALA", "Rename",
                            lambda text: using_active_atom(set_residue_name,
                                                           "aa_imol", "aa_chain_id", "aa_res_no", "aa_ins_code",
@@ -4972,12 +4918,12 @@ def average_map_gui():
                option_menu  = mav_bits[1]
                map_mol_list = mav_bits[2]
                entry        = mav_bits[3]
-               print "map_mol_list", map_mol_list
+               print("map_mol_list", map_mol_list)
                map_selected = get_option_menu_active_molecule(option_menu, map_mol_list)
                text = entry.get_text()
                weight = float(text)   # try?! FIXME
                maps_to_average_list.append([map_selected, weight])
-            print "maps to average", maps_to_average_list
+            print("maps to average", maps_to_average_list)
             average_map(maps_to_average_list)
             window.destroy()
             return False
@@ -5030,13 +4976,7 @@ def rename_residue_gui():
       aa_chain_id = active_atom[1]
       aa_res_no   = active_atom[2]
       aa_ins_code = active_atom[3]
-      label = "Rename Residue [in molecule " + \
-              str(aa_imol) + \
-              "]: " + \
-              aa_chain_id + \
-              str(aa_res_no) + \
-              aa_ins_code + \
-              " to: "
+      label = "Rename Residue [in molecule " + str(aa_imol) + "]: " + aa_chain_id + str(aa_res_no) + aa_ins_code + " to: "
       generic_single_entry(label, "ALA", "Rename Residue",
                            lambda text: set_residue_name(aa_imol, aa_chain_id,
                                                          aa_res_no, aa_ins_code,
@@ -5254,7 +5194,7 @@ def water_coordination_gui():
 #
 def min_max_residues_from_atom_specs(specs):
 
-   print specs
+   print(specs)
 
    min_res_no = False
    max_res_no = False
@@ -5382,7 +5322,7 @@ def refmac_multi_sharpen_gui():
             m = "ERROR:: Current directory " + os.getcwd() + " is not writable"
             info_dialog(m)
             return
-         print "active_item_imol", active_item_imol
+         print("active_item_imol", active_item_imol)
          step_size = max_b/n_levels
          numbers_string = ' '.join(str((i+1) * step_size) for i in range(n_levels))
          blur_string = "SFCALC BLUR  " + numbers_string
@@ -5409,17 +5349,17 @@ def refmac_multi_sharpen_gui():
                   info_dialog("WARNING:: refmac5 failed")
                else:
                   # Happy path
-                  print "BL DEBUG:: s", s
+                  print("BL DEBUG:: s", s)
                   if os.path.isfile("starting_map.mtz"):
-                     print "INFO renaming starting_map.mtz to", refmac_output_mtz_file_name
+                     print("INFO renaming starting_map.mtz to", refmac_output_mtz_file_name)
                      os.rename("starting_map.mtz", refmac_output_mtz_file_name)
                      # offer a read-mtz dialog
                      manage_column_selector(refmac_output_mtz_file_name)
                   else:
-                     print "WARNING:: starting_map.mtz does not exist"
+                     print("WARNING:: starting_map.mtz does not exist")
 
             except:
-               print "BL DEBUG:: tried to rename starting-map.mtz but failed."
+               print("BL DEBUG:: tried to rename starting-map.mtz but failed.")
                pass
          delete_event(widget)
 
@@ -5694,7 +5634,7 @@ def scale_alt_conf_occ_gui(imol, chain_id, res_no, ins_code):
         pass
 
     if (len(alt_confs) != 2):
-        print "INFO:: no (or too many) alt confs, no gui!"
+        print("INFO:: no (or too many) alt confs, no gui!")
     else:
         # only do if 2 alt confs (plus no)
         res_info = residue_info(imol, chain_id, res_no, ins_code)
@@ -5718,7 +5658,7 @@ def scale_alt_conf_occ_gui(imol, chain_id, res_no, ins_code):
                               imol, chain_id, res_no, ins_code,
                               alt_confs):
             new_occ = occ_adjust.value
-            print "BL INFO:: setting new occupancy ", new_occ
+            print("BL INFO:: setting new occupancy ", new_occ)
             alt_conf_list = [[alt_confs[0], new_occ], [alt_confs[1], 1 - new_occ]]
             set_alt_conf_occ(imol, chain_id, res_no, ins_code, alt_conf_list)
             delete_event()
@@ -5787,27 +5727,27 @@ def toggle_backrub_rotamers(widget=None):
       if widget.get_active():
          # the button is toggled on
          set_rotamer_search_mode(ROTAMERSEARCHLOWRES)
-         print "BL INFO:: Using Backrub rotamers"
+         print("BL INFO:: Using Backrub rotamers")
       else:
          set_rotamer_search_mode(ROTAMERSEARCHHIGHRES)
-         print "BL INFO:: No longer using Backrub rotamers"
+         print("BL INFO:: No longer using Backrub rotamers")
 
    else:
       # non graphical - but wont be able to run if this is not loaded.
       mode = rotamer_search_mode_state()
       if (mode == ROTAMERSEARCHLOWRES):
          set_rotamer_search_mode(ROTAMERSEARCHHIGHRES)
-         print "INFO:: no longer using Backrub rotamers"
+         print("INFO:: no longer using Backrub rotamers")
       if (mode == ROTAMERSEARCHHIGHRES or
           mode == ROTAMERSEARCHAUTOMATIC):
          set_rotamer_search_mode(ROTAMERSEARCHLOWRES)
-         print "INFO:: Using Backrub rotamers"
+         print("INFO:: Using Backrub rotamers")
          
          
       # no alternative for now
       # need to be able to get the state of search mode.
       # easily added. FIXME
-      print "BL WARNING:: no widget"
+      print("BL WARNING:: no widget")
 
 def atom_overlaps_for_this_model():
    """Display Atom overlaps for active atom"""
@@ -5834,8 +5774,8 @@ def toggle_hydrogen_display(widget=None):
 
       else:
          # non graphical - but wont be able to run if this is not loaded.
-         print "BL INFO:: No display, so I dont care about the hydrogens."
-         print "BL WARNING:: no widget"
+         print("BL INFO:: No display, so I dont care about the hydrogens.")
+         print("BL WARNING:: no widget")
 
 
 def toggle_wiimote(widget=None):
@@ -5855,7 +5795,7 @@ def toggle_wiimote(widget=None):
             print ("BL WARNING:: setup_wii not defined! " 
                    "Did you compile with WII_INTERFACE_WIIUSE?")
          except:
-            print "BL WARNING:: could not set up Wii"
+            print("BL WARNING:: could not set up Wii")
       else:
          try:
             stop_wii()
@@ -5863,11 +5803,11 @@ def toggle_wiimote(widget=None):
             print ("BL WARNING:: stop_wii not defined! "
                    "Did you compile with WII_INTERFACE_WIIUSE?")
          except:
-            print "BL WARNING:: could not stop wii"
+            print("BL WARNING:: could not stop wii")
 
    else:
       # no alternative for now (could just go by state and change back and forth)
-      print "BL WARNING:: no widget"
+      print("BL WARNING:: no widget")
 
 # Simple minded dialog, search disk or not?
 # Could/should be expaded to browse for exe and to select which 
@@ -6018,8 +5958,7 @@ def rama_outlier_gui():
          for res_spec in res_list:
             chain_id = res_spec[1]
             res_no = res_spec[2]
-            label = label_string + ": " + \
-                    chain_id + " " + str(res_no)
+            label = label_string + ": " + chain_id + " " + str(res_no)
             func = [cmd2str(set_go_to_atom_molecule, imol),
                     cmd2str(set_go_to_atom_from_res_spec, res_spec)]
             ret.append([label, func])

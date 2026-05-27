@@ -50125,6 +50125,31 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_python_timeout_add(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  PyObject *arg2 = 0 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[2] ;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_python_timeout_add", 2, 2, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "bandicoot_python_timeout_add" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  arg2 = swig_obj[1];
+  result = (int)bandicoot_python_timeout_add(arg1,arg2);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_set_tip_of_the_day_flag(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -77796,6 +77821,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "set_socket_python_string_waiting", _wrap_set_socket_python_string_waiting, METH_O, NULL},
 	 { "set_remote_control_port", _wrap_set_remote_control_port, METH_O, NULL},
 	 { "get_remote_control_port_number", _wrap_get_remote_control_port_number, METH_NOARGS, NULL},
+	 { "bandicoot_python_timeout_add", _wrap_bandicoot_python_timeout_add, METH_VARARGS, NULL},
 	 { "set_tip_of_the_day_flag", _wrap_set_tip_of_the_day_flag, METH_O, NULL},
 	 { "set_display_lists_for_maps", _wrap_set_display_lists_for_maps, METH_O, NULL},
 	 { "display_lists_for_maps_state", _wrap_display_lists_for_maps_state, METH_NOARGS, NULL},

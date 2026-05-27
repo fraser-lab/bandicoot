@@ -169,8 +169,7 @@ def validation_outliers_dialog(imol, imol_map):
         frb = find_rama_baddies()
         fcbb = find_c_beta_baddies()
         filtered_mao_baddies = filter_molecule_atom_overlap_baddies(molecule_atom_overlap_baddies())
-        residue_correlations = [] if not ok_to_do_density_correlations_qm() \
-                               else map_to_model_correlation_per_residue(imol,
+        residue_correlations = [] if not ok_to_do_density_correlations_qm() else map_to_model_correlation_per_residue(imol,
                                                                          all_residues_sans_water(imol),
                                                                          0,
                                                                          imol_map)
@@ -217,15 +216,7 @@ def validation_outliers_dialog(imol, imol_map):
         for baddie in sorted_filtered_rama_baddies:
             spec, rama_prob = baddie
             score_string = '{:6.2f} %'.format(100 * rama_prob)
-            button_label = "Ramachandran Outlier " + \
-                           residue_spec_to_chain_id(spec) + \
-                           " " + \
-                           str(residue_spec_to_res_no(spec)) + \
-                           residue_spec_to_ins_code(spec) + \
-                           " " + \
-                           residue_spec_to_residue_name(imol, spec) + \
-                           " " + \
-                           score_string
+            button_label = "Ramachandran Outlier " + residue_spec_to_chain_id(spec) + " " + str(residue_spec_to_res_no(spec)) + residue_spec_to_ins_code(spec) + " " + residue_spec_to_residue_name(imol, spec) + " " + score_string
             rama_buttons.append([button_label,
                                  [[set_go_to_atom_molecule, imol],
                                   [set_go_to_atom_from_res_spec, spec]]])
@@ -235,12 +226,7 @@ def validation_outliers_dialog(imol, imol_map):
             spec = baddie[0]
             score = baddie[1][0][1]  # only the first score
             score_string = '{:6.2f}'.format(score)
-            button_label = "C-beta deviant " + \
-                           residue_spec_to_string(spec) + \
-                           " " + \
-                           residue_spec_to_residue_name(imol, spec) + \
-                           " " + \
-                           score_string + u'\u212B'.encode('utf-8')
+            button_label = "C-beta deviant " + residue_spec_to_string(spec) + " " + residue_spec_to_residue_name(imol, spec) + " " + score_string + u'\u212B'.encode('utf-8')
             c_beta_buttons.append([button_label,
                                    [[set_go_to_atom_molecule, imol],
                                     [set_go_to_atom_from_res_spec, spec]]])
@@ -250,10 +236,7 @@ def validation_outliers_dialog(imol, imol_map):
             spec_1 = baddie[0]
             spec_2 = baddie[1]
             omega = baddie[2]
-            button_label = "Non-PRO cis-peptide " + \
-                           residue_spec_to_string(spec_1) + \
-                           " - " + \
-                           residue_spec_to_string(spec_2)
+            button_label = "Non-PRO cis-peptide " + residue_spec_to_string(spec_1) + " - " + residue_spec_to_string(spec_2)
             non_pro_cis_peptide_buttons.append([button_label,
                                                 [[set_go_to_atom_molecule, imol],
                                                  [set_go_to_atom_from_res_spec, spec_1]]])
@@ -263,10 +246,7 @@ def validation_outliers_dialog(imol, imol_map):
             spec_1 = baddie[0]
             spec_2 = baddie[1]
             omega = baddie[2]
-            button_label = "Twisted trans-peptide " + \
-                           residue_spec_to_string(spec_1) + \
-                           " - " + \
-                           residue_spec_to_string(spec_2)
+            button_label = "Twisted trans-peptide " + residue_spec_to_string(spec_1) + " - " + residue_spec_to_string(spec_2)
             twisted_trans_peptide_buttons.append([button_label,
                                                   [[set_go_to_atom_molecule, imol],
                                                    [set_go_to_atom_from_res_spec, spec_1]]])
@@ -286,11 +266,7 @@ def validation_outliers_dialog(imol, imol_map):
                                         residue_spec_to_chain_id(spec),
                                         residue_spec_to_res_no(spec),
                                         residue_spec_to_ins_code(spec))
-            button_label = ms_string + " " + \
-                           residue_spec_to_string(spec) + \
-                           " " + \
-                           residue_spec_to_residue_name(imol, spec) + \
-                            " "
+            button_label = ms_string + " " + residue_spec_to_string(spec) + " " + residue_spec_to_residue_name(imol, spec) + " "
             button_label += rot_name if isinstance(rot_name, str) else " "
             button_label += "" if score == 0.0 else score_string
             rota_buttons.append([button_label,
@@ -300,10 +276,7 @@ def validation_outliers_dialog(imol, imol_map):
         density_baddies_buttons = []
         for baddie in density_baddies:
             spec, score = baddie
-            button_label = "Poor Density Fit " + \
-                           residue_spec_to_string(spec) + \
-                           " " + \
-                           '{:5.2f}'.format(score)
+            button_label = "Poor Density Fit " + residue_spec_to_string(spec) + " " + '{:5.2f}'.format(score)
             density_baddies_buttons.append([button_label,
                                             [[set_go_to_atom_molecule, imol],
                                              [set_go_to_atom_from_res_spec, spec]]])
@@ -311,18 +284,14 @@ def validation_outliers_dialog(imol, imol_map):
         cg_torsion_buttons = []
         for baddie in cg_torsion_baddies:
             spec, score = baddie
-            button_label = "CG Torsion Diff " + \
-                           residue_spec_to_string(spec) + \
-                           " " + \
-                           '{:5.2f}'.format(score)
+            button_label = "CG Torsion Diff " + residue_spec_to_string(spec) + " " + '{:5.2f}'.format(score)
             cg_torsion_buttons.append([button_label,
                                        [[set_go_to_atom_molecule, imol],
                                         [set_go_to_atom_from_res_spec, spec]]])
 
         chiral_volume_buttons = []
         for baddie_atom_spec in find_chiral_volume_baddies():
-            button_label = "Chiral Volume Error " + \
-                           atom_spec_to_string(baddie_atom_spec)
+            button_label = "Chiral Volume Error " + atom_spec_to_string(baddie_atom_spec)
             chiral_volume_buttons.append([button_label,
                                           [[set_go_to_atom_molecule, imol],
                                            [set_go_to_atom_from_atom_spec, baddie_atom_spec]]])
@@ -332,25 +301,12 @@ def validation_outliers_dialog(imol, imol_map):
             atom_spec_1 = baddie['atom-1-spec']
             atom_spec_2 = baddie['atom-2-spec']
             overlap = baddie['overlap-volume']
-            button_label = "Atom Overlap " + \
-                           atom_spec_to_string(atom_spec_1) + \
-                           " on " + \
-                           atom_spec_to_string(atom_spec_2) + \
-                           " OV: " + \
-                           '{:5.2f}'.format(overlap)
+            button_label = "Atom Overlap " + atom_spec_to_string(atom_spec_1) + " on " + atom_spec_to_string(atom_spec_2) + " OV: " + '{:5.2f}'.format(overlap)
             atom_overlap_buttons.append([button_label,
                                          [[set_go_to_atom_molecule, imol],
                                           [set_go_to_atom_from_atom_spec, atom_spec_1]]])
 
-        buttons =  chiral_volume_buttons + \
-                   rama_buttons + \
-                   rota_buttons + \
-                   non_pro_cis_peptide_buttons + \
-                   twisted_trans_peptide_buttons + \
-                   density_baddies_buttons + \
-                   c_beta_buttons + \
-                   cg_torsion_buttons + \
-                   atom_overlap_buttons
+        buttons =  chiral_volume_buttons + rama_buttons + rota_buttons + non_pro_cis_peptide_buttons + twisted_trans_peptide_buttons + density_baddies_buttons + c_beta_buttons + cg_torsion_buttons + atom_overlap_buttons
         return buttons
 
     # main line

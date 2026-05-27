@@ -1,7 +1,7 @@
 # Installing a Bandicoot binary tarball
 
 These instructions cover the prebuilt
-`bandicoot-0.0.0.1-darwin-arm64.tar.gz` distribution. If you're building
+`bandicoot-<version>-darwin-arm64.tar.gz` distribution. If you're building
 from source instead, see [BUILD.md](BUILD.md).
 
 ## Requirements
@@ -11,9 +11,15 @@ from source instead, see [BUILD.md](BUILD.md).
   ```sh
   brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
   ```
+- Miniconda installed at `/opt/miniconda3` (Python 3.13 from the
+  standard distribution is sufficient)
 
-**NOTE:** The Coot scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++) are bundled inside the tarball — you do **not** need to install them via conda. Miniconda is
-only required if you intend to rebuild Bandicoot from source against the same clipper / mmdb / ssm versions.
+**NOTE:** Starting in v0.1.0.0, Bandicoot embeds Python so it can
+talk to Phenix (live model/map updates during refinement). The
+`libpython3.13.dylib` from Miniconda is loaded at runtime; that is
+why Miniconda is now listed as a runtime requirement. The Coot
+scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++)
+are still bundled inside the tarball.
 
 **NOTE:** Homebrew _has to be_ installed in the default path of `/opt/homebrew`, or the binary distribution of Bandicoot won't work. If you wish to have Homebrew in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
 

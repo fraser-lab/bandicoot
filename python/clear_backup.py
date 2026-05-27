@@ -80,7 +80,7 @@ def delete_coot_backup_files(action_type):
     if (action_type == 'delete'):
         for file in files:
             file_name, dir_name = os.path.split(file)
-            print "Deleting old file %s from %s" %(file_name, dir_name)
+            print("Deleting old file %s from %s" %(file_name, dir_name))
             os.remove(file)
         # now create a last-backup file with a time stamp:
         for directory in dirs:
@@ -112,18 +112,13 @@ def clear_backup_gui():
         ok_button = gtk.Button(" Clear up ")
         cancel_button = gtk.Button(" Stay messy ")
         h_sep = gtk.HSeparator()
-        label_str = "  There are " + str(file_stats[0]) + \
-                    " old backup files (%.1fMb) \n" %file_stats[1] + \
-                    "   Delete Them?"
+        label_str = "  There are " + str(file_stats[0]) + " old backup files (%.1fMb) \n" %file_stats[1] + "   Delete Them?"
         label = gtk.Label(label_str)
         ok_button.connect("clicked", lambda w: map(eval, ["delete_coot_backup_files('delete')", "coot_real_exit(0)"]))
         cancel_button.connect("clicked", lambda w: coot_real_exit(0))
 
         ok_text = " Consider yourself patted on the back! "
-        cancel_text = "A less pejorative label here might be \"Keep\" or \"Cancel\" " + \
-                      "but seeing as (for the moment) I like my intestines where they are " + \
-                      "and not used as hosiery fastenings for Systems Adminstrators then " + \
-                      "we get this rather nannying label..."
+        cancel_text = "A less pejorative label here might be \"Keep\" or \"Cancel\" " + "but seeing as (for the moment) I like my intestines where they are " + "and not used as hosiery fastenings for Systems Adminstrators then " + "we get this rather nannying label..."
         if gtk.pygtk_version >= (2,12):
             ok_button.set_tooltip_text(ok_text)
             cancel_button.set_tooltip_text(cancel_text)
@@ -198,7 +193,7 @@ def clear_backups_maybe():
                     ret = clear_backup_gui()
                     return ret
                 else:
-                    print "INFO:: backup clearout done %s days ago" %((now - val) * 24 * 60 * 60)
+                    print("INFO:: backup clearout done %s days ago" %((now - val) * 24 * 60 * 60))
                     return False
             except:
                 return False

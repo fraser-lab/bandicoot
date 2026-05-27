@@ -51,8 +51,7 @@ def jligand_code_file_maybe(comp_id, port):
     if not jligand_standard_amino_acid_qm(comp_id):
         cif_file = cif_file_for_comp_id(comp_id)
         if (len(cif_file) > 0):
-            port.write("CODE " + comp_id + " " + \
-                       "FILE " + os.path.normpath(cif_file))
+            port.write("CODE " + comp_id + " " + "FILE " + os.path.normpath(cif_file))
             port.write("\n")
 
 def write_file_for_jligand(res_spec_1, resname_1, res_spec_2, resname_2):
@@ -67,13 +66,11 @@ def write_file_for_jligand(res_spec_1, resname_1, res_spec_2, resname_2):
     chain_id_1 = res_spec_to_chain_id(res_spec_1)
     chain_id_2 = res_spec_to_chain_id(res_spec_2)
 
-    fin.write("CODE " + resname_1 + " " + chain_id_1 + " " + \
-              str(res_spec_to_res_no(res_spec_1)))
+    fin.write("CODE " + resname_1 + " " + chain_id_1 + " " + str(res_spec_to_res_no(res_spec_1)))
     fin.write("\n")
     if refmac_new_enough:
         jligand_code_file_maybe(resname_1, fin)
-    fin.write("CODE " + resname_2 + " " + chain_id_2 + " " + \
-              str(res_spec_to_res_no(res_spec_2)))
+    fin.write("CODE " + resname_2 + " " + chain_id_2 + " " + str(res_spec_to_res_no(res_spec_2)))
     fin.write("\n")
     if refmac_new_enough:
         jligand_code_file_maybe(resname_2, fin)
@@ -135,10 +132,10 @@ def handle_read_from_jligand_file():
 
     def bond_length_from_atoms(atom_1, atom_2):
         if not isinstance(atom_1, list):
-            print "   WARNING:: bond_length_from_atoms: atom_1 not a list:", atom_1
+            print("   WARNING:: bond_length_from_atoms: atom_1 not a list:", atom_1)
             return
         elif not isinstance(atom_2, list):
-                  print "   WARNING:: bond_length_from_atoms: atom_2 not a list:", atom_2
+                  print("   WARNING:: bond_length_from_atoms: atom_2 not a list:", atom_2)
                   return
         else:
             return bond_length(atom_1[2],
@@ -162,19 +159,19 @@ def handle_read_from_jligand_file():
         lines = fin.read().splitlines()  # remove the newlines
         fin.close()
         if not lines:
-            print "BL WARNING:: empty file", from_jligand_secret_link_file_name
+            print("BL WARNING:: empty file", from_jligand_secret_link_file_name)
         else:
             cif_dictionary = lines[0]
             # was it the READY marker or a cif file name?
             if (cif_dictionary == "READY"):
-                print "JLigand is ready"
+                print("JLigand is ready")
                 # maybe I need to set something here? (that
                 # from now a modification of .jligand-to-coot
                 # is means that we should read it?)
             if os.path.isfile(cif_dictionary):
                 read_cif_dictionary(cif_dictionary)
                 link_line = lines[1]
-                print "Now handle this link line", link_line
+                print("Now handle this link line", link_line)
                 if (len(link_line) > 72):
                     atom_name_1 = link_line[12:16]
                     atom_name_2 = link_line[42:46]
@@ -190,14 +187,14 @@ def handle_read_from_jligand_file():
                     alt_conf_2 = ""
                     link_type = link_line[72]
 
-                    print "we parsed these: "
-                    print "       atom_name_1", atom_name_1
-                    print "       atom_name_2", atom_name_2
-                    print "        chain_id_1", chain_id_1
-                    print "        chain_id_2", chain_id_2
-                    print "      res_no_1_str", res_no_1_str
-                    print "      res_no_2_str", res_no_2_str
-                    print "         link_type", link_type
+                    print("we parsed these: ")
+                    print("       atom_name_1", atom_name_1)
+                    print("       atom_name_2", atom_name_2)
+                    print("        chain_id_1", chain_id_1)
+                    print("        chain_id_2", chain_id_2)
+                    print("      res_no_1_str", res_no_1_str)
+                    print("      res_no_2_str", res_no_2_str)
+                    print("         link_type", link_type)
 
                     # check res_no_1/2 as number? Shoudl be earlier as
                     # converted to int now... use try...
@@ -208,7 +205,7 @@ def handle_read_from_jligand_file():
                         atom_spec_2 = res_spec_2 + [atom_name_2, alt_conf_2]
                         dist = get_dist(atom_spec_1, atom_spec_2)
                         if not dist:
-                            print "bad dist %s from %s %s" %(dist, atom_spec_1, atom_spec_2)
+                            print("bad dist %s from %s %s" %(dist, atom_spec_1, atom_spec_2))
                         else:
                             make_link(imol_jligand_link, atom_spec_1,
                                       atom_spec_2, link_type, dist)

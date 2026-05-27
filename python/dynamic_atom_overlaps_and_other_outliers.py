@@ -88,7 +88,7 @@ def make_quick_test_validation_info(imol):
 
     def sort_buttons_inner(buttons_with_spec):
         if buttons_with_spec:
-			# sorted takes care of mixed lists...
+                        # sorted takes care of mixed lists...
             ret = sorted(buttons_with_spec)
         else:
             ret = []
@@ -145,15 +145,7 @@ def make_quick_test_validation_info(imol):
         spec, rama_prob = baddie
         baddie_score = 0.5
         score_string = '{:6.2f} %'.format(100 * rama_prob)
-        button_label = "Ramachandran Outlier " + \
-                       residue_spec_to_chain_id(spec) + \
-                       " " + \
-                       str(residue_spec_to_res_no(spec)) + \
-                       residue_spec_to_ins_code(spec) + \
-                       " " + \
-                       residue_spec_to_residue_name(imol, spec) + \
-                       " " + \
-                       score_string
+        button_label = "Ramachandran Outlier " + residue_spec_to_chain_id(spec) + " " + str(residue_spec_to_res_no(spec)) + residue_spec_to_ins_code(spec) + " " + residue_spec_to_residue_name(imol, spec) + " " + score_string
         rama_buttons.append([spec, baddie_score, button_label,
                              [[set_go_to_atom_molecule, imol],
                               [set_go_to_atom_from_res_spec, spec]]])
@@ -164,12 +156,7 @@ def make_quick_test_validation_info(imol):
         score = baddie[1][0][1]  # only the first score
         score_string = '{:6.2f}'.format(score)
         baddie_score = 0.5
-        button_label = "C-beta deviant " + \
-                       residue_spec_to_string(spec) + \
-                       " " + \
-                       residue_spec_to_residue_name(imol, spec) + \
-                       " " + \
-                       score_string + u'\u212B'.encode('utf-8')
+        button_label = "C-beta deviant " + residue_spec_to_string(spec) + " " + residue_spec_to_residue_name(imol, spec) + " " + score_string + u'\u212B'.encode('utf-8')
         c_beta_buttons.append([spec, baddie_score, button_label,
                                [[set_go_to_atom_molecule, imol],
                                 [set_go_to_atom_from_res_spec, spec]]])
@@ -180,10 +167,7 @@ def make_quick_test_validation_info(imol):
         spec_2 = baddie[1]
         omega = baddie[2]
         baddie_score = 0.5
-        button_label = "Non-PRO cis-peptide " + \
-                       residue_spec_to_string(spec_1) + \
-                       " - " + \
-                       residue_spec_to_string(spec_2)
+        button_label = "Non-PRO cis-peptide " + residue_spec_to_string(spec_1) + " - " + residue_spec_to_string(spec_2)
         non_pro_cis_peptide_buttons.append([spec_1, baddie_score, button_label,
                                             [[set_go_to_atom_molecule, imol],
                                              [set_go_to_atom_from_res_spec, spec_1]]])
@@ -194,10 +178,7 @@ def make_quick_test_validation_info(imol):
         spec_2 = baddie[1]
         omega = baddie[2]
         baddie_score = 1.0
-        button_label = "Twisted trans-peptide " + \
-                       residue_spec_to_string(spec_1) + \
-                       " - " + \
-                       residue_spec_to_string(spec_2)
+        button_label = "Twisted trans-peptide " + residue_spec_to_string(spec_1) + " - " + residue_spec_to_string(spec_2)
         twisted_trans_peptide_buttons.append([spec_1, baddie_score, button_label,
                                               [[set_go_to_atom_molecule, imol],
                                                [set_go_to_atom_from_res_spec, spec_1]]])
@@ -218,11 +199,7 @@ def make_quick_test_validation_info(imol):
                                     residue_spec_to_chain_id(spec),
                                     residue_spec_to_res_no(spec),
                                     residue_spec_to_ins_code(spec))
-        button_label = ms_string + " " + \
-                       residue_spec_to_string(spec) + \
-                       " " + \
-                       residue_spec_to_residue_name(imol, spec) + \
-                        " "
+        button_label = ms_string + " " + residue_spec_to_string(spec) + " " + residue_spec_to_residue_name(imol, spec) + " "
         button_label += rot_name if isinstance(rot_name, str) else " "
         button_label += "" if score == 0.0 else score_string
         rota_buttons.append([spec, baddie_score, button_label,
@@ -235,8 +212,7 @@ def make_quick_test_validation_info(imol):
         baddie_atom_spec = baddie_atom_spec_6[1:]
         baddie_score = 1.0
         residue_spec = atom_spec_to_residue_spec(baddie_atom_spec)
-        button_label = "Chiral Volume Error " + \
-                       atom_spec_to_string(baddie_atom_spec)
+        button_label = "Chiral Volume Error " + atom_spec_to_string(baddie_atom_spec)
         chiral_volume_buttons.append([residue_spec, baddie_score, button_label,
                                       [[set_go_to_atom_molecule, imol],
                                        [set_go_to_atom_from_atom_spec, baddie_atom_spec]]])
@@ -248,12 +224,7 @@ def make_quick_test_validation_info(imol):
         overlap = baddie['overlap-volume']
         baddie_score = 0.5
         residue_spec = atom_spec_to_residue_spec(atom_spec_1)
-        button_label = "Atom Overlap " + \
-                       atom_spec_to_string(atom_spec_1) + \
-                       " on " + \
-                       atom_spec_to_string(atom_spec_2) + \
-                       " OV: " + \
-                       '{:5.2f}'.format(overlap)
+        button_label = "Atom Overlap " + atom_spec_to_string(atom_spec_1) + " on " + atom_spec_to_string(atom_spec_2) + " OV: " + '{:5.2f}'.format(overlap)
         atom_overlap_buttons.append([residue_spec, baddie_score, button_label,
                                      [[set_go_to_atom_molecule, imol],
                                       [set_go_to_atom_from_atom_spec, atom_spec_1]]])
@@ -266,13 +237,7 @@ def make_quick_test_validation_info(imol):
 
     # these buttons have 3 fields - spec label func
 
-    buttons =  chiral_volume_buttons + \
-               rama_buttons + \
-               rota_buttons + \
-               non_pro_cis_peptide_buttons + \
-               twisted_trans_peptide_buttons + \
-               c_beta_buttons + \
-               atom_overlap_buttons
+    buttons =  chiral_volume_buttons + rama_buttons + rota_buttons + non_pro_cis_peptide_buttons + twisted_trans_peptide_buttons + c_beta_buttons + atom_overlap_buttons
 
     sorted_buttons = sort_buttons(buttons)
 

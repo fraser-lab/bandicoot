@@ -37,7 +37,7 @@ if (have_coot_python):
               if java_exe:
                   run_concurrently(java_exe, jligand_args)
               else:
-                  print "BL INFO:: no java found"
+                  print("BL INFO:: no java found")
           
       add_simple_coot_menu_menuitem(
           menu, "Launch Jligand",
@@ -47,7 +47,7 @@ if (have_coot_python):
 
       def make_jligand_link():
           def link_em(*args):
-              print "we received these clicks", args
+              print("we received these clicks", args)
               if (len(args) == 2):
                   click_1 = args[0]
                   click_2 = args[1]
@@ -63,7 +63,7 @@ if (have_coot_python):
                                                click_2[4])
                       if not (isinstance(resname_1, str) and
                               isinstance(resname_2, str)):
-                          print "Bad resnames: %s and %s" %(resname_1, resname_2)
+                          print("Bad resnames: %s and %s" %(resname_1, resname_2))
                       else:
                           write_file_for_jligand(resname_1, resname_2)
                           
@@ -94,12 +94,12 @@ def jligand_timeout_func():
     if operator.isNumberType(now_time):
         if not operator.isNumberType(startup_mtime):
             startup_mtime = now_time
-            print "just set startup-mtime to (first)", startup_mtime
+            print("just set startup-mtime to (first)", startup_mtime)
             handle_read_from_jligand_file()
         else:
             if (now_time > startup_mtime):
                 startup_mtime = now_time
-                print "just set startup-mtime to", startup_mtime
+                print("just set startup-mtime to", startup_mtime)
                 handle_read_from_jligand_file()
                 
     return True # we never expire...

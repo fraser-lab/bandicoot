@@ -50,7 +50,7 @@ def sequence_string(imol, chain_id, resno_start, resno_end):
             res_name = residue_name(imol, chain_id, resno, "")
             single_letter_code_list.append(three_letter_code2single_letter(res_name))
         if (not all_chars_qm):
-            print "bad sequence chars ", single_letter_code_list
+            print("bad sequence chars ", single_letter_code_list)
             return False
         else:
             return "".join(single_letter_code_list)
@@ -59,10 +59,9 @@ def rapper_it(imol, chain_id, start_resno, end_resno, sequence, number_of_models
 
     imol_map = imol_refinement_map()
     if (not valid_map_molecule_qm(imol_map)):
-        print "No valid map molecule given (possibly ambiguous)"
+        print("No valid map molecule given (possibly ambiguous)")
     else:
-        str = "//" + chain_id + "/" + str(start_no) + \
-              "-" + str(end_resno)
+        str = "//" + chain_id + "/" + str(start_no) + "-" + str(end_resno)
         frag_mol = new_molecule_by_atom_selection(imol, str)
         fragment_pdb = "coot-rapper-fragment-in.pdb"
         rapper_out_pdb = "rapper_out.pdb"
@@ -79,8 +78,7 @@ def rapper_it(imol, chain_id, start_resno, end_resno, sequence, number_of_models
         write_pdb_file(imol, whole_pdb_file_name)
         close_molecule(frag_mol)
         export_map(imol_map, map_file)
-        print "running rapper: ", imol, chain_id, start_resno, end_resno, \
-              sequence, number_of_models
+        print("running rapper: ", imol, chain_id, start_resno, end_resno, sequence, number_of_models)
 
         if (os.path.isfile("TESTRUNS")):
             rename_dir_by_date("TESTRUNS")
@@ -109,7 +107,7 @@ def rapper_it(imol, chain_id, start_resno, end_resno, sequence, number_of_models
                                       [],
                                       "rapper.log",
                                       True)
-        print "rapper_status:", rapper_status
+        print("rapper_status:", rapper_status)
         if (os.path.isfile("TESTRUNS")):
             new_dir_name = rename_dir_by_date("TESTRUNS")
             result_pdb_file_name = os.path.join(new_dir_name, "looptest-best.pdb")
@@ -121,7 +119,7 @@ def rapper_it(imol, chain_id, start_resno, end_resno, sequence, number_of_models
         # run rapper, not decided yet how
 
 def stop_rapper():
-    print "stopping rapper process..."
+    print("stopping rapper process...")
 
 def cancel_dialog_func(widget, window):
 
@@ -136,14 +134,14 @@ def a_rapper_gui(loop_building_tool):
         from types import IntType
         imol = get_option_menu_active_molecule(option_menu_pdb, model_mol_list)
         if (not (type(imol) is IntType)):
-            print "bad active model"
+            print("bad active model")
         else:
             chain_text = entry_chain.get_text()
             start_resno_text = entry_start_resno.get_text()
             end_resno_text = entry_end_resno.get_text()
             text_sequence_buffer = text_sequence.get_buffer()
             sequence = text_sequence_buffer.get_text()
-            print "BL DEBUG:: input sequence is", sequence
+            print("BL DEBUG:: input sequence is", sequence)
             number_of_models_text = entry_models.get_text()
             start_resno = int(start_resno_text)
             end_resno = int(end_resno_text)
@@ -152,7 +150,7 @@ def a_rapper_gui(loop_building_tool):
             if (not ((type(start_resno) is IntType) and
                      (type(end_resno) is IntType) and
                      (type(number_of_models) is IntType))):
-                print "Something incomprehensible: ", start_resno, end_resno, number_of_models
+                print("Something incomprehensible: ", start_resno, end_resno, number_of_models)
             else:
                 if (loop_building_tool == 'rapper'):
                     seq = sequence_string(imol, chain_text, start_resno, end_resno)
@@ -170,7 +168,7 @@ def a_rapper_gui(loop_building_tool):
                                 [new_start, new_end],
                                 seq, number_of_models)
                 else:
-                    print "INFO:: invalid loop building argument", loop_building_tool
+                    print("INFO:: invalid loop building argument", loop_building_tool)
 
     window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     vbox = gtk.VBox(False, 2)

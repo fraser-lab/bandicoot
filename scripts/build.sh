@@ -28,10 +28,23 @@ if [ ! -x ./configure ]; then
     ./scripts/bootstrap.sh
 fi
 
+# Python embed flags. python3-config --ldflags omits -lpython3.X since
+# Python 3.8 — you have to ask for --embed explicitly. Coot's autotools
+# macro pre-dates that change, so we backfill via LDFLAGS here.
+PYTHON_EMBED_LDFLAGS="$(${CONDA_PREFIX:-/opt/miniconda3}/bin/python3-config --ldflags --embed 2>/dev/null)"
+
 export CPPFLAGS="-I${CONDA_PREFIX}/include -I${PREFIX}/include -I${BREW_PREFIX}/include"
 export LDFLAGS="-L${CONDA_PREFIX}/lib -L${PREFIX}/lib -L${BREW_PREFIX}/lib \
-    -Wl,-rpath,${CONDA_PREFIX}/lib -Wl,-rpath,${PREFIX}/lib"
-export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14"
+    -Wl,-rpath,${CONDA_PREFIX}/lib -Wl,-rpath,${PREFIX}/lib \
+    ${PYTHON_EMBED_LDFLAGS}"
+# -include compat/python23-shim.hh: force-include the Py2→Py3 macro shim
+# into every TU so the ~350 PyString_*/PyInt_* call sites scattered
+# through Coot's c-interface compile against Python 3 without per-file
+# edits. The shim is a no-op when Python.h hasn't been pulled in.
+# See compat/python23-shim.hh for details.
+SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14 ${SHIM_INCLUDE}"
+export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\
 ${BREW_PREFIX}/lib/pkgconfig:\
@@ -52,15 +65,18 @@ echo "==> ./configure --prefix=${PREFIX}"
     --without-gnomecanvas \
     --with-glut-prefix="${BREW_PREFIX}" \
     --with-boost="${BREW_PREFIX}" \
-    PYTHON="${CONDA_PREFIX}/bin/python3"
-# NOTE: deliberately not passing --with-python. Coot 0.9's C source is
-# Python-2-flavoured throughout (PyString_FromString, etc.) and won't
-# compile against Python 3 without a substantial port. Without --with-
-# python, USE_PYTHON stays undefined; Coot's safe_python_command_*
-# functions become no-ops; nothing in Bandicoot's toolbar dispatches
-# through Python. C-callback toolbar items (Quicksave, Auto-open MTZ)
-# still work. Porting Coot's Python C interface to py3 is deferred —
-# see [[bandicoot-coot-py-broken]] for the full background.
+    --with-python="${CONDA_PREFIX}" \
+    PYTHON="${CONDA_PREFIX}/bin/python3" \
+    PYTHON_CONFIG="${CONDA_PREFIX}/bin/python3-config"
+# v0.1.0.0: --with-python re-enabled. Coot's C interface is Py2-flavoured
+# throughout; the Py2→Py3 macro shim at compat/python23-shim.hh
+# (force-included via CXXFLAGS above) handles the vast majority of
+# PyString_*/PyInt_* sites. Per-file fixes only needed where return
+# types differ (PyUnicode_AsUTF8 returns const char*) or semantics
+# differ (PyString_Check accepted bytes on Py2, PyUnicode_Check
+# doesn't on Py3). Without --with-python, Phenix's socket listener
+# stays inert and pandda.inspect can't launch — see
+# [[bandicoot-coot-py-broken]] for the full backstory.
 
 echo "==> make -j${JOBS}"
 make -j"${JOBS}"

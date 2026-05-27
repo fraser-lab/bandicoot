@@ -31,13 +31,11 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
         n_ligand_atoms = het_group_n_atoms(rn)
 
         if (not isNumber(n_ligand_atoms)):
-            print "BL ERROR:: failed liagnd atoms not a number."
+            print("BL ERROR:: failed liagnd atoms not a number.")
             return False
         else:
-            refmac_out_sfs_file_name = os.path.join(refmac_dir, \
-                                                    stub_name + "-with-ligand-refmac.mtz")
-            with_ligand_pdb_file_name = os.path.join(refmac_dir, \
-                                                     stub_name + "-with-ligand.pdb")
+            refmac_out_sfs_file_name = os.path.join(refmac_dir, stub_name + "-with-ligand-refmac.mtz")
+            with_ligand_pdb_file_name = os.path.join(refmac_dir, stub_name + "-with-ligand.pdb")
 
             make_directory_maybe(refmac_dir)
             make_directory_maybe("coot-refmac") # XYZOUT goes here
@@ -47,7 +45,7 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
                                                       refmac_out_sfs_file_name,
                                                       fobs_col, sig_fobs_col, rfree_col)
             if not r:
-                print "BL ERROR:: failed calculating sfs in refmac"
+                print("BL ERROR:: failed calculating sfs in refmac")
                 return False
             else:
                 # happy path
@@ -59,13 +57,9 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
 
         global refmac_extra_params
 
-        refmac_extra_params = ["refine exclude all from " + \
-                               str(res_no) + " " + \
-                               chain_id + " to " + \
-                               str(res_no) + " " + \
-                               chain_id]
+        refmac_extra_params = ["refine exclude all from " + str(res_no) + " " + chain_id + " to " + str(res_no) + " " + chain_id]
 
-        print "BL DEBUG:: in get_correlation(): refmac_extra_params:", refmac_extra_params
+        print("BL DEBUG:: in get_correlation(): refmac_extra_params:", refmac_extra_params)
 
         ligand_spec = [chain_id, res_no, ins_code]
         refmac_out_sfs_file_name = local_refmac(stub_name)
@@ -105,8 +99,7 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
 
             c = map_to_model_correlation_stats_py(imol, [ligand_spec],
                                                   neighbs, 10, imol_map)
-            print "BL INFO:: residue %s density statistics %s!" \
-                  %(ligand_spec, c)
+            print("BL INFO:: residue %s density statistics %s!" %(ligand_spec, c))
             return c
 
     # Return an error status (False, i.e. not a list) or a list
@@ -123,7 +116,7 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
                                res_no, ins_code,
                                "ligand-check", use_cache_qm)
 
-        print "BL DEBUG:: run_results (mogul): ", chain_id, res_no, run_result
+        print("BL DEBUG:: run_results (mogul): ", chain_id, res_no, run_result)
 
         if not run_result:
             return False
@@ -145,7 +138,7 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
     def get_ligand_dictionary_based_geometry_stats():
         ligand_spec = [chain_id, res_no, ins_code]
         summary_info = get_ligand_distortion_summary_info(imol, ligand_spec)
-        print "##### we got summary-info", summary_info
+        print("##### we got summary-info", summary_info)
         return summary_info
 
     # return a list: n_bad_overlaps n_hydrogen_bonds n_small_overlaps n_close_contacts n_wide_contacts
@@ -196,15 +189,11 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
             env_atoms = []
             map(env_atoms.extend, env_residues)
             if isinstance(atoms, list):
-                r1 = map(lambda atom: atom[1][1][0] \
-                         if isinstance(atom[1][1], list) \
-                         else atom[1][1], atoms)
+                r1 = map(lambda atom: atom[1][1][0] if isinstance(atom[1][1], list) else atom[1][1], atoms)
             else:
                 r1 = False
             if env_atoms:
-                r2 = map(lambda atom: atom[1][1][0] \
-                         if isinstance(atom[1][1], list) \
-                         else atom[1][1], env_atoms)
+                r2 = map(lambda atom: atom[1][1][0] if isinstance(atom[1][1], list) else atom[1][1], env_atoms)
             else:
                 r2 = False
 
@@ -215,16 +204,16 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
         ligand_spec = [chain_id, res_no, ins_code]
         lig_env_temp_factors = ligand_environment_temperature_factors(imol, ligand_spec, 5)
         if not isinstance(lig_env_temp_factors, list):
-            print "Ligand env temp factors not a list\n"
+            print("Ligand env temp factors not a list\n")
             return False
         if (len(lig_env_temp_factors[1]) == 0):
-            print "No values in Ligand env temp factors\n"
+            print("No values in Ligand env temp factors\n")
             return False
 
         v1 = lig_env_temp_factors[0]
         v2 = lig_env_temp_factors[1]
-        print "b-factor kolmogorov-smirnov lig:", stub_name, ligand_spec, v1
-        print "b-factor kolmogorov-smirnov env:", stub_name, ligand_spec, v2
+        print("b-factor kolmogorov-smirnov lig:", stub_name, ligand_spec, v1)
+        print("b-factor kolmogorov-smirnov env:", stub_name, ligand_spec, v2)
         temp_factor_median_ratio = median_ratio(v1, v2)
         kolmogorov_smirnov_result = kolmogorov_smirnov(v1, v2)
 
@@ -237,19 +226,19 @@ def get_metrics_for_ligand(imol, chain_id, res_no, ins_code,
 
     b_factor_info = get_b_factor_distribution_metrics(stub_name)
 
-    print "####################### b-factor-info:", b_factor_info
+    print("####################### b-factor-info:", b_factor_info)
 
     # add error checking to this (maybe more?!)
     #
     correlation_score = get_correlation(stub_name)
-    print "#####################!!! correlation-score:", correlation_score
+    print("#####################!!! correlation-score:", correlation_score)
     if (isNumber(correlation_score)):
         dict_based_stats = get_ligand_dictionary_based_geometry_stats()
-        print "####################### dict-based-stats:", dict_based_stats
+        print("####################### dict-based-stats:", dict_based_stats)
         bmp = get_bump_score()
-        print "####################### bmp:", bmp
+        print("####################### bmp:", bmp)
         difference_map_stats = get_ligand_difference_map_stats(stub_name)
-        print "####################### difference-map-stats:", difference_map_stats
+        print("####################### difference-map-stats:", difference_map_stats)
         ret = [correlation_score, dict_based_stats, bmp,
                difference_map_stats, b_factor_info]
         return ret

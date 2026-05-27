@@ -38,18 +38,16 @@ def render_image(use_popen=False):
         coot_image_file_name = "coot.tif"
         image_format = " -tiff "
     else:
-	coot_image_file_name = "coot.png"
-	image_format = " -png "
+        coot_image_file_name = "coot.png"
+        image_format = " -png "
     raster3d(coot_r3d_file_name)
     r3d_exe = find_exe("render", "PATH")
     if (r3d_exe):
        r3d_dir = os.path.dirname(r3d_exe)
        os.environ['R3D_LIB'] = r3d_dir + "/materials"
-       r3d_call = r3d_exe + " -labels " + \
-           image_format + coot_image_file_name + \
-           " < " + coot_r3d_file_name
-       print "BL DEBUG:: r3d_call is ", r3d_call
-       print "calling render..."
+       r3d_call = r3d_exe + " -labels " + image_format + coot_image_file_name + " < " + coot_r3d_file_name
+       print("BL DEBUG:: r3d_call is ", r3d_call)
+       print("calling render...")
 
        major, minor, micro, releaselevel, serial = sys.version_info
        if (major >= 2 and minor >=4):
@@ -64,15 +62,15 @@ def render_image(use_popen=False):
            if status:
                # something went wrong with raster3d
                # maybe same for system call?!?
-               print "BL WARNING:: some error in raster3d"
+               print("BL WARNING:: some error in raster3d")
                return
        else:
            status = os.system(r3d_call)
-       print "calling display..."
+       print("calling display...")
        try:
          webbrowser.open(coot_image_file_name,1,1)
        except OSError:
-         print "BL WARNING:: We can't find rendered file ",coot_image_file_name
+         print("BL WARNING:: We can't find rendered file ",coot_image_file_name)
 
 # Run either raster3d or povray
 #
@@ -95,20 +93,17 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
         image_file_name += ".tif"
         image_format = " -tiff "
     else:
-	render_exe = "render"
-	image_format = " -png "
+        render_exe = "render"
+        image_format = " -png "
     r3d_exe = find_exe("render", "CCP4_BIN", "PATH")
     if (r3d_exe):
        r3d_dir = os.path.dirname(r3d_exe)
        os.environ['R3D_LIB'] = r3d_dir + "/materials"
        #we have to check filenames for spaces for dodgy windows path
-       image_file_name_mod, source_file_name_mod, space_flag = \
-		check_file_names_for_space_and_move(image_file_name, source_file_name)
-       r3d_call = r3d_exe + " -labels " + \
-           image_format + image_file_name_mod + \
-           " < " + source_file_name_mod
-       print "BL DEBUG:: r3d_call is ", r3d_call
-       print "calling render..."
+       image_file_name_mod, source_file_name_mod, space_flag = check_file_names_for_space_and_move(image_file_name, source_file_name)
+       r3d_call = r3d_exe + " -labels " + image_format + image_file_name_mod + " < " + source_file_name_mod
+       print("BL DEBUG:: r3d_call is ", r3d_call)
+       print("calling render...")
 
        major, minor, micro, releaselevel, serial = sys.version_info
        if (major >= 2 and minor >=4):
@@ -117,7 +112,7 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
            if status:
                # something went wrong with raster3d
                # maybe same for system call?!?
-               print "BL WARNING:: some error in raster3d"
+               print("BL WARNING:: some error in raster3d")
                return
        else:
            status = os.system(r3d_call)
@@ -127,11 +122,11 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
           shutil.move(image_file_name_mod,image_file_name)
           shutil.move(source_file_name_mod,source_file_name)
 
-       print "calling display..."
+       print("calling display...")
        try:
          webbrowser.open(image_file_name,1,1)
        except OSError:
-         print "BL WARNING:: We can't find rendered file ",image_file_name
+         print("BL WARNING:: We can't find rendered file ",image_file_name)
 
    elif (image_type == "povray"):
     image_file_name += ".png"
@@ -140,16 +135,15 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
     # again, we just assume povray exe is pvengine on all systems
     povray_exe = find_exe(povray_command_name, "PATH")
     if (povray_exe):
-      image_file_name_mod, source_file_name_mod, space_flag = \
-		check_file_names_for_space_and_move(image_file_name, source_file_name)
+      image_file_name_mod, source_file_name_mod, space_flag = check_file_names_for_space_and_move(image_file_name, source_file_name)
       if (os.name == 'nt'):
-		args = ["/EXIT", "/RENDER"]
+                args = ["/EXIT", "/RENDER"]
       else:
-		args = " "
+                args = " "
       args += [source_file_name_mod] + povray_args() + ["-UV" , "+W" + str(x_size) , "+H" + str(y_size)]
-      print "BL INFO:: run povray with args: ", args
+      print("BL INFO:: run povray with args: ", args)
       povray_call = [povray_exe] +  args + ["+o" + image_file_name_mod]
-      print "BL DEBUG:: povray command line", povray_call
+      print("BL DEBUG:: povray command line", povray_call)
       major, minor, micro, releaselevel, serial = sys.version_info
       if (major >= 2 and minor >=4):
           import subprocess
@@ -157,7 +151,7 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
           if status:
               # something went wrong with raster3d
               # maybe same for system call?!?
-              print "BL WARNING:: some error in povray"
+              print("BL WARNING:: some error in povray")
               return
       else:
           os.system(povray_call)
@@ -167,14 +161,14 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
          shutil.move(image_file_name_mod,image_file_name)
          shutil.move(source_file_name_mod,source_file_name)
       else: pass
-      print "calling display..."
+      print("calling display...")
       try:
          webbrowser.open(image_file_name,1,1)
       except OSError:
-         print "BL WARNING:: We can't find rendered file ",image_file_name
+         print("BL WARNING:: We can't find rendered file ",image_file_name)
 
    else:
-     print "Image type ", image_type, " unknown!"
+     print("Image type ", image_type, " unknown!")
 
 # Converts a ppm file to a bmp file (for windows users) and opens in
 # browser or viewer
@@ -202,20 +196,20 @@ def ppm2bmp(ppm_file_name):
             if status:
                 # something went wrong with raster3d
                 # maybe same for system call?!?
-                print "BL WARNING:: some error in ppm2bmp"
+                print("BL WARNING:: some error in ppm2bmp")
                 return
         else:
             os.system(ppm2bmp_call)
     if (extension == ".png"):
         bmp_file_name = ppm_file_name
     if (not os.path.isfile(bmp_file_name)):
-        print "BL WARNING:: Cannot find png/bmp file ", bmp_file_name
+        print("BL WARNING:: Cannot find png/bmp file ", bmp_file_name)
     else:
-        print "calling display..."
+        print("calling display...")
         try:
             webbrowser.open(bmp_file_name,1,1)
         except OSError:
-            print "BL WARNING:: We can't open screendump file ",bmp_file_name
+            print("BL WARNING:: We can't open screendump file ",bmp_file_name)
 
 # Tests file names for spaces. there is certainly on problem on windows
 # not sure about other OS, yet
@@ -265,8 +259,7 @@ def raster3d_version():
                 try:
                     major = int(tmp[0])
                 except:
-                    print "BL INFO:: problem extracting major version " + \
-                          "from raster3d"
+                    print("BL INFO:: problem extracting major version " + "from raster3d")
                     return False
                 if ("-" in tmp[1]):
                     # have new style version
@@ -275,21 +268,19 @@ def raster3d_version():
                         minor = int(tmp_min[0])
                         micro = int(tmp_min[1])
                     except:
-                        print "BL INFO:: problem extracting minor version " + \
-                              "from raster3d"
+                        print("BL INFO:: problem extracting minor version " + "from raster3d")
                         return False
                     return [major, minor, micro]
                 else:
                     # old style
                     if (len(tmp[1]) != 2):
-                        print "BL INFO:: cannot deal with this version."
+                        print("BL INFO:: cannot deal with this version.")
                         return False
                     else:
                         try:
                             minor = int(tmp[1][0])
                         except:
-                            print "BL INFO:: problem extracting minor " + \
-                                  "version of raster3d (old style)."
+                            print("BL INFO:: problem extracting minor " + "version of raster3d (old style).")
                             return False
                         micro = tmp[1][1]
                         return [major, minor, micro]

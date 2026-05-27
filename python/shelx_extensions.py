@@ -130,7 +130,7 @@ def shelx_ins_strings(imol):
         lines = fin.readlines()
         fin.close()
     except:
-        print "INFO:: problems reading file", ins_tmp_file
+        print("INFO:: problems reading file", ins_tmp_file)
     return lines
 
 def shelxl_refine_gui(imol, hkl_file_name_maybe=False):

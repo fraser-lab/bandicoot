@@ -6598,6 +6598,15 @@ void set_socket_python_string_waiting(const char *s);
 void set_remote_control_port(int port_number);
 int get_remote_control_port_number();
 
+#ifdef USE_PYTHON
+/*! \brief Bandicoot v0.1.0.0: schedule a Python callable on the GLib
+    main loop. Returns the GLib source id, or 0 on failure. Used by our
+    `gobject` shim's `timeout_add` so Phenix-injected scripts (and others)
+    that drive Coot via gobject.timeout_add actually run on the main
+    thread (where the GL context lives) instead of a daemon thread. */
+int bandicoot_python_timeout_add(int interval_ms, PyObject *callable);
+#endif
+
 
 /* tooltip */
 void set_tip_of_the_day_flag(int state);

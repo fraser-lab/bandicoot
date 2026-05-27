@@ -128,7 +128,7 @@ def using_active_atom(*funcs):
                     arg_ls.append(arg_to_append(ele))
                 return arg_ls
             else:
-                if aa_dict.has_key(item):
+                if item in aa_dict:
                     return aa_dict[item]
                 else:
                     return item
@@ -329,9 +329,9 @@ def molecule_has_hydrogens(imol):
 
 def add_hydrogens_using_refmac(imol):
     out_file_name = os.path.join("coot-refmac",
-				 molecule_name_stub(imol, 0) + '-needs-H.pdb') 
+                                 molecule_name_stub(imol, 0) + '-needs-H.pdb') 
     in_file_name = os.path.join("coot-refmac",
-				molecule_name_stub(imol, 0) + '-with-H.pdb')
+                                molecule_name_stub(imol, 0) + '-with-H.pdb')
     make_directory_maybe('coot-refmac')
     write_pdb_file(imol, out_file_name)
     return add_hydrogens_using_refmac_inner(imol, in_file_name, out_file_name)
@@ -339,9 +339,9 @@ def add_hydrogens_using_refmac(imol):
 
 def add_hydrogens_to_chain_using_refmac(imol, chain_id):
     out_file_name = os.path.join("coot-refmac",
-				 molecule_name_stub(imol, 0) + '-chain-' + chain_id + '-needs-H.pdb') 
+                                 molecule_name_stub(imol, 0) + '-chain-' + chain_id + '-needs-H.pdb') 
     in_file_name = os.path.join("coot-refmac",
-				molecule_name_stub(imol, 0) + '-chain-' + chain_id + '-with-H.pdb')
+                                molecule_name_stub(imol, 0) + '-chain-' + chain_id + '-with-H.pdb')
     make_directory_maybe('coot-refmac')
     write_chain_to_pdb_file(imol, chain_id, out_file_name)
     return add_hydrogens_using_refmac_inner(imol, in_file_name, out_file_name)
@@ -350,9 +350,9 @@ def add_hydrogens_to_chain_using_refmac(imol, chain_id):
 def add_hydrogens_using_refmac_inner(imol, in_file_name, out_file_name):
 
     status = popen_command("refmac5",
-			   ['XYZIN', out_file_name, 'XYZOUT', in_file_name],
-			   ['MAKE HOUT YES', 'NCYCLE 0', 'END'],
-			   'refmac-H-addition.log', 0)
+                           ['XYZIN', out_file_name, 'XYZOUT', in_file_name],
+                           ['MAKE HOUT YES', 'NCYCLE 0', 'END'],
+                           'refmac-H-addition.log', 0)
     try:
         if status == 0:
             # all good
@@ -420,7 +420,7 @@ def display_all_maps():
 # c.f. graphics_info_t::undisplay_all_model_molecules_except(int imol)
 def undisplay_all_maps_except(imol_map):
 
-    print "BL INFO:: undisplay_all_maps_except imol_map:", imol_map
+    print("BL INFO:: undisplay_all_maps_except imol_map:", imol_map)
 
     map_list = map_molecule_list()
     for imol in map_list:
@@ -436,8 +436,8 @@ def display_cycle_through_maps():
         except:
             current_idx = -1
         l = len(map_number_list)
-        print "BL INFO:: current_idx: %s from list %s" %(current_idx,
-                                                         map_number_list)
+        print("BL INFO:: current_idx: %s from list %s" % (current_idx,
+                                                         map_number_list))
         if current_idx > -1:
             next_index = 0 if current_idx + 1 == l else current_idx + 1
             return map_number_list[next_index]
@@ -532,8 +532,7 @@ def most_recently_created_file(glob_str, dir):
 # FIXME:: to be tested
 #
 def residue_spec_to_atom_selection_string(centre_residue_spec):
-    ret = "//" + centre_residue_spec[0] + \
-          "/" + str(centre_residue_spec[1])
+    ret = "//" + centre_residue_spec[0] + "/" + str(centre_residue_spec[1])
     return ret
 
 def residue_atom_to_atom_name(ra):
@@ -730,7 +729,7 @@ def set_virtual_trackball_type(type):
     elif (type == "spherical-surface"):
         vt_surface(0)
     else:
-        print "virtual trackball type",type,"not understood"
+        print("virtual trackball type",type,"not understood")
 
 # Is ls a list of strings? Return True or False
 #
@@ -896,7 +895,7 @@ def command_in_path_qm_old_version(cmd, only_extension="", add_extensions=[]):
                         return True
             return False
         except:
-            print "BL WARNING:: couldnt open $PATH"  # this shouldnt happen
+            print("BL WARNING:: couldnt open $PATH")  # this shouldnt happen
             return False
 
 
@@ -927,8 +926,8 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
         cmd_execfile = cmd
     else:
         if not(command_in_path_qm(cmd)):
-            print "command ", cmd, " not found in $PATH!"
-            print "BL INFO:: Maybe we'll find it somewhere else later..."
+            print("command ", cmd, " not found in $PATH!")
+            print("BL INFO:: Maybe we'll find it somewhere else later...")
         cmd_execfile = find_exe(cmd, "CBIN", "CBIN", "CCP4_BIN", "PATH")
 
     if (cmd_execfile):
@@ -975,7 +974,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
 
             if (screen_flag):
                 for line in process.stdout:
-                    print "#", line.rstrip(" \n")  # remove trailing whitespace
+                    print("#", line.rstrip(" \n"))  # remove trailing whitespace
                     log.write(line)
             process.wait()
             log.close()
@@ -999,7 +998,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
             status = os.popen(cmd_execfile + " " + args_string + " < " + data_list_file + " > " + log_file, 'r')
             cmd_finished = status.close()
             if (cmd_finished != None):
-                print "running command ", cmd, " failed!"
+                print("running command ", cmd, " failed!")
                 return 1
             else:
                 # print "cmd ", cmd ," seems to have run ok!"
@@ -1007,7 +1006,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
                 return 0
             os.remove(data_list_file)
     else:
-        print "WARNING:: could not find %s, so not running" %cmd
+        print("WARNING:: could not find %s, so not running" %cmd)
         return False
 
 def ok_popen_status_qm(status):
@@ -1174,7 +1173,7 @@ def multi_read_pdb(glob_pattern, dir):
     patt = os.path.normpath(dir+'/*.'+glob_pattern)
     all_files = glob.glob(patt)
     for file in all_files:
-        print "BL INFO:: reading ", file
+        print("BL INFO:: reading ", file)
         read_pdb(file)
 
 # read_pdb_all reads all the "*.pdb" files in the current directory.
@@ -1186,7 +1185,7 @@ def read_pdb_all():
     patt = os.path.normpath(os.path.abspath(".")+'/*.pdb')
     all_files = glob.glob(patt)
     for file in all_files:
-        print "BL INFO:: reading ", file
+        print("BL INFO:: reading ", file)
         read_pdb(file)
     set_recentre_on_read_pdb(recentre_status)
 
@@ -1230,18 +1229,18 @@ def view_matrix_transp():
 #
 def view_quaternion():
 
-	ret = map(get_view_quaternion_internal,[0,1,2,3])
-	return ret
+        ret = map(get_view_quaternion_internal,[0,1,2,3])
+        return ret
 
 # Return the view number 
 #
 def add_view(position, quaternion, zoom, view_name):
 
-	args = position + quaternion
-	args.append(zoom)
-	args.append(view_name)
-	ret = add_view_raw(*args)
-	return ret
+        args = position + quaternion
+        args.append(zoom)
+        args.append(view_name)
+        ret = add_view_raw(*args)
+        return ret
 
 # Convert a view matrix to a view quaternion to set Coot view internals.
 #
@@ -1348,10 +1347,10 @@ def translation(axis,length):
        elif (axis=="z"):
           return [0,0,length]
        else:
-          print "symbol axis: ", axis, " incomprehensible"
+          print("symbol axis: ", axis, " incomprehensible")
           return False
     else:
-       print "incomprehensible length argument: ",length
+       print("incomprehensible length argument: ",length)
        return False
 
 # Rotate degrees about screen axis, where axis is either 'x', 'y' or 'z'.
@@ -1392,9 +1391,9 @@ def rotate_about_screen_axis(axis,degrees):
        elif (axis=="z"):
           mult(view_matrix(),simple_rotation_z(deg_to_rad(degrees)))
        else:
-          print "symbol axis: ", axis, " incomprehensible"
+          print("symbol axis: ", axis, " incomprehensible")
     else:
-       print "incomprehensible length argument: ", degrees
+       print("incomprehensible length argument: ", degrees)
 
 
 # Support for old toggle functions.  (consider instead the raw
@@ -1527,7 +1526,7 @@ def transform_map(*args):
         ret = tf(args[0], identity_matrix(), args[1], rotation_centre(),
                  args[2], space_group(imol), cell(imol))
     else:
-       print "arguments to transform-map incomprehensible: args: ",args
+       print("arguments to transform-map incomprehensible: args: ",args)
     return ret
 
 
@@ -1563,9 +1562,8 @@ def transform_map_using_lsq_matrix(imol_ref, ref_chain, ref_resno_start, ref_res
     cell_params = cell(imol_ref)
 
     if not (space_group and cell):
-        message = "Bad cell or symmetry for molecule" + str(cell_params) + \
-            str(space_group) + str(imol_ref)
-        print "Bad cell or symmetry for molecule", message
+        message = "Bad cell or symmetry for molecule" + str(cell_params) + str(space_group) + str(imol_ref)
+        print("Bad cell or symmetry for molecule", message)
         ret = -1           # invalid mol! or return message!?
 
     else:
@@ -1596,7 +1594,7 @@ def brighten_map(imol, scale_factor):
                   pass
            set_map_colour(imol, *new_v)
        else:
-          print "bad non-list current-colour ", current_colour
+          print("bad non-list current-colour ", current_colour)
        graphics_draw()
 
 # Make all maps brighter
@@ -1710,10 +1708,10 @@ def residue_has_hetatms_qm(imol, chain_id, res_no, ins_code):
 def centre_of_mass(imol):
     centre = eval(centre_of_mass_string(imol))
     if (centre == 0):
-       print "molecule number",imol,"is not valid"
+       print("molecule number",imol,"is not valid")
        return False
     else:
-       print "Centre of mass for molecule %s is %s" % (imol, centre)
+       print("Centre of mass for molecule %s is %s" % (imol, centre))
        # for use somewhere let's return the centre
        return centre
 
@@ -1762,7 +1760,7 @@ def guess_refinement_map():
         for map_mol in map_list:
             if map_is_difference_map(map_mol) == 0:
                 return map_mol
-        print "BL WARNING:: we couldnt find a non difference map for fitting!"
+        print("BL WARNING:: we couldnt find a non difference map for fitting!")
         return -1
 
     
@@ -1790,7 +1788,7 @@ def auto_weight_for_refinement():
     def sphere_residues(radius):
         active_atom = active_residue()
         if not active_atom:    # check for list?
-            print "No active atom"
+            print("No active atom")
             return False
         else:
             centred_residue = active_atom[1:4]
@@ -1854,11 +1852,11 @@ def auto_weight_for_refinement():
     n_trials = 0
     while results:
         av_rms_d = weight_scale_from_refinement_results(results)
-        print "av_rms_d:", av_rms_d
+        print("av_rms_d:", av_rms_d)
         if not av_rms_d:   # check for number?
             return False
         if n_trials > 20:
-            print "BL INFO:: refinement did not converge, bailing out"
+            print("BL INFO:: refinement did not converge, bailing out")
             return False
         if (av_rms_d < (target_auto_weighting_value * 1.1) and
             av_rms_d > (target_auto_weighting_value * 0.9)):
@@ -1874,11 +1872,10 @@ def auto_weight_for_refinement():
             # Simple is overdamped.
             current_weight = matrix_state()
             new_weight = (target_auto_weighting_value * current_weight) / av_rms_d
-            print "INFO:: setting refinement weight to %s from * %s / %s" \
-                  %(new_weight, current_weight, av_rms_d)
+            print("INFO:: setting refinement weight to %s from * %s / %s" %(new_weight, current_weight, av_rms_d))
             if (new_weight < 2):
                 # weight refinement not converging
-                print "BL INFO:: not convering, weight to set was", new_weight
+                print("BL INFO:: not convering, weight to set was", new_weight)
             set_matrix(new_weight)
             results = refinement_func()
         n_trials += 1
@@ -1916,7 +1913,7 @@ def associate_pir_file(imol, chain_id, pir_file_name):
     if seq_text:
         assign_pir_sequence(imol, chain_id, seq_text)
     else:
-        print "WARNING:: associate-pir-file: bad text for", pir_file_name
+        print("WARNING:: associate-pir-file: bad text for", pir_file_name)
 
 # Associate the contents of a fasta file with a molecule.
 #
@@ -1925,16 +1922,16 @@ def associate_fasta_file(imol, chain_id, pir_file_name):
     if seq_text:
         assign_fasta_sequence(imol, chain_id, seq_text)
     else:
-        print "WARNING:: associate-fasta-file: bad text for", pir_file_name
+        print("WARNING:: associate-fasta-file: bad text for", pir_file_name)
 
 
 # comma key hook
 def graphics_comma_key_pressed_hook():
-	pass
+        pass
 
 # dot key hook
 def graphics_dot_key_pressed_hook():
-	pass
+        pass
 
 # a list of [code, key, name, thunk]
 # e.g. [103, "g", "Goto Blob", blob_under_pointer_to_screen_centre()]
@@ -1976,26 +1973,26 @@ def add_key_binding(name, key, thunk):
         keys     = [elem[1] for elem in key_bindings]
         codes    = [elem[0] for elem in key_bindings]
         if (key in std_keys):
-            print "INFO:: you shall not overwrite a standard key binding (%s)" %key
+            print("INFO:: you shall not overwrite a standard key binding (%s)" %key)
         else:
             if (type(key) is IntType):
                 if (key in keys):
-                    print "INFO:: you are overwriting existing key", key
+                    print("INFO:: you are overwriting existing key", key)
                     key_bindings.pop(keys.index(key))
                 key_bindings.append([key, key, name, thunk])
             elif (type(key) is StringType):
                 code = decode_key(key)
                 if (code in codes):
-                    print "INFO:: you are overwriting existing key (from code)", key
+                    print("INFO:: you are overwriting existing key (from code)", key)
                     key_bindings.pop(codes.index(code))
                 if "Control_" in key:
                     code = decode_key(key[-1])
                 if (("Control_" in key) or not (code == -1)):
                     key_bindings.append([code, key, name, thunk])
                 else:
-                    print "INFO:: key %s not found in code table" %key
+                    print("INFO:: key %s not found in code table" %key)
             else:
-                print "BL WARNING:: invalid key", key
+                print("BL WARNING:: invalid key", key)
                 
 
 # general key press hook, not for public use!!
@@ -2016,10 +2013,8 @@ def graphics_general_key_press_hook(key, control_flag = 0):
         apply(func)
     else:
         if coot_has_guile() and is_windows():
-            run_scheme_command("(graphics-general-key-press-hook " + \
-                               str(key) + \
-                               ")")
-        print "Key %s not found in (python) key bindings" %key
+            run_scheme_command("(graphics-general-key-press-hook " + str(key) + ")")
+        print("Key %s not found in (python) key bindings" %key)
 
 
 # Function requested by Mark White.
@@ -2060,7 +2055,7 @@ def read_vu_file(filename, obj_name):
             try:
                 coords = map(float, current_line[0:-1])
             except:
-                print "BL WARNING:: cannot make float from cordinates", current_line[0:-1]
+                print("BL WARNING:: cannot make float from cordinates", current_line[0:-1])
                 return
             to_generic_object_add_line(n, colour, 2,
                                        *coords)
@@ -2164,8 +2159,7 @@ def atoms_with_zero_occ(imol):
                 name     = atom_info[0][0]
                 alt_conf = atom_info[0][1]
                 if (occ < 0.01):
-                    text = str(imol)   + " " + chain_id + " " + \
-                           str(res_no) + " " + name
+                    text = str(imol)   + " " + chain_id + " " + str(res_no) + " " + name
                     if (alt_conf):
                         text += " "
                         text += alt_conf
@@ -2323,12 +2317,12 @@ def update_go_to_atom_from_current_atom():
 
     active_atom = active_residue()
     if active_atom:
-	imol      = active_atom[0]
-	chain_id  = active_atom[1]
-	resno     = active_atom[2]
-	ins_code  = active_atom[3]
-	atom_name = active_atom[4]
-	alt_conf  = active_atom[5]
+        imol      = active_atom[0]
+        chain_id  = active_atom[1]
+        resno     = active_atom[2]
+        ins_code  = active_atom[3]
+        atom_name = active_atom[4]
+        alt_conf  = active_atom[5]
         go_to_atom_imol_current = go_to_atom_molecule_number()
         set_go_to_atom_molecule(imol)
         # if imol != goto_atom_imol_current
@@ -2352,9 +2346,9 @@ def flip_active_ligand():
 # 
 def delete_atom_by_active_residue():
 
-	active_atom = active_residue()
-	if active_atom:
-		delete_atom(active_atom)
+        active_atom = active_residue()
+        if active_atom:
+                delete_atom(active_atom)
 
 # general mutate
 # 
@@ -2400,7 +2394,7 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
     def overlap_by_main_chain(imol_mov, chain_id_mov, res_no_mov, ins_code_mov,
                               imol_ref, chain_id_ref, res_no_ref, ins_code_ref):
 
-        print "BL DEBUG:: in overlap_by_main_chain : ---------------- imol-mov: %s imol-ref: %s" %(imol_mov, imol_ref)
+        print("BL DEBUG:: in overlap_by_main_chain : ---------------- imol-mov: %s imol-ref: %s" %(imol_mov, imol_ref))
         clear_lsq_matches()
         map(lambda atom_name:
             add_lsq_atom_pair([chain_id_ref, res_no_ref, ins_code_ref, atom_name, ""],
@@ -2453,9 +2447,9 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
             add_lsq_atom_pair(chain_id_ref, res_no_ref, ins_code_ref, atom_name_1, "",
                               chain_id_mov, res_no_mov, ins_code_mov, atom_name_2, "")
 
-        print "applying matches!"
+        print("applying matches!")
         apply_lsq_matches(imol_ref, imol_mov)
-        print "done matches!"
+        print("done matches!")
         
     # get_monomer_and_dictionary, now we check to see if we have a
     # molecule already loaded that matches this residue, if we have,
@@ -2478,7 +2472,7 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
         if ((not have_tlc_molecule) or (not have_dict_for_tlc)):
             return get_monomer(tlc)
         else:
-            print "we have dict and model for tlc already"
+            print("we have dict and model for tlc already")
             return have_tlc_molecule
 
     #
@@ -2511,16 +2505,16 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
                 match_ligand_torsions(imol_ligand, imol, chain_id_in, resno)
             delete_residue(imol, chain_id_in, resno, "")
             new_chain_id_info = merge_molecules([imol_ligand], imol)
-            print "BL DEBUG:: new_chain_id_info: ", new_chain_id_info
+            print("BL DEBUG:: new_chain_id_info: ", new_chain_id_info)
             merge_status = new_chain_id_info[0]
             # merge_status is sometimes a spec, sometimes a chain-id pair
             # BL says:: the rest of it is, merge_status should be 1
-            print "BL DEBUG:: merge status: ", merge_status
+            print("BL DEBUG:: merge status: ", merge_status)
             if merge_status == 1:
                 new_res_spec = new_chain_id_info[1]
                 new_chain_id = residue_spec_to_chain_id(new_res_spec)
-                print "BL DEBUG:: new_res_spec", new_res_spec
-                print "BL DEBUG:: change_residue_number to ", resno
+                print("BL DEBUG:: new_res_spec", new_res_spec)
+                print("BL DEBUG:: change_residue_number to ", resno)
                 change_residue_number(imol,
                                       residue_spec_to_chain_id(new_res_spec),
                                       residue_spec_to_res_no(new_res_spec),
@@ -2558,7 +2552,7 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
 
             else:
                 # guess merge failed!?!
-                print "BL WARNING:: merge failed!?"
+                print("BL WARNING:: merge failed!?")
 
     # main line
     #
@@ -2587,25 +2581,25 @@ def phosphorylate_active_residue():
                     n += 1
             return n
 
-	active_atom = active_residue()
+        active_atom = active_residue()
         try:
-	    imol       = active_atom[0]
-	    chain_id   = active_atom[1]
-	    resno      = active_atom[2]
-	    inscode    = active_atom[3]
-	    res_name = residue_name(imol, chain_id, resno, inscode)
+            imol       = active_atom[0]
+            chain_id   = active_atom[1]
+            resno      = active_atom[2]
+            inscode    = active_atom[3]
+            res_name = residue_name(imol, chain_id, resno, inscode)
 
-	    if res_name == 'TYR':
-	        mutate_by_overlap(imol, chain_id, resno, "PTR")
-	    elif res_name == 'SER':
-	        mutate_by_overlap(imol, chain_id, resno, "SEP")
-	    elif res_name == 'THR':
-	        mutate_by_overlap(imol, chain_id, resno, "TPO")
-	    else:
-	        s = "Can't Phosphorylate residue of type " + res_name
-	        info_dialog(s)
+            if res_name == 'TYR':
+                mutate_by_overlap(imol, chain_id, resno, "PTR")
+            elif res_name == 'SER':
+                mutate_by_overlap(imol, chain_id, resno, "SEP")
+            elif res_name == 'THR':
+                mutate_by_overlap(imol, chain_id, resno, "TPO")
+            else:
+                s = "Can't Phosphorylate residue of type " + res_name
+                info_dialog(s)
         except TypeError as e:
-            print e
+            print(e)
             n_active = n_active_models()
             s = 'WARNING:: unable to get active atom\n'
             s += 'Is your molecule active?                  \n'
@@ -2619,8 +2613,7 @@ def overlay_my_ligands(imol_mov, chain_id_mov, resno_mov,
                        imol_ref, chain_id_ref, resno_ref):
 
     imol_frag = new_molecule_by_atom_selection(imol_mov,
-                                               "//" + chain_id_mov + \
-                                               "/" + str(resno_mov))
+                                               "//" + chain_id_mov + "/" + str(resno_mov))
     rtop_i = overlap_ligands(imol_frag, imol_ref, chain_id_ref, resno_ref)
     set_mol_displayed(imol_frag, 0)
     transform_coords_molecule(imol_mov, rtop_i[0])
@@ -2639,27 +2632,27 @@ def label_all_CAs(imol):
 
 
 def label_all_atoms_in_residue(imol, chain_id, resno, inscode):
-	import types
+        import types
 
-	atom_list = residue_info(imol, chain_id, resno, inscode)
-	if type(atom_list) is ListType:
-		for atom_info in atom_list:
+        atom_list = residue_info(imol, chain_id, resno, inscode)
+        if type(atom_list) is ListType:
+                for atom_info in atom_list:
                         add_atom_label(imol,chain_id, resno, atom_info[0][0])
                 graphics_draw()
 
 def label_all_active_residue_atoms():
 
-	active_atom = active_residue()
+        active_atom = active_residue()
         imol       = active_atom[0]
         chain_id   = active_atom[1]
         resno      = active_atom[2]
         inscode    = active_atom[3]
 
-	atom_list = residue_info(imol, chain_id, resno, inscode)
-	if type(atom_list) is ListType:
-		for atom_info in atom_list:
-			add_atom_label(imol,chain_id, resno, atom_info[0][0])
-		graphics_draw()
+        atom_list = residue_info(imol, chain_id, resno, inscode)
+        if type(atom_list) is ListType:
+                for atom_info in atom_list:
+                        add_atom_label(imol,chain_id, resno, atom_info[0][0])
+                graphics_draw()
 
 # Resets alt confs and occupancies of atoms in residue that have
 # orphan alt-loc attributes
@@ -2754,14 +2747,14 @@ def save_dialog_positions_to_init_file():
             if (not os.path.isdir(init_dir)):
                 return False
             port = open(init_file, 'w')
-            print "BL INFO:: writing dialog positions to .coot-preferences/saved_dialog_positions.py"
+            print("BL INFO:: writing dialog positions to .coot-preferences/saved_dialog_positions.py")
         else:
             init_file = os.path.join(os.getenv(home),
                                      ".coot.py")
             if (not os.path.isfile(init_file)):
                 return False
             port = open(init_file, 'a')
-            print "BL INFO:: writing dialog positions to .coot.py"
+            print("BL INFO:: writing dialog positions to .coot.py")
             
         if port:
 
@@ -2773,7 +2766,7 @@ def save_dialog_positions_to_init_file():
             port.write("# -------------------------")
             port.close()
         else:
-            print "BL ERROR:: no valid port to write to!"
+            print("BL ERROR:: no valid port to write to!")
 
     # main line
     save_state()
@@ -2786,7 +2779,7 @@ def save_dialog_positions_to_init_file():
 
     state_file = "0-coot.state.py"
     if (not os.path.isfile(state_file)):
-        print "Ooops %s does not exist (either guile enabled or problem writing the file" %state_file
+        print("Ooops %s does not exist (either guile enabled or problem writing the file" %state_file)
     else:
         port = open("0-coot.state.py", 'r')
         try:
@@ -2796,10 +2789,10 @@ def save_dialog_positions_to_init_file():
         positions =[]
         for line in lines:
             if ("_dialog_position" in line):
-                print " Adding dialog position: ", line
+                print(" Adding dialog position: ", line)
                 positions.append(line)
             elif ("set_go_to_atom_window_position" in line):
-                print " Adding dialog position: ", line
+                print(" Adding dialog position: ", line)
                 positions.append(line)
         port.close()
 
@@ -2857,7 +2850,7 @@ def remove_line_containing_from_file(remove_str_ls, filename):
         lines = port.readlines()
         port.close()
     else:
-        print "BL INFO:: no %s file, so cannot remove line" %init_file
+        print("BL INFO:: no %s file, so cannot remove line" %init_file)
         lines = []
     if (lines):
         patt = string.join(remove_str_ls,'|')
@@ -2892,7 +2885,7 @@ def multi_chicken(imol, n_colours = False):
             n_col = n_colours
         sigma = map_sigma(imol)
         
-        print "range n_col returns: ", range(n_col)
+        print("range n_col returns: ", range(n_col))
 
         for icol in range(n_col):
             new_map = copy_molecule(imol)
@@ -2901,7 +2894,7 @@ def multi_chicken(imol, n_colours = False):
             set_last_map_contour_level(sigma * contour_level_sigma)
             set_last_map_colour(*rotate_colour_map(initial_colour, colour_range * frac))
     else:
-        print "BL INFO:: %s is not valid map" %imol
+        print("BL INFO:: %s is not valid map" %imol)
         
 
 # simple enumeration
@@ -3031,13 +3024,9 @@ def pukka_puckers_qm(imol):
             residue_spec = residue[1]
             pucker_atom = residue[0]
             at_name = get_ribose_residue_atom_name(imol, residue_spec, pucker_atom)
-            ls = [residue_spec[0] + " " + str(residue_spec[1]) + residue_spec[2] + \
-                  ": " + residue[2],
+            ls = [residue_spec[0] + " " + str(residue_spec[1]) + residue_spec[2] + ": " + residue[2],
                   ["set_go_to_atom_molecule("+ str(imol) +")",
-                   "set_go_to_atom_chain_residue_atom_name(" +\
-                   "\"" + str(residue_spec[0]) + "\", " +\
-                   str(residue_spec[1]) + ", " +\
-                   "\"" + str(at_name) + "\")"]
+                   "set_go_to_atom_chain_residue_atom_name(" + "\"" + str(residue_spec[0]) + "\", " + str(residue_spec[1]) + ", " + "\"" + str(at_name) + "\")"]
                   ]
             buttons.append(ls)
         dialog_box_of_buttons("Non-pukka puckers",
@@ -3076,10 +3065,7 @@ def prodrg_ify(imol, chain_id, res_no, ins_code):
         if not prodrg_exe:
             info_dialog("Cannot find cprodrg, so no prodrg-ifying of ligand possible")
         else:
-            print "BL DEBUG:: now run prodrg with", prodrg_exe, \
-                  "XYZIN",  prodrg_xyzin,\
-                  "XYZOUT", prodrg_xyzout,\
-                  "LIBOUT", prodrg_cif
+            print("BL DEBUG:: now run prodrg with", prodrg_exe, "XYZIN",  prodrg_xyzin, "XYZOUT", prodrg_xyzout, "LIBOUT", prodrg_cif)
             status = popen_command(prodrg_exe,
                                    ["XYZIN",  prodrg_xyzin,
                                     "XYZOUT", prodrg_xyzout,
@@ -3219,12 +3205,7 @@ def make_latest_version_url():
     if is_windows():
         host = "http://www.ysbl.york.ac.uk/~lohkamp/software/binaries/"
         pre_dir = "nightlies/pre-release" if pre_release_qm() else "stable"
-    url = host + \
-          pre_dir + \
-          "/" + \
-          "type-binary-" + \
-          build_type + \
-          "-latest.txt"
+    url = host + pre_dir + "/" + "type-binary-" + build_type + "-latest.txt"
     return url
             
 
@@ -3254,7 +3235,7 @@ def run_download_binary_curl(revision, version_string,
         else:
             if not os.path.isfile(target_md5sum_file_name):
                 #print "OOps! %s does not exist" %target_md5sum_file_name
-                print "OOps! %s does not exist" %target_md5sum_file_name
+                print("OOps! %s does not exist" %target_md5sum_file_name)
                 return False
             else:
                 target_md5_string = get_target_md5_string(target_md5sum_file_name)
@@ -3263,19 +3244,17 @@ def run_download_binary_curl(revision, version_string,
                 md5_string = get_md5sum_string(tar_file_name)
                 if not target_md5_string:    # need to test if string?
                     #print "OOps %s is not a string" %target_md5_string
-                    print "OOps %s is not a string" %target_md5_string
+                    print("OOps %s is not a string" %target_md5_string)
                     return False
                 else:
                     if not md5_string:       # as above
                         #print "OOps %s is not a string" %md5_string
-                        print "OOps %s is not a string" %md5_string
+                        print("OOps %s is not a string" %md5_string)
                         return False
                     else:
                         if not (target_md5_string == md5_string):
-                            #print "Oops: md5sums do not match %s %s.  Doing nothing" \
-                            #      %(target_md5_string, md5_string)
-                            print "Oops: md5sums do not match %s %s.  Doing nothing" \
-                                  %(target_md5_string, md5_string)
+                            #print "Oops: md5sums do not match %s %s.  Doing nothing" #      %(target_md5_string, md5_string)
+                            print("Oops: md5sums do not match %s %s.  Doing nothing" %(target_md5_string, md5_string))
                             return False
                         else:
                             return True
@@ -3304,7 +3283,7 @@ def run_download_binary_curl(revision, version_string,
                 # with working dir !?
                 current_dir = os.getcwd()
                 os.chdir(pending_dir)
-                print "now current dir is", os.getcwd()
+                print("now current dir is", os.getcwd())
                 if use_tar:
                     # non-pythonic
                     popen_command("tar", ["xzf", a_tar_file_name], [],
@@ -3351,25 +3330,17 @@ def run_download_binary_curl(revision, version_string,
 
     # main line
     #
-    #print "::::: run_download_binary_curl.... with revision %s with version_string %s" \
-    #      %(revision, version_string)
+    #print "::::: run_download_binary_curl.... with revision %s with version_string %s" #      %(revision, version_string)
     prefix = os.getenv("COOT_PREFIX")
     prefix = os.path.normpath(prefix)  # FIXME do we need this?
     if not prefix:  # do we need to check if prefix is string?
-        print "OOps! Can't find COOT_PREFIX"
+        print("OOps! Can't find COOT_PREFIX")
         return False
     else:
         pre_release_flag = "-pre" in coot_version()
         ys = "www.ysbl.york.ac.uk/~emsley/software/binaries/"
         binary_type = coot_sys_build_type()
-        if (binary_type == "Linux-i386-fedora-3") or                  \
-               (binary_type == "Linux-i386-fedora-3-python") or       \
-               (binary_type == "Linux-i386-fedora-8-python-gtk2") or  \
-               (binary_type == "Linux-i386-fedora-8-gtk2") or         \
-               (binary_type == "Linux-i386-fedora-10-python-gtk2") or \
-               (binary_type == "Linux-i386-fedora-10-gtk2") or        \
-               (binary_type == "Linux-i686-ubuntu-8.04.3") or         \
-               (binary_type == "Linux-i686-ubuntu-8.04.3-python"):
+        if (binary_type == "Linux-i386-fedora-3") or (binary_type == "Linux-i386-fedora-3-python") or (binary_type == "Linux-i386-fedora-8-python-gtk2") or (binary_type == "Linux-i386-fedora-8-gtk2") or (binary_type == "Linux-i386-fedora-10-python-gtk2") or (binary_type == "Linux-i386-fedora-10-gtk2") or (binary_type == "Linux-i686-ubuntu-8.04.3") or (binary_type == "Linux-i686-ubuntu-8.04.3-python"):
             host_dir = ys
         else:
             host_dir = "www.biop.ox.ac.uk/coot/software/binaries/"
@@ -3405,7 +3376,7 @@ def run_download_binary_curl(revision, version_string,
         if set_file_name_func:
             set_file_name_func(tar_file_name)
 
-        print "INFO:: getting URL:", url
+        print("INFO:: getting URL:", url)
         
         if (use_curl):
             # this is for curl
@@ -3441,17 +3412,17 @@ def run_download_binary_curl(revision, version_string,
             try:
                 md5_url_local_file_name, md5_url_info =  urllib.urlretrieve(md5_url, md5_tar_file_name)
             except:
-                print "BL ERROR:: could not download", md5_url
+                print("BL ERROR:: could not download", md5_url)
                 return False
             try:
-                print "\n"
-                print "Downloading: %s" %tar_file_name
+                print("\n")
+                print("Downloading: %s" %tar_file_name)
                 url_local_file_name, url_info =  urllib.urlretrieve(url, tar_file_name, progress_function)
                 pending_install_in_place = "full"
-                print "\nDone"
+                print("\nDone")
             except:
                 if not (pending_install_in_place == "cancelled"):
-                    print "BL ERROR:: could not download", url
+                    print("BL ERROR:: could not download", url)
                 return False
 
         if not os.path.isfile(tar_file_name):
@@ -3563,7 +3534,7 @@ def update_self(use_curl=False):
     else:
         coot_url = get_url_as_string(url)
     if not coot_url:
-        print "BL INFO:: could not get string from URL %s, so no update" %url
+        print("BL INFO:: could not get string from URL %s, so no update" %url)
     else:
         version_string = coot_split_version_string(coot_url)
         revision = get_revision_from_string(version_string)
@@ -3602,7 +3573,7 @@ def update_self(use_curl=False):
                             f = v2 / v1
                             #sys.stdout.write("\rProgress %3.2f%%" %(f*100))
                             #sys.stdout.flush()
-                            print "%3.2f%%" %(f*100)
+                            print("%3.2f%%" %(f*100))
                             if f > 0.999:
                                 continue_status = False
             elif count >= 1500:  # about 50 min
@@ -3674,23 +3645,23 @@ def get_drug_via_wikipedia(drug_name_in):
         drug_bank_id = False
         query_ele = tree.find("query")
         rev_iter = query_ele.getiterator("rev")
-	if len(rev_iter) > 0:
-	   rev_text = rev_iter[0].text
-	   # seems to be in some strange format!?
-	   decode_text = rev_text.encode('ascii', 'ignore')
-	   for line in decode_text.split("\n"):
-	      # if key in line: # too simple, we need a regular expresssion search
-	      if key_re.search(line):
+        if len(rev_iter) > 0:
+           rev_text = rev_iter[0].text
+           # seems to be in some strange format!?
+           decode_text = rev_text.encode('ascii', 'ignore')
+           for line in decode_text.split("\n"):
+              # if key in line: # too simple, we need a regular expresssion search
+              if key_re.search(line):
                  if (redirect == False):
-		    drug_bank_id = line.split(" ")[-1]
-		    if not drug_bank_id:
+                    drug_bank_id = line.split(" ")[-1]
+                    if not drug_bank_id:
                        # we can get an empty string
                        drug_bank_id = False
-		 else:
+                 else:
                     # a REDIRECT was found
-		    drug_bank_id = line[line.find("[[")+2:line.find("]]")]
-	else:
-	    print 'Oops! len rev_text is 0'
+                    drug_bank_id = line[line.find("[[")+2:line.find("]]")]
+        else:
+            print('Oops! len rev_text is 0')
 
         return drug_bank_id
             
@@ -3698,10 +3669,8 @@ def get_drug_via_wikipedia(drug_name_in):
     file_name = False
     if isinstance(drug_name_in, str):
         if len(drug_name_in) > 0:
-	    drug_name = drug_name_in.lower()
-            url = "http://en.wikipedia.org/w/api.php?format=xml&action=query&titles=" + \
-                  drug_name + \
-                  "&prop=revisions&rvprop=content"
+            drug_name = drug_name_in.lower()
+            url = "http://en.wikipedia.org/w/api.php?format=xml&action=query&titles=" + drug_name + "&prop=revisions&rvprop=content"
 
             # we want to parse the Etree rather than xml as this is an addurlinfo thingy
             xml = urllib2.urlopen(url, context=ssl._create_unverified_context())
@@ -3730,48 +3699,43 @@ def get_drug_via_wikipedia(drug_name_in):
             for db, id in db_id_list:
                 if id:
                     if db == "DrugBank":
-                        db_mol_uri = "https://www.drugbank.ca/structures/small_molecule_drugs/" + \
-                                     id + ".mol"
+                        db_mol_uri = "https://www.drugbank.ca/structures/small_molecule_drugs/" + id + ".mol"
                         file_name = "drugbank-" + id + ".mol"
-                        print "BL DEBUG:: DrugBank path: getting url:", db_mol_uri
+                        print("BL DEBUG:: DrugBank path: getting url:", db_mol_uri)
                         coot_get_url(db_mol_uri, file_name)
                         # check that filename is good here
                         if file_seems_good_qm(file_name):
-                            print "BL DEBUG:: yes db file-name: %s seems good" %file_name
+                            print("BL DEBUG:: yes db file-name: %s seems good" %file_name)
                             return file_name
 
                     if db == "ChemSpider":
-                        cs_mol_url = "http://www.chemspider.com/" + \
-                                     "FilesHandler.ashx?type=str&striph=yes&id=" + \
-                                     "cs-" + id + ".mol"
+                        cs_mol_url = "http://www.chemspider.com/" + "FilesHandler.ashx?type=str&striph=yes&id=" + "cs-" + id + ".mol"
                         file_name = "cs-" + id + ".mol"
-                        print "BL DEBUG:: DrugBank path: getting url:", cs_mol_ur
+                        print("BL DEBUG:: DrugBank path: getting url:", cs_mol_ur)
                         coot_get_url(cs_mol_url, file_name)
                         # check that filename is good here
                         if file_seems_good_qm(file_name):
-                            print "BL DEBUG:: yes cs file-name: %s seems good" %file_name
+                            print("BL DEBUG:: yes cs file-name: %s seems good" %file_name)
                             return file_name
 
                     if db == "ChEMBL":
-                        mol_url = "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL" + \
-                                     id + ".sdf"
+                        mol_url = "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL" + id + ".sdf"
                         file_name = "chembl-" + id + ".sdf"
-                        print "BL DEBUG:: ChEMBL path: getting url:", mol_url
+                        print("BL DEBUG:: ChEMBL path: getting url:", mol_url)
                         coot_get_url(mol_url, file_name)
                         # check that filename is good here
                         if file_seems_good_qm(file_name):
-                            print "BL DEBUG:: yes chembl file-name: %s seems good" %file_name
+                            print("BL DEBUG:: yes chembl file-name: %s seems good" %file_name)
                             return file_name
 
                     if db == "PubChem":
-                        pc_mol_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/" + \
-                                     id + "/record/SDF/?record_type=2d&response_type=display"
+                        pc_mol_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/" + id + "/record/SDF/?record_type=2d&response_type=display"
                         file_name = "pc-" + id + ".mol"
-                        print "BL DEBUG:: pubchem path: getting url:", pc_mol_url
+                        print("BL DEBUG:: pubchem path: getting url:", pc_mol_url)
                         coot_get_url(pc_mol_url, file_name)
                         # check that filename is good here
                         if file_seems_good_qm(file_name):
-                            print "BL DEBUG:: yes pc file-name: %s seems good" %file_name
+                            print("BL DEBUG:: yes pc file-name: %s seems good" %file_name)
                             return file_name
     # last resort, try a redirect
     new_id = get_redirected_drug_name(xml_tree)
@@ -3803,9 +3767,7 @@ def get_pdbe_cif_for_comp_id(comp_id):
     download_dir = get_directory("coot-download")
     cif_file_name = os.path.join(download_dir,
                                  "PDBe-" + comp_id + ".cif")
-    url = "ftp://ftp.ebi.ac.uk/pub/databases/msd/pdbechem/files/mmcif/" + \
-          comp_id + \
-          ".cif"
+    url = "ftp://ftp.ebi.ac.uk/pub/databases/msd/pdbechem/files/mmcif/" + comp_id + ".cif"
     
     if os.path.isfile(cif_file_name):
         # try the filesystem cache
@@ -3816,19 +3778,14 @@ def get_pdbe_cif_for_comp_id(comp_id):
         else:
             # give a dialog, saying that the file will not be
             # overwritten
-            msg = cif_file_name + \
-                  " exists but is empty." + \
-                  "\nNot overwriting."
+            msg = cif_file_name + " exists but is empty." + "\nNot overwriting."
             info_dialog(msg)
             return False
     # use network then
-    print "BL INFO:: getting url:", url
+    print("BL INFO:: getting url:", url)
     state = coot_get_url(url, cif_file_name)
     if (state != 0):
-        msg = "Problem downloading\n" + \
-              url + "\n to file \n" + \
-              cif_file_name + \
-              "."
+        msg = "Problem downloading\n" + url + "\n to file \n" + cif_file_name + "."
         info_dialog(msg)
         return False
     else:
@@ -3894,8 +3851,7 @@ def file_to_preferences(filename):
                     pref_file = os.path.join(pref_dir, filename)
                     # don't install it if it is already in place.
                     if os.path.isfile(pref_file):
-                        s = "keybinding file " + pref_file + \
-                            " already exists. Not overwritten."
+                        s = "keybinding file " + pref_file + " already exists. Not overwritten."
                         add_status_bar_text(s)
                     else:
                         # check the directory first
@@ -3903,7 +3859,7 @@ def file_to_preferences(filename):
                             make_directory_maybe(pref_dir)
                         shutil.copyfile(ref_py, pref_file)
                         if os.path.isfile(pref_file):
-                            execfile(pref_file, globals())
+                            exec(open(pref_file).read(), globals())
 
 
 # something like this for intermediate atoms also?
@@ -3929,16 +3885,14 @@ def rebuild_residues_using_db_loop(imol, middle_residue_spec, n_neighbs):
     resno_mid = residue_spec_to_res_no(middle_residue_spec)
     resno_low = resno_mid - n_neighbs
     resno_high = resno_mid + n_neighbs
-    r = range(resno_mid - 4 - n_neighbs, resno_mid + n_neighbs + 0) + \
-        range(resno_mid + 1 + n_neighbs, resno_mid + 3 + n_neighbs)
-    print "BL DEBUG:: r", r
+    r = range(resno_mid - 4 - n_neighbs, resno_mid + n_neighbs + 0) + range(resno_mid + 1 + n_neighbs, resno_mid + 3 + n_neighbs)
+    print("BL DEBUG:: r", r)
     ch_id = residue_spec_to_chain_id(middle_residue_spec)
     residue_specs = map(lambda res_no: [ch_id, res_no, ""], r)
 
     loop_mols = protein_db_loops(imol, residue_specs, imol_refinement_map(),
                                  1, db_loop_preserve_residue_names)
-    residue_spec_of_residues_to_be_replaced = [middle_residue_spec] \
-        if n_neighbs == 0 else map(lambda rno: [ch_id, rno, ""],
+    residue_spec_of_residues_to_be_replaced = [middle_residue_spec] if n_neighbs == 0 else map(lambda rno: [ch_id, rno, ""],
                                    range(resno_low, resno_high + 1))
 
     saved_residue_names = map(lambda rno: residue_spec_to_residue_name(imol, rno),
@@ -3972,7 +3926,7 @@ def go_to_box_middle():
     if ls:
         imol_map = ls[0]
         c = cell(imol_map)
-        print "BL DEBUG:: c", c
+        print("BL DEBUG:: c", c)
         rc = map(lambda a: a * 0.5, c[:3])
         set_rotation_centre(*rc)
 
@@ -4041,7 +3995,7 @@ def reset_b_factor_active_residue():
     active_atom = active_residue()
 
     if not active_atom:
-       print "No active atom"
+       print("No active atom")
     else:
        imol       = active_atom[0]
        chain_id   = active_atom[1]
@@ -4057,7 +4011,7 @@ def reset_b_factor_active_residue():
 # we need this for popen as it requires the full path of the exe file
 # we use arguments and keyword:
 #
-# program_name	: name of exe to find
+# program_name  : name of exe to find
 #
 # args (i.e. path_names) : path name to search (usually "PATH", then maybe CCP4_BIN, ...,
 #                         can be a single path as well)
@@ -4147,7 +4101,7 @@ def find_exe(program_name, *args, **kwargs):
                 program_exe = os.path.join(search_path, file_name)
                 if (os.path.isfile(program_exe)):
                     if info:
-                        print "BL INFO:: We found ", program_exe
+                        print("BL INFO:: We found ", program_exe)
                     return program_exe
             else:
                 try:
@@ -4156,11 +4110,11 @@ def find_exe(program_name, *args, **kwargs):
                         program_exe = os.path.join(path, file_name)
                         if (os.path.isfile(program_exe)):
                             if info:
-                                print "BL INFO:: We found ", program_exe
+                                print("BL INFO:: We found ", program_exe)
                             return program_exe
                 except:
                     if info:
-                        print "BL WARNING:: %s not defined!" %search_path
+                        print("BL WARNING:: %s not defined!" %search_path)
             
     # BL says: before we search everywhere we might want to ask
     # the user if he actually wishes to do so!
@@ -4185,10 +4139,10 @@ def find_exe(program_name, *args, **kwargs):
                     return program_exe
     else:
         if info:
-            print "BL INFO:: we don't search the whole disk for", program_name_noext
+            print("BL INFO:: we don't search the whole disk for", program_name_noext)
             
     if info:
-        print "BL WARNING:: We cannot find %s anywhere! Program %s won't run!" %(program_name_noext, program_name_noext)
+        print("BL WARNING:: We cannot find %s anywhere! Program %s won't run!" %(program_name_noext, program_name_noext))
     return False
 
 # for running online docs
@@ -4198,20 +4152,20 @@ def open_url(url):
     try:
       webbrowser.open(url,1,1)
     except:
-      print "BL WARNING:: Cannot open the URL %s in webbrowser %s!" %(url,webbrowser.get())
+      print("BL WARNING:: Cannot open the URL %s in webbrowser %s!" %(url,webbrowser.get()))
 
 
 # to reload modules
 def reload_module(name):
-	import os
-	path = os.getenv('COOT_PYTHON_DIR')
-	file = os.path.join(path, name)
-	execfile(file)
+        import os
+        path = os.getenv('COOT_PYTHON_DIR')
+        file = os.path.join(path, name)
+        exec(open(file).read(), globals())
 
 # to make print a function:
 def printf(*args):
     for arg in args:
-        print arg,
+        print(arg, end="")
 
 # to print elements of a list:
 def printl(ls):
@@ -4237,8 +4191,8 @@ def run_concurrently(cmd, args=[], data_list=None, logfile=None, screen_flag=Fal
 
     cmd_execfile = ""
     if not(command_in_path_qm(cmd)):
-       print "command ", cmd, " not found in $PATH!"
-       print "BL INFO:: Maybe we'll find it somewhere else later..."
+       print("command ", cmd, " not found in $PATH!")
+       print("BL INFO:: Maybe we'll find it somewhere else later...")
     else:
        cmd_execfile = find_exe(cmd, "CBIN", "CCP4_BIN", "PATH")
 
@@ -4264,7 +4218,7 @@ def run_concurrently(cmd, args=[], data_list=None, logfile=None, screen_flag=Fal
                 else:
                     return pid
             except:
-                print "BL WARNING:: could not run process with args", cmd_args
+                print("BL WARNING:: could not run process with args", cmd_args)
                 return False
         
         else:
@@ -4273,32 +4227,31 @@ def run_concurrently(cmd, args=[], data_list=None, logfile=None, screen_flag=Fal
                 pid = os.spawnv(os.P_NOWAIT, cmd_execfile, [cmd_execfile] + args)
                 return pid
             except:
-                print "BL WARNING:: could not run program %s with args %s" \
-                      %(cmd_execfile, args)
+                print("BL WARNING:: could not run program %s with args %s" %(cmd_execfile, args))
                 return False
     else:
-        print "WARNING:: could not find %s, so not running this program" %cmd
+        print("WARNING:: could not find %s, so not running this program" %cmd)
         return False
 
 # python command to see if we have pygtk available
 # return True if availabel otherwise False
 #
 def coot_has_pygtk():
-	import sys
-	if ('pygtk' in sys.modules.keys()):
-		return True
-	else:
-		return False
+        import sys
+        if ('pygtk' in sys.modules.keys()):
+                return True
+        else:
+                return False
 
 # python command to see if we have pygobject available
 # return True if availabel otherwise False
 #
 def coot_has_gobject():
-	import sys
-	if ('gobject' in sys.modules.keys()):
-		return True
-	else:
-		return False
+        import sys
+        if ('gobject' in sys.modules.keys()):
+                return True
+        else:
+                return False
 
 
 # function to kill a process, given the process pid
@@ -4377,7 +4330,7 @@ def toggle_full_screen(widget=None):
             full_screen(0)
     else:
         # no alternative for now (could just go by state and change back and forth)
-        print "BL WARNING:: no widget"
+        print("BL WARNING:: no widget")
 
 def split_active_water():
     with UsingActiveAtom() as [aa_imol, aa_chain_id, aa_res_no, aa_ins_code, aa_atom_name, aa_alt_conf]:
@@ -4489,7 +4442,7 @@ def set_alt_conf_occ(imol, chain_id, res_no, ins_code, alt_conf_list):
                                         alt_conf_str, "occ", alt_conf_occ])
         set_atom_attributes(change_list)
     else:
-        print "BL INFO:: no alt confs in residue", imol, chain_id, res_no, ins_code
+        print("BL INFO:: no alt confs in residue", imol, chain_id, res_no, ins_code)
             
 
 # simplyfy check for windows
@@ -4652,7 +4605,7 @@ def setup_ccp4():
         # first check for CCP4
         ccp4_dir = os.getenv("CCP4")
         if not ccp4_dir:
-            print "BL INFO:: no $CCP4 found, wont setup CCP4 for Coot."
+            print("BL INFO:: no $CCP4 found, wont setup CCP4 for Coot.")
             # done here
         else:
             CCP4 = ccp4_dir
@@ -4674,7 +4627,7 @@ def setup_ccp4():
                 "CCP4_OPEN": ["UNKNOWN"],
                 "GFORTRAN_UNBUFFERED_PRECONNECTED": ["Y"]
                 }
-            for env_var, env_dir_ls in ccp4_env_vars.iteritems():
+            for env_var, env_dir_ls in ccp4_env_vars.items():
                 current_env_dir = os.getenv(env_var)
                 if not current_env_dir:
                     # variable not set, so let do so if exists
@@ -4747,7 +4700,7 @@ def rename_alt_confs(imol, chain_id, res_no, ins_code,
     # only works if all new alt confs are single letter
     list_len = map(lambda x: len(x) == 1, new_names)
     if not all(list_len):
-        print "BL INFO:: not all new alt confs are single letter, method wont work."
+        print("BL INFO:: not all new alt confs are single letter, method wont work.")
     else:
         # gogogo
 
@@ -4777,7 +4730,7 @@ def rename_alt_confs(imol, chain_id, res_no, ins_code,
                 change_list[i][7] = change_list[i][7].upper()
             set_atom_attributes(change_list)
         else:
-            print "BL INFO:: no alt confs in residue", imol, chain_id, res_no, ins_code
+            print("BL INFO:: no alt confs in residue", imol, chain_id, res_no, ins_code)
 
 # swap A and B
 #
@@ -4905,8 +4858,7 @@ def run_clustalw_alignment(imol, ch_id, target_sequence_pir_file):
 
     def get_clustalw2_command():
         clustalw2_command = "clustalw2"
-        ccp4_libexec_path = os.path.join(os.getenv("CCP4"), "libexec") \
-            if os.getenv("CCP4") else ""
+        ccp4_libexec_path = os.path.join(os.getenv("CCP4"), "libexec") if os.getenv("CCP4") else ""
         return find_exe(clustalw2_command, ["PATH", ccp4_libexec_path, "CBIN"])
 
     current_sequence_pir_file = "current-sequence.pir"
@@ -4915,7 +4867,7 @@ def run_clustalw_alignment(imol, ch_id, target_sequence_pir_file):
 
     clustalw2_command = get_clustalw2_command()
     if not clustalw2_command:
-        print "No clustalw2 command!"
+        print("No clustalw2 command!")
         return False
     else:
 

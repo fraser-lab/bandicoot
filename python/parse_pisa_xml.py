@@ -8,8 +8,7 @@ def pisa_assemblies(imol):
     global pisa_min_version
     pisa_exe = pisa_new_enough_qm()
     if not pisa_exe:
-        msg = "Your pisa version it too old.  Need at least " + \
-              pisa_min_version + "."
+        msg = "Your pisa version it too old.  Need at least " + pisa_min_version + "."
         info_dialog(msg)
     else:
         #
@@ -43,7 +42,7 @@ def pisa_assemblies_xml(imol, file_name):
     import os
 
     if (os.path.isfile(file_name)):
-        print "opened", file_name
+        print("opened", file_name)
         sm = ElementTree()
         xml_file = clean_xml_file(file_name)
         if xml_file:
@@ -127,8 +126,7 @@ def pisa_handle_xml_molecule(imol, molecule, pisa_results_type):
                     atom_selection_string = "// /" + residue_string + "/" + element_string
                 else:
                     atom_selection_string = "//" + chain_string + "/" + residue_string
-                # print "BL debug:: atom_selection_string: %s from %s" \
-                #      %(atom_selection_string, chain_id_raw)
+                # print "BL debug:: atom_selection_string: %s from %s" #      %(atom_selection_string, chain_id_raw)
                 return atom_selection_string
         else:
             #print "found a simple chain_id", chain_id_raw
@@ -248,7 +246,7 @@ def pisa_handle_xml_molecule(imol, molecule, pisa_results_type):
             ass_rtop_symbols.append([symbol, float(mol_dic[symbol])])
 
         # do something with residues (if interface)
-        if mol_dic.has_key("residues"):
+        if "residues" in mol_dic:
             residues = molecule.getiterator("residue")
             mol_dic["residues"] = handle_residues(residues)
             
@@ -258,9 +256,7 @@ def pisa_handle_xml_molecule(imol, molecule, pisa_results_type):
             mat = map(lambda sym: sym[1], ass_rtop_symbols)
             #print "== atom-selection string %s   mat:::: %s" %(atom_selection_string, mat)
             #print "currently %s molecules" %(graphics_n_molecules())
-            new_molecule_name = "Symmetry copy of " + \
-                                str(imol) +\
-                                " using " + symm_name_part
+            new_molecule_name = "Symmetry copy of " + str(imol) + " using " + symm_name_part
             # new-molecule-by-symop-with-atom-selection,
             # perhaps? (20100222 doesn't seem needed because
             # the transformation is contained in mat.)
@@ -455,7 +451,7 @@ def parse_pisa_assemblies(imol, entity):
 
 
     if top_assembly_set:
-        print "top assembly-set:\n", top_assembly_set
+        print("top assembly-set:\n", top_assembly_set)
         s = "top assembly-set: \n\n" + top_assembly_set
     else:
         s = "no assembly-sets found"
@@ -560,8 +556,7 @@ def pisa_interfaces(imol):
     global pisa_min_version
     pisa_exe = pisa_new_enough_qm()
     if not pisa_exe:
-        msg = "Your pisa version it too old.  Need at least" \
-              + pisa_min_version + "."
+        msg = "Your pisa version it too old.  Need at least" + pisa_min_version + "."
         info_dialog(msg)
     else:
         pdb_file_name, pisa_config, pisa_xml_file_name = prep_for_pisa("interfaces", imol)
@@ -584,7 +579,7 @@ def pisa_interfaces(imol):
 
 def pisa_interfaces_xml(imol, file_name):
     if not os.path.isfile(file_name):
-        print "WARNING:: in pisa_interfaces_xml: %s does not exist" %file_name
+        print("WARNING:: in pisa_interfaces_xml: %s does not exist" %file_name)
     else:
         from xml.etree.ElementTree import ElementTree
         sm = ElementTree()

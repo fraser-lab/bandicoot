@@ -64,7 +64,7 @@ def get_flip_residue(line):
         else:
             inscode = inscode_pre
         chain_id = line[18:19]
-        print "found", resno, inscode, chain_id
+        print("found", resno, inscode, chain_id)
         return [chain_id, resno, inscode]
 
 def convert_to_button_info(problemed_res_list):
@@ -135,7 +135,7 @@ def parse_check_db(imol, file_name, action):
     #
     def my_delete_atom(imol, atom_spec):
         ls = [imol] + atom_spec
-        print "calling delete_atom with args", ls
+        print("calling delete_atom with args", ls)
         delete_atom(*ls)
 
     #
@@ -147,8 +147,7 @@ def parse_check_db(imol, file_name, action):
 
         imol_map = imol_refinement_map()
         if (valid_map_molecule_qm(imol_map)):
-            print "rotamer search with imol: %s chain: %s resno: %s inscode: %s" \
-                  %(imol, chain_id, resno, ins_code)
+            print("rotamer search with imol: %s chain: %s resno: %s inscode: %s" %(imol, chain_id, resno, ins_code))
             auto_fit_best_rotamer(resno, altloc, ins_code, chain_id, imol, imol_map, 1, 0.01)
         else:
             add_status_bar_text("No refinement map available, no rotamer fit")
@@ -160,7 +159,7 @@ def parse_check_db(imol, file_name, action):
             try:
                 resno = int(resno_string)
             except:
-                print "BL WARNING:: no int resno -> return"
+                print("BL WARNING:: no int resno -> return")
                 return False
             inscode_pre = line[40:41]
             if (inscode_pre == "_"):
@@ -188,9 +187,8 @@ def parse_check_db(imol, file_name, action):
             atom_name_pre = line[47:51]
             atom_name = atom_name_pre
             alt_conf = ""
-            print "found atom name %s resno %s (from %s) inscode %s (%s) chain_id %s" \
-                  %(atom_name, resno, resno_string, inscode_pre, inscode, chain_id)
-            print "line:", line
+            print("found atom name %s resno %s (from %s) inscode %s (%s) chain_id %s" %(atom_name, resno, resno_string, inscode_pre, inscode, chain_id))
+            print("line:", line)
             return [chain_id, resno, inscode, atom_name, alt_conf]
 
     def apply_actions(imol, action_list):
@@ -198,15 +196,15 @@ def parse_check_db(imol, file_name, action):
         for action in action_list:
             func = action[0]
             baddie_list = action[1]
-            print "BL DEBUG:: action and baddie_list", action, baddie_list
+            print("BL DEBUG:: action and baddie_list", action, baddie_list)
             imol_list = map(lambda x: imol, baddie_list)
-            print "BL DEBUG:: imol_list", imol_list
-            print "applying %s to %s" %(func, baddie_list)
-            print "BL DEBUG:: len of lists", len(imol_list), len(baddie_list)
+            print("BL DEBUG:: imol_list", imol_list)
+            print("applying %s to %s" %(func, baddie_list))
+            print("BL DEBUG:: len of lists", len(imol_list), len(baddie_list))
             map(func, imol_list, baddie_list)
 
     # main line
-    print "parse_whatcheck_report: parsing output of what-if..."
+    print("parse_whatcheck_report: parsing output of what-if...")
     found_flip_table     = False
     found_h2ohbo_table   = False
     found_BMPCHK_table   = False
@@ -292,7 +290,7 @@ def parse_check_db(imol, file_name, action):
         #print "Here flip_list is", flip_list
         #print "Here h2o-h-bond-less-list is", h2o_h_bond_less_list
         #print "Here bump_list is", bump_list
-        print "Here plane_list is", plane_list
+        print("Here plane_list is", plane_list)
         if (action == 'gui'):
             problem_residues2dialog(imol, [
                 ["Needs flipping", "Flip it", "my_flip", flip_list],
@@ -308,8 +306,8 @@ def parse_check_db(imol, file_name, action):
                 # [my_flip, namchk_list]
                 ])
         else:
-            print "INFO:: wrong action input"
+            print("INFO:: wrong action input")
                      
             
     else:
-        print "file not found", file_name
+        print("file not found", file_name)

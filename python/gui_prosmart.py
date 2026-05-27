@@ -13,14 +13,11 @@ def run_prosmart(imol_target, imol_ref, include_side_chains=False):
   dir_stub = "coot-ccp4"
   make_directory_maybe(dir_stub)
   target_pdb_file_name = os.path.join(dir_stub,
-                                      molecule_name_stub(imol_target, 0).replace(" ", "_") + \
-                                      "-prosmart.pdb")
+                                      molecule_name_stub(imol_target, 0).replace(" ", "_") + "-prosmart.pdb")
   reference_pdb_file_name = os.path.join(dir_stub,
-                                         molecule_name_stub(imol_ref, 0).replace(" ", "_") + \
-                                         "-prosmart-ref.pdb")
+                                         molecule_name_stub(imol_ref, 0).replace(" ", "_") + "-prosmart-ref.pdb")
   prosmart_out = os.path.join("ProSMART_Output",
-                              molecule_name_stub(imol_target, 0).replace(" ", "_") + \
-                              "-prosmart.txt")
+                              molecule_name_stub(imol_target, 0).replace(" ", "_") + "-prosmart.txt")
   prosmart_rmax = 6.0
 
   write_pdb_file(imol_target, target_pdb_file_name)
@@ -38,9 +35,9 @@ def run_prosmart(imol_target, imol_ref, include_side_chains=False):
                   os.path.join(dir_stub, "prosmart.log"),
                   False)
     if (not os.path.isfile(prosmart_out)):
-      print "file not found", prosmart_out
+      print("file not found", prosmart_out)
     else:
-      print "Reading ProSMART restraints from", prosmart_out
+      print("Reading ProSMART restraints from", prosmart_out)
       add_refmac_extra_restraints(imol_target, prosmart_out)
 
 def add_prosmart_secondary_structure_restraints(imol, do_mc_h_bonds_also_flag):
@@ -96,7 +93,7 @@ def add_prosmart_secondary_structure_restraints(imol, do_mc_h_bonds_also_flag):
     os.chdir(current_dir)
 
     for fn in [helix_out, strand_out]:
-        print "INFO:: reading ProSMART output file fn:", fn
+        print("INFO:: reading ProSMART output file fn:", fn)
         if os.path.isfile(fn):
             add_refmac_extra_restraints(imol, fn)
         else:
@@ -104,7 +101,7 @@ def add_prosmart_secondary_structure_restraints(imol, do_mc_h_bonds_also_flag):
             info_dialog(s)
 
     if do_mc_h_bonds_also_flag:
-        print "INFO:: reading ProSMART output file fn:", h_bonds_out
+        print("INFO:: reading ProSMART output file fn:", h_bonds_out)
         if os.path.isfile(h_bonds_out):
             add_refmac_extra_restraints(imol, h_bonds_out)
         else:

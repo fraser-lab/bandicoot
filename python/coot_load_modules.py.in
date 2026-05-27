@@ -1,218 +1,322 @@
-# coot_load_modules+gui.py
-
-# Copyright 2004, 2005, 2006, 2007 by the University of York
-# Author: Bernhard Lohkamp, Paul Emsley
-
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or (at
-# your option) any later version.
-
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc.,  51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301, USA
-
-# load coot python modules (including gui s)
+# coot_load_modules.py.in -- autoconf-substituted at build time.
+#
+# Bandicoot v0.1.0.0 Py3 rewrite. Upstream Coot's version is Py2-only
+# (print statements, execfile, pygtk2, hardcoded python2.7 paths).
+# This rewrite:
+#   - parses cleanly under Py3
+#   - loads each module in its own try/except so a single broken file
+#     doesn't disable the rest
+#   - logs which files failed so we know what to port next
+#   - skips pygtk (Py2-only PyGTK; Py3 would need PyGObject)
+#   - reads COOT_PYTHON_DIR or falls back to @pkgpythondir@
+#
+# As we port more python/*.py files to Py3, they get picked up
+# automatically. Set BANDICOOT_PY_VERBOSE=1 to see per-file failures.
 
 import os
 import sys
 import traceback
 
-# define some globals
+# ---------------------------------------------------------------------
+# Py2 compatibility preamble.
+#
+# Coot 0.9 was Py2-only, and so were many downstream tools that drive
+# Coot via --script (notably Phenix's wxGUI2/Coot.py and pandda.inspect).
+# Those are *distributed* scripts we can't patch -- the fix has to live
+# on the Bandicoot side. We pre-populate sys.modules and builtins with
+# the Py2 names so a `import cPickle` / `isinstance(x, unicode)` in any
+# script Coot loads via --script just works.
+#
+# This runs before run_command_line_scripts() in setup_python.cc, so
+# scripts loaded with --script see the shims.
+import builtins
+import pickle as _bandicoot_pickle
+sys.modules.setdefault('cPickle', _bandicoot_pickle)
+try:
+    import io as _bandicoot_io
+    sys.modules.setdefault('cStringIO', _bandicoot_io)
+    sys.modules.setdefault('StringIO', _bandicoot_io)
+except ImportError:
+    pass
+# Other commonly-renamed Py2 stdlib modules
+try:
+    import urllib.request, urllib.parse, urllib.error  # noqa: F401
+    sys.modules.setdefault('urllib2', sys.modules['urllib.request'])
+    sys.modules.setdefault('urlparse', sys.modules['urllib.parse'])
+except ImportError:
+    pass
+try:
+    import http.client
+    sys.modules.setdefault('httplib', sys.modules['http.client'])
+except ImportError:
+    pass
+try:
+    import queue as _bandicoot_queue
+    sys.modules.setdefault('Queue', _bandicoot_queue)
+except ImportError:
+    pass
+try:
+    import socketserver as _bandicoot_socketserver
+    sys.modules.setdefault('SocketServer', _bandicoot_socketserver)
+except ImportError:
+    pass
+try:
+    import configparser as _bandicoot_configparser
+    sys.modules.setdefault('ConfigParser', _bandicoot_configparser)
+except ImportError:
+    pass
+try:
+    import xmlrpc.server, xmlrpc.client
+    sys.modules.setdefault('SimpleXMLRPCServer', sys.modules['xmlrpc.server'])
+    sys.modules.setdefault('xmlrpclib', sys.modules['xmlrpc.client'])
+    # The Py2 class lived at SimpleXMLRPCServer.SimpleXMLRPCServer -- same in Py3
+    # at xmlrpc.server.SimpleXMLRPCServer, so `from SimpleXMLRPCServer
+    # import SimpleXMLRPCServer` works directly via the alias.
+except ImportError:
+    pass
+# Py2 builtins that scripts reference unqualified
+for _name, _alias in (('unicode', str), ('basestring', str),
+                      ('long', int), ('raw_input', input)):
+    if not hasattr(builtins, _name):
+        setattr(builtins, _name, _alias)
 
-# This is full pathname of molprobity's probe program
-# deftexi probe_command
-global probe_command
+# Permissive GTK2 stub. PyGTK 2 (the `gtk` and `gobject` modules) is
+# Py2-only and not installable on Py3. Phenix's wxGUI2/Coot.py and
+# similar distributed driver scripts `import gtk` for their toolbar
+# widgets, but their core workflow (loading molecules + maps via
+# Coot's C API after each refinement cycle) doesn't depend on the
+# widgets actually doing anything. A no-op stub lets `import gtk`
+# succeed, the script's __init__ runs (creating unused widgets that
+# vanish into the void), and the live-update code paths reach the
+# real C functions they need.
+#
+# Loses: Phenix's UI controls inside the Bandicoot toolbar.
+# Keeps: live model/map update on each refinement cycle.
+#
+# To upgrade to real PyGObject (gi.repository.Gtk) bindings later,
+# replace this stub with an API-translation shim that maps Py2-style
+# gtk.HBox / gtk.Window / etc. to their PyGObject equivalents.
+class _BandicootGtkStub(object):
+    def __getattr__(self, name):
+        return _BandicootGtkStub()
+    def __call__(self, *args, **kwargs):
+        return _BandicootGtkStub()
+    def __setitem__(self, *args, **kwargs):
+        pass
+    def __iter__(self):
+        return iter(())
+    def __bool__(self):
+        return False
+    # numeric stand-ins so module-level constants like gtk.WINDOW_TOPLEVEL
+    # can be assigned/compared without exploding
+    def __int__(self):
+        return 0
+    def __index__(self):
+        return 0
+
+sys.modules.setdefault('gtk', _BandicootGtkStub())
+sys.modules.setdefault('pygtk', _BandicootGtkStub())
+sys.modules.setdefault('gtk.gdk', _BandicootGtkStub())
+sys.modules.setdefault('pango', _BandicootGtkStub())
+
+# gobject needs slightly more than a no-op stub. Phenix's wxGUI2/Coot.py
+# uses gobject.timeout_add(250ms, callback) to drive its XML-RPC server's
+# request-polling loop.
+#
+# We route `gobject.timeout_add` to `coot.bandicoot_python_timeout_add`,
+# a C function that wraps GLib's `g_timeout_add`. This makes the callback
+# fire on the GTK main thread (where the GL context lives), so RPC
+# handlers that touch GL state -- the Phenix handlers call make_and_
+# draw_map, close_molecule, etc. -- run correctly. An earlier threading
+# implementation crashed Bandicoot the moment Phenix sent a model+map
+# update, with Metal aborting on cross-thread GL access.
+def _bandicoot_glib_timeout_add(interval_ms, callback, *args, **kwargs):
+    """gobject.timeout_add replacement via GLib's main loop (C-bound)."""
+    if args or kwargs:
+        _bound_args = args
+        _bound_kwargs = kwargs
+        def _bound():
+            return callback(*_bound_args, **_bound_kwargs)
+        _target = _bound
+    else:
+        _target = callback
+    try:
+        import coot
+        return coot.bandicoot_python_timeout_add(int(interval_ms), _target)
+    except (ImportError, AttributeError):
+        return 0  # silent no-op when C binding is missing (dev build)
+
+def _bandicoot_glib_idle_add(callback, *args, **kwargs):
+    """gobject.idle_add replacement: schedule the callback once on the
+    GLib main loop. Implemented as timeout_add(0, ...) with the callback
+    wrapped to return False so it fires exactly once."""
+    if args or kwargs:
+        _bound_args = args
+        _bound_kwargs = kwargs
+        def _once():
+            try:
+                callback(*_bound_args, **_bound_kwargs)
+            finally:
+                return False
+    else:
+        def _once():
+            try:
+                callback()
+            finally:
+                return False
+    return _bandicoot_glib_timeout_add(0, _once)
+
+def _bandicoot_glib_source_remove(_source_id):
+    """gobject.source_remove: dispatch to GLib if we have a real source id."""
+    # We could expose g_source_remove from C, but the only consumer in
+    # practice is when a callback wants to stop itself -- which it does
+    # by returning False from the callback. Most other usage is at exit
+    # time when it doesn't matter. No-op for now.
+    return True
+
+class _BandicootGobjectStub(object):
+    timeout_add = staticmethod(_bandicoot_glib_timeout_add)
+    idle_add = staticmethod(_bandicoot_glib_idle_add)
+    source_remove = staticmethod(_bandicoot_glib_source_remove)
+    def __getattr__(self, name):
+        return _BandicootGtkStub()
+    def __call__(self, *args, **kwargs):
+        return _BandicootGtkStub()
+
+sys.modules.setdefault('gobject', _BandicootGobjectStub())
+# ---------------------------------------------------------------------
+
+# Globals expected by various modules
+global probe_command, reduce_command, do_coot_tips_flag
+global use_gui_qm, have_guile_gtk
 probe_command = 'probe'
-
-# This is full pathname of molprobity's reduce program
-# deftexi reduce_command
-global reduce_command
 reduce_command = 'reduce'
-
-# This has be be here (in a general place) because tips_gui (where it
-# used to be is conditionally loaded).
-# (default to tips_gui displayed is True).
-# deftexi do_coot_tips_flag
-global do_coot_tips_flag
 do_coot_tips_flag = False
 
-# coot tips have been removed from the list of files to load but
-# there may be users who have no_coot_tips() in their ~/.coot script.
-# Or run at startup (like CCP4). Give it an empty function.
-#
+
 def no_coot_tips():
     pass
 
-# this is the variable we check so that coot doesn't double-load its extensions
-# - this is set in src/main.cc
-global use_gui_qm
-global have_guile_gtk
 
-pre_list = ["redefine_functions.py",
-	    "coot_utils.py",
-            "filter.py",
-            "coot_lsq.py",
-            "shelx.py",
-            "get_ebi.py",
-            "local_code.py",
-            # hello might give some people problems (according to Paul, it does 
-            # in the scheme version), if so, just comment out the next line:
-            "hello.py",
-            "mutate.py",
-            "refmac.py",
-            "libcheck.py",
-            "gap.py",
-            "fitting.py",
-            "raster3d.py",
-            "povray.py",
-            "remote_control.py",
-            "generic_objects.py",
-            "ncs.py",
-            "parse_pisa_xml.py",
-            "cns2coot.py",
-            "clear_backup.py",
-#            "tips.py",
-            "3d_generator_import.py",
-            "dictionary_generators.py",
-            "jligand.py",
-            "americanisms.py",
-            "group_settings.py"]
-post_list = ["coot_gui.py",
-#            "tips_gui.py",
-            "gui_hole.py",
-            "gui_prosmart.py",
-            "gui_add_linked_cho.py",
-            "cho_restraints_from_models.py",
-            "add_linked_cho.py",
-            "gui_contact_score_isolated_ligand.py",
-            "jligand_gui.py",
-            "get_recent_pdbe.py",
-            "extensions.py",
-            "shelx_extensions.py",
-            "enhanced_ligand.py",
-            "ligand_check.py",
-            "acedrg_link.py",
-            "sharpen_blur.py",
-            "dynamic_atom_overlaps_and_other_outliers.py",
-            "interactive_nudge_residues.py",
-            "gui_ligand_sliders.py",
-            "find_baddies.py",
-            "coot_toolbuttons.py",
-            "pdbe_validation_data.py",
-            "contact_score_isolated_ligand.py",
-            "ligand_validation_sliders.py",
-            "rcrane_loader.py" # calls set_found_coot_gui()
+# Order matters: redefine_functions and coot_utils define helpers other
+# modules use. remote_control is what Bandicoot v0.1.0.0 needs for the
+# Phenix socket listener.
+pre_list = [
+    "redefine_functions.py",
+    "coot_utils.py",
+    "filter.py",
+    "coot_lsq.py",
+    "shelx.py",
+    "get_ebi.py",
+    "local_code.py",
+    "hello.py",
+    "mutate.py",
+    "refmac.py",
+    "libcheck.py",
+    "gap.py",
+    "fitting.py",
+    "raster3d.py",
+    "povray.py",
+    "remote_control.py",
+    "generic_objects.py",
+    "ncs.py",
+    "parse_pisa_xml.py",
+    "cns2coot.py",
+    "clear_backup.py",
+    "3d_generator_import.py",
+    "dictionary_generators.py",
+    "jligand.py",
+    "americanisms.py",
+    "group_settings.py",
 ]
-
-# list of modules not available on Windows
+post_list = [
+    "coot_gui.py",
+    "gui_hole.py",
+    "gui_prosmart.py",
+    "gui_add_linked_cho.py",
+    "cho_restraints_from_models.py",
+    "add_linked_cho.py",
+    "gui_contact_score_isolated_ligand.py",
+    "jligand_gui.py",
+    "get_recent_pdbe.py",
+    "extensions.py",
+    "shelx_extensions.py",
+    "enhanced_ligand.py",
+    "ligand_check.py",
+    "acedrg_link.py",
+    "sharpen_blur.py",
+    "dynamic_atom_overlaps_and_other_outliers.py",
+    "interactive_nudge_residues.py",
+    "gui_ligand_sliders.py",
+    "find_baddies.py",
+    "coot_toolbuttons.py",
+    "pdbe_validation_data.py",
+    "contact_score_isolated_ligand.py",
+    "ligand_validation_sliders.py",
+]
 non_win_list = ["brute_lsqman.py"]
 
-python_list = pre_list
-
-if (os.name != 'nt'):
+python_list = list(pre_list)
+if os.name != 'nt':
     python_list += non_win_list
 
-# are we running unittesting?
-coot_unittesting = False
-for arg in sys.argv:
-    if "coot_unittest.py" in arg:
-        coot_unittesting = True
-        break
+# Skip the GUI module list for now (pygtk2 is Py2-only; PyGObject port
+# is a separate effort). Set BANDICOOT_LOAD_GUI_MODULES=1 to attempt.
+if os.getenv('BANDICOOT_LOAD_GUI_MODULES'):
+    python_list += post_list
 
-have_coot_python = False
-if use_gui_qm:
-    try:
-        # we only append the graphics modules if we have pygtk 2
-        import pygtk
-        import gtk
-        # now try to import coot_python
-        try: 
-            import coot_python
-            have_coot_python = True
-        except:
-            print """BL WARNING:: could not import coot_python module!!
-            Some things, esp. extensions, may be crippled!"""
-
-        # now make a global tooltip
-        if (gtk.pygtk_version < (2, 12)):
-            coot_tooltips = gtk.Tooltips()
-        # pygtk.require("2.0")
-	# print "adding to load list:", post_list # .. not sure that this is what I want
-        python_list += post_list
-        if (use_gui_qm == 2):
-            # we do have guile_gtk and dont want to have 
-            # the extra extensions from python
-            python_list.remove("extensions.py")
-	    python_list.remove("gui_contact_score_isolated_ligand.py")
-    except:
-        print "BL INFO:: could not import pygtk and gtk"
-        pass    
-
+# Locate the .py files: prefer COOT_PYTHON_DIR (set by coot.in), fall
+# back to the autoconf-substituted @pkgpythondir@.
 coot_python_dir = os.getenv('COOT_PYTHON_DIR')
 if coot_python_dir:
     search_load_path = coot_python_dir
 else:
-    # old 
-    # search_load_path = "@prefix@/share/coot/python"
-
-    # this is a bit ugly - I'm hacking in the python site packages path
-    #
-    # this is what I want to do:
     search_load_path = "@pkgpythondir@"
-    # 
-    # hack
-    search_load_path = "@prefix@/lib/python2.7/site-packages/coot"
 
 
-def load_from_search_load_path(file):
-    print "DEBUG:: search_load_path is ", search_load_path
-    f = os.path.join(search_load_path, file)
-    if f:
-        print "load", file
-        execfile(f, globals())
-    else:
-        print "Error finding", file
-
-# coot_toolbar_button must exist if we are in non-graphics-mode because there isn't any
-# "non-graphics" protection in ~/.coot-preferences/coot_toolbuttons.py
-
-def coot_toolbar_button(button_label, cb_function, icon_name=False, tooltip=False, toggle_button=False, use_button=False):
+# Stubs that some modules expect to exist before being loaded
+def coot_toolbar_button(button_label, cb_function, icon_name=False,
+                        tooltip=False, toggle_button=False, use_button=False):
     pass
+
 
 def toggle_backrub_rotamers(widget=None):
     pass
 
 
-for coot_python_file in python_list:
-    filename = os.path.join(search_load_path, coot_python_file)
-    if filename and os.path.isfile(filename):
-        # we need user configuration of this verbosity
-
-	if False:
-	   print "Loading:", coot_python_file
-
-        try:
-            # BL says::
-            # We execute the files rather than loading it as modules since
-            # some and parts thereof are actually scripts and not modules
-            # if you wish to rather use modules use, e.g.
-            # exec "from " + base + " import *"
-            # and set PYTHONPATH to point to COOT_PYTHON_DIR
-            execfile(filename)
-        except:
-            traceback.print_exc()
-            print "ERROR:: couldn't load ", coot_python_file
-            if coot_unittesting:
-                coot_real_exit(1)
-    else:
-        print "ERROR: cannot find", coot_python_file
+# Track load results so we can summarise at the end
+_loaded = []
+_failed = []
 
 
+def _load_file(filename):
+    """Load a single .py file into our globals, recording success/fail."""
+    full = os.path.join(search_load_path, filename)
+    if not os.path.isfile(full):
+        _failed.append((filename, "file not found at " + full))
+        return
+    try:
+        with open(full, "r") as fh:
+            src = fh.read()
+        code = compile(src, full, "exec")
+        exec(code, globals())
+        _loaded.append(filename)
+    except SyntaxError as e:
+        _failed.append((filename, "SyntaxError line %d: %s" % (e.lineno or 0, e.msg)))
+    except Exception as e:
+        _failed.append((filename, type(e).__name__ + ": " + str(e)))
 
+
+if search_load_path:
+    for coot_python_file in python_list:
+        _load_file(coot_python_file)
+else:
+    print("BL WARNING:: no COOT_PYTHON_DIR or @pkgpythondir@ set; no modules loaded")
+
+
+# One-line summary
+print("[bandicoot-py] loaded %d module(s), %d failed" %
+      (len(_loaded), len(_failed)))
+if _failed and os.getenv("BANDICOOT_PY_VERBOSE"):
+    for fname, err in _failed:
+        print("  FAIL %s: %s" % (fname, err))

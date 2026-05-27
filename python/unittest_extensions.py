@@ -30,10 +30,10 @@ begin_filename = os.path.join(project_dir, "begin.py")
 def exec_file(filename):
     if (os.path.isfile(unittest_filename) and
         (filename == "coot_unittest.py")):
-        execfile(unittest_filename, globals())
+        exec(open(unittest_filename).read(), globals())
     elif (os.path.isfile(begin_filename) and
           (filename == "begin.py")):
-        execfile(begin_filename, globals())
+        exec(open(begin_filename).read(), globals())
     else:
         unittest_dir = "python-tests"
         unittest_file = filename
@@ -42,11 +42,11 @@ def exec_file(filename):
         if (os.path.isdir(full_dir)):
             full_name = os.path.join(unittest_dir, unittest_file)
             if (os.path.isfile(full_name)):
-                execfile(full_name, globals())
+                exec(open(full_name).read(), globals())
             else:
-                print "BL INFO:: could not find %s in ../%s" %(unittest_file, unittest_dir)
+                print("BL INFO:: could not find %s in ../%s" %(unittest_file, unittest_dir))
         else:
-            print "BL INFO:: could not find directory ../%s" %unittest_dir
+            print("BL INFO:: could not find directory ../%s" %unittest_dir)
             # search, starting from HOME
             if (os.name == 'nt'):
                 home = os.getenv("COOT_HOME")
@@ -57,21 +57,21 @@ def exec_file(filename):
             if (os.path.isdir(full_dir)):
                 full_name = os.path.join(full_dir, unittest_file)
                 if (os.path.isfile(full_name)):
-                    execfile(full_name, globals())
+                    exec(open(full_name).read(), globals())
                 else:
-                    print "BL INFO:: could not find %s in %s" %(unittest_file, full_dir)
+                    print("BL INFO:: could not find %s in %s" %(unittest_file, full_dir))
             else:
-                print "BL INFO:: searching $HOME..."
+                print("BL INFO:: searching $HOME...")
                 for root, dirs, files in os.walk(home):
                     #print "BL DEBUG:: root, dirs", root, dirs
                     if unittest_dir in dirs:
                         full_name = os.path.join(root, unittest_dir, unittest_file)
                         if (os.path.isfile(full_name)):
-                            execfile(full_name, globals())
+                            exec(open(full_name).read(), globals())
                             break
                         else:
-                            print "BL INFO:: could not find %s in %s/%s" %(unittest_file, root, unittest_dir)
-                            print "BL INFO:: continue searching..."
+                            print("BL INFO:: could not find %s in %s/%s" %(unittest_file, root, unittest_dir))
+                            print("BL INFO:: continue searching...")
 
 if (have_coot_python):
     if coot_python.main_menubar():

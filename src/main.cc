@@ -560,6 +560,13 @@ main (int argc, char *argv[]) {
    setup_python(argc, argv);
 #ifdef USE_PYTHON
    setup_python_classes();
+   // Bandicoot v0.1.0.0: trigger the socket listener (--port + --hostname
+   // both required). Upstream Coot calls this from c-inner-main.c only on
+   // the Guile path AND has it commented out; we don't build Guile, so
+   // without this line `--port` is silently ignored. Now that the Python
+   // interface is alive and remote_control.py is loaded by setup_python,
+   // make_socket_listener_maybe can fire the Python connect logic.
+   make_socket_listener_maybe();
 #endif
      
 #ifdef USE_GUILE
@@ -581,17 +588,25 @@ main (int argc, char *argv[]) {
 #if ! defined (USE_GUILE)
 #ifdef USE_PYTHON
    run_command_line_scripts();
-   if (graphics_info_t::use_graphics_interface_flag)
-      gtk_main ();
-   else 
+   if (graphics_info_t::use_graphics_interface_flag) {
+      // v0.1.0.0: release the GIL around gtk_main so Python threads can
+      // actually run. Without this, daemon threads spawned by injected
+      // scripts (e.g. Phenix's XML-RPC pump in wxGUI2/Coot.py via our
+      // gobject.timeout_add stub) are blocked forever -- gtk_main is a
+      // C function holding the GIL by default.
+      Py_BEGIN_ALLOW_THREADS;
+      gtk_main();
+      Py_END_ALLOW_THREADS;
+   } else {
       start_command_line_python_maybe(argv);
+   }
 
 #else
    // not python or guile
    if (graphics_info_t::use_graphics_interface_flag)
       gtk_main();
 #endif // USE_PYTHON
-     
+
 #endif // ! USE_GUILE
 
    return 0;

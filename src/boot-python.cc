@@ -8,29 +8,15 @@
 void start_command_line_python_maybe(char **argv) {
 
 #ifdef USE_PYTHON
-   
-#if PY_MAJOR_VERSION > 2 
-   Py_Main(0, argv);
-#else
-#if PY_MINOR_VERSION > 2 
-   Py_Main(0, argv);
-#endif     // PY_MINOR_VERSION
-#endif     // PY_MAJOR_VERSION
 
-     //  Skip initialization registration of signal handlers, useful
-     //  when Python is embedded. Version 2.4 or later. Thanks Stuart
-     //  McNicholas for letting me know about this.
-     //
-     // Question: Do we need to check that we are not using command
-     // line python no graphics before we use this?
-     // 
-#if PY_MAJOR_VERSION > 2
+   // Bandicoot doesn't expose a command-line Python REPL (no --python
+   // flag), so we skip Py_Main entirely. On Py3 it takes wchar_t**
+   // anyway, not char**, which would need Py_DecodeLocale conversion.
+   (void) argv;
+
+   // Skip initialization registration of signal handlers, useful when
+   // Python is embedded.
    Py_InitializeEx(0);
-#endif     
-#if PY_MAJOR_VERSION == 2
-#if PY_MINOR_VERSION > 3
-   Py_InitializeEx(0);
-#endif
-#endif
+
 #endif
 }

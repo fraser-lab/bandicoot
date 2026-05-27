@@ -49,10 +49,10 @@ def skip_to_next_ncs_chain(direction):
         # feel that this is easier and equally good!?
         # Agreed, it does the same thing and more obviously correct 20100126-PE
         current_chain_index = chain_id_list.index(this_chain_id)
-	if current_chain_index == len(chain_id_list)-1:	# last chain
+        if current_chain_index == len(chain_id_list)-1: # last chain
             # return the first chain
             return chain_id_list[0]
-	else:
+        else:
             # return the next chain
             return chain_id_list[current_chain_index + 1]
 
@@ -91,7 +91,7 @@ def skip_to_next_ncs_chain(direction):
   make_ncs_ghosts_maybe(imol)
   found_atom_state = 0
   if (not chains):
-      print "BL WARNING:: empty set of chains!!! This should never happen."
+      print("BL WARNING:: empty set of chains!!! This should never happen.")
       msg_txt = "BL WARNING:: somehow there are no chains in mol " + str(imol)
       msg_txt+= "\n Try \"p\" to update the Go To Atom molecule and then\n"
       msg_txt+= "skip again. Good luck skipping!\n"
@@ -148,15 +148,15 @@ def skip_to_next_ncs_chain(direction):
 # 
 def single_manual_ncs_ghosts(imol, resno_start, resno_end, ref_chain, peer_chain):
 
-	imol_copy = copy_molecule(imol)
-	clear_lsq_matches()
-	add_lsq_match(resno_start, resno_end, ref_chain, 
+        imol_copy = copy_molecule(imol)
+        clear_lsq_matches()
+        add_lsq_match(resno_start, resno_end, ref_chain, 
                       resno_start, resno_end, peer_chain, 0) # ref mov - all atoms
-	rtop = apply_lsq_matches(imol_copy, imol_copy)
-	close_molecule(imol_copy)
-	if (not rtop):
-            print "Failed to get matching matrix"
-	else:
+        rtop = apply_lsq_matches(imol_copy, imol_copy)
+        close_molecule(imol_copy)
+        if (not rtop):
+            print("Failed to get matching matrix")
+        else:
             clear_ncs_ghost_matrices(imol)
             set_draw_ncs_ghosts(imol, 1)
             args = [imol, peer_chain, ref_chain] + rtop[0] + rtop[1]
@@ -183,10 +183,10 @@ def manual_ncs_ghosts(imol, resno_start, resno_end, chain_id_list):
                               resno_start, resno_end, chain_id, 1)
                 rtop = apply_lsq_matches(imol, imol_copy)
                 if (not rtop):
-                    print "Failed to get LSQ matching matrix", chain_id
+                    print("Failed to get LSQ matching matrix", chain_id)
                 else:
                     master = chain_id_list[0]
-                    print "chain_id %s master %s rtop: %s" %(chain_id, master, rtop)
+                    print("chain_id %s master %s rtop: %s" %(chain_id, master, rtop))
                     if master:  # should be string or False, so ok I belive
                         args = [imol, chain_id, master] + rtop[0] + rtop[1]
                         add_ncs_matrix(*args)
@@ -230,7 +230,7 @@ def update_ncs_ghosts_by_local_sphere():
                     rtop = apply_lsq_matches(aa_imol, imol_copy)
                     close_molecule(imol_copy)
                     if not rtop:
-                        print "Failed to get LSQ matching matrix", chain_id
+                        print("Failed to get LSQ matching matrix", chain_id)
                     else:
                         master = ghost_chain_id_list[0]
                         if (isinstance(master, str)):
@@ -277,8 +277,7 @@ def ncs_ligand(imol_protein, ncs_master_chain_id,
 
     chain_ids_from_ncs = ncs_chain_ids(imol_protein)
     if chain_ids_from_ncs:
-        ligand_selection_string = "//" + chain_id_ligand + "/" + str(resno_ligand_start) + \
-                                  "-" + str(resno_ligand_stop)
+        ligand_selection_string = "//" + chain_id_ligand + "/" + str(resno_ligand_start) + "-" + str(resno_ligand_stop)
         imol_ligand_fragment = new_molecule_by_atom_selection(imol_ligand, ligand_selection_string)
         ghosts = ncs_ghosts(imol_protein)
         for chain_ids in chain_ids_from_ncs:
@@ -288,7 +287,7 @@ def ncs_ligand(imol_protein, ncs_master_chain_id,
                 for chain_id_protein in peer_chains:
                     rtop = rtop_from_ghost_with_chain_id(ghosts, chain_id_protein)
                     if (not rtop):
-                        print "Opps - ncs-ligand: Missing ghost rt-op!"
+                        print("Opps - ncs-ligand: Missing ghost rt-op!")
                         info_dialog("Opps - ncs-ligand: Missing ghost rt-op!")
                     else:
                         new_lig_mol = copy_molecule(imol_ligand_fragment)

@@ -32,7 +32,7 @@ import thread
 safe_print = thread.allocate_lock()
 def print_thread(*txt):
     safe_print.acquire()
-    print " ".join(map(str, txt))
+    print(" ".join(map(str, txt)))
     safe_print.release()
 
 global coot_pdbe_image_cache_dir
@@ -48,7 +48,7 @@ def get_recent_json(file_name):
     import json  # maybe should be globally imported
     
     if not os.path.isfile(file_name):
-        print "file not found", file_name
+        print("file not found", file_name)
         return False
     else:
         fin = open(file_name, 'r')
@@ -83,9 +83,7 @@ def dialog_box_of_buttons_with_async_ligands(window_name, geometry,
     def add_button_info_to_box_of_buttons_vbox_for_ligand_images(button_info, vbox):
         button_label = button_info[0]
         callback = button_info[1]
-        active_button_label_func = button_info[2] \
-                                   if (len(button_info) > 2) \
-                                   else False  # it doesnt have one
+        active_button_label_func = button_info[2] if (len(button_info) > 2) else False  # it doesnt have one
         button = gtk.Button()
         button_hbox         = gtk.HBox(False, 0)   # pixmaps and labels get added here.
         protein_ribbon_hbox = gtk.HBox(False, 0)  # do we need a box here?!
@@ -124,10 +122,8 @@ def dialog_box_of_buttons_with_async_ligands(window_name, geometry,
         # main line
         image_size = 100
         for tlc in ligand_tlc_list:
-            # image_url = "http://www.ebi.ac.uk/pdbe-srv/pdbechem/image/showNew?code=" + \
-            #             tlc + "&size=" + str(image_size)
-            image_url = "https://www.ebi.ac.uk/pdbe/static/chem-files/" + \
-                        tlc + "-" + str(image_size) + ".gif"
+            # image_url = "http://www.ebi.ac.uk/pdbe-srv/pdbechem/image/showNew?code=" + #             tlc + "&size=" + str(image_size)
+            image_url = "https://www.ebi.ac.uk/pdbe/static/chem-files/" + tlc + "-" + str(image_size) + ".gif"
             image_name = os.path.join(coot_pdbe_image_cache_dir,
                                       (tlc + "-" + str(image_size) + ".gif"))
             cache_or_net_get_image(image_url, image_name, ligands_hbox)
@@ -136,10 +132,8 @@ def dialog_box_of_buttons_with_async_ligands(window_name, geometry,
         image_size = 120
         # image_name_stub = entry_id + "_cbc" + str(image_size) + ".png"
         image_name_stub = "_deposited_chain_front_image-200x200.png"
-        # image_url = "http://www.ebi.ac.uk/pdbe/entry-images/" + \
-        #            image_name_stub
-        image_url = "https://www.ebi.ac.uk/pdbe/static/entry/" + \
-                    entry_id + image_name_stub
+        # image_url = "http://www.ebi.ac.uk/pdbe/entry-images/" + #            image_name_stub
+        image_url = "https://www.ebi.ac.uk/pdbe/static/entry/" + entry_id + image_name_stub
         
         entry_image_file_name = os.path.join(coot_pdbe_image_cache_dir,
                                              entry_id + image_name_stub)
@@ -381,9 +375,8 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
                                                   sfs_mtz_file_name)
                 if not (convert_status == 1):
                     # why cant we make a dialog?! (if this is threaded)
-                    txt = "WARNING:: Failed to convert " +  \
-                          sfs_cif_file_name + " to an mtz file"
-                    print txt
+                    txt = "WARNING:: Failed to convert " + sfs_cif_file_name + " to an mtz file"
+                    print(txt)
                     #info_dialog(txt)
                     download_thread_status = "fail"
                 else:
@@ -396,7 +389,7 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
                         refmac_result = refmac_calc_sfs_make_mtz(pdb_file_name,
                                                                  sfs_mtz_file_name,
                                                                  refmac_out_mtz_file_name)
-                        print "      refmac-result: ", refmac_result
+                        print("      refmac-result: ", refmac_result)
 
                         # if refmac_result is good? (is tuple not list)
                         # good enough if it's not false?!
@@ -409,7 +402,7 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
                             download_thread_status = "done"  #??
 
             # main line get_sfs_run_refmac
-            print "in get_sfs_run_refmac", sfs_cif_file_name,
+            print("in get_sfs_run_refmac", sfs_cif_file_name, end="")
             sfs_mtz_file_name, pdb_file_name, refmac_out_mtz_file_name
 
             # check for cached results: only run refmac if
@@ -567,20 +560,16 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
 
         # main line
         coords_type = ".ent"  # can/will be ".cif"
-#       pdb_url = "http://www.ebi.ac.uk/pdbe-srv/view/files/" + \
-#                       entry_id + ".ent"
-#       sfs_cif_url = "http://www.ebi.ac.uk/pdbe-srv/view/files/r" + \
-#                       entry_id + "sf.ent"
-        pdb_url     = "https://www.ebi.ac.uk/pdbe/entry-files/pdb" + \
-                      entry_id + coords_type
+#       pdb_url = "http://www.ebi.ac.uk/pdbe-srv/view/files/" + #                       entry_id + ".ent"
+#       sfs_cif_url = "http://www.ebi.ac.uk/pdbe-srv/view/files/r" + #                       entry_id + "sf.ent"
+        pdb_url     = "https://www.ebi.ac.uk/pdbe/entry-files/pdb" + entry_id + coords_type
         sfs_cif_url = "https://www.ebi.ac.uk/pdbe/entry-files/r"   + entry_id + "sf.ent"
         pdb_file_name = os.path.join("coot-download", entry_id + coords_type)
         sfs_cif_file_name = os.path.join("coot-download", "r" + entry_id + "sf.cif")
         sfs_mtz_file_name = os.path.join("coot-download", "r" + entry_id + "sf.mtz")
         refmac_out_mtz_file_name = os.path.join("coot-download",
                                                 "r" + entry_id + "-refmac.mtz")
-        refmac_log_file_name = "refmac-from-coot-" + \
-                               str(refmac_count) + ".log" # set in run_refmac_by_filename
+        refmac_log_file_name = "refmac-from-coot-" + str(refmac_count) + ".log" # set in run_refmac_by_filename
         progr_widgets = progress_dialog(pdb_file_name, sfs_cif_file_name)
         window = progr_widgets["window"]
         pdb_progress_bar = progr_widgets["pdb_progress_bar"]
@@ -628,17 +617,17 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
                                                    update_progressbar_in_download(nb, bs, fs, progress_bar))
                 download_thread_status = "done-download"
             except socket.timeout:
-                print "BL ERROR:: timout download", url[-50:]
+                print("BL ERROR:: timout download", url[-50:])
                 download_thread_status = "fail"
             except IOError:
-                print "BL ERROR:: ioerror downloading", url[-50:]
+                print("BL ERROR:: ioerror downloading", url[-50:])
                 download_thread_status = "fail"
             except:
                 if (not download_thread_status == "cancelled"):
-                    print "BL ERROR:: general problem downloading", url[-50:]
+                    print("BL ERROR:: general problem downloading", url[-50:])
                     download_thread_status = "fail"
                 else:
-                    print "BL INFO:: cancelled download"
+                    print("BL INFO:: cancelled download")
 
         # or shall this be in the timeout function!?
         def update_refmac_progress_bar(refmac_progress_bar, log_file_name):
@@ -860,7 +849,7 @@ def recent_structure_browser(t):
         # entry_id = str(dic["EntryID"])
         groupValue = dic_wrapper["groupValue"]
         if not isinstance(groupValue, basestring):
-            print "failed to get groupValue"
+            print("failed to get groupValue")
         else:
             dic = dic_wrapper["doclist"]["docs"][0]
             entry_id = str(dic["pdb_id"])
@@ -887,18 +876,16 @@ def recent_structure_browser(t):
                 ligands = []
             ligands_string = make_ligands_string(ligands)
             ligand_tlc_list = ligands
-            resolution_string = ("     Resolution: " + str(resolution_item)) \
-                                if resolution_item else ""
+            resolution_string = ("     Resolution: " + str(resolution_item)) if resolution_item else ""
 
             if False:
-                print "   title_label:", title_label
-                print "   entry_id:", entry_id
-                print "   method_label:", method_label
-                print "   resolution_string:", resolution_string
-                print "   authors_label:", authors_label
-                print "   ligands_string:", ligands_string
-            label = entry_id + "\n" + title_label + "\n" + method_label + \
-                    resolution_string + "\n" + authors_label + ligands_string
+                print("   title_label:", title_label)
+                print("   entry_id:", entry_id)
+                print("   method_label:", method_label)
+                print("   resolution_string:", resolution_string)
+                print("   authors_label:", authors_label)
+                print("   ligands_string:", ligands_string)
+            label = entry_id + "\n" + title_label + "\n" + method_label + resolution_string + "\n" + authors_label + ligands_string
 
             if (method_label == "X-ray diffraction"):
                 return[label,
@@ -969,7 +956,7 @@ def pdbe_latest_releases_gui():
     class MyURLopener(urllib.FancyURLopener):
         def http_error_default(self, url, fp, errcode, errmsg, headers):
             # handle errors the way you'd like to
-            # raise StandardError, ("File not found?")
+            # raise StandardError(("File not found?"))
             pass
     
     class GetUrlThread(threading.Thread):
@@ -1001,9 +988,9 @@ def pdbe_latest_releases_gui():
                 self.file_name = coot_urlretrieve(self.url, self.file_name, self.update_function)
                 self.status = 0 #?
             except socket.timeout:
-                print "BL ERROR:: timout download", self.url
+                print("BL ERROR:: timout download", self.url)
             except IOError:
-                print "BL ERROR:: ioerror"
+                print("BL ERROR:: ioerror")
             except:
                 self.status = 1
                 # FIXME here dies with the thread. need to go to main thread

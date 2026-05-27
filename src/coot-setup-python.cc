@@ -48,6 +48,15 @@
 #include <glob.h>
 
 
+// Py3 SWIG names the coot module init PyInit__coot (note the leading
+// underscore -- SWIG generates `_coot` as the C module name; the Python-
+// side import target is "coot" via the .py shim). On Py2 it was the
+// flat `init_coot`. Declared here so we can register it via
+// PyImport_AppendInittab before Py_Initialize.
+#if defined(USE_PYTHON) && PY_MAJOR_VERSION >= 3
+extern "C" PyObject *PyInit__coot(void);
+#endif
+
 void setup_python(int argc, char **argv) {
 
 
@@ -55,16 +64,42 @@ void setup_python(int argc, char **argv) {
      //  (on Mac OS, call PyMac_Initialize() instead)
      //http://www.python.org/doc/current/ext/embedding.html
 
-#ifdef USE_PYMAC_INIT 
+#ifdef USE_PYMAC_INIT
   PyMac_Initialize();
-#else  
+#else
+
+#if PY_MAJOR_VERSION >= 3
+  // Register the SWIG-generated coot module so `import coot` works
+  // from in-process Python. Must happen BEFORE Py_Initialize.
+  PyImport_AppendInittab("coot", PyInit__coot);
+#endif
+
   Py_Initialize(); // otherwise it core dumps saying python
   // interpreter not initialized (or something).
+#if PY_MAJOR_VERSION >= 3
+  // Py3 PySys_SetArgv takes wchar_t**, not char**. Convert argv via
+  // Py_DecodeLocale (mbstowcs-style) and pass through. argv strings
+  // get leaked at exit; harmless given they live for process lifetime.
+  {
+    wchar_t **wargv = (wchar_t **) malloc(sizeof(wchar_t *) * (argc + 1));
+    for (int i = 0; i < argc; i++)
+      wargv[i] = Py_DecodeLocale(argv[i], NULL);
+    wargv[argc] = NULL;
+    PySys_SetArgv(argc, wargv);
+    // wargv entries intentionally leaked (Py owns them once handed off)
+  }
+#else
   PySys_SetArgv(argc, argv);
-#endif     
+#endif
+#endif
 
+#if PY_MAJOR_VERSION < 3
   init_coot(); // i.e. SWIG_init for python, best we do this before
                // running .coot.py, eh?
+#endif
+  // On Py3, the module is initialised lazily on first `import coot`
+  // by Python's import machinery (we registered it via AppendInittab
+  // above).
 
   
   std::string home_directory = coot::get_home_dir();;

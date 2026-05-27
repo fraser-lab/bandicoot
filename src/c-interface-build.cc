@@ -1129,7 +1129,8 @@ int set_atom_attributes_py(PyObject *attribute_expression_list) {
 	 if (PyList_Check(attribute_expression)) { 
 	    int attr_expression_length = PyObject_Length(attribute_expression);
 	    if (attr_expression_length != 8) {
-	       char *ps = PyString_AsString(display_python(attribute_expression));
+	       /* Py3: PyUnicode_AsUTF8 (shim'd from PyString_AsString) returns const char*. */
+	       const char *ps = PyString_AsString(display_python(attribute_expression));
 	       if (ps) {
 		  std::string ae(ps);
 		  std::cout << "Incomplete attribute expression: " << ae << std::endl;

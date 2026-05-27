@@ -18,8 +18,7 @@ def launch_jligand_function():
 
         # make an extra message telling us that JLIGAND_HOME is
         # not set if it is not set.
-        env_message = "Environment variable JLIGAND_HOME not set\n\n" \
-                      if not jligand_home_env else ""
+        env_message = "Environment variable JLIGAND_HOME not set\n\n" if not jligand_home_env else ""
         info_dialog(env_message + s)
 
     else:
@@ -27,18 +26,15 @@ def launch_jligand_function():
         #
         java_exe = find_exe(java_command)
         if not java_exe:
-            print "BL INFO:: no java found"
+            print("BL INFO:: no java found")
         else:
             # first check if we can run it with coot, i.e. is '-version'
             # a valid command line arg
             jligand_version = ["-jar", jligand_jar, "-version"]
-            cmd = java_exe + " " + \
-                  string_append_with_spaces(jligand_version)
+            cmd = java_exe + " " + string_append_with_spaces(jligand_version)
             res = shell_command_to_string(cmd)
             if (not res):
-                message = "Sorry, your JLigand:\n\n " + jligand_jar + "\n\n" + \
-                          "is not new enough to work with Coot!\n" + \
-                          "Please download a new one!"
+                message = "Sorry, your JLigand:\n\n " + jligand_jar + "\n\n" + "is not new enough to work with Coot!\n" + "Please download a new one!"
                 info_dialog(message)
             else:
                 run_concurrently(java_exe, jligand_args)
@@ -60,12 +56,12 @@ def click_select_residues_for_jligand():
     global imol_jligand_link
     
     def link_em(*args):
-        print "we received these clicks", args
+        print("we received these clicks", args)
         if (len(args) == 2):
             click_1 = args[0]
             click_2 = args[1]
-            print "click_1:", click_1
-            print "click_2:", click_2
+            print("click_1:", click_1)
+            print("click_2:", click_2)
             if ((len(click_1) == 7)
                 and (len(click_2) ==7)):
                 resname_1 = residue_name(click_1[1],
@@ -84,19 +80,15 @@ def click_select_residues_for_jligand():
                 resno_click_2 = click_2[3]
                 if not (isinstance(resname_1, str) and
                         isinstance(resname_2, str)):
-                    print "Bad resnames: %s and %s" %(resname_1, resname_2)
+                    print("Bad resnames: %s and %s" %(resname_1, resname_2))
                 else:
                     if not (imol_click_1 == imol_click_2):
-                        msg = "Two different molecules %s and %s selected.\n" \
-                              %(imol_click_1, imol_click_2) + \
-                              "Make sure to select residues in the same molecule."
+                        msg = "Two different molecules %s and %s selected.\n" %(imol_click_1, imol_click_2) + "Make sure to select residues in the same molecule."
                         info_dialog(msg)
                         imol_jligand_link = False
                     elif (chain_click_1 == chain_click_2 and
                           resno_click_1 == resno_click_2):
-                        msg = "Same residue %s %s selected.\n" \
-                              %(chain_click_1, resno_click_1) + \
-                              "Make sure to select different residues."
+                        msg = "Same residue %s %s selected.\n" %(chain_click_1, resno_click_1) + "Make sure to select different residues."
                         info_dialog(msg)
                         imol_jligand_link = False
                     else:

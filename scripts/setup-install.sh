@@ -89,17 +89,56 @@ echo "    $CHECK quarantine cleared"
 if [ "$SKIP_SIGN" -eq 0 ]; then
     if command -v codesign >/dev/null 2>&1; then
         echo "$ARROW Ad-hoc-codesigning Mach-O files (suppresses repeat Gatekeeper prompts)..."
+
+        # Bandicoot v0.1.0.0: coot-bin embeds Python and dlopens
+        # conda-shipped libraries (libpython3.13, etc.). For that to
+        # work under macOS's hardened runtime, coot-bin needs three
+        # entitlements:
+        #   disable-library-validation -- allow loading libs signed
+        #     by anyone (not just our ad-hoc signer).
+        #   allow-unsigned-executable-memory + allow-jit -- some
+        #     Python extensions (ctypes, cffi) generate executable
+        #     memory at runtime.
+        # Without them, dyld silently SIGKILLs the process. Generated
+        # plist is dropped here so we don't depend on ship-time state.
+        ENT_PLIST="$INSTALL_DIR/.bandicoot-coot-bin.entitlements"
+        cat > "$ENT_PLIST" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+</dict>
+</plist>
+EOF
+
         SIGNED=0
         for d in "$INSTALL_DIR/libexec" "$INSTALL_DIR/lib" "$INSTALL_DIR/bin"; do
             [ -d "$d" ] || continue
             while IFS= read -r f; do
                 if file -b "$f" 2>/dev/null | grep -q "Mach-O"; then
-                    codesign --force --sign - "$f" >/dev/null 2>&1 && \
-                        SIGNED=$(( SIGNED + 1 )) || true
+                    case "$(basename "$f")" in
+                        coot-bin)
+                            # Apply with hardened runtime + entitlements.
+                            codesign --force --sign - \
+                                --entitlements "$ENT_PLIST" \
+                                --options runtime \
+                                "$f" >/dev/null 2>&1 && \
+                                SIGNED=$(( SIGNED + 1 )) || true
+                            ;;
+                        *)
+                            # Other Mach-O files (bundled dylibs, helper
+                            # binaries): plain ad-hoc, no entitlements.
+                            codesign --force --sign - "$f" >/dev/null 2>&1 && \
+                                SIGNED=$(( SIGNED + 1 )) || true
+                            ;;
+                    esac
                 fi
             done < <(find "$d" -type f)
         done
-        echo "    $CHECK signed $SIGNED Mach-O files"
+        echo "    $CHECK signed $SIGNED Mach-O files (coot-bin gets Python-enabling entitlements)"
     else
         echo "$WARN codesign not found in PATH; skipping signing step." >&2
     fi

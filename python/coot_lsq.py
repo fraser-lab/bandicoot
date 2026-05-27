@@ -53,9 +53,9 @@ def set_match_element(m):
   if (len(m)==7):
 
         match_type=lsq_match_type_symbol(m[6])
-	add_lsq_match(m[0],m[1],m[2],m[3],m[4],m[5],match_type)
+        add_lsq_match(m[0],m[1],m[2],m[3],m[4],m[5],match_type)
   else:
-     print "Wrong number of elements in match (was",len(m)," should be 7)"
+     print("Wrong number of elements in match (was",len(m)," should be 7)")
 
 
 # The scripting interface to LSQ matching.  Pass molecule numbers for
@@ -79,11 +79,11 @@ def simple_lsq_match (ref_start_resno, ref_end_resno, ref_chain_id, imol_ref, mo
       internal_match_type=lsq_match_type_symbol(match_type)
       clear_lsq_matches()
       add_lsq_match(ref_start_resno,ref_end_resno,ref_chain_id,
-		    mov_start_resno,mov_end_resno,mov_chain_id,
-		    internal_match_type)
+                    mov_start_resno,mov_end_resno,mov_chain_id,
+                    internal_match_type)
       apply_lsq_matches(imol_ref,imol_mov)
 
-		    
+                    
 # examples:
 # simple_lsq_match(940,950,"A",0,940,950,"A",1,"main")
 #

@@ -131,7 +131,7 @@ def cluster_and_display_waters(site_number, w_positions_np):
    cluster_assignments = dpgmm.predict(w_positions_np)
    
    color_list=['green', 'greentint', "sea", 'yellow', "yellowtint", "aquamarine", "forestgreen",
-	       "goldenrod", "orangered", "orange", "cyan", 'red', "blue"]
+               "goldenrod", "orangered", "orange", "cyan", 'red', "blue"]
    color_list.extend(color_list)
    color_list.extend(color_list)
    color_list.extend(color_list)
@@ -159,10 +159,10 @@ def cluster_and_display_waters(site_number, w_positions_np):
        # reject spheres at the origin - (from DPGMM strangeness)
        d = mean[0]*mean[0] + mean[1]*mean[1] + mean[2]*mean[2]
        if d > 1.0:
-	   col = color_list[cluster_assignments[i]]
-	   coot.to_generic_object_add_point(obj, col, 10, pos[0], pos[1], pos[2])
+           col = color_list[cluster_assignments[i]]
+           coot.to_generic_object_add_point(obj, col, 10, pos[0], pos[1], pos[2])
        else:
-	   print("reject prediction", i, "for cluster", cluster_assignments[i])
+           print("reject prediction", i, "for cluster", cluster_assignments[i])
 
    # set_display_generic_object(obj, 1)
 
@@ -207,8 +207,7 @@ def cluster_and_display_chemical_features(site_number, type, chemical_features_l
 
    def optimize_n(type, positions_np, n_data):
 
-      print("cluster_and_display_chemical_features.optimize_n called " \
-             "with n_data = ", n_data)
+      print("cluster_and_display_chemical_features.optimize_n called " "with n_data = ", n_data)
 
       bic = {}
       for n in [x+1 for x in range(10)]:
@@ -362,21 +361,21 @@ def cfc_process_site(site_number, wrapped_imol_ligand_specs, imol_first, first_l
        print("debug:: ================= in cfc_process_site() count the protein_res_specs: ", len(protein_res_specs))
 
        for res_spec in protein_res_specs:
-	   chain_id = rsu.residue_spec_to_chain_id(res_spec)
-	   res_no   = rsu.residue_spec_to_res_no(res_spec)
-	   coot.add_lsq_match(res_no, res_no, chain_id, res_no, res_no, chain_id, 1)
+           chain_id = rsu.residue_spec_to_chain_id(res_spec)
+           res_no   = rsu.residue_spec_to_res_no(res_spec)
+           coot.add_lsq_match(res_no, res_no, chain_id, res_no, res_no, chain_id, 1)
            print("debug:: ================ in cfc_process_site() adding protein residue", res_spec)
 
        for imol_and_spec in imol_ligand_specs[1:]:  # lsq fit others to the first in the list
-	   print('============================ lsq-match ', imol_first, imol_and_spec, imol_and_spec[0])
+           print('============================ lsq-match ', imol_first, imol_and_spec, imol_and_spec[0])
            imol,spec = imol_and_spec
-	   # coot.apply_lsq_matches_py(imol_first, imol_and_spec[0])
-	   coot.apply_lsq_matches_py(imol_first, imol)
+           # coot.apply_lsq_matches_py(imol_first, imol_and_spec[0])
+           coot.apply_lsq_matches_py(imol_first, imol)
            # 4-element (i.e. prefixed) residue specs are need to be phased out, but for now, test and fix
            if len(spec) == 4:
                spec = spec[1:]
            make_ball_and_stick_by_spec(imol, spec)
-	   # pass
+           # pass
 
        print("Here with first_ligand_spec:", first_ligand_spec)
        ligand_centre = coot.residue_centre_py(imol_first,
@@ -584,7 +583,7 @@ class cfc_ligand_sites:
       for key in bic:
           print("bic", key, bic[key])
       
-      key, value = max(bic.iteritems(), key=lambda x:x[1])
+      key, value = max(bic.items(), key=lambda x:x[1])
       return key
 
 
@@ -679,9 +678,9 @@ class cfc_ligand_sites:
           # which key (i.e. cluster index) has the most number of other clusters
           # that can be merged in?
           #
-	  # convert to a list of ints (not <type 'numpy.int64'>) (because, on decoding Python->C++ object
-	  # we do a PyInt_Check for the site_idx (and a <type 'numpy.int64'> fails that test)
-	  #
+          # convert to a list of ints (not <type 'numpy.int64'>) (because, on decoding Python->C++ object
+          # we do a PyInt_Check for the site_idx (and a <type 'numpy.int64'> fails that test)
+          #
           new_cluster_assignments = [int(x) for x in self.merge_clusters(cluster_assignments, merge_map)]
           print("new cluster_assignments", new_cluster_assignments)
  

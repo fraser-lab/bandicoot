@@ -30,14 +30,14 @@ coot_povray_log_file_name = "coot-povray.log"
 # think is differnt under non windows!
 import os
 if (os.name == 'nt'):
-	import platform
-	bits, junk = platform.architecture()
-	if (bits == '64bit'):
-		povray_command_name = "pvengine64"
-	else:
-		povray_command_name = "pvengine"
+        import platform
+        bits, junk = platform.architecture()
+        if (bits == '64bit'):
+                povray_command_name = "pvengine64"
+        else:
+                povray_command_name = "pvengine"
 else:
-	povray_command_name = "povray"
+        povray_command_name = "povray"
 
 # args not including the output filename
 #def povray_args():
@@ -54,19 +54,19 @@ def povray_image():
     import sys
 
     povray(coot_povray_file_name)
-    print "calling povray with args: ", povray_args()
+    print("calling povray with args: ", povray_args())
     extra_args = "-UV +H600 +W600"
     if (os.name == 'nt'):
-	args = " /EXIT /RENDER "
+        args = " /EXIT /RENDER "
     else:
-	args = " "
+        args = " "
     args = args + coot_povray_file_name + " " + povray_args() + " " + extra_args
     # BL says: dunno what povray exe is called on other systems, 
     # just assume is same for now
     povray_exe = find_exe(povray_command_name, "PATH")
     if (povray_exe):
       povray_call = povray_exe + args + " +o" + coot_povray_png_file_name
-      print "BL DEBUG:: povray_call", povray_call
+      print("BL DEBUG:: povray_call", povray_call)
       major, minor, micro, releaselevel, serial = sys.version_info
       if (major >= 2 and minor >=4):
           # new style
@@ -75,15 +75,15 @@ def povray_image():
           if status:
               # something went wrong with raster3d
               # maybe same for system call?!?
-              print "BL WARNING:: some error in povray"
+              print("BL WARNING:: some error in povray")
               return
       else:
           os.system(povray_call)
-      print "INFO:: displaying..."
+      print("INFO:: displaying...")
       try:
          webbrowser.open(coot_povray_png_file_name,1,1)
       except OSError:
-         print "BL WARNING:: We can't find rendered file ",coot_povray_png_file_name
+         print("BL WARNING:: We can't find rendered file ",coot_povray_png_file_name)
 
 #povray_image()
  

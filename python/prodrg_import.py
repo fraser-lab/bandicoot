@@ -12,8 +12,8 @@ if not os.getenv("CLIBD"):
     prodrg_params = os.path.join(clibd, "prodrg.param")
     if os.path.isfile(prodrg_params):
         os.environ["CLIBD"] = clibd
-        print "BL INFO:: found prodrg.param"
-        print "          and set CLIBD to", clibd
+        print("BL INFO:: found prodrg.param")
+        print("          and set CLIBD to", clibd)
     else:
         # print "BL ERROR:: no prodrg.param available"
         # print "searched in ", clibd
@@ -21,7 +21,7 @@ if not os.getenv("CLIBD"):
             # we don't want to know that you can't find old programs
             pass
         else:
-           print "Sorry, prodrg module not available"
+           print("Sorry, prodrg module not available")
         # should load rest?
         # i.e. stop here?
     
@@ -44,7 +44,7 @@ if home:
     prodrg_xyzin      = os.path.join(home, "Projects",
                                      "build-xp-python", "lbg", "prodrg-in.mdl")
 else:
-    print "BL DEBUG:: buggery home is", home  # FIXME
+    print("BL DEBUG:: buggery home is", home)  # FIXME
 sbase_to_coot_tlc = "../../build-xp-python/lbg/.sbase-to-coot-comp-id"
 
 # this is latest!!!!
@@ -96,8 +96,7 @@ def import_ligand_with_overlay(prodrg_xyzout, prodrg_cif):
             if not residue_has_hetatms_qm(imol_ref, chain_id_ref, res_no_ref, ""):
                 return False
             else:
-                print "----------- overlap-ligands %s %s %s %s ------------" \
-                      %(imol_ligand, imol_ref, chain_id_ref, res_no_ref)
+                print("----------- overlap-ligands %s %s %s %s ------------" %(imol_ligand, imol_ref, chain_id_ref, res_no_ref))
                 # this can return the rtop operator or False (for fail of course).
                 return overlap_ligands(imol_ligand, imol_ref, chain_id_ref, res_no_ref)
             
@@ -186,7 +185,7 @@ def import_ligand_with_overlay(prodrg_xyzout, prodrg_cif):
                                                         aa_chain_id, aa_res_no)
 
                 if overlapped_flag:
-                    print "------ overlapped-flag was true!!!!!"
+                    print("------ overlapped-flag was true!!!!!")
                     set_mol_displayed(aa_imol, 0)
                     set_mol_active(aa_imol, 0)
                     col = get_molecule_bonds_colour_map_rotation(aa_imol)
@@ -279,13 +278,13 @@ def mdl_update_timeout_func():
                     fin.close()
                     imol = get_ccp4srs_monomer_and_dictionary(tlc_symbol)
                     if not valid_model_molecule_qm(imol):
-                        print "failed to get SBase molecule for", tlc_symbol
+                        print("failed to get SBase molecule for", tlc_symbol)
                     else:
                         # it was read OK, do an overlap
                         using_active_atom(overlap_ligands, imol,
                                           "aa_imol", "aa_chain_id", "aa_res_no")
                 except:
-                    print "BL ERROR:: reading sbase file", sbase_to_coot_tlc
+                    print("BL ERROR:: reading sbase file", sbase_to_coot_tlc)
                 
     return True # return value, keep running; FIXME:: how to stop?
 
@@ -345,7 +344,7 @@ def prodrg_flat(imol_in, chain_id_in, res_no_in):
                 "MOLOUT", prodrg_output_mol_file,
                 "XYZOUT", prodrg_output_pdb_file,
                 "LIBOUT", prodrg_output_lib_file]
-    print "arg_list", arg_list
+    print("arg_list", arg_list)
     status = popen_command(cprodrg,
                            arg_list,
                            ["COORDS BOTH", "MINI FLAT", "END"],
@@ -358,8 +357,7 @@ def prodrg_flat(imol_in, chain_id_in, res_no_in):
     else:
         if not (status == 0):
             # only for python >=2.5
-            mess = "Something went wrong running cprodrg\n" + \
-                   get_prodrg_error_message(prodrg_log)
+            mess = "Something went wrong running cprodrg\n" + get_prodrg_error_message(prodrg_log)
             info_dialog(mess)
             return False
         else:
@@ -372,8 +370,7 @@ def prodrg_flat(imol_in, chain_id_in, res_no_in):
 
 def prodrg_plain(mode, imol_in, chain_id_in, res_no_in):
 
-    selection_string = "//" + chain_id_in + "/" + \
-                       str(res_no_in)
+    selection_string = "//" + chain_id_in + "/" + str(res_no_in)
     imol = new_molecule_by_atom_selection(imol_in, selection_string)
     stub = os.path.join("coot-ccp4", "prodrg-tmp-" + str(os.getpid()))
     prodrg_xyzin  = stub + "-xyzin.pdb"

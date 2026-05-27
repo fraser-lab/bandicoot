@@ -337,7 +337,7 @@ PyObject *handle_pisa_interfaces_py(PyObject *interfaces_description_py) {
           double interface_stab_en = -9999.9;
 
           PyObject *tmp;
-          tmp = PyFloat_FromString(interface_area_py, NULL);
+          tmp = PyFloat_FromString(interface_area_py);
           if (tmp)
               interface_area = PyFloat_AsDouble(tmp);
           else
@@ -345,7 +345,7 @@ PyObject *handle_pisa_interfaces_py(PyObject *interfaces_description_py) {
                         << std::endl;
           Py_XDECREF(tmp);
 	 
-          tmp = PyFloat_FromString(interface_solv_en_py, NULL);
+          tmp = PyFloat_FromString(interface_solv_en_py);
           if (tmp)
               interface_solv_en = PyFloat_AsDouble(tmp);
           else
@@ -353,7 +353,7 @@ PyObject *handle_pisa_interfaces_py(PyObject *interfaces_description_py) {
                         << std::endl;
           Py_XDECREF(tmp);
 	 
-          tmp = PyFloat_FromString(interface_pvalue_py, NULL);
+          tmp = PyFloat_FromString(interface_pvalue_py);
           if (tmp)
               interface_pvalue = PyFloat_AsDouble(tmp);
           else
@@ -361,7 +361,7 @@ PyObject *handle_pisa_interfaces_py(PyObject *interfaces_description_py) {
                         << std::endl;
           Py_XDECREF(tmp);
 
-          tmp = PyFloat_FromString(interface_stab_en_py, NULL);
+          tmp = PyFloat_FromString(interface_stab_en_py);
           if (tmp)
               interface_stab_en = PyFloat_AsDouble(tmp);
           else

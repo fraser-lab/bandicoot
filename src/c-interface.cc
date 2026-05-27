@@ -5914,7 +5914,7 @@ PyObject *symmetry_operators_py(int imol) {
 	 std::cout << "WARNING:: in symmetry_operators_py() null space group " << std::endl;
       }
    }
-   if PyBool_Check(o) {
+   if (PyBool_Check(o)) {
      Py_INCREF(o);
    }
    return o;
@@ -5940,7 +5940,7 @@ symmetry_operators_to_xHM_py(PyObject *symmetry_operators) {
    clipper::Spacegroup sg = py_symop_strings_to_space_group(symmetry_operators);
    if (! sg.is_null())
       o = PyString_FromString(sg.symbol_hm().c_str()); 
-   if PyBool_Check(o) {
+   if (PyBool_Check(o)) {
      Py_INCREF(o);
    }
    return o;
@@ -6199,7 +6199,14 @@ void safe_scheme_command(const std::string &scheme_command) { /* do nothing */
 void safe_python_command(const std::string &python_cmd) {
 
 #ifdef USE_PYTHON
+   // v0.1.0.0: Bandicoot releases the GIL around gtk_main so that
+   // Python threads (e.g. the Phenix XML-RPC pump) can run.
+   // GTK timer/idle callbacks therefore enter this function WITHOUT
+   // holding the GIL. PyGILState_Ensure is reentrant: harmless when
+   // we already hold the GIL, mandatory otherwise.
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyRun_SimpleString(python_cmd.c_str());
+   PyGILState_Release(gstate);
 #endif
 }
 
@@ -7144,10 +7151,25 @@ run_python_script(const char *filename_in) {
 #ifdef USE_PYTHON
 
    std::string s = coot::util::intelligent_debackslash(filename_in);
+   std::cout << "Running python script " << s << std::endl;
+
+#if PY_MAJOR_VERSION >= 3
+   // Py3: execfile() is removed. Use exec(compile(open(path, encoding=
+   // 'utf-8').read(), path, 'exec'), globals()) -- same semantics,
+   // modern syntax. The explicit utf-8 matters: bare open() picks a
+   // codec from locale and falls back to ASCII in some environments,
+   // which would crash on any non-ASCII content (e.g. em-dashes in
+   // comments).
+   std::string simple = "exec(compile(open(";
+   simple += single_quote(s);
+   simple += ", encoding='utf-8').read(), ";
+   simple += single_quote(s);
+   simple += ", 'exec'), globals())";
+#else
    std::string simple = "execfile(";
    simple += single_quote(s);
    simple += ")";
-   std::cout << "Running python script " << s  << std::endl;
+#endif
    PyRun_SimpleString(simple.c_str());
 
 #endif // USE_PYTHON
@@ -8340,6 +8362,45 @@ void make_socket_listener_maybe() {
 void set_coot_listener_socket_state_internal(int sock_state) {
    graphics_info_t::listener_socket_have_good_socket_state = sock_state;
 }
+
+#ifdef USE_PYTHON
+/* Bandicoot v0.1.0.0: GLib timeout that calls a Python callable.
+   The thunk acquires the GIL before calling Python (the GTK main thread
+   runs with the GIL released around gtk_main, so dispatched timeouts
+   need to re-acquire). Returns G_SOURCE_CONTINUE / G_SOURCE_REMOVE
+   based on whether the Python callable returned False (matches GLib's
+   convention and Phenix's expectations). */
+static gboolean bandicoot_python_timeout_thunk(gpointer data) {
+   PyObject *callable = (PyObject *) data;
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   gboolean keep = TRUE;
+   PyObject *result = PyObject_CallObject(callable, NULL);
+   if (result) {
+      if (PyBool_Check(result) && result == Py_False) {
+         keep = FALSE;
+      }
+      Py_DECREF(result);
+   } else {
+      // Python exception in the callback. Print + clear so GLib doesn't
+      // see a lingering error state on subsequent calls. Drop the timeout
+      // since the callback is broken.
+      PyErr_Print();
+      PyErr_Clear();
+      keep = FALSE;
+   }
+   if (!keep) Py_DECREF(callable);  // matches the Py_INCREF in the registrar
+   PyGILState_Release(gstate);
+   return keep;
+}
+
+int bandicoot_python_timeout_add(int interval_ms, PyObject *callable) {
+   if (!callable || !PyCallable_Check(callable)) return 0;
+   Py_INCREF(callable);  // released by the thunk when it returns FALSE
+   return (int) g_timeout_add(interval_ms,
+                              bandicoot_python_timeout_thunk,
+                              callable);
+}
+#endif // USE_PYTHON
 
 void set_remote_control_port(int port_number) {
   graphics_info_t::remote_control_port_number = port_number;

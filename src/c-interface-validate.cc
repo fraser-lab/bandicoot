@@ -2726,6 +2726,7 @@ int clashes_with_symmetry(int imol, const char *chain_id, int res_no, const char
 //! B-factor distribution histogram
 void b_factor_distribution_graph(int imol) {
 
+#ifdef HAVE_GOOCANVAS
    if (is_valid_model_molecule(imol)) {
       mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
       coot::b_factor_histogram b(mol);
@@ -2754,6 +2755,9 @@ void b_factor_distribution_graph(int imol) {
       g->show_dialog();
 
    }
+#else
+   (void) imol; // no-op: goograph is gated by HAVE_GOOCANVAS, which Bandicoot builds --without-gnomecanvas
+#endif
 }
 
 
