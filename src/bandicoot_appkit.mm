@@ -1236,6 +1236,19 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     [win setToolbar:toolbar];
     [toolbar setVisible:YES];
 
+    // v0.1.0.1: thin white outline around the GL canvas so the bottom-right
+    // resize corner is findable against black-on-black (terminal windows
+    // below the all-black GL viewport). Drawn by CoreAnimation on the
+    // contentView's existing layer (which is already there because GtkGLExt
+    // attaches the NSOpenGLContext as a backing layer), so it composites on
+    // top of GL contents without going through the GL pipeline.
+    NSView *cv = win.contentView;
+    if (cv) {
+        cv.wantsLayer = YES;
+        cv.layer.borderWidth = 1.5;
+        cv.layer.borderColor = [[NSColor whiteColor] CGColor];
+    }
+
     // Prevent gtk_widget_show_all (called later by various Coot init paths)
     // from undoing our hide and resurrecting the in-window toolbar.
     gtk_widget_set_no_show_all(gtk_toolbar, TRUE);

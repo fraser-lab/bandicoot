@@ -2218,6 +2218,17 @@ gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
 
    if (event->is_hint) {
       gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+#ifdef __APPLE__
+      // v0.1.0.1: same coord-mismatch as the middle-click recentre fix --
+      // gdk_window_get_pointer() returns window-relative coords (off by
+      // the 32 px toolbar chrome) while press/release handlers use
+      // event->x/y. A synthetic motion event between press and release
+      // fed +32 to do_drag_pan -> phantom 32-px upward shift on every
+      // middle-click. Force widget-relative coords on Quartz.
+      x_as_int = int(event->x);
+      y_as_int = int(event->y);
+      state    = (GdkModifierType) event->state;
+#endif
       x = x_as_int;
       y = y_as_int;
    } else {
@@ -4076,14 +4087,14 @@ gint glarea_button_release(GtkWidget *widget, GdkEventButton *event) {
 
 	 pick_info nearest_atom_index_info = atom_pick(event);
 
-	 double delta_x = g.GetMouseClickedX() - x_as_int;
-	 double delta_y = g.GetMouseClickedY() - y_as_int;
-
-	 if (false) {
-	    std::cout << "MouseBegin " << g.GetMouseBeginX() << " " << g.GetMouseBeginY()
-		      << " now " << x_as_int << " " << y_as_int << std::endl;
-	    std::cout << "mouse deltas " << delta_x << " " << delta_y << std::endl;
-	 }
+	 // v0.1.0.1: on GTK2-Quartz (Tahoe), gdk_window_get_pointer() returns
+	 // window-relative coords while the press handler stored event->x/y
+	 // (widget-relative), producing a constant ~32 px y offset = toolbar
+	 // chrome. Result: every middle-click registered as a 32-px drag and
+	 // the recentre branch was skipped. Compare against event->x/y to
+	 // match what SetMouseClicked recorded in glarea_button_press.
+	 double delta_x = g.GetMouseClickedX() - event->x;
+	 double delta_y = g.GetMouseClickedY() - event->y;
 
 	 if (std::abs(delta_x) < 10.0) {
 	    if (std::abs(delta_y) < 10.0) {

@@ -192,11 +192,26 @@ SCM coot_get_url_as_string(const char *url) {
 
 #ifdef USE_PYTHON
 PyObject *coot_get_url_as_string_py(const char *url) {
-   PyObject *r  = Py_False;
+   // v0.1.0.x: PyUnicode_FromString (the Py3 backing for our
+   // PyString_FromString shim) returns NULL when given bytes that
+   // aren't valid UTF-8 -- a real possibility for a URL fetch that
+   // might pull HTML with embedded gzip/binary content or have
+   // mid-sequence encoding errors. The previous code then called
+   // PyBool_Check(NULL), which dereferences NULL and SEGVs.
+   //
+   // Use PyUnicode_DecodeUTF8 with 'replace' so invalid bytes become
+   // U+FFFD instead of returning NULL. Always returns a valid str.
    std::string s = coot_get_url_as_string_internal(url);
-   r = PyString_FromString(s.c_str());
-   if (PyBool_Check(r)) {
-     Py_INCREF(r);
+   PyObject *r = PyUnicode_DecodeUTF8(s.c_str(), s.size(), "replace");
+   if (!r) {
+      // Even the lenient decode failed; clear the error and return an
+      // empty string so the caller can detect "fetch failed".
+      PyErr_Clear();
+      r = PyUnicode_FromString("");
+      if (!r) {
+         Py_INCREF(Py_None);
+         return Py_None;
+      }
    }
    return r;
 }

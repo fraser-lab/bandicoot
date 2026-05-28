@@ -676,7 +676,10 @@ gint draw(GtkWidget *widget, GdkEventExpose *event) {
 #ifdef USE_PYTHON
    // Hamish function
    if (! graphics_info_t::python_draw_function_string.empty()) {
+      // v0.1.0.1: per-frame draw -- GTK callback context, GIL not held.
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyRun_SimpleString(graphics_info_t::python_draw_function_string.c_str());
+      PyGILState_Release(gstate);
    }
 #endif
    if (graphics_info_t::display_mode == coot::HARDWARE_STEREO_MODE) {

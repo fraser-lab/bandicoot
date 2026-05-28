@@ -27,7 +27,7 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
     # BL says: maybe somthing for coot-utils?
     # ..and has already a buikld-in function in python
     def trim_trailing_spaces(s):
-        f = string.rstrip(s)
+        f = s.rstrip()
         return f
 
     # return [] on bad, else return a 6 memberes list.
@@ -42,7 +42,7 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
            lines = fin.readlines()
            for line in lines:
                if "CRYST1" in line:
-                  s = string.split(line)
+                  s = line.split()
                   s = s[1:7]
                   fin.close()
                   break
@@ -70,9 +70,9 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
            lines = fin.readlines()
            for line in lines: 
                if "CRYST1" in line:
-                  s = string.split(line)
+                  s = line.split()
                   s = s[7:]
-                  s = string.join(s,"")
+                  s = "".join(s)
                   fin.close()
                   break
         else:
@@ -91,9 +91,9 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
            lines = fin.readlines()
            for line in lines:
                if "CRYST1" in line:
-                  s = string.split(line)
+                  s = line.split()
                   s = s[7:]
-                  s = string.join(s)
+                  s = ' '.join(s)
                   fin.close()
                   break
         else:
@@ -122,7 +122,7 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
               lines = fin.readlines()
               for line in lines: 
                  if symm2 in line:
-                    t = string.split(line)
+                    t = line.split()
                     s = t[3]
                     break
               fin.close()
@@ -145,7 +145,7 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
     pdbset_log = "cns2coot-pdbset-tmp.log"
 
     print("symm1: ", symm1)
-    popen_command("pdbset",["XYZIN",model_pdb,"XYZOUT",map1_tmp],["CELL " + string.join(cell), "SPACEGROUP " + symm1],pdbset_log,0)
+    popen_command("pdbset",["XYZIN",model_pdb,"XYZOUT",map1_tmp],["CELL " + ' '.join(cell), "SPACEGROUP " + symm1],pdbset_log,0)
     symm2 = get_symm_from_pdb_file_2(map1_tmp)
     print("symm2: ", symm2)
     symm = get_symm_from_symop_lib(symm2)
@@ -166,9 +166,9 @@ def cns2coot(twofofc_coeffs, fofc_coeffs, model_pdb):
        if os.path.isfile(map2_mtz):
           os.remove(map2_mtz)
    
-       popen_command("sftools", [] ,["read " + twofofc_coeffs, "cns", string.join(cell), symm, "END", "W", "P", "R", "SET LABELS", "FOM", "PHIC", "SCALE", "FWT", "PHWT", "WRITE " + map1_mtz] , sftools_1_log, 0)
+       popen_command("sftools", [] ,["read " + twofofc_coeffs, "cns", ' '.join(cell), symm, "END", "W", "P", "R", "SET LABELS", "FOM", "PHIC", "SCALE", "FWT", "PHWT", "WRITE " + map1_mtz] , sftools_1_log, 0)
 
-       popen_command("sftools", [] ,["read " + fofc_coeffs, "cns", string.join(cell), symm, "END", "W", "P", "R", "SET LABELS", "FOM", "PHIC", "SCALE", "DELFWT", "PHDELWT", "WRITE " + map2_mtz] , sftools_2_log, 0)
+       popen_command("sftools", [] ,["read " + fofc_coeffs, "cns", ' '.join(cell), symm, "END", "W", "P", "R", "SET LABELS", "FOM", "PHIC", "SCALE", "DELFWT", "PHDELWT", "WRITE " + map2_mtz] , sftools_2_log, 0)
 
        popen_command("cad", ["HKLIN1", map1_mtz, "HKLIN2", map2_mtz, "HKLOUT", map_coot_mtz],["LABIN FILE_NUMBER 1 E1=FOM E2=PHIC E3=FWT E4=PHWT", "LABIN FILE_NUMBER 2 E1=DELFWT E2=PHDELWT", "END"], cad_log, 0)
 

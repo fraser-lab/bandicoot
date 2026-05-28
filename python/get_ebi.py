@@ -55,21 +55,23 @@ def coot_urlretrieve(url, file_name, reporthook=None):
     """Helper function to avoid downloading empty files
     returns download filename upon success or False when fail."""
 
-    import urllib, ssl
+    # Bandicoot Py3 rewrite: the original used urllib.FancyURLopener
+    # (Py2 namespace, deprecated in Py3). Replaced with
+    # urllib.request.urlretrieve, which gives us the same semantics
+    # without the deprecation noise. SSL verification is disabled to
+    # match the previous behaviour (some PDB mirrors have stale certs).
+    import urllib.request, ssl
     local_filename = False
     ssl_context = ssl._create_unverified_context()
-    class CootURLopener(urllib.FancyURLopener):
-        def http_error_default(self, url, fp, errcode, errmsg, headers):
-            # handle errors the way you'd like to
-            # we just pass
-            pass
-
-    opener = CootURLopener(context=ssl_context)
+    https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+    opener = urllib.request.build_opener(https_handler)
     try:
-        local_filename, header = opener.retrieve(url, file_name, reporthook)
-    except:
-        # we could catch more here, but dont bother for now
-        print("BL WARNING:: retrieve of url %s failed" %url)
+        urllib.request.install_opener(opener)
+        local_filename, header = urllib.request.urlretrieve(
+            url, file_name, reporthook)
+    except Exception as e:
+        print("BL WARNING:: retrieve of url %s failed: %s" % (url, e))
+        local_filename = False
 
     return local_filename
 
@@ -139,7 +141,7 @@ def get_ebi_pdb_and_sfs(id):
     if (imol_coords < 0):       # -1 is coot code for failed read.
        print("failed to read coordinates.")
     else:
-       down_id = string.lower(id)
+       down_id = id.lower()
        url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + "r" + down_id + "sf." + pdbe_file_name_tail
        get_url_str(id, url_str, "sfs", imol_coords)
 
@@ -150,7 +152,7 @@ def get_ebi_pdb(id):
     import urllib, string
 
     # print "======= id:", id
-    down_id = string.lower(id)
+    down_id = id.lower()
     pdb_url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + down_id + ".ent"
     cif_url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + down_id + ".cif"
     url_status = get_url_str(id, pdb_url_str, "pdb", None)
@@ -202,7 +204,7 @@ def get_eds_pdb_and_mtz(id):
     # http://www.ebi.ac.uk/pdbe/coordinates/files/1cbs_map.mtz
 
     def get_cached_eds_files(accession_code):
-        down_code = string.lower(accession_code)
+        down_code = accession_code.lower()
         dir_name = get_directory("coot-download")
         pdb_file_name = os.path.join(dir_name,
                                      "pdb" + down_code + ".ent")
@@ -258,7 +260,7 @@ def get_eds_pdb_and_mtz(id):
         r = coot_mkdir(coot_tmp_dir)
 
         if (r):
-            down_id = string.lower(id)
+            down_id = id.lower()
             target_pdb_file = "pdb" + down_id + ".ent"
             target_cif_file = down_id + ".cif"
             dir_target_pdb_file = coot_tmp_dir + "/" + target_pdb_file
@@ -339,7 +341,7 @@ def get_pdb_redo(text):
         if not (len(text) == 4):
             print("BL WARNING:: Accession code not 4 chars.")
         else:
-            text = string.lower(text)
+            text = text.lower()
             stub = "https://pdb-redo.eu/db/" + text + "/" + text + "_final"
             pdb_file_name = text + "_final.pdb"
             mtz_file_name = text + "_final.mtz"

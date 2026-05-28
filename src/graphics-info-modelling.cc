@@ -5346,7 +5346,14 @@ graphics_info_t::do_interactive_probe() const {
 	 c += "\", ";
 	 c += int_to_string(moving_atoms_asc->atom_selection[0]->GetSeqNum());
 	 c += ")";
+	 // v0.1.0.1: GIL must be held for Python C API calls reached from
+	 // GTK callbacks. accept_moving_atoms -> setup_for_probe_dots_on_
+	 // chis_molprobity -> do_interactive_probe runs on the main thread
+	 // after Rotate/Translate OK; without PyGILState_Ensure,
+	 // PyRun_SimpleString SEGVs in PyObject_Malloc.
+	 PyGILState_STATE gstate = PyGILState_Ensure();
 	 PyRun_SimpleString((char *) c.c_str());
+	 PyGILState_Release(gstate);
       }
    }
    

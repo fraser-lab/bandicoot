@@ -1693,6 +1693,13 @@ graphics_info_t::run_post_read_model_hook(int imol) {
 #endif
 
 #ifdef USE_PYTHON
+   // v0.1.0.1: GIL handling -- this hook is reached from GTK callbacks
+   // (file-load dialog responses, post-RPC updates etc.) where the GIL
+   // is released. Without PyGILState_Ensure, PyImport_Import +
+   // PyObject_Malloc inside crash on first access. This was the exact
+   // SEGV mode in v0.1.0.1 when loading a molecule.
+   PyGILState_STATE gstate = PyGILState_Ensure();
+
    s = "post_read_model_hook";
    PyObject *pName_coot = PyString_FromString("__main__");  // not "coot" at the moment
    PyObject *pModule = PyImport_Import(pName_coot);
@@ -1719,6 +1726,8 @@ graphics_info_t::run_post_read_model_hook(int imol) {
       std::cout << "INFO:: in run_post_read_model_hook() pDict " << pDict << " " << std::endl;
       std::cout << "INFO:: in run_post_read_model_hook() pModule " << pModule << " " << std::endl;
    }
+
+   PyGILState_Release(gstate);
 #endif
 
 }

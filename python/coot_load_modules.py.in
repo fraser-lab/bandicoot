@@ -219,6 +219,8 @@ pre_list = [
     "povray.py",
     "remote_control.py",
     "generic_objects.py",
+    "pdbe_validation_data.py",  # defines pdb_validate (called by get_ebi.py after PDB fetch)
+    "coot_gui.py",              # defines interesting_things_gui etc. (called by PDB-REDO + many others)
     "ncs.py",
     "parse_pisa_xml.py",
     "cns2coot.py",
@@ -230,7 +232,7 @@ pre_list = [
     "group_settings.py",
 ]
 post_list = [
-    "coot_gui.py",
+    # "coot_gui.py" -- moved to pre_list (defines interesting_things_gui + many helpers)
     "gui_hole.py",
     "gui_prosmart.py",
     "gui_add_linked_cho.py",
@@ -250,7 +252,7 @@ post_list = [
     "gui_ligand_sliders.py",
     "find_baddies.py",
     "coot_toolbuttons.py",
-    "pdbe_validation_data.py",
+    # "pdbe_validation_data.py" -- moved to pre_list (defines pdb_validate)
     "contact_score_isolated_ligand.py",
     "ligand_validation_sliders.py",
 ]

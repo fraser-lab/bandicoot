@@ -276,7 +276,7 @@ def refmac_calc_sfs_make_mtz_with_columns(pdb_in_file_name, mtz_file_name,
     make_molecules_flag = 0 # ??
 
     save_refmac_extra_params = refmac_extra_params
-    if isinstance(refmac_extra_params, types.ListType):
+    if isinstance(refmac_extra_params, list):
         refmac_extra_params.append("MAKE NEWLIGAND CONTINUE")
     else:
         refmac_extra_params = ["MAKE NEWLIGAND CONTINUE"]
@@ -393,7 +393,7 @@ def pdbe_get_pdb_and_sfs_cif(include_get_sfs_flag,
 
                         # if refmac_result is good? (is tuple not list)
                         # good enough if it's not false?!
-                        if not (isinstance(refmac_result, types.TupleType)):
+                        if not (isinstance(refmac_result, tuple)):
                             download_thread_status = "fail-refmac"
                         else:
                             # make map

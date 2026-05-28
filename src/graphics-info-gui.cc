@@ -4043,14 +4043,26 @@ graphics_info_t::fill_combobox_with_chain_options(GtkWidget *combobox,
 
    std::string r("no-chain");
 
+   // v0.1.0.x: defensive null check. The LSQ Superpose dialog fires a
+   // "changed" signal during init that recursively triggers this fill;
+   // in some states the combobox's model is uninitialised and the
+   // GTK_LIST_STORE cast + clear SEGVs on macOS Tahoe GTK2-Quartz.
+   if (!combobox || !GTK_IS_COMBO_BOX(combobox)) {
+      std::cout << "WARNING:: fill_combobox_with_chain_options called with "
+                << "invalid combobox; skipping" << std::endl;
+      return r;
+   }
+
    GtkComboBoxText *cb_as_text = GTK_COMBO_BOX_TEXT(combobox);
 
 #if (GTK_MAJOR_VERSION > 2)
    gtk_combo_box_text_remove_all(cb_as_text);
 #else
    GtkTreeModel *model_from_combobox = gtk_combo_box_get_model(GTK_COMBO_BOX(combobox));
-   GtkListStore *store_from_model = GTK_LIST_STORE(model_from_combobox);
-   gtk_list_store_clear(store_from_model);
+   if (model_from_combobox && GTK_IS_LIST_STORE(model_from_combobox)) {
+      GtkListStore *store_from_model = GTK_LIST_STORE(model_from_combobox);
+      gtk_list_store_clear(store_from_model);
+   }
 #endif
 
    if (is_valid_model_molecule(imol)) {

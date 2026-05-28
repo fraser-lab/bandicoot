@@ -583,7 +583,7 @@ class validation_entry_to_canvas:
                 c[idx  ] = chr(r)
                 c[idx+1] = chr(g)
                 c[idx+2] = chr(b)
-        self.colour_bar_buff = string.join(c, '')
+        self.colour_bar_buff = ''.join(c)
 
     def on_drawing_area_expose(self, da, event):
         style = da.get_style()
@@ -696,7 +696,7 @@ class validation_entry_to_canvas:
         da.window.draw_layout(gc, 4+x_for_rj, y-6, pangolayout)
 
         # Values text
-        if isinstance(value_str, types.StringType):
+        if isinstance(value_str, str):
             x_for_value = self.x_bar_offset + self.bar_length + 12
             pangolayout.set_text(value_str)
             # print "value", x_for_value, y

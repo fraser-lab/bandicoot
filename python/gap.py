@@ -177,7 +177,7 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
 def fit_gap_generic(imol, chain_id, start_resno, stop_resno, sequence=""):
 
    import string
-   sequence = string.upper(sequence)
+   sequence = sequence.upper()
    
    if (valid_model_molecule_qm(imol) == 0):
       print("Molecule number %(a)i is not a valid model molecule" %{"a":imol})

@@ -632,7 +632,7 @@ def residue_specs_match_qm(spec_1, spec_2):
 
 def atom_spec_to_imol(atom_spec):
     import types
-    if not (isinstance(atom_spec, types.ListType)):
+    if not (isinstance(atom_spec, list)):
         return False
     else:
         if (len(atom_spec) == 6):
@@ -740,7 +740,7 @@ def list_of_strings_qm(ls):
        return False
     else:
        for item in ls:
-           if isinstance(item,types.StringTypes): pass
+           if isinstance(item,str): pass
            else: not_str += 1
        if not_str == 0:
           return True
@@ -753,7 +753,7 @@ def string_append_with_spaces(ls):
     
     import string
     if ls:
-       return string.join(ls)
+       return ' '.join(ls)
     else:
        return [""] 
 
@@ -888,7 +888,7 @@ def command_in_path_qm_old_version(cmd, only_extension="", add_extensions=[]):
         try:
             primary_path = os.environ["PATH"]
             for cmd_name in program_names:
-                for path in string.split(primary_path, os.pathsep):
+                for path in primary_path.split(os.pathsep):
                     program_exe = os.path.join(path, cmd_name)
                     #           print "BL DEBUG:: program_exe is", program_exe
                     if (os.path.isfile(program_exe)):
@@ -986,7 +986,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
             data_list_file = "data_list_file_tmp.txt"
         
             # make args string
-            args_string = string.join(args)
+            args_string = ' '.join(args)
             
             # write tmp input file
             input = file (data_list_file,'w')
@@ -1045,7 +1045,7 @@ def file_name_extension(file_name):
     import os, string
     root, ext = os.path.splitext(file_name)
     if ext:
-       ext = string.lstrip(ext,'.')
+       ext = ext.lstrip('.')
        return ext
     else:
        return ""
@@ -1055,7 +1055,7 @@ def file_name_extension(file_name):
 def add_tmp_extension_to(file_name):
   
     import types
-    if isinstance(file_name,types.StringTypes):
+    if isinstance(file_name,str):
        root, ext = os.path.splitext(file_name)
        f = root + "-tmp" + ext
        return f
@@ -1081,7 +1081,7 @@ def strip_path(s):
 def slash_start_qm(s):
     import types
     import string
-    if isinstance(s, types.StringTypes):
+    if isinstance(s, str):
        if len(s) > 0:
           if (s.startswith("/") or s.startswith("\\")):
               return True
@@ -2853,7 +2853,7 @@ def remove_line_containing_from_file(remove_str_ls, filename):
         print("BL INFO:: no %s file, so cannot remove line" %init_file)
         lines = []
     if (lines):
-        patt = string.join(remove_str_ls,'|')
+        patt = '|'.join(remove_str_ls)
         re_patt = re.compile(patt)
         tmp_ls = []
         for line in lines:
@@ -3614,7 +3614,7 @@ def set_use_curl(status):
 def residue_is_close_to_screen_centre_qm(imol, chain_id, res_no, ins_code):
     def square(x): return x * x
     rc = residue_centre(imol, chain_id, res_no, ins_code)
-    if not isinstance(rc, types.ListType):
+    if not isinstance(rc, list):
         return False
     else:
         sc = rotation_centre()
@@ -4106,7 +4106,7 @@ def find_exe(program_name, *args, **kwargs):
             else:
                 try:
                     primary_path = os.environ[search_path]
-                    for path in string.split(primary_path, os.pathsep):
+                    for path in primary_path.split(os.pathsep):
                         program_exe = os.path.join(path, file_name)
                         if (os.path.isfile(program_exe)):
                             if info:
@@ -4457,7 +4457,7 @@ def get_windows_drives():
         from ctypes import windll
         drives = []
         bitmask = windll.kernel32.GetLogicalDrives()
-        upper = string.uppercase
+        upper = string.ascii_uppercase  # Py3: string.uppercase removed
         for letter in upper:
             if bitmask & 1:
                 drives.append(letter + ":\\")
@@ -4467,7 +4467,7 @@ def get_windows_drives():
         # poor man's version but simple
         #print "BL INFO:: couldnt import ctypes, using simple version to get drives."
         drives = []
-        lower = string.lowercase
+        lower = string.ascii_lowercase  # Py3: string.lowercase removed
         for letter in lower:
             if os.path.isdir(letter + ":"):
                 drives.append(letter + ":\\")

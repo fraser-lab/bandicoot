@@ -79,7 +79,7 @@ class ligand_validation_metrics_gui:
                 c[idx  ] = chr(r)
                 c[idx+1] = chr(g)
                 c[idx+2] = chr(b)
-        self.colour_bar_buff = string.join(c, '')
+        self.colour_bar_buff = ''.join(c)
 
     def draw_sliders(self, ligand_validation_specs, da, gc):
 
@@ -128,7 +128,7 @@ class ligand_validation_metrics_gui:
         da.window.draw_layout(gc, 4+x_for_rj, y-3, pangolayout)
 
         # Values text
-        if isinstance(value_str, types.StringType):
+        if isinstance(value_str, str):
             x_for_value = self.x_bar_offset + self.bar_length + 12
             pangolayout.set_text(value_str)
             # print "Drawing Value value", x_for_value, y, value_str

@@ -148,12 +148,12 @@ def convert_shelx_fcf_to_cif(fcf_filename,cif_filename):
         if "_refln_phase_calc" in line:
           line = line.replace("_refln_phase_calc"," _refln.phase_calc")
           intable = 1
-        if (intable == 1 and len(string.split(line))>5):
-          col = string.split(line)
+        if (intable == 1 and len(line.split())>5):
+          col = line.split()
           col[3] = str(math.sqrt(float(col[3])))
           if (float(col[3]) > 0.0):
              col[4] = str(0.5 * (float(col[4]) + 0.0) / float(col[3]))
-             line = string.join(col) + "\n"
+             line = ' '.join(col) + "\n"
         fout.write(line)
 
     fin.close()

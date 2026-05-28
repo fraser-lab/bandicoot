@@ -137,11 +137,11 @@ def coot_gui(own_gtk_main=False):
        # test for '(' at start
        # and if a '-' before the '(' [i.e. if we have a guile command instead of a python command in the beginning,
        # we need to allow '-' after the '(']
-       if ((string.find(py_func[0:py_func.find('(')],"-") > 0) or (string.find(py_func,"(") == 0)):
+       if ((py_func[0:py_func.find('(')].find("-") > 0) or (py_func.find("(") == 0)):
           #remove ()
-          tmp = string.rstrip(string.lstrip(py_func,("(")),")")
-          tmp_list = string.split(tmp)
-          tmp_command = string.replace(tmp_list[0],"-","_")
+          tmp = py_func.lstrip("(").rstrip(")")
+          tmp_list = tmp.split()
+          tmp_command = tmp_list[0].replace("-","_")
           tmp_list[0:1] = []
           #convert string args from list to int, float, string...
           arg = tmp_list
@@ -446,7 +446,7 @@ def generic_single_entry(function_label, entry_1_default_text, go_button_label, 
     window.add(vbox)
     vbox.set_border_width(6)
  
-    if isinstance(entry_1_default_text,types.StringTypes):
+    if isinstance(entry_1_default_text,str):
        smiles_entry.set_text(entry_1_default_text)
     else:
        print("BL WARNING:: entry_1_default_text was no string!!")
@@ -538,12 +538,12 @@ def generic_double_entry(label_1, label_2,
     window.add(vbox)
     vbox.set_border_width(6)
 
-    if isinstance(entry_1_default_text,types.StringTypes):
+    if isinstance(entry_1_default_text,str):
        tlc_entry.set_text(entry_1_default_text)
     else:
        print("BL WARNING:: entry_1_default_text was no string!!")
  
-    if isinstance(entry_2_default_text,types.StringTypes):
+    if isinstance(entry_2_default_text,str):
        smiles_entry.set_text(entry_2_default_text)
     else:
        print("BL WARNING:: entry_2_default_text was no string!!")
@@ -789,7 +789,7 @@ def interesting_things_with_fix_maybe(title, baddie_list):
           func_maybe2 = baddie[l-2]
           func_maybe3 = baddie[l-3]
 
-          if (isinstance(func_maybe1, types.ListType) and len(func_maybe1)>0):
+          if (isinstance(func_maybe1, list) and len(func_maybe1)>0):
              # the last one is probably a funcn (no button name)
              func_maybe_strip = func_maybe1[0]
 #             print "BL DEBUG:: func_maybe_strip is", func_maybe_strip
@@ -798,8 +798,8 @@ def interesting_things_with_fix_maybe(title, baddie_list):
              else:
                 return False, False, False
              
-          elif (isinstance(func_maybe2, types.ListType) and len(func_maybe2)>0
-                and isinstance(func_maybe1, types.StringType)):
+          elif (isinstance(func_maybe2, list) and len(func_maybe2)>0
+                and isinstance(func_maybe1, str)):
              # the second last is function, last is button name
              func_maybe_strip = func_maybe2[0]
              button_name = func_maybe1
@@ -808,9 +808,9 @@ def interesting_things_with_fix_maybe(title, baddie_list):
              else:
                 return False, False, False
              
-          elif (isinstance(func_maybe3, types.ListType) and len(func_maybe3)>0
-                and isinstance(func_maybe2, types.StringType)
-                and isinstance(func_maybe1, types.StringType)):
+          elif (isinstance(func_maybe3, list) and len(func_maybe3)>0
+                and isinstance(func_maybe2, str)
+                and isinstance(func_maybe1, str)):
              # the third last is function, second last is button name, last is tooltip
              func_maybe_strip = func_maybe3[0]
              button_name = func_maybe2
@@ -942,7 +942,7 @@ def fill_option_menu_with_mol_options(menu, filter_function):
     for mol_no in molecule_number_list():
         if filter_function(mol_no):
            label_str = molecule_name(mol_no)
-           if (isinstance(label_str,types.StringTypes)):
+           if (isinstance(label_str,str)):
               mlabel_str = str(mol_no) + " " + label_str
               menu.append_text(mlabel_str)
               menu.set_active(0)
@@ -1563,14 +1563,14 @@ def coot_toolbar_button(button_label, cb_function,
             coot_tooltips.set_tip(toolbutton, tooltip)
 
       def cb_wrapper(widget, callback_function):
-         if (type(callback_function) is types.StringType):
+         if (type(callback_function) is str):
             # old style with string as function
             eval(callback_function)
          else:
             # have function as callable and maybe extra args (all in one list)
             args = []
             function = callback_function
-            if (type(callback_function) is types.ListType):
+            if (type(callback_function) is list):
                function = callback_function[0]
                args = callback_function[1:]
             # pass the widget/button as well? Maybe the cb function can
@@ -1649,7 +1649,7 @@ def coot_toolbar_combobox(label, entry_list, cb_function, tooltip=""):
 
       def cb_wrapper(widget, callback_function):
          pos = widget.get_active()
-         if (type(callback_function) is types.StringType):
+         if (type(callback_function) is str):
             # old style with string as function
             # does not take into account the positions pos! Or how?
             # FIXME? Maybe

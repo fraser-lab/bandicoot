@@ -376,7 +376,7 @@ def interactive_probe(x_cen, y_cen, z_cen, radius, chain_id, res_no):
     chain_str = ""
     if (not chain_id == ""):
       chain_str = "chain"
-    atom_sel = "(file1 within " + str(radius) + " of " + str(x_cen) + ", " + str(y_cen) + ", " + str(z_cen) + ", " + "not water not (" + chain_str + string.lower(chain_id) + " " + str(res_no) + ")),file2"
+    atom_sel = "(file1 within " + str(radius) + " of " + str(x_cen) + ", " + str(y_cen) + ", " + str(z_cen) + ", " + "not water not (" + chain_str + chain_id.lower() + " " + str(res_no) + ")),file2"
 
     # no longer use std-bonds
     print("probe command", probe_command,

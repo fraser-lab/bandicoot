@@ -2021,7 +2021,10 @@ void python_window_enter_callback( GtkWidget *widget,
   strncpy(new_text, entry_text, new_length);
   printf("Running string: %s\n", new_text);
 
+  // v0.1.0.1: GIL must be held for Python C API calls from GTK callbacks.
+  PyGILState_STATE gstate = PyGILState_Ensure();
   PyRun_SimpleString(new_text);
+  PyGILState_Release(gstate);
 
   // clear the entry
   gtk_entry_set_text(GTK_ENTRY(entry),"");

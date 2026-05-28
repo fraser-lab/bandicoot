@@ -68,7 +68,7 @@ def coot_says_hello():
    l2 = os.getenv("LANGUAGE")
    if l1 == "ja": name_strings.reverse() # perhaps beginswith
    if l2 == "ja": name_strings.reverse()
-   personal_name = string.capitalize(first_non_trivial_name(name_strings))
+   personal_name = first_non_trivial_name(name_strings).capitalize()
    hello_str = "Good %s %s, Welcome to Coot version %s" %(time_str, personal_name, coot_version())
    print(hello_str)
    set_display_intro_string(hello_str)

@@ -6269,13 +6269,17 @@ PyObject *py_clean_internal(PyObject *o) {
 }
 #endif  // USE_PYTHON
 
-int pyrun_simple_string(const char *python_command) { 
-  
+int pyrun_simple_string(const char *python_command) {
+
 #ifdef USE_PYTHON
-  return PyRun_SimpleString(python_command);
-#endif 
+  // v0.1.0.1: GIL handling -- see safe_python_command.
+  PyGILState_STATE gstate = PyGILState_Ensure();
+  int rc = PyRun_SimpleString(python_command);
+  PyGILState_Release(gstate);
+  return rc;
+#endif
   return -1;
-} 
+}
 
 #ifdef USE_PYTHON
 // BL says:: let's have a python command with can receive return values
@@ -6283,6 +6287,15 @@ int pyrun_simple_string(const char *python_command) {
 // returns a PyObject which can then be used further
 // returns NULL for failed run
 PyObject *safe_python_command_with_return(const std::string &python_cmd) {
+
+   // v0.1.0.1: GIL is released around gtk_main (see main.cc), so this
+   // function entered from GTK callbacks (file dialogs, post-load
+   // hooks, etc.) does NOT hold the GIL by default. Touching ANY Python
+   // C API without it crashes in PyObject_Malloc et al -- the exact
+   // SEGV symptom we hit when loading the first molecule in v0.1.0.1.
+   // PyGILState_Ensure is reentrant; safe to wrap. Acquired at the top
+   // so it covers the Py_INCREF / PyBool_Check calls in the trailer too.
+   PyGILState_STATE gstate = PyGILState_Ensure();
 
    PyObject *ret = NULL;
 
@@ -6361,15 +6374,17 @@ PyObject *safe_python_command_with_return(const std::string &python_cmd) {
    // Running PyBool_Check(NULL) crashes.
    if (ret == NULL) {
       Py_INCREF(Py_None);
+      PyGILState_Release(gstate);
       return Py_None; // don't try to convert this to a SCM thing.
    }
-   
-   if (PyBool_Check(ret)) { 
+
+   if (PyBool_Check(ret)) {
       Py_INCREF(ret);
    }
    if (ret == Py_None) {
       Py_INCREF(ret);
    }
+   PyGILState_Release(gstate);
    return ret;
 }
 #endif //PYTHON
@@ -6387,9 +6402,13 @@ PyObject *safe_python_command_test(const char *cmd) {
 /* doesnt work anyway!? */
 void safe_python_command_with_unsafe_thread(const char *cmd) {
 
-  Py_BEGIN_ALLOW_THREADS;
+  // v0.1.0.1: was Py_BEGIN/END_ALLOW_THREADS which is the OPPOSITE of
+  // what we need (releases GIL; only valid if you hold it -- which we
+  // don't from GTK callbacks). Acquire-then-release to match the rest
+  // of the safe_python_command family.
+  PyGILState_STATE gstate = PyGILState_Ensure();
   PyRun_SimpleString((char *)cmd);
-  Py_END_ALLOW_THREADS;
+  PyGILState_Release(gstate);
 }
 
 #endif //PYTHON
@@ -6397,7 +6416,10 @@ void safe_python_command_with_unsafe_thread(const char *cmd) {
 void safe_python_command_by_char_star(const char *python_cmd) {
 
 #ifdef USE_PYTHON
+   // v0.1.0.1: see safe_python_command for the GIL rationale.
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyRun_SimpleString((char *)python_cmd);
+   PyGILState_Release(gstate);
 #endif   
 }
 
@@ -6788,7 +6810,10 @@ void post_python_scripting_window() {
 
   if (graphics_info_t::python_gui_loaded_flag == TRUE) {
 
+     // v0.1.0.1: GIL handling -- see safe_python_command.
+     PyGILState_STATE gstate = PyGILState_Ensure();
      PyRun_SimpleString("coot_gui()");
+     PyGILState_Release(gstate);
 
   } else {
      // we don't get a proper status from python_gui_loaded_flag so
@@ -7170,13 +7195,16 @@ run_python_script(const char *filename_in) {
    simple += single_quote(s);
    simple += ")";
 #endif
+   // v0.1.0.1: GIL handling -- see safe_python_command.
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyRun_SimpleString(simple.c_str());
+   PyGILState_Release(gstate);
 
 #endif // USE_PYTHON
 }
 
 int
-import_python_module(const char *module_name, int use_namespace) { 
+import_python_module(const char *module_name, int use_namespace) {
 
    int err = 1;
 
@@ -7196,7 +7224,10 @@ import_python_module(const char *module_name, int use_namespace) {
       std::cout << "Importing python module " << module_name
 		<< " using command " << simple << std::endl;
 
+   // v0.1.0.1: GIL handling -- see safe_python_command.
+   PyGILState_STATE gstate = PyGILState_Ensure();
    err = PyRun_SimpleString(simple.c_str());
+   PyGILState_Release(gstate);
 #endif // USE_PYTHON
    return err;
 }
