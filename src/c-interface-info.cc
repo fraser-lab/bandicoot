@@ -2153,7 +2153,8 @@ void update_go_to_atom_from_current_position() {
                                                          if (next_atom) {
                                                             mmdb::Residue *residue_p = next_atom->residue;
                                                             if (residue_p) {
-#if defined(HAVE_GNOME_CANVAS)
+#if defined(HAVE_GOOCANVAS)
+                                                               // v0.1.0.2: nsv->highlight_residue gated to HAVE_GOOCANVAS (see nsv.cc).
                                                                exptl::nsv *nsv = static_cast<exptl::nsv *>(g_object_get_data(G_OBJECT(svc), "nsv"));
                                                                if (nsv)
                                                                   nsv->highlight_residue(residue_p);
@@ -2178,7 +2179,8 @@ update_sequence_view_current_position_highlight_from_active_atom() {
                                                       if (next_atom) {
                                                          mmdb::Residue *residue_p = next_atom->residue;
                                                          if (residue_p) {
-#if defined(HAVE_GNOME_CANVAS)
+#if defined(HAVE_GOOCANVAS)
+                                                            // v0.1.0.2: nsv->highlight_residue gated to HAVE_GOOCANVAS (see nsv.cc).
                                                             exptl::nsv *nsv = static_cast<exptl::nsv *>(g_object_get_data(G_OBJECT(svc), "nsv"));
                                                             if (nsv)
                                                                nsv->highlight_residue(residue_p);

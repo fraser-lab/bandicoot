@@ -338,6 +338,8 @@ graphics_info_t::update_geometry_graphs(const atom_selection_container_t &moving
       }
    }
 
+#ifdef HAVE_GOOCANVAS
+   // v0.1.0.2: nsv (regenerate) is gated to HAVE_GOOCANVAS in nsv.cc.
    graph = coot::get_validation_graph(imol_moving_atoms, coot::SEQUENCE_VIEW);
    if (graph) {
 
@@ -348,6 +350,7 @@ graphics_info_t::update_geometry_graphs(const atom_selection_container_t &moving
 	 sequence_view->regenerate(mol);
       }
    }
+#endif
 
    // and now ramachandran also
 
@@ -399,6 +402,8 @@ graphics_info_t::delete_residue_from_geometry_graphs(int imol, coot::residue_spe
       }
    }
 
+#ifdef HAVE_GOOCANVAS
+   // v0.1.0.2: nsv (regenerate) is gated to HAVE_GOOCANVAS in nsv.cc.
    // and the sequence view!
    //
    GtkWidget *graph = coot::get_validation_graph(imol_moving_atoms, coot::SEQUENCE_VIEW);
@@ -409,7 +414,8 @@ graphics_info_t::delete_residue_from_geometry_graphs(int imol, coot::residue_spe
 	 sequence_view->regenerate(mol);
       }
    }
-   
+#endif
+
 #endif // defined(HAVE_GNOME_CANVAS) || defined(HAVE_GTK_CANVAS)
 #endif // HAVE_GSL
 }

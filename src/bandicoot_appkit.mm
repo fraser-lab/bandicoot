@@ -146,11 +146,93 @@ static NSString *string_from_gtk_label(GtkMenuItem *item) {
 
 static void populate_from_gtk_menu(NSMenu *ns_menu, GtkMenuShell *gtk_menu);
 
+// v0.1.0.2: NSMenu delegate that re-mirrors a GTK submenu every time the
+// user opens it. Without this we only get a startup snapshot, missing any
+// submenu items added by later C-code calls -- e.g. Draw > Sequence View
+// populates `seq_view_menu` lazily in `add_on_sequence_view_choices()`
+// when the user activates the parent item. Caveat: this only catches
+// submenu populations that land on the REAL GtkMenu. Python-side
+// extensions.py uses PyGObject (which we currently stub), so its
+// dynamic submenus don't reach the GtkMenu and this delegate has
+// nothing to mirror -- those remain blocked on the v0.1.1.0 PyGObject port.
+@interface BandicootMenuMirror : NSObject <NSMenuDelegate>
+@property (nonatomic, assign) GtkMenuShell *gtkMenuShell;
+@end
+
+static int bandicoot_gtk_menu_child_count(GtkMenuShell *shell) {
+    if (!shell || !GTK_IS_MENU_SHELL(shell)) return 0;
+    GList *children = gtk_container_get_children(GTK_CONTAINER(shell));
+    int n = (int) g_list_length(children);
+    g_list_free(children);
+    return n;
+}
+
+// Sticky "this submenu re-populates itself when its parent's activate
+// handler fires" marker. Stashed on the GtkMenu via g_object_set_data
+// rather than on the Objective-C BandicootMenuMirror, because the parent
+// NSMenu re-mirrors its children on every open -- discarding and
+// recreating each child NSMenu + delegate. The GtkMenu persists across
+// rebuilds, so the flag survives there. Set when our first
+// activate-on-empty fires and items appear (e.g. Draw > Sequence View).
+// Read on every subsequent menuNeedsUpdate to decide whether to re-fire.
+#define BANDICOOT_MENU_DYNAMIC_KEY "bandicoot.menu.is_dynamic_populator"
+
+@implementation BandicootMenuMirror
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+    if (!self.gtkMenuShell || !GTK_IS_MENU_SHELL(self.gtkMenuShell)) return;
+    GtkWidget *attached = gtk_menu_get_attach_widget(GTK_MENU(self.gtkMenuShell));
+    BOOL has_parent = (attached && GTK_IS_MENU_ITEM(attached));
+    int n_before = bandicoot_gtk_menu_child_count(self.gtkMenuShell);
+    BOOL is_dynamic = (g_object_get_data(G_OBJECT(self.gtkMenuShell),
+                                         BANDICOOT_MENU_DYNAMIC_KEY) != NULL);
+
+    if (is_dynamic && has_parent) {
+        // Known dynamic submenu: refresh on every open so molecule
+        // add/remove is reflected.
+        gtk_menu_item_activate(GTK_MENU_ITEM(attached));
+    } else if (n_before == 0 && has_parent) {
+        // First encounter with this submenu empty -- give the parent
+        // menuitem's activate handler a chance to populate. If items
+        // appear, mark dynamic so future opens refresh.
+        // We never fire activate on already-populated submenus, to
+        // avoid real-work side effects (e.g. Validate's probe_available_p()
+        // which currently SEGVs via a Py3 incompat in coot_utils.find_exe).
+        gtk_menu_item_activate(GTK_MENU_ITEM(attached));
+        if (bandicoot_gtk_menu_child_count(self.gtkMenuShell) > 0) {
+            g_object_set_data(G_OBJECT(self.gtkMenuShell),
+                              BANDICOOT_MENU_DYNAMIC_KEY,
+                              GINT_TO_POINTER(1));
+        }
+    }
+
+    [menu removeAllItems];
+    populate_from_gtk_menu(menu, self.gtkMenuShell);
+}
+@end
+
+// Menu items from upstream Coot 0.9 that we suppress in the native NSMenu
+// because Bandicoot has replaced their functionality. Matched against the
+// underscore-stripped GTK label.
+//   "Model/Fit/Refine..." — upstream's floating Glade dialog with rainbow
+//     icons; superseded by Bandicoot's permanent Model Tools side window.
+static BOOL bandicoot_suppress_menu_item(NSString *title) {
+    static NSArray<NSString *> *suppress = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        suppress = @[ @"Model/Fit/Refine..." ];
+    });
+    for (NSString *s in suppress) {
+        if ([title isEqualToString:s]) return YES;
+    }
+    return NO;
+}
+
 static NSMenuItem *build_item(GtkMenuItem *gtk_item) {
     if (GTK_IS_SEPARATOR_MENU_ITEM(gtk_item)) {
         return [NSMenuItem separatorItem];
     }
     NSString *title = string_from_gtk_label(gtk_item);
+    if (bandicoot_suppress_menu_item(title)) return nil;
     NSMenuItem *ns_item = [[NSMenuItem alloc] initWithTitle:title
                                                      action:nil
                                               keyEquivalent:@""];
@@ -160,6 +242,15 @@ static NSMenuItem *build_item(GtkMenuItem *gtk_item) {
         NSMenu *ns_sub = [[NSMenu alloc] initWithTitle:title];
         [ns_sub setAutoenablesItems:NO];
         populate_from_gtk_menu(ns_sub, GTK_MENU_SHELL(sub));
+        // v0.1.0.2: attach a mirror delegate so anything added to this
+        // GTK submenu after startup (e.g. Sequence View's molecule list)
+        // shows up on next open. NSMenu.delegate is a zeroing weak ref,
+        // so we associate-retain the delegate on the menu to keep it alive.
+        BandicootMenuMirror *mirror = [BandicootMenuMirror new];
+        mirror.gtkMenuShell = GTK_MENU_SHELL(sub);
+        [ns_sub setDelegate:mirror];
+        objc_setAssociatedObject(ns_sub, "bandicoot.menu.mirror",
+                                 mirror, OBJC_ASSOCIATION_RETAIN);
         [ns_item setSubmenu:ns_sub];
     } else {
         [ns_item setTarget:[BandicootMenuTarget shared]];
@@ -178,7 +269,8 @@ static void populate_from_gtk_menu(NSMenu *ns_menu, GtkMenuShell *gtk_menu) {
     GList *children = gtk_container_get_children(GTK_CONTAINER(gtk_menu));
     for (GList *l = children; l; l = l->next) {
         if (!GTK_IS_MENU_ITEM(l->data)) continue;
-        [ns_menu addItem:build_item(GTK_MENU_ITEM(l->data))];
+        NSMenuItem *ns_item = build_item(GTK_MENU_ITEM(l->data));
+        if (ns_item) [ns_menu addItem:ns_item];
     }
     g_list_free(children);
 }

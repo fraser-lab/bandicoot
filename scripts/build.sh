@@ -47,22 +47,27 @@ export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14 ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\
+${HOME}/sw/canvas-deps/lib/pkgconfig:\
 ${BREW_PREFIX}/lib/pkgconfig:\
 ${BREW_PREFIX}/share/pkgconfig:\
 ${BREW_PC_OSDIR}:\
 ${PREFIX}/lib/pkgconfig:\
 ${CONDA_PREFIX}/lib/pkgconfig"
 
-# Bypass the libgnomecanvas check; Bandicoot doesn't need the 2D ligand
-# editor.
-export GNOME_CANVAS_CFLAGS=""
-export GNOME_CANVAS_LIBS=""
+# v0.1.0.2: libgnomecanvas-2.0 is now built from source into
+# ${HOME}/sw/canvas-deps (PKG_CONFIG_PATH above picks it up). This
+# enables HAVE_GNOME_CANVAS at compile time, which unlocks Sequence
+# View (Draw menu), the 2D ligand editor, and the geometry graphs
+# (Ramachandran etc.). canvas-deps/lib/pkgconfig also ships shim
+# .pc files for bzip2 and x11/xcb/xext/xrender (those don't exist
+# under Homebrew on macOS but are referenced via cairo/freetype2's
+# private requires; Bandicoot doesn't actually link against any of
+# them at runtime).
 
 echo "==> ./configure --prefix=${PREFIX}"
 ./configure \
     --prefix="${PREFIX}" \
     --with-fftw-prefix="${FFTW_PREFIX}" \
-    --without-gnomecanvas \
     --with-glut-prefix="${BREW_PREFIX}" \
     --with-boost="${BREW_PREFIX}" \
     --with-python="${CONDA_PREFIX}" \

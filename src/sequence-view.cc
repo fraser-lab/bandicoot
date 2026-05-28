@@ -110,12 +110,38 @@ coot::sequence_view::setup_internal(mmdb::Manager *mol_in) {
 #if defined(WINDOWS_MINGW) || defined(_MSC_VER)
    fixed_font = "monospace";
    res_scale = 8;
-#endif   
+#endif
+
+   // v0.1.0.2: drive the sequence view's font and column spacing from Coot's
+   // global atom_label_font_size preference (Edit > Settings... > Font Size).
+   // The X11 "fixed" alias isn't registered on Quartz; gdk_font_load returns
+   // NULL and res_width collapses to 0, smushing the whole sequence into a
+   // few-pixel-wide strip. Use a real Pango font description on macOS so the
+   // GnomeCanvas text items render at a usable size that tracks the user's
+   // small/medium/large choice.
+#ifdef __APPLE__
+   int pango_pt;
+   switch (graphics_info_t::atom_label_font_size) {
+      case 1:  pango_pt =  9; res_scale =  7; row_scale = 11; break;
+      case 3:  pango_pt = 16; res_scale = 12; row_scale = 19; break;
+      case 2:
+      default: pango_pt = 12; res_scale =  9; row_scale = 14; break;
+   }
+   {
+      char buf[64];
+      snprintf(buf, sizeof(buf), "Menlo %d", pango_pt);
+      fixed_font = buf;
+   }
+#else
    GdkFont *font;
    font = gdk_font_load(fixed_font.c_str());
-   gint res_width = gdk_string_width(font, "m");
-   //std::cout <<"BL DEBUG:: font width calc "<<res_width <<" and set " << res_scale<< std::endl;
-   res_scale = res_width + 2;
+   gint res_width = font ? gdk_string_width(font, "m") : 0;
+   if (res_width < 5) {
+      res_scale = 8;
+   } else {
+      res_scale = res_width + 2;
+   }
+#endif
 
    tooltip_item = NULL;
    tooltip_item_text = NULL;

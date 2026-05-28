@@ -369,7 +369,7 @@ graphics_info_t::intelligent_near_atom_centring(GtkWidget *go_to_atom_window,
                                                          if (svc) {
                                                             mmdb::Residue *residue_p = next_atom->residue;
                                                             if (residue_p) {
-#if defined(HAVE_GNOME_CANVAS)
+#if defined(HAVE_GOOCANVAS)
                                                                exptl::nsv *nsv = static_cast<exptl::nsv *>(g_object_get_data(G_OBJECT(svc), "nsv"));
                                                                if (nsv)
                                                                   nsv->highlight_residue(residue_p);
@@ -1257,7 +1257,7 @@ graphics_info_t::sequence_view_highlight_residue_maybe(mmdb::Atom *atom, GtkWidg
       if (atom) {
          mmdb::Residue *residue_p = atom->residue;
          if (residue_p) {
-#if defined(HAVE_GNOME_CANVAS)
+#if defined(HAVE_GOOCANVAS)
             exptl::nsv *nsv = static_cast<exptl::nsv *>(g_object_get_data(G_OBJECT(svc), "nsv"));
             if (nsv) {
                nsv->highlight_residue(residue_p);

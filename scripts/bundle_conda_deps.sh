@@ -19,6 +19,10 @@ set -e
 PREFIX="${1:?Usage: $0 <install-prefix> [conda-prefix]}"
 PREFIX="$(cd "$PREFIX" && pwd)"
 CONDA_PREFIX_ARG="${2:-${CONDA_PREFIX:-/opt/miniconda3}}"
+# v0.1.0.2: separate prefix for libgnomecanvas-2.0 + libart_lgpl_2 built
+# from source (archived GNOME 2 libs, not in Homebrew). Override via
+# CANVAS_DEPS_PREFIX env var.
+CANVAS_DEPS_PREFIX="${CANVAS_DEPS_PREFIX:-$HOME/sw/canvas-deps}"
 
 [ -d "$PREFIX/lib" ]              || { echo "error: $PREFIX/lib missing" >&2; exit 1; }
 [ -d "$CONDA_PREFIX_ARG/lib" ]    || { echo "error: $CONDA_PREFIX_ARG/lib missing" >&2; exit 1; }
@@ -70,9 +74,20 @@ for lib in "${FFTW_LIBS[@]}"; do
     copy_lib "$CONDA_PREFIX_ARG/fftw2/lib/$lib" || true
 done
 
+# v0.1.0.2: libgnomecanvas-2.0 + libart_lgpl_2 from $CANVAS_DEPS_PREFIX.
+CANVAS_LIBS=(
+    libgnomecanvas-2.0.dylib
+    libart_lgpl_2.2.dylib
+)
+if [ -d "$CANVAS_DEPS_PREFIX/lib" ]; then
+    for lib in "${CANVAS_LIBS[@]}"; do
+        copy_lib "$CANVAS_DEPS_PREFIX/lib/$lib" || true
+    done
+fi
+
 echo "==> rewriting install_names and inter-library references"
 
-ALL_BUNDLED=("${TOPLEVEL_LIBS[@]}" "${FFTW_LIBS[@]}")
+ALL_BUNDLED=("${TOPLEVEL_LIBS[@]}" "${FFTW_LIBS[@]}" "${CANVAS_LIBS[@]}")
 
 for lib in "${ALL_BUNDLED[@]}"; do
     path="$PREFIX/lib/$lib"
@@ -148,6 +163,25 @@ done
 for dylib in "$PREFIX"/lib/*.dylib; do
     [ -f "$dylib" ] || continue
     rewrite_external_in "$dylib"
+done
+
+# v0.1.0.2: rewrite absolute $CANVAS_DEPS_PREFIX/lib/ refs in executables
+# and bundled dylibs to @rpath/<basename>. coot-bin links via the absolute
+# path because we built libgnomecanvas-2.0 + libart_lgpl_2 into a custom
+# prefix; without this they'd fail dyld lookup once moved off the build host.
+rewrite_canvas_in() {
+    local file="$1"
+    file -b "$file" 2>/dev/null | grep -q "Mach-O" || return 0
+    chmod u+w "$file" 2>/dev/null
+    for lib in "${CANVAS_LIBS[@]}"; do
+        install_name_tool -change "$CANVAS_DEPS_PREFIX/lib/$lib" \
+                                  "@rpath/$lib" "$file" 2>/dev/null || true
+    done
+}
+for d in libexec bin lib; do
+    [ -d "$PREFIX/$d" ] || continue
+    while IFS= read -r f; do rewrite_canvas_in "$f"; done \
+        < <(find "$PREFIX/$d" -type f)
 done
 
 echo "==> normalising conda rpath on binaries in libexec/ and bin/"

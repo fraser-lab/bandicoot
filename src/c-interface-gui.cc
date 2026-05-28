@@ -5698,6 +5698,13 @@ void set_sequence_view_is_docked(short int state) {
 
 void nsv(int imol) {
 
+#if !defined(HAVE_GOOCANVAS)
+   // v0.1.0.2: nsv.cc is gated to HAVE_GOOCANVAS only (see comment there);
+   // route to the GnomeCanvas-based sequence_view_old_style instead.
+   sequence_view_old_style(imol);
+   return;
+#endif
+
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
 
    if (is_valid_model_molecule(imol)) {

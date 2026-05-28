@@ -25,7 +25,14 @@
 #endif
 
 
-#if defined(HAVE_GNOME_CANVAS) || defined (HAVE_GOOCANVAS)
+// v0.1.0.2: upstream Coot's nsv.cc unconditionally touches members
+// (`current_highlight_residue`, GooCanvasItem*, etc.) that nsv.hh only
+// declares under HAVE_GOOCANVAS -- so this TU can't actually compile in
+// a HAVE_GNOME_CANVAS-only build (which is what we have on macOS via
+// our from-source libgnomecanvas-2.0). Restrict it to HAVE_GOOCANVAS,
+// and let c-interface-gui.cc's `nsv()` wrapper fall back to
+// sequence_view_old_style (GnomeCanvas-based) when goocanvas is absent.
+#if defined(HAVE_GOOCANVAS)
 
 // Don't forget to enable
 // g.set_sequence_view_is_displayed(seq_view->Canvas(), imol) in nsv()
