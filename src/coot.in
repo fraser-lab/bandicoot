@@ -207,12 +207,50 @@ else
   export PYTHONPATH="$extra_pypath:${extra_pypath//lib/lib64}:$PYTHONPATH"
 fi
 
+# Bandicoot v0.1.0.1: harden against env leakage from parent processes.
+# Upstream Coot's wrapper above is Py2-flavoured and sets PYTHONHOME to
+# paths that don't exist on a Py3 install. When Bandicoot is launched
+# from SBGrid's phenix.refine (or any caller that exports its own
+# PYTHONHOME / PYTHONPATH), the wrong values would break Python init.
+# Override unconditionally with values keyed to whatever conda Python
+# our libpython3.13.dylib was built against. Falls back to unset if no
+# conda is found at the known paths; libpython then uses its compiled-
+# in default prefix.
+unset PYTHONHOME
+for _bcoot_conda in /opt/miniconda3 /opt/anaconda3 "$HOME/miniconda3" "$HOME/anaconda3"; do
+    if [ -x "$_bcoot_conda/bin/python3" ]; then
+        PYTHONHOME="$_bcoot_conda"
+        break
+    fi
+done
+unset _bcoot_conda
+# PYTHONPATH: prepend our coot/ module dir but preserve whatever the
+# parent process set (Phenix's libtbx etc. ride along this way). Strip
+# obvious version-incompatible entries -- a /python3.9/ or /python2.7/
+# site-packages would shadow our 3.13 imports with mismatched C
+# extensions and crash on first use.
+if [ -n "$PYTHONPATH" ]; then
+    PYTHONPATH=$(printf '%s\n' "$PYTHONPATH" | tr ':' '\n' | \
+                 grep -v '/python3\.9/' | grep -v '/python2\.7/' | \
+                 grep -v '/python3\.8/' | grep -v '/python3\.10/' | \
+                 grep -v '/python3\.11/' | grep -v '/python3\.12/' | \
+                 tr '\n' ':' | sed 's/:$//')
+fi
+if [ -n "$COOT_PYTHON_DIR" ]; then
+    if [ -n "$PYTHONPATH" ]; then
+        PYTHONPATH="$COOT_PYTHON_DIR:$PYTHONPATH"
+    else
+        PYTHONPATH="$COOT_PYTHON_DIR"
+    fi
+fi
+export PYTHONPATH
+
 export SYMINFO
 export COOT_PREFIX
 export COOT_STANDARD_RESIDUES
 # export COOT_REFMAC_LIB_DIR
 export COOT_PYTHON_DIR
-# export PYTHONPATH
+# export PYTHONPATH  -- exported just above by the v0.1.0.1 hardening block
 export PYTHONHOME
 export COOT_SCHEME_DIR
 export COOT_REF_STRUCTS
