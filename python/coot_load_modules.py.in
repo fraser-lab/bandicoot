@@ -72,6 +72,28 @@ try:
     sys.modules.setdefault('commands', _bandicoot_subprocess)
 except ImportError:
     pass
+# v0.1.0.4: re-inject the Py2 `types.StringType` / `types.IntType` / etc. names
+# that Py3's `types` module dropped. ~26 sites across coot's python/ tree do
+# `from types import StringType` (and friends) before later isinstance checks.
+# Each maps to the matching builtin in Py3.
+try:
+    import types as _bandicoot_types
+    for _legacy, _builtin in (
+        ('StringType', str),
+        ('UnicodeType', str),
+        ('IntType', int),
+        ('LongType', int),
+        ('FloatType', float),
+        ('BooleanType', bool),
+        ('ListType', list),
+        ('TupleType', tuple),
+        ('DictType', dict),
+        ('NoneType', type(None)),
+    ):
+        if not hasattr(_bandicoot_types, _legacy):
+            setattr(_bandicoot_types, _legacy, _builtin)
+except ImportError:
+    pass
 try:
     import xmlrpc.server, xmlrpc.client
     sys.modules.setdefault('SimpleXMLRPCServer', sys.modules['xmlrpc.server'])

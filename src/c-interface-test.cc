@@ -441,7 +441,8 @@ SCM test_function_scm(SCM i_scm, SCM j_scm) {
 
       auto get_alphafold_model_via_uniprot = [] (const std::string &uniprot_id) {
 
-         std::string fn_tail = std::string("AF-") + uniprot_id + std::string("-F1-model_v3.pdb");
+         // v0.1.0.4: bumped to v6 (see c-interface-network.cc).
+         std::string fn_tail = std::string("AF-") + uniprot_id + std::string("-F1-model_v6.pdb");
          std::string fn = coot::util::append_dir_file("coot-download", fn_tail);
          // make coot-download if needed
          std::string url = std::string("https://alphafold.ebi.ac.uk/files/") + fn_tail;

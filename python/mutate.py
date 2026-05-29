@@ -179,10 +179,12 @@ def mutate_nucleotide_range(imol, chain_id, resno_start, resno_end, sequence):
          info_dialog(s)
          print(s)
       else:
-         residue_types = map(nucleotide_letter2three_letter_code,
-                             sequence.upper())
-         for res_no, res_type in map(None,
-                                     range(resno_start, resno_end + 1),
+         # v0.1.0.4: Py2 map() returned a list; Py3 returns an iterator. zip is
+         # fine since the caller guaranteed equal lengths above. The original
+         # `map(None, ...)` was Py2's zip-with-None-padding idiom.
+         residue_types = list(map(nucleotide_letter2three_letter_code,
+                                  sequence.upper()))
+         for res_no, res_type in zip(range(resno_start, resno_end + 1),
                                      residue_types):
             if res_type:
                mutate_base(imol, chain_id, res_no, "", res_type)

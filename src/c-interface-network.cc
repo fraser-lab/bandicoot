@@ -483,7 +483,12 @@ void fetch_and_superpose_alphafold_models(int imol) {
 int
 fetch_alphafold_model_for_uniprot_id(const std::string &uniprot_id) {
 
-   std::string fn_tail = std::string("AF-") + uniprot_id + std::string("-F1-model_v3.pdb");
+   // v0.1.0.4: AlphaFold-EBI currently serves model_v6. v3 (upstream
+   // hardcoded) is the original AlphaFold release; v4/v5 were intermediate;
+   // newer UniProt entries (e.g. A0AAU9GB17, accessed via the AlphaFold
+   // Protein Structure Database 2026-05) only exist at v6. Older entries
+   // generally still resolve at v3 too, but only v6 is universal now.
+   std::string fn_tail = std::string("AF-") + uniprot_id + std::string("-F1-model_v6.pdb");
    // make coot-download if needed
    std::string download_dir = "coot-download";
    download_dir = coot::get_directory(download_dir.c_str());
