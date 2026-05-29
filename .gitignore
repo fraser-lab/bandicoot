@@ -71,3 +71,7 @@ cootrc
 .DS_Store
 .claude/
 *~
+
+# v0.1.0.3 per-build counter + generated header
+.build-counter
+src/bandicoot-build-id.h

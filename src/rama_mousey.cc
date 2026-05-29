@@ -95,6 +95,21 @@ on_dynarama2_cancel_button_clicked(GtkButton *button, gpointer user_data) {
 
    GtkWidget *canvas = GTK_WIDGET(user_data);
    coot::rama_plot *plot = static_cast<coot::rama_plot *> (gtk_object_get_user_data(GTK_OBJECT(canvas)));
+   // v0.1.0.3: match the null-guard pattern of on_dynarama2_ok_button_clicked
+   // and on_dynarama2_window_destroy. plot can be NULL on this GTK2-Quartz
+   // build when the dynarama dialog is dismissed before its rama_plot is
+   // fully attached to the canvas user_data; dereferencing it SEGVs.
+   if (!plot) {
+      std::cout << "failed to get the plot from " << canvas << std::endl;
+      // Avoid lookup_widget (not linked into dynarama-bin). The canvas's
+      // toplevel is the dynarama window itself, so destroying that closes
+      // the dialog.
+      GtkWidget *toplevel = canvas ? gtk_widget_get_toplevel(canvas) : NULL;
+      if (toplevel && GTK_IS_WINDOW(toplevel)) {
+         gtk_widget_destroy(toplevel);
+      }
+      return;
+   }
    if (plot->is_stand_alone())
       gtk_exit(0);
    else {

@@ -73,7 +73,13 @@ main(int argc, char *argv[]) {
 
 #ifdef USE_PYTHON
    Py_Initialize();
+#if PY_MAJOR_VERSION < 3
    PySys_SetArgv(argc, argv);
+#else
+   // v0.1.0.3: Py3 PySys_SetArgv takes wchar_t** instead of char**. lidia
+   // is the standalone ligand-builder binary; argv-to-sys propagation isn't
+   // load-bearing for the typical workflow, so skip rather than convert.
+#endif
    PyRun_SimpleString("global user_defined_alert_smarts ; user_defined_alert_smarts = []");
 #endif
    

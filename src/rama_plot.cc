@@ -463,17 +463,18 @@ coot::rama_plot::init_internal(const std::string &mol_name,
 
    gtk_widget_set_can_focus(canvas, TRUE);
 
-   // It seems that we cannot remove the general accelerators from the entry
-   // so they would interfere with the input. Therefore (as long as there is
-   // only +, -, we disable them as accellerators and use them as key press
-   // events. In case we use other accellerators we need to revise this.
-   GSList *accel_grp_ls;
-   GtkAccelGroup *accel_gr;
-   accel_grp_ls = gtk_accel_groups_from_object(G_OBJECT(dynawin));
+   // v0.1.0.3: upstream Coot walked the accel-group list and removed each
+   // group inside the loop -- but gtk_window_remove_accel_group mutates
+   // the very list we're iterating, so `accel_grp_ls->next` after a
+   // remove dereferenced freed memory and SEGV'd. Capture `next` before
+   // the remove. (Linux build dodged it by GLib happening to keep the
+   // freed node's next-pointer valid; macOS heap allocator doesn't.)
+   GSList *accel_grp_ls = gtk_accel_groups_from_object(G_OBJECT(dynawin));
    while (accel_grp_ls) {
-      accel_gr = GTK_ACCEL_GROUP(accel_grp_ls->data);
+      GSList *next = accel_grp_ls->next;
+      GtkAccelGroup *accel_gr = GTK_ACCEL_GROUP(accel_grp_ls->data);
       gtk_window_remove_accel_group(GTK_WINDOW(dynawin), accel_gr);
-      accel_grp_ls = accel_grp_ls->next;
+      accel_grp_ls = next;
    }
 
 #endif

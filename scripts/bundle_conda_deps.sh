@@ -78,6 +78,7 @@ done
 CANVAS_LIBS=(
     libgnomecanvas-2.0.dylib
     libart_lgpl_2.2.dylib
+    libgoocanvas.3.dylib
 )
 if [ -d "$CANVAS_DEPS_PREFIX/lib" ]; then
     for lib in "${CANVAS_LIBS[@]}"; do

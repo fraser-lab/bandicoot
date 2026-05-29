@@ -381,7 +381,7 @@ def new_molecule_by_smiles_string(tlc_text, smiles_text, force_libcheck=False):
        cif_file_name = "libcheck_" + three_letter_code + ".cif"
 
        # write the smiles string to a file
-       smiles_input = file(smiles_file,'w')
+       smiles_input = open(smiles_file,'w')
        smiles_input.write(smiles_text)
        smiles_input.close()
 
@@ -483,7 +483,7 @@ def new_molecule_by_smiles_string_by_acedrg(tlc_str, smiles_str):
     smi_file = "acedrg-in.smi"
 
     # dump the smiles string to a file
-    smiles_input = file(smi_file,'w')
+    smiles_input = open(smi_file,'w')
     smiles_input.write(smiles_str)
     smiles_input.close()
 

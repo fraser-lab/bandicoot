@@ -327,7 +327,7 @@ def write_reduce_het_dict(imol, reduce_het_dict_file_name):
   if con_file_names:
     fin = open(reduce_het_dict_file_name, 'w')
     for file_name in con_file_names:
-      shutil.copyfileobj(open(file_name, 'rb'), fin)
+      shutil.copyfileobj(open(file_name, 'r'), fin)
     fin.close()
     
       
@@ -339,7 +339,7 @@ def prepare_file_for_probe(file_in, file_out):
     except IOError:
       print("BL WARNING:: Cannot read ", file_in)
     try:
-      fout = file(file_out,'w')
+      fout = open(file_out,'w')
     except IOError:
       print("BL WARNING:: Cannot write ", file_out)
     if (fin and fout):

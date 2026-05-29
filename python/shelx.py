@@ -63,7 +63,7 @@ def convert_shelx_fcf_to_cif(fcf_filename,cif_filename):
    except IOError:
     print("BL ERROR:: Cannot read ", fcf_filename)
    try:
-    fout = file(cif_filename,"w")
+    fout = open(cif_filename,"w")
    except IOError:
     print("BL ERROR:: Cannot write ", cif_filename)
    if (fin and fout):

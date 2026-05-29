@@ -3943,7 +3943,7 @@ def using_gui():
     if coot_has_guile():
         ret = run_scheme_command("(defined? 'coot-main-menubar)")
     if not ret:
-        ret = globals().has_key("coot_python")  # coot_main_menubar is not a global var
+        ret = "coot_python" in globals()  # coot_main_menubar is not a global var
     return ret
 
 ############################################################################################
