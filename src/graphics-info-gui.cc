@@ -645,10 +645,21 @@ graphics_info_t::set_transient_and_position(int widget_type, GtkWidget *window) 
 }
 
 
+#ifdef __APPLE__
+// Mirror status text to Bandicoot's native bottom status bar: the GTK
+// statusbar is occluded by the GL backing layer (see bandicoot_install_status_bar).
+// extern "C" to match the shim's linkage; declared here at namespace scope to
+// avoid this file's delicate include ordering.
+extern "C" void bandicoot_set_status_text(const char *text);
+#endif
+
 void
 graphics_info_t::add_status_bar_text(const std::string &text) const {
 
    if (use_graphics_interface_flag) {
+#ifdef __APPLE__
+      bandicoot_set_status_text(text.c_str());
+#endif
       if (statusbar) {
          std::string sbt = text;
          // If it is "too long" chop it down.

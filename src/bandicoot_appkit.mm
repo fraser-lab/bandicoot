@@ -301,62 +301,76 @@ extern "C" unsigned int bandicoot_make_text_texture(const char *text,
                                                     int *out_width,
                                                     int *out_height) {
     if (!text || !*text) return 0;
-    NSString *str = [NSString stringWithUTF8String:text];
-    if (!str) return 0;
 
-    // Use a monospaced face so atom labels (with their slash-separated
-    // chain/residue fields) line up vertically when stacked. Menlo ships
-    // with every macOS install. Fall back to the system fixed-pitch font
-    // if Menlo is somehow missing.
-    if (point_size < 8.0) point_size = 8.0;
-    NSFont *font = [NSFont fontWithName:@"Menlo" size:point_size];
-    if (!font) font = [NSFont userFixedPitchFontOfSize:point_size];
-    if (!font) font = [NSFont systemFontOfSize:point_size];
-    NSDictionary *attrs = @{
-        NSFontAttributeName:            font,
-        NSForegroundColorAttributeName: [NSColor whiteColor]
-    };
-    NSSize sz = [str sizeWithAttributes:attrs];
-    int w = (int)ceil(sz.width)  + 8;
-    int h = (int)ceil(sz.height) + 8;
-    if (w <= 0 || h <= 0) return 0;
-
-    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:NULL
-                      pixelsWide:w
-                      pixelsHigh:h
-                   bitsPerSample:8
-                 samplesPerPixel:4
-                        hasAlpha:YES
-                        isPlanar:NO
-                  colorSpaceName:NSDeviceRGBColorSpace
-                     bytesPerRow:w * 4
-                    bitsPerPixel:32];
-    if (!rep) return 0;
-
-    NSGraphicsContext *gc =
-        [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
-    [NSGraphicsContext saveGraphicsState];
-    [NSGraphicsContext setCurrentContext:gc];
-
-    // Transparent background, white text. Caller can tint via glColor.
-    [[NSColor clearColor] set];
-    NSRectFill(NSMakeRect(0, 0, w, h));
-    [str drawAtPoint:NSMakePoint(4, 4) withAttributes:attrs];
-
-    [gc flushGraphics];
-    [NSGraphicsContext restoreGraphicsState];
-
+    // v0.1.0.5: this function runs once per atom label per draw frame; the
+    // build doesn't use ARC so MRC rules apply. The original code leaked
+    // NSBitmapImageRep on every call (alloc/init gives +1 retain, never
+    // released) and accumulated autoreleased NSString/NSDictionary/NSGCtx
+    // until the event-loop drained its pool -- often minutes during heavy
+    // modeling. Result: 10-15 minute Jetsam OOM kill (SIGKILL), no Bandicoot
+    // crash log. Wrap the whole body in @autoreleasepool to drain transients
+    // per call, and explicitly release the bitmap rep.
     GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, [rep bitmapData]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    int w = 0, h = 0;
+    @autoreleasepool {
+        NSString *str = [NSString stringWithUTF8String:text];
+        if (!str) return 0;
+
+        // Use a monospaced face so atom labels (with their slash-separated
+        // chain/residue fields) line up vertically when stacked. Menlo ships
+        // with every macOS install. Fall back to the system fixed-pitch font
+        // if Menlo is somehow missing.
+        if (point_size < 8.0) point_size = 8.0;
+        NSFont *font = [NSFont fontWithName:@"Menlo" size:point_size];
+        if (!font) font = [NSFont userFixedPitchFontOfSize:point_size];
+        if (!font) font = [NSFont systemFontOfSize:point_size];
+        NSDictionary *attrs = @{
+            NSFontAttributeName:            font,
+            NSForegroundColorAttributeName: [NSColor whiteColor]
+        };
+        NSSize sz = [str sizeWithAttributes:attrs];
+        w = (int)ceil(sz.width)  + 8;
+        h = (int)ceil(sz.height) + 8;
+        if (w <= 0 || h <= 0) return 0;
+
+        NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+            initWithBitmapDataPlanes:NULL
+                          pixelsWide:w
+                          pixelsHigh:h
+                       bitsPerSample:8
+                     samplesPerPixel:4
+                            hasAlpha:YES
+                            isPlanar:NO
+                      colorSpaceName:NSDeviceRGBColorSpace
+                         bytesPerRow:w * 4
+                        bitsPerPixel:32];
+        if (!rep) return 0;
+
+        NSGraphicsContext *gc =
+            [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+        [NSGraphicsContext saveGraphicsState];
+        [NSGraphicsContext setCurrentContext:gc];
+
+        // Transparent background, white text. Caller can tint via glColor.
+        [[NSColor clearColor] set];
+        NSRectFill(NSMakeRect(0, 0, w, h));
+        [str drawAtPoint:NSMakePoint(4, 4) withAttributes:attrs];
+
+        [gc flushGraphics];
+        [NSGraphicsContext restoreGraphicsState];
+
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, [rep bitmapData]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        [rep release];
+    }
 
     if (out_width)  *out_width  = w;
     if (out_height) *out_height = h;
@@ -1636,5 +1650,112 @@ extern "C" void bandicoot_setup_window_raising(void) {
         g_signal_add_emission_hook(map_id, 0,
                                    bandicoot_window_map_hook,
                                    NULL, NULL);
+    }
+}
+
+// ---- Native status bar (bottom child window) ----------------------------
+//
+// GTK's main_window_statusbar lives on the GL-owned contentView and is
+// permanently occluded. We host the status text in a borderless child
+// NSWindow pinned flush to the bottom edge of the main window, full content
+// width. add_status_bar_text() funnels here via bandicoot_set_status_text().
+
+static const CGFloat BANDICOOT_STATUS_BAR_HEIGHT = 26.0;
+
+static NSWindow    *bandicoot_status_window = nil;  // the child strip (singleton)
+static NSTextField *bandicoot_status_field  = nil;  // its label (owned by contentView)
+static NSWindow    *bandicoot_status_parent = nil;  // the main NSWindow (unretained)
+
+static void bandicoot_reposition_status_bar(void) {
+    if (!bandicoot_status_window || !bandicoot_status_parent) return;
+    // Pin to the bottom edge of the parent's *content* area, full width, so
+    // the strip never overlaps the title bar / toolbar chrome at the top.
+    NSRect cf = [bandicoot_status_parent
+                    contentRectForFrameRect:bandicoot_status_parent.frame];
+    NSRect sf = NSMakeRect(cf.origin.x, cf.origin.y,
+                           cf.size.width, BANDICOOT_STATUS_BAR_HEIGHT);
+    [bandicoot_status_window setFrame:sf display:YES];
+}
+
+// Observes the parent window so the strip stays glued and full-width as the
+// user moves/resizes the main window. addChildWindow: handles the move, but
+// not the width, so we resync on every move/resize notification.
+@interface BandicootStatusObserver : NSObject
+@end
+@implementation BandicootStatusObserver
+- (void)parentGeometryChanged:(NSNotification *)note {
+    bandicoot_reposition_status_bar();
+}
+@end
+static BandicootStatusObserver *bandicoot_status_observer = nil;
+
+extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
+    @autoreleasepool {
+        if (!main_window) return;
+        if (bandicoot_status_window) return;  // already installed
+
+        GtkWidget *toplevel = gtk_widget_get_toplevel(main_window);
+        if (!toplevel || !toplevel->window) return;
+        NSWindow *win = (NSWindow *)gdk_quartz_window_get_nswindow(toplevel->window);
+        if (!win) return;
+
+        bandicoot_status_parent = win;  // unretained: parent outlives the strip
+
+        NSRect frame = NSMakeRect(0, 0, 400, BANDICOOT_STATUS_BAR_HEIGHT);
+        NSWindow *sw = [[NSWindow alloc] initWithContentRect:frame
+                                                   styleMask:NSWindowStyleMaskBorderless
+                                                     backing:NSBackingStoreBuffered
+                                                       defer:NO];
+        sw.releasedWhenClosed = NO;
+        sw.backgroundColor = [NSColor windowBackgroundColor];
+        sw.opaque = YES;
+        sw.hasShadow = NO;
+        [sw setIgnoresMouseEvents:YES];  // never steal clicks from the GL canvas
+
+        // Vertically center a ~17pt-tall label within the strip.
+        CGFloat fld_h = 17.0;
+        CGFloat fld_y = (BANDICOOT_STATUS_BAR_HEIGHT - fld_h) / 2.0;
+        NSTextField *tf = [[NSTextField alloc] initWithFrame:
+            NSMakeRect(8, fld_y, frame.size.width - 16, fld_h)];
+        tf.bezeled = NO;
+        tf.editable = NO;
+        tf.selectable = NO;
+        tf.drawsBackground = NO;
+        tf.font = [NSFont systemFontOfSize:13];
+        tf.textColor = [NSColor labelColor];
+        tf.lineBreakMode = NSLineBreakByTruncatingTail;
+        tf.stringValue = @"";
+        tf.autoresizingMask = NSViewWidthSizable;
+        [[sw contentView] addSubview:tf];
+        [tf release];                 // contentView now owns it (MRC: balance alloc)
+        bandicoot_status_field = tf;  // unretained ref, valid for the window's life
+
+        bandicoot_status_window = sw; // singleton, intentionally never released
+
+        // Glue to the parent: follows it on move, stays just above it in z.
+        [win addChildWindow:sw ordered:NSWindowAbove];
+
+        bandicoot_status_observer = [BandicootStatusObserver new];
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc addObserver:bandicoot_status_observer
+               selector:@selector(parentGeometryChanged:)
+                   name:NSWindowDidResizeNotification
+                 object:win];
+        [nc addObserver:bandicoot_status_observer
+               selector:@selector(parentGeometryChanged:)
+                   name:NSWindowDidMoveNotification
+                 object:win];
+
+        bandicoot_reposition_status_bar();
+        [sw orderFront:nil];
+    }
+}
+
+extern "C" void bandicoot_set_status_text(const char *text) {
+    if (!bandicoot_status_field) return;
+    @autoreleasepool {
+        NSString *s = text ? [NSString stringWithUTF8String:text] : @"";
+        if (!s) s = @"";  // invalid UTF-8 → stringWithUTF8String returns nil
+        bandicoot_status_field.stringValue = s;
     }
 }

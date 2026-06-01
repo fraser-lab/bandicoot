@@ -443,6 +443,12 @@ main (int argc, char *argv[]) {
 	       GtkWidget *mi = lookup_widget(window1, mi_name);
 	       if (mi) gtk_menu_item_activate(GTK_MENU_ITEM(mi));
 	    }
+
+	    // Install the native status bar (bottom child window). GTK's
+	    // main_window_statusbar is occluded by the GL backing layer, so
+	    // add_status_bar_text() also pushes to this. Must run after
+	    // gtk_widget_show(window1) so window1's NSWindow is realized.
+	    bandicoot_install_status_bar(window1);
 	 }
 #endif
 	 create_rot_trans_menutoolbutton_menu(window1);

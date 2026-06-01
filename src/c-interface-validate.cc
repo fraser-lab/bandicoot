@@ -2216,6 +2216,12 @@ void unset_lsq_plane_dialog() /* callback from destroy of widget */
 
    graphics_info_t::lsq_plane_dialog = 0;
    graphics_info_t::lsq_plane_atom_positions->resize(0);
+   // Closing the dialog must also disarm both pick modes, otherwise the
+   // button-press handler stays armed after the dialog is gone: leaving
+   // "Deviation of Atom" selected made every left-click try to measure a
+   // plane deviation and report "Not enough atoms to find plane".
+   graphics_info_t::in_lsq_plane_define = 0;
+   graphics_info_t::in_lsq_plane_deviation = 0;
 }
 
 void remove_last_lsq_plane_atom() {

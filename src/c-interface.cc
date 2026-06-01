@@ -6808,6 +6808,7 @@ void post_python_scripting_window() {
 
 #ifdef USE_PYTHON
 
+#ifndef __APPLE__
   if (graphics_info_t::python_gui_loaded_flag == TRUE) {
 
      // v0.1.0.1: GIL handling -- see safe_python_command.
@@ -6815,27 +6816,19 @@ void post_python_scripting_window() {
      PyRun_SimpleString("coot_gui()");
      PyGILState_Release(gstate);
 
-  } else {
-     // we don't get a proper status from python_gui_loaded_flag so
-     // lets check again here whether MAPVIEW_GUI_DIR was defined.
-     char *t;
-     t = getenv("COOT_PYTHON_DIR"); // was #defined
-     if (t) {
-        std::cout << "COOT_PYTHON_DIR was defined to be " << t << std::endl
-                  << "  but no PyGtk and hence no coot_gui."
-                  << std::endl;
-     } else {
-        std::cout << "COOT_PYTHON_DIR  was not defined - cannot open ";
-        std::cout << "scripting window" << std::endl;
-     }
-// so let's load the usual window!!
-  GtkWidget *window;
-  GtkWidget *python_entry;
-  window = create_python_window();
-
-  python_entry = lookup_widget(window, "python_window_entry");
-  setup_python_window_entry(python_entry); // USE_PYTHON and USE_GUILE used here
-  gtk_widget_show(window);
+  } else
+#endif
+  {
+     // BANDICOOT (__APPLE__): the python_gui_loaded_flag==TRUE path runs
+     // coot_gui(), which builds the scripting console via PyGtk -- i.e. the
+     // no-op gtk stub here, so nothing opens. Always use the C-built scripting
+     // window instead: a real GtkWindow in its own NSWindow that renders fine.
+     // Its Python entry callback (python_window_enter_callback) was GIL-fixed
+     // in v0.1.0.1. (On non-APPLE this remains the original fallback path.)
+     GtkWidget *window = create_python_window();
+     GtkWidget *python_entry = lookup_widget(window, "python_window_entry");
+     setup_python_window_entry(python_entry); // USE_PYTHON / USE_GUILE used here
+     gtk_widget_show(window);
   }
 
   // clear the entry here

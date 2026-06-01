@@ -99,6 +99,22 @@ unsigned int bandicoot_make_text_texture(const char *text,
                                          int *out_height);
 void bandicoot_free_text_texture(unsigned int tex);
 
+// Install a native status bar as a borderless child NSWindow pinned flush to
+// the bottom edge of the main window, full content width. GTK's in-window
+// main_window_statusbar lives on the GL-owned contentView and is permanently
+// occluded by the GtkGLExt-Quartz backing layer (same reason the menubar and
+// toolbars were moved out); a child NSWindow renders above the GL layer, like
+// the floated model toolbar. addChildWindow: keeps it glued to the parent on
+// move and a resize/move notification observer keeps its width in sync.
+// Call once at startup, after gtk_widget_show() has realized the main window.
+// No-op on non-macOS builds.
+void bandicoot_install_status_bar(GtkWidget *main_window);
+
+// Update the native status bar text. Funnelled here from
+// graphics_info_t::add_status_bar_text() under __APPLE__. No-op if the bar
+// has not been installed or on non-macOS builds.
+void bandicoot_set_status_text(const char *text);
+
 #ifdef __cplusplus
 }
 #endif
