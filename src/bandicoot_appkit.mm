@@ -215,11 +215,18 @@ static int bandicoot_gtk_menu_child_count(GtkMenuShell *shell) {
 // underscore-stripped GTK label.
 //   "Model/Fit/Refine..." — upstream's floating Glade dialog with rainbow
 //     icons; superseded by Bandicoot's permanent Model Tools side window.
+//   "All Molecule..." / "Modelling..." / "Modules..." / "NCS Tools..." / "PISA..."
+//     — dead extensions.py submenus (built with the stubbed pygtk gtk.Menu(), so
+//     they attach nothing and click to nowhere). Redundant/niche/doubly-dead —
+//     see the v0.1.1.0 todo. ("Modelling..."'s useful ops were folded into the
+//     "Other Modelling Tools..." dialog, so its item is suppressed too.)
 static BOOL bandicoot_suppress_menu_item(NSString *title) {
     static NSArray<NSString *> *suppress = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        suppress = @[ @"Model/Fit/Refine..." ];
+        suppress = @[ @"Model/Fit/Refine...",
+                      @"All Molecule...", @"Modelling...", @"Modules...",
+                      @"NCS Tools...", @"PISA..." ];
     });
     for (NSString *s in suppress) {
         if ([title isEqualToString:s]) return YES;
@@ -1689,6 +1696,29 @@ static void bandicoot_reposition_status_bar(void) {
 @end
 static BandicootStatusObserver *bandicoot_status_observer = nil;
 
+// A cosmetic resize grip drawn in the bottom-right of the status strip. The
+// strip's lower-right corner overlaps the main window's *functional* resize
+// corner, and the strip ignoresMouseEvents so the drag passes straight through
+// to the window -- this view is purely a visual hint that the corner resizes.
+@interface BandicootResizeGrip : NSView
+@end
+@implementation BandicootResizeGrip
+- (BOOL)isFlipped { return NO; }            // bottom-left origin
+- (NSView *)hitTest:(NSPoint)point { return nil; }  // never intercept the resize
+- (void)drawRect:(NSRect)dirty {
+    CGFloat w = self.bounds.size.width;
+    NSBezierPath *p = [NSBezierPath bezierPath];
+    [p setLineWidth:1.0];
+    [[NSColor tertiaryLabelColor] set];
+    for (int i = 0; i < 3; i++) {           // three nested diagonal ticks
+        CGFloat off = 3.0 + i * 3.5;
+        [p moveToPoint:NSMakePoint(w - off, 2.0)];
+        [p lineToPoint:NSMakePoint(w - 2.0, off)];
+    }
+    [p stroke];
+}
+@end
+
 extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
     @autoreleasepool {
         if (!main_window) return;
@@ -1716,7 +1746,7 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
         CGFloat fld_h = 17.0;
         CGFloat fld_y = (BANDICOOT_STATUS_BAR_HEIGHT - fld_h) / 2.0;
         NSTextField *tf = [[NSTextField alloc] initWithFrame:
-            NSMakeRect(8, fld_y, frame.size.width - 16, fld_h)];
+            NSMakeRect(8, fld_y, frame.size.width - 16 - 14, fld_h)];  // leave room for the grip
         tf.bezeled = NO;
         tf.editable = NO;
         tf.selectable = NO;
@@ -1729,6 +1759,15 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
         [[sw contentView] addSubview:tf];
         [tf release];                 // contentView now owns it (MRC: balance alloc)
         bandicoot_status_field = tf;  // unretained ref, valid for the window's life
+
+        // Cosmetic resize grip, pinned to the bottom-right (the strip's lower-
+        // right overlaps the window's functional resize corner).
+        const CGFloat grip = 14.0;
+        BandicootResizeGrip *rg = [[BandicootResizeGrip alloc] initWithFrame:
+            NSMakeRect(frame.size.width - grip, 0, grip, grip)];
+        rg.autoresizingMask = NSViewMinXMargin;   // stay glued to the right edge
+        [[sw contentView] addSubview:rg];
+        [rg release];                 // contentView owns it (MRC: balance alloc)
 
         bandicoot_status_window = sw; // singleton, intentionally never released
 

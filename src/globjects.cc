@@ -928,7 +928,7 @@ GdkModifierType graphics_info_t::button_3_mask_ = GDK_BUTTON3_MASK;
 short int graphics_info_t::display_density_level_on_screen = 1;
 short int graphics_info_t::display_density_level_this_image = 1;
 std::string graphics_info_t::display_density_level_screen_string =
-   "Welcome to Coot";
+   "Welcome to Bandicoot";
 
 // This kills the compiler:  Move the allocation to init.
 // GtkWidget **graphics_info_t::dynarama_is_displayed = new GtkWidget *[graphics_info_t::n_molecules_max];

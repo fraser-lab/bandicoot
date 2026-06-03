@@ -1748,7 +1748,753 @@ wrapped_create_fast_ss_search_dialog() {
 // Edit Functions that have been promoted from Extensions -> Modelling
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
+#ifdef __APPLE__
+// BANDICOOT: native C replacements for the molecule_chooser_gui() Python
+// dialogs, which are no-ops here because `gtk` is the stub module (see
+// python/coot_load_modules.py). The underlying ops (copy_molecule,
+// new_molecule_by_atom_selection) are already C; only the chooser UI was
+// stranded in Python. Builds a non-modal GtkDialog with a model-molecule
+// combobox (+ optional atom-selection entry) and runs the op on OK.
+int my_combobox_get_imol(GtkComboBox *combobox);   // gtk-manual.h
+enum { BANDICOOT_CHOOSER_COPY_MOLECULE = 0,
+       BANDICOOT_CHOOSER_COPY_FRAGMENT = 1 };
+
+typedef struct {
+   GtkWidget *combobox;
+   GtkWidget *entry;   // NULL unless this chooser has an atom-selection entry
+   int op_kind;
+} bandicoot_chooser_t;
+
+static void bandicoot_molecule_chooser_response(GtkDialog *dialog, gint response,
+                                                gpointer user_data) {
+   bandicoot_chooser_t *cd = (bandicoot_chooser_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combobox));
+      if (is_valid_model_molecule(imol)) {
+         if (cd->op_kind == BANDICOOT_CHOOSER_COPY_FRAGMENT && cd->entry) {
+            const char *sel = gtk_entry_get_text(GTK_ENTRY(cd->entry));
+            new_molecule_by_atom_selection(imol, sel);
+         } else {
+            copy_molecule(imol);
+         }
+      }
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_molecule_chooser_dialog(const char *title,
+                                              const char *label_text,
+                                              gboolean with_entry,
+                                              const char *entry_default,
+                                              int op_kind) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons(title, GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+
+   GtkWidget *label = gtk_label_new(label_text);
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+
+   GtkWidget *combobox = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combobox, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), combobox, FALSE, FALSE, 4);
+
+   bandicoot_chooser_t *cd = g_new0(bandicoot_chooser_t, 1);
+   cd->combobox = combobox;
+   cd->op_kind  = op_kind;
+
+   if (with_entry) {
+      GtkWidget *entry = gtk_entry_new();
+      gtk_entry_set_text(GTK_ENTRY(entry), entry_default ? entry_default : "//A/1-10");
+      gtk_box_pack_start(GTK_BOX(vbox), entry, FALSE, FALSE, 4);
+      cd->entry = entry;
+   }
+
+   g_signal_connect(dialog, "response",
+                    G_CALLBACK(bandicoot_molecule_chooser_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// BANDICOOT modelling ops salvaged from the dead extensions.py "Modelling..."
+// submenu (built with stubbed pygtk gtk.Menu()). The simple, genuinely-useful
+// ones act on the active atom's molecule/chain via active_atom_spec(). They are
+// surfaced as buttons appended into the existing "Other Modelling Tools" dialog
+// (see bandicoot_add_modelling_tools_buttons below) -- consolidating the two
+// menu items, which felt redundant.
+static int bandicoot_active_imol(coot::atom_spec_t *spec_out) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t> > aa = active_atom_spec();
+   if (! aa.first) {
+      add_status_bar_text("No active atom -- centre on a model atom first");
+      return -1;
+   }
+   if (spec_out) *spec_out = aa.second.second;
+   return aa.second.first;
+}
+static void bandicoot_modelling_fill_partial(GtkButton *b, gpointer u) {
+   int imol = bandicoot_active_imol(NULL);
+   if (is_valid_model_molecule(imol)) fill_partial_residues(imol);
+}
+static void bandicoot_modelling_delete_hydrogens(GtkButton *b, gpointer u) {
+   int imol = bandicoot_active_imol(NULL);
+   if (is_valid_model_molecule(imol)) delete_hydrogens(imol);
+}
+static void bandicoot_modelling_delete_sidechains(GtkButton *b, gpointer u) {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (is_valid_model_molecule(imol)) delete_sidechains_for_chain(imol, spec.chain_id.c_str());
+}
+
+// Append the salvaged modelling ops as a "Modelling Tools" frame into an
+// existing dialog's content area. Called from wrapped_create_other_model_tools_dialog
+// so "Other Modelling Tools..." absorbs the old "Modelling..." submenu's ops
+// (which is then suppressed from the menu).
+extern "C" void bandicoot_add_modelling_tools_buttons(GtkWidget *dialog) {
+   if (!dialog) return;
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   GtkWidget *frame = gtk_frame_new("Modelling Tools (active molecule/chain)");
+   GtkWidget *fbox = gtk_vbox_new(FALSE, 2);
+   gtk_container_set_border_width(GTK_CONTAINER(fbox), 4);
+   gtk_container_add(GTK_CONTAINER(frame), fbox);
+
+   const char *labels[3] = { "Fill Partial Residues",
+                             "Delete Hydrogen Atoms",
+                             "Delete Side-chains for Active Chain" };
+   GCallback cbs[3] = { G_CALLBACK(bandicoot_modelling_fill_partial),
+                        G_CALLBACK(bandicoot_modelling_delete_hydrogens),
+                        G_CALLBACK(bandicoot_modelling_delete_sidechains) };
+   for (unsigned int i = 0; i < 3; i++) {
+      GtkWidget *btn = gtk_button_new_with_label(labels[i]);
+      g_signal_connect(btn, "clicked", cbs[i], NULL);
+      gtk_box_pack_start(GTK_BOX(fbox), btn, FALSE, FALSE, 2);
+   }
+   gtk_box_pack_start(GTK_BOX(vbox), frame, FALSE, FALSE, 4);
+   gtk_widget_show_all(frame);
+}
+
+// ---- PanDDA Inspect panel -------------------------------------------------
+// A native panel driving python/bandicoot_pandda.py (parse pandda.analyse
+// results, navigate events, load model + aligned event/z maps). The Python
+// driver functions return a one-line status string, which we show in the panel.
+static GtkWidget *bandicoot_pandda_status_label = NULL;
+static GtkWidget *bandicoot_pandda_prev_btn = NULL;
+static GtkWidget *bandicoot_pandda_next_btn = NULL;
+static GtkWidget *bandicoot_pandda_prev_site_btn = NULL;
+static GtkWidget *bandicoot_pandda_next_site_btn = NULL;
+static GtkWidget *bandicoot_pandda_emap_check = NULL;
+static GtkWidget *bandicoot_pandda_zmap_check = NULL;
+static GtkWidget *bandicoot_pandda_place_btn = NULL;
+static GtkWidget *bandicoot_pandda_merge_btn = NULL;
+static GtkWidget *bandicoot_pandda_save_btn = NULL;
+static GtkWidget *bandicoot_pandda_load_btn = NULL;
+static GtkWidget *bandicoot_pandda_smiles_btn = NULL;
+static GtkWidget *bandicoot_pandda_sel_combo = NULL;
+static GtkWidget *bandicoot_pandda_xray_check = NULL;
+static GtkWidget *bandicoot_pandda_avg_check = NULL;
+static GtkWidget *bandicoot_pandda_interesting_check = NULL;
+static GtkWidget *bandicoot_pandda_conf_combo = NULL;
+static GtkWidget *bandicoot_pandda_comment_entry = NULL;
+static GtkWidget *bandicoot_pandda_dataset_view = NULL;   // "Go to" dataset list
+static GtkListStore *bandicoot_pandda_dataset_store = NULL;
+static GtkWidget *bandicoot_pandda_go_btn = NULL;
+static gboolean   bandicoot_pandda_refreshing = FALSE;  // suppress widget callbacks
+
+// Dataset-info value labels: crystal, resolution, r_work, r_free, event, site, BDC.
+#define BANDICOOT_PANDDA_NINFO 7
+static GtkWidget *bandicoot_pandda_info_val[BANDICOOT_PANDDA_NINFO] = { NULL };
+static const char *bandicoot_pandda_info_titles[BANDICOOT_PANDDA_NINFO] = {
+   "Crystal", "Resolution", "Rwork", "Rfree", "Event", "Site", "BDC" };
+
+// Ligand-confidence values, in the same order as PanddaInspect.CONFIDENCE_VALUES.
+static const char *bandicoot_pandda_conf_values[] = {
+   "unassigned", "no ligand bound", "unknown ligand",
+   "low confidence", "high confidence" };
+
+// Navigation/editing widgets are usable only when a dataset is loaded (the
+// Select-folder and Close buttons stay enabled at all times).
+static void bandicoot_pandda_set_nav_sensitive(gboolean on) {
+   GtkWidget *w[] = { bandicoot_pandda_prev_btn,      bandicoot_pandda_next_btn,
+                      bandicoot_pandda_prev_site_btn, bandicoot_pandda_next_site_btn,
+                      bandicoot_pandda_emap_check,     bandicoot_pandda_zmap_check,
+                      bandicoot_pandda_xray_check,     bandicoot_pandda_avg_check,
+                      bandicoot_pandda_load_btn,       bandicoot_pandda_smiles_btn,
+                      bandicoot_pandda_place_btn,      bandicoot_pandda_merge_btn,
+                      bandicoot_pandda_save_btn,       bandicoot_pandda_sel_combo,
+                      bandicoot_pandda_interesting_check, bandicoot_pandda_conf_combo,
+                      bandicoot_pandda_comment_entry,  bandicoot_pandda_dataset_view,
+                      bandicoot_pandda_go_btn };
+   for (unsigned i = 0; i < G_N_ELEMENTS(w); i++)
+      if (w[i]) gtk_widget_set_sensitive(w[i], on);
+}
+
+static void bandicoot_pandda_populate_datasets();   // defined below; used by handlers above it
+
+// Run a python driver command, show its returned status in the label, and
+// return that status so callers can distinguish success ("PanDDA N/M …") from
+// an error ("PanDDA: …").
+static std::string bandicoot_pandda_run(const std::string &cmd) {
+   std::string s;
+#ifdef USE_PYTHON
+   PyGILState_STATE g = PyGILState_Ensure();
+   PyObject *r = safe_python_command_with_return(cmd);
+   if (r && PyString_Check(r))
+      s = PyString_AsString(r);
+   PyGILState_Release(g);
+#endif
+   if (bandicoot_pandda_status_label && !s.empty())
+      gtk_label_set_text(GTK_LABEL(bandicoot_pandda_status_label), s.c_str());
+   return s;
+}
+
+// Query a python driver string without disturbing the status label.
+static std::string bandicoot_pandda_query(const std::string &cmd) {
+   std::string s;
+#ifdef USE_PYTHON
+   PyGILState_STATE g = PyGILState_Ensure();
+   PyObject *r = safe_python_command_with_return(cmd);
+   if (r && PyString_Check(r))
+      s = PyString_AsString(r);
+   PyGILState_Release(g);
+#endif
+   return s;
+}
+
+// Pull the current event's annotations into the Interesting/Confidence/Comment
+// widgets. The refreshing flag stops the widgets' own callbacks from writing
+// back while we set them programmatically.
+static void bandicoot_pandda_refresh_annotations() {
+   bandicoot_pandda_refreshing = TRUE;
+   if (bandicoot_pandda_interesting_check) {
+      std::string v = bandicoot_pandda_query("bandicoot_pandda.get_interesting()");
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bandicoot_pandda_interesting_check),
+                                   v == "True");
+   }
+   if (bandicoot_pandda_conf_combo) {
+      std::string v = bandicoot_pandda_query("bandicoot_pandda.get_confidence()");
+      int idx = 0;
+      for (unsigned i = 0; i < G_N_ELEMENTS(bandicoot_pandda_conf_values); i++)
+         if (v == bandicoot_pandda_conf_values[i]) { idx = i; break; }
+      gtk_combo_box_set_active(GTK_COMBO_BOX(bandicoot_pandda_conf_combo), idx);
+   }
+   if (bandicoot_pandda_comment_entry) {
+      std::string v = bandicoot_pandda_query("bandicoot_pandda.get_comment()");
+      if (v == "None") v = "";
+      gtk_entry_set_text(GTK_ENTRY(bandicoot_pandda_comment_entry), v.c_str());
+   }
+   // Dataset Info: split the '|'-joined fields into the value labels.
+   if (bandicoot_pandda_info_val[0]) {
+      std::string info = bandicoot_pandda_query("bandicoot_pandda.get_info()");
+      size_t start = 0;
+      for (int i = 0; i < BANDICOOT_PANDDA_NINFO; i++) {
+         std::string field;
+         if (start <= info.size()) {
+            size_t bar = info.find('|', start);
+            field = info.substr(start, bar == std::string::npos ? std::string::npos
+                                                                : bar - start);
+            start = (bar == std::string::npos) ? info.size() + 1 : bar + 1;
+         }
+         gtk_label_set_text(GTK_LABEL(bandicoot_pandda_info_val[i]), field.c_str());
+      }
+   }
+   bandicoot_pandda_refreshing = FALSE;
+}
+
+// A titled frame wrapping a child widget (the Krojer-style sectioning).
+static GtkWidget *bandicoot_pandda_frame(const char *title, GtkWidget *child) {
+   GtkWidget *f = gtk_frame_new(title);
+   gtk_container_set_border_width(GTK_CONTAINER(f), 2);
+   gtk_container_add(GTK_CONTAINER(f), child);
+   return f;
+}
+
+// Run a navigation command, then refresh the annotation widgets for the new event.
+static void bandicoot_pandda_nav(const char *cmd) {
+   bandicoot_pandda_run(cmd);
+   bandicoot_pandda_refresh_annotations();
+}
+
+// escape \ and ' so a C string can be embedded in a python single-quoted literal
+static std::string bandicoot_pandda_py_escape(const char *s) {
+   std::string e;
+   for (const char *p = s; p && *p; ++p) {
+      if (*p == '\\' || *p == '\'') e += '\\';
+      e += *p;
+   }
+   return e;
+}
+
+static void bandicoot_pandda_next(GtkButton *b, gpointer u) {
+   bandicoot_pandda_nav("bandicoot_pandda.next_event()");
+}
+static void bandicoot_pandda_prev(GtkButton *b, gpointer u) {
+   bandicoot_pandda_nav("bandicoot_pandda.prev_event()");
+}
+static void bandicoot_pandda_next_site(GtkButton *b, gpointer u) {
+   bandicoot_pandda_nav("bandicoot_pandda.next_site()");
+}
+static void bandicoot_pandda_prev_site(GtkButton *b, gpointer u) {
+   bandicoot_pandda_nav("bandicoot_pandda.prev_site()");
+}
+static void bandicoot_pandda_toggle_emap(GtkToggleButton *t, gpointer u) {
+   bandicoot_pandda_run(gtk_toggle_button_get_active(t)
+                        ? "bandicoot_pandda.set_show_emap(True)"
+                        : "bandicoot_pandda.set_show_emap(False)");
+}
+static void bandicoot_pandda_toggle_zmap(GtkToggleButton *t, gpointer u) {
+   bandicoot_pandda_run(gtk_toggle_button_get_active(t)
+                        ? "bandicoot_pandda.set_show_zmap(True)"
+                        : "bandicoot_pandda.set_show_zmap(False)");
+}
+static void bandicoot_pandda_toggle_xray(GtkToggleButton *t, gpointer u) {
+   bandicoot_pandda_run(gtk_toggle_button_get_active(t)
+                        ? "bandicoot_pandda.set_show_xray(True)"
+                        : "bandicoot_pandda.set_show_xray(False)");
+}
+static void bandicoot_pandda_toggle_avg(GtkToggleButton *t, gpointer u) {
+   bandicoot_pandda_run(gtk_toggle_button_get_active(t)
+                        ? "bandicoot_pandda.set_show_average(True)"
+                        : "bandicoot_pandda.set_show_average(False)");
+}
+static void bandicoot_pandda_selection_changed(GtkComboBox *c, gpointer u) {
+   if (bandicoot_pandda_refreshing) return;
+   gchar *txt = gtk_combo_box_get_active_text(c);
+   if (txt) {
+      bandicoot_pandda_run("bandicoot_pandda.set_selection('"
+                           + bandicoot_pandda_py_escape(txt) + "')");
+      g_free(txt);
+      bandicoot_pandda_refresh_annotations();
+      bandicoot_pandda_populate_datasets();   // filter narrowed/changed the view
+   }
+}
+static void bandicoot_pandda_interesting_toggled(GtkToggleButton *t, gpointer u) {
+   if (bandicoot_pandda_refreshing) return;
+   bandicoot_pandda_run(gtk_toggle_button_get_active(t)
+                        ? "bandicoot_pandda.set_interesting(True)"
+                        : "bandicoot_pandda.set_interesting(False)");
+}
+static void bandicoot_pandda_confidence_changed(GtkComboBox *c, gpointer u) {
+   if (bandicoot_pandda_refreshing) return;
+   gchar *txt = gtk_combo_box_get_active_text(c);
+   if (txt) {
+      bandicoot_pandda_run("bandicoot_pandda.set_confidence('"
+                           + bandicoot_pandda_py_escape(txt) + "')");
+      g_free(txt);
+   }
+}
+static void bandicoot_pandda_comment_commit(GtkEntry *e) {
+   if (bandicoot_pandda_refreshing) return;
+   bandicoot_pandda_run("bandicoot_pandda.set_comment('"
+                        + bandicoot_pandda_py_escape(gtk_entry_get_text(e)) + "')");
+}
+static void bandicoot_pandda_comment_activate(GtkEntry *e, gpointer u) {
+   bandicoot_pandda_comment_commit(e);
+}
+static gboolean bandicoot_pandda_comment_focus_out(GtkWidget *w, GdkEventFocus *ev,
+                                                   gpointer u) {
+   bandicoot_pandda_comment_commit(GTK_ENTRY(w));
+   return FALSE;   // let other handlers run
+}
+
+// Refill the "Go to" list with the dataset codes of the current selection
+// (dataset_list() reflects the active view order, so a filter narrows the list).
+static void bandicoot_pandda_populate_datasets() {
+   if (!bandicoot_pandda_dataset_store) return;
+   gtk_list_store_clear(bandicoot_pandda_dataset_store);
+   std::string s = bandicoot_pandda_query("bandicoot_pandda.dataset_list()");
+   size_t start = 0;
+   while (start < s.size()) {
+      size_t nl = s.find('\n', start);
+      std::string d = s.substr(start, nl == std::string::npos ? std::string::npos : nl - start);
+      if (!d.empty()) {
+         GtkTreeIter it;
+         gtk_list_store_append(bandicoot_pandda_dataset_store, &it);
+         gtk_list_store_set(bandicoot_pandda_dataset_store, &it, 0, d.c_str(), -1);
+      }
+      if (nl == std::string::npos) break;
+      start = nl + 1;
+   }
+}
+static void bandicoot_pandda_go_selected() {
+   if (!bandicoot_pandda_dataset_view) return;
+   GtkTreeSelection *sel =
+      gtk_tree_view_get_selection(GTK_TREE_VIEW(bandicoot_pandda_dataset_view));
+   GtkTreeModel *model = NULL;
+   GtkTreeIter it;
+   if (gtk_tree_selection_get_selected(sel, &model, &it)) {
+      gchar *d = NULL;
+      gtk_tree_model_get(model, &it, 0, &d, -1);
+      if (d) {
+         bandicoot_pandda_run("bandicoot_pandda.go_to_dataset('"
+                              + bandicoot_pandda_py_escape(d) + "')");
+         g_free(d);
+         bandicoot_pandda_refresh_annotations();
+      }
+   }
+}
+static void bandicoot_pandda_go_clicked(GtkButton *b, gpointer u) {
+   bandicoot_pandda_go_selected();
+}
+static void bandicoot_pandda_dataset_activated(GtkTreeView *v, GtkTreePath *p,
+                                               GtkTreeViewColumn *c, gpointer u) {
+   bandicoot_pandda_go_selected();   // double-click / Enter on a row = Go
+}
+static void bandicoot_pandda_place_ligand(GtkButton *b, gpointer u) {
+   bandicoot_pandda_run("bandicoot_pandda.place_ligand()");
+}
+static void bandicoot_pandda_merge_ligand(GtkButton *b, gpointer u) {
+   bandicoot_pandda_run("bandicoot_pandda.merge_ligand()");
+}
+static void bandicoot_pandda_save_model(GtkButton *b, gpointer u) {
+   bandicoot_pandda_run("bandicoot_pandda.save_model()");
+}
+static void bandicoot_pandda_load_ligand(GtkButton *b, gpointer u) {
+   GtkWidget *fc = gtk_file_chooser_dialog_new(
+      "Load ligand coordinates", NULL, GTK_FILE_CHOOSER_ACTION_OPEN,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OPEN,   GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkFileFilter *ff = gtk_file_filter_new();
+   gtk_file_filter_set_name(ff, "Ligand coords (pdb, cif, ent, mol)");
+   gtk_file_filter_add_pattern(ff, "*.pdb");   gtk_file_filter_add_pattern(ff, "*.ent");
+   gtk_file_filter_add_pattern(ff, "*.cif");   gtk_file_filter_add_pattern(ff, "*.mmcif");
+   gtk_file_filter_add_pattern(ff, "*.mol");   gtk_file_filter_add_pattern(ff, "*.mol2");
+   gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(fc), ff);
+   GtkFileFilter *fa = gtk_file_filter_new();
+   gtk_file_filter_set_name(fa, "All files");
+   gtk_file_filter_add_pattern(fa, "*");
+   gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(fc), fa);
+   if (gtk_dialog_run(GTK_DIALOG(fc)) == GTK_RESPONSE_ACCEPT) {
+      char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
+      if (path) {
+         bandicoot_pandda_run("bandicoot_pandda.load_ligand_file('"
+                              + bandicoot_pandda_py_escape(path) + "')");
+         g_free(path);
+      }
+   }
+   gtk_widget_destroy(fc);
+}
+static void bandicoot_pandda_smiles_ligand(GtkButton *b, gpointer u) {
+   GtkWidget *d = gtk_dialog_new_with_buttons(
+      "Ligand from SMILES", NULL, GTK_DIALOG_MODAL,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vb = gtk_dialog_get_content_area(GTK_DIALOG(d));
+   gtk_container_set_border_width(GTK_CONTAINER(vb), 8);
+   GtkWidget *t = gtk_table_new(2, 2, FALSE);
+   gtk_table_set_row_spacings(GTK_TABLE(t), 4);
+   gtk_table_set_col_spacings(GTK_TABLE(t), 6);
+   GtkWidget *l1 = gtk_label_new("3-letter code:");
+   gtk_misc_set_alignment(GTK_MISC(l1), 0.0, 0.5);
+   GtkWidget *tlc = gtk_entry_new();
+   gtk_entry_set_text(GTK_ENTRY(tlc), "LIG");
+   gtk_entry_set_max_length(GTK_ENTRY(tlc), 3);
+   GtkWidget *l2 = gtk_label_new("SMILES:");
+   gtk_misc_set_alignment(GTK_MISC(l2), 0.0, 0.5);
+   GtkWidget *smi = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(smi), 36);
+   gtk_entry_set_activates_default(GTK_ENTRY(smi), TRUE);
+   gtk_table_attach_defaults(GTK_TABLE(t), l1, 0, 1, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(t), tlc, 1, 2, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(t), l2, 0, 1, 1, 2);
+   gtk_table_attach_defaults(GTK_TABLE(t), smi, 1, 2, 1, 2);
+   gtk_box_pack_start(GTK_BOX(vb), t, FALSE, FALSE, 0);
+   gtk_dialog_set_default_response(GTK_DIALOG(d), GTK_RESPONSE_ACCEPT);
+   gtk_widget_show_all(d);
+   if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
+      std::string code = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(tlc)));
+      std::string ss   = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(smi)));
+      bandicoot_pandda_run("bandicoot_pandda.ligand_from_smiles('" + ss + "', '" + code + "')");
+   }
+   gtk_widget_destroy(d);
+}
+static void bandicoot_pandda_choose_folder(GtkButton *b, gpointer u) {
+   GtkWidget *fc = gtk_file_chooser_dialog_new(
+      "Select PanDDA folder", NULL, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OPEN,   GTK_RESPONSE_ACCEPT, (char *) NULL);
+   if (gtk_dialog_run(GTK_DIALOG(fc)) == GTK_RESPONSE_ACCEPT) {
+      char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
+      if (path) {
+         std::string esc;                       // escape \ and ' for the py literal
+         for (const char *p = path; *p; ++p) {
+            if (*p == '\\' || *p == '\'') esc += '\\';
+            esc += *p;
+         }
+         std::string s = bandicoot_pandda_run("bandicoot_pandda.set_folder('" + esc + "')");
+         // success status is "PanDDA N/M …"; an error is "PanDDA: …". On a bad
+         // folder the python driver resets to an empty state, so disable nav.
+         gboolean loaded = (!s.empty() && s.compare(0, 8, "PanDDA: ") != 0);
+         bandicoot_pandda_set_nav_sensitive(loaded);
+         if (loaded) {
+            // the new folder loads in default order -> reset the combo, then
+            // pull the first event's annotations into the widgets.
+            bandicoot_pandda_refreshing = TRUE;
+            if (bandicoot_pandda_sel_combo)
+               gtk_combo_box_set_active(GTK_COMBO_BOX(bandicoot_pandda_sel_combo), 0);
+            bandicoot_pandda_refreshing = FALSE;
+            bandicoot_pandda_refresh_annotations();
+            bandicoot_pandda_populate_datasets();
+         }
+         g_free(path);
+      }
+   }
+   gtk_widget_destroy(fc);
+}
+static void bandicoot_pandda_dialog_destroy(GtkObject *o, gpointer u) {
+   bandicoot_pandda_status_label = NULL;
+   bandicoot_pandda_prev_btn = NULL;
+   bandicoot_pandda_next_btn = NULL;
+   bandicoot_pandda_prev_site_btn = NULL;
+   bandicoot_pandda_next_site_btn = NULL;
+   bandicoot_pandda_emap_check = NULL;
+   bandicoot_pandda_zmap_check = NULL;
+   bandicoot_pandda_place_btn = NULL;
+   bandicoot_pandda_merge_btn = NULL;
+   bandicoot_pandda_save_btn = NULL;
+   bandicoot_pandda_load_btn = NULL;
+   bandicoot_pandda_smiles_btn = NULL;
+   bandicoot_pandda_sel_combo = NULL;
+   bandicoot_pandda_xray_check = NULL;
+   bandicoot_pandda_avg_check = NULL;
+   bandicoot_pandda_interesting_check = NULL;
+   bandicoot_pandda_conf_combo = NULL;
+   bandicoot_pandda_comment_entry = NULL;
+   bandicoot_pandda_dataset_view = NULL;
+   bandicoot_pandda_dataset_store = NULL;
+   bandicoot_pandda_go_btn = NULL;
+   for (int i = 0; i < BANDICOOT_PANDDA_NINFO; i++)
+      bandicoot_pandda_info_val[i] = NULL;
+}
+static void bandicoot_pandda_dialog_response(GtkDialog *d, gint r, gpointer u) {
+   gtk_widget_destroy(GTK_WIDGET(d));
+}
+
+extern "C" void bandicoot_pandda_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef USE_PYTHON
+   // import once so the button commands are single expressions (their return
+   // value reaches the status label, and they aren't double-executed).
+   safe_python_command("import bandicoot_pandda");
+#endif
+   // No transient parent: the Inspect dialog is its own top-level window so it
+   // does NOT move together with the main Bandicoot window.
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons("PanDDA Inspect", NULL,
+                                  (GtkDialogFlags) 0,
+                                  GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE, (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+
+   // ---- PanDDA Folder ----
+   GtkWidget *sel = gtk_button_new_with_label("Select PanDDA folder\xe2\x80\xa6");
+   g_signal_connect(sel, "clicked", G_CALLBACK(bandicoot_pandda_choose_folder), NULL);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("PanDDA Folder", sel),
+                      FALSE, FALSE, 2);
+
+   // ---- Event Selection ----
+   GtkWidget *sel_combo = gtk_combo_box_new_text();
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "All events");
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Sort by cluster size");
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Sort alphabetically");
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Unviewed only");
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Interesting only");
+   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Not modelled only");
+   gtk_combo_box_set_active(GTK_COMBO_BOX(sel_combo), 0);
+   g_signal_connect(sel_combo, "changed", G_CALLBACK(bandicoot_pandda_selection_changed), NULL);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Event Selection", sel_combo),
+                      FALSE, FALSE, 2);
+
+   // ---- Dataset Info (title | value rows, filled on each event load) ----
+   GtkWidget *info_tbl = gtk_table_new(BANDICOOT_PANDDA_NINFO, 2, FALSE);
+   gtk_table_set_row_spacings(GTK_TABLE(info_tbl), 1);
+   gtk_table_set_col_spacings(GTK_TABLE(info_tbl), 8);
+   gtk_container_set_border_width(GTK_CONTAINER(info_tbl), 3);
+   for (int i = 0; i < BANDICOOT_PANDDA_NINFO; i++) {
+      GtkWidget *t = gtk_label_new(bandicoot_pandda_info_titles[i]);
+      gtk_misc_set_alignment(GTK_MISC(t), 0.0, 0.5);
+      GtkWidget *v = gtk_label_new("");
+      gtk_misc_set_alignment(GTK_MISC(v), 0.0, 0.5);
+      gtk_label_set_selectable(GTK_LABEL(v), TRUE);
+      gtk_table_attach(GTK_TABLE(info_tbl), t, 0, 1, i, i + 1, GTK_FILL, GTK_FILL, 0, 0);
+      gtk_table_attach(GTK_TABLE(info_tbl), v, 1, 2, i, i + 1,
+                       (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+      bandicoot_pandda_info_val[i] = v;
+   }
+   GtkWidget *info_row = gtk_hbox_new(FALSE, 4);
+   gtk_box_pack_start(GTK_BOX(info_row),
+                      bandicoot_pandda_frame("Dataset Info", info_tbl), TRUE, TRUE, 0);
+
+   // ---- Go to (jump to a dataset; list reflects the current selection) ----
+   GtkWidget *gotobox = gtk_vbox_new(FALSE, 4);
+   GtkWidget *dset_scroll = gtk_scrolled_window_new(NULL, NULL);
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dset_scroll),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(dset_scroll), GTK_SHADOW_IN);
+   gtk_widget_set_size_request(dset_scroll, 130, 132);   // fixed-height list
+   bandicoot_pandda_dataset_store = gtk_list_store_new(1, G_TYPE_STRING);
+   GtkWidget *dset_view = gtk_tree_view_new_with_model(
+                             GTK_TREE_MODEL(bandicoot_pandda_dataset_store));
+   g_object_unref(bandicoot_pandda_dataset_store);   // the view now holds the ref
+   gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(dset_view), FALSE);
+   {
+      GtkCellRenderer *rend = gtk_cell_renderer_text_new();
+      GtkTreeViewColumn *dcol = gtk_tree_view_column_new_with_attributes(
+                                   "Dataset", rend, "text", 0, (char *) NULL);
+      gtk_tree_view_append_column(GTK_TREE_VIEW(dset_view), dcol);
+   }
+   g_signal_connect(dset_view, "row-activated",
+                    G_CALLBACK(bandicoot_pandda_dataset_activated), NULL);
+   gtk_container_add(GTK_CONTAINER(dset_scroll), dset_view);
+   gtk_box_pack_start(GTK_BOX(gotobox), dset_scroll, TRUE, TRUE, 0);
+   GtkWidget *go_btn = gtk_button_new_with_label("Go");
+   g_signal_connect(go_btn, "clicked", G_CALLBACK(bandicoot_pandda_go_clicked), NULL);
+   gtk_box_pack_start(GTK_BOX(gotobox), go_btn, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(info_row), bandicoot_pandda_frame("Go to", gotobox),
+                      FALSE, FALSE, 0);
+   bandicoot_pandda_dataset_view = dset_view;
+   bandicoot_pandda_go_btn = go_btn;
+
+   gtk_box_pack_start(GTK_BOX(vbox), info_row, FALSE, FALSE, 2);
+
+   // ---- Navigator ----
+   GtkWidget *navbox = gtk_vbox_new(FALSE, 4);
+   GtkWidget *nav = gtk_hbox_new(TRUE, 4);
+   GtkWidget *prev = gtk_button_new_with_label("\xe2\x97\x80 Prev event");
+   GtkWidget *next = gtk_button_new_with_label("Next event \xe2\x96\xb6");
+   g_signal_connect(prev, "clicked", G_CALLBACK(bandicoot_pandda_prev), NULL);
+   g_signal_connect(next, "clicked", G_CALLBACK(bandicoot_pandda_next), NULL);
+   gtk_box_pack_start(GTK_BOX(nav), prev, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(nav), next, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(navbox), nav, FALSE, FALSE, 0);
+   GtkWidget *snav = gtk_hbox_new(TRUE, 4);
+   GtkWidget *prev_site = gtk_button_new_with_label("\xe2\x97\x80 Prev site");
+   GtkWidget *next_site = gtk_button_new_with_label("Next site \xe2\x96\xb6");
+   g_signal_connect(prev_site, "clicked", G_CALLBACK(bandicoot_pandda_prev_site), NULL);
+   g_signal_connect(next_site, "clicked", G_CALLBACK(bandicoot_pandda_next_site), NULL);
+   gtk_box_pack_start(GTK_BOX(snav), prev_site, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(snav), next_site, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(navbox), snav, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Navigator", navbox),
+                      FALSE, FALSE, 2);
+
+   GtkWidget *maps = gtk_hbox_new(TRUE, 4);
+   GtkWidget *emap_check = gtk_check_button_new_with_label("Event map");
+   GtkWidget *zmap_check = gtk_check_button_new_with_label("Z-map");
+   GtkWidget *xray_check = gtk_check_button_new_with_label("(2)Fo-Fc");
+   GtkWidget *avg_check  = gtk_check_button_new_with_label("Average");
+   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(emap_check), TRUE);  // shown by default
+   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(zmap_check), TRUE);
+   // xray + average default OFF (loaded lazily on first toggle)
+   g_signal_connect(emap_check, "toggled", G_CALLBACK(bandicoot_pandda_toggle_emap), NULL);
+   g_signal_connect(zmap_check, "toggled", G_CALLBACK(bandicoot_pandda_toggle_zmap), NULL);
+   g_signal_connect(xray_check, "toggled", G_CALLBACK(bandicoot_pandda_toggle_xray), NULL);
+   g_signal_connect(avg_check,  "toggled", G_CALLBACK(bandicoot_pandda_toggle_avg), NULL);
+   gtk_box_pack_start(GTK_BOX(maps), emap_check, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(maps), zmap_check, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(maps), xray_check, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(maps), avg_check,  TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Toggle Maps", maps),
+                      FALSE, FALSE, 2);
+
+   // ---- Ligand Modeling ----
+   GtkWidget *ligbox = gtk_vbox_new(FALSE, 4);
+   GtkWidget *getlig = gtk_hbox_new(TRUE, 4);
+   GtkWidget *load_btn   = gtk_button_new_with_label("Load Ligand\xe2\x80\xa6");
+   GtkWidget *smiles_btn = gtk_button_new_with_label("Ligand from SMILES\xe2\x80\xa6");
+   g_signal_connect(load_btn,   "clicked", G_CALLBACK(bandicoot_pandda_load_ligand), NULL);
+   g_signal_connect(smiles_btn, "clicked", G_CALLBACK(bandicoot_pandda_smiles_ligand), NULL);
+   gtk_box_pack_start(GTK_BOX(getlig), load_btn,   TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(getlig), smiles_btn, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(ligbox), getlig, FALSE, FALSE, 0);
+   GtkWidget *lig = gtk_hbox_new(TRUE, 4);
+   GtkWidget *place_btn = gtk_button_new_with_label("Place Ligand");
+   GtkWidget *merge_btn = gtk_button_new_with_label("Merge Ligand");
+   g_signal_connect(place_btn, "clicked", G_CALLBACK(bandicoot_pandda_place_ligand), NULL);
+   g_signal_connect(merge_btn, "clicked", G_CALLBACK(bandicoot_pandda_merge_ligand), NULL);
+   gtk_box_pack_start(GTK_BOX(lig), place_btn, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(lig), merge_btn, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(ligbox), lig, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Ligand Modeling", ligbox),
+                      FALSE, FALSE, 2);
+
+   // ---- Annotation (written to pandda_inspect_events.csv) ----
+   GtkWidget *annobox = gtk_vbox_new(FALSE, 4);
+   GtkWidget *anno = gtk_hbox_new(FALSE, 6);
+   GtkWidget *interesting_check = gtk_check_button_new_with_label("Interesting");
+   g_signal_connect(interesting_check, "toggled",
+                    G_CALLBACK(bandicoot_pandda_interesting_toggled), NULL);
+   gtk_box_pack_start(GTK_BOX(anno), interesting_check, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(anno), gtk_label_new("Confidence:"), FALSE, FALSE, 0);
+   GtkWidget *conf_combo = gtk_combo_box_new_text();
+   for (unsigned i = 0; i < G_N_ELEMENTS(bandicoot_pandda_conf_values); i++)
+      gtk_combo_box_append_text(GTK_COMBO_BOX(conf_combo), bandicoot_pandda_conf_values[i]);
+   gtk_combo_box_set_active(GTK_COMBO_BOX(conf_combo), 0);
+   g_signal_connect(conf_combo, "changed",
+                    G_CALLBACK(bandicoot_pandda_confidence_changed), NULL);
+   gtk_box_pack_start(GTK_BOX(anno), conf_combo, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(annobox), anno, FALSE, FALSE, 0);
+
+   GtkWidget *crow = gtk_hbox_new(FALSE, 6);
+   gtk_box_pack_start(GTK_BOX(crow), gtk_label_new("Comment:"), FALSE, FALSE, 0);
+   GtkWidget *comment_entry = gtk_entry_new();
+   g_signal_connect(comment_entry, "activate",
+                    G_CALLBACK(bandicoot_pandda_comment_activate), NULL);
+   g_signal_connect(comment_entry, "focus-out-event",
+                    G_CALLBACK(bandicoot_pandda_comment_focus_out), NULL);
+   gtk_box_pack_start(GTK_BOX(crow), comment_entry, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(annobox), crow, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Annotation", annobox),
+                      FALSE, FALSE, 2);
+
+   // ---- Save ----
+   GtkWidget *save_btn = gtk_button_new_with_label("Save Model");
+   g_signal_connect(save_btn, "clicked", G_CALLBACK(bandicoot_pandda_save_model), NULL);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Save", save_btn),
+                      FALSE, FALSE, 2);
+
+   bandicoot_pandda_prev_btn = prev;
+   bandicoot_pandda_next_btn = next;
+   bandicoot_pandda_prev_site_btn = prev_site;
+   bandicoot_pandda_next_site_btn = next_site;
+   bandicoot_pandda_emap_check = emap_check;
+   bandicoot_pandda_zmap_check = zmap_check;
+   bandicoot_pandda_xray_check = xray_check;
+   bandicoot_pandda_avg_check = avg_check;
+   bandicoot_pandda_place_btn = place_btn;
+   bandicoot_pandda_merge_btn = merge_btn;
+   bandicoot_pandda_save_btn = save_btn;
+   bandicoot_pandda_load_btn = load_btn;
+   bandicoot_pandda_smiles_btn = smiles_btn;
+   bandicoot_pandda_sel_combo = sel_combo;
+   bandicoot_pandda_interesting_check = interesting_check;
+   bandicoot_pandda_conf_combo = conf_combo;
+   bandicoot_pandda_comment_entry = comment_entry;
+   bandicoot_pandda_set_nav_sensitive(FALSE);   // greyed out until a dataset loads
+
+   bandicoot_pandda_status_label = gtk_label_new("Select a PanDDA folder to begin.");
+   gtk_misc_set_alignment(GTK_MISC(bandicoot_pandda_status_label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_status_label, FALSE, FALSE, 6);
+
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_pandda_dialog_response), NULL);
+   g_signal_connect(dialog, "destroy",  G_CALLBACK(bandicoot_pandda_dialog_destroy), NULL);
+   gtk_widget_show_all(dialog);
+}
+#endif // __APPLE__
+
 void  do_edit_copy_molecule() {
+
+#ifdef __APPLE__
+   bandicoot_molecule_chooser_dialog("Copy Molecule", "Molecule to copy:",
+                                     FALSE, NULL, BANDICOOT_CHOOSER_COPY_MOLECULE);
+   return;
+#endif
 
 #ifdef USE_PYTHON
 #ifdef USE_GUILE
@@ -1787,6 +2533,13 @@ void  do_edit_copy_molecule() {
 }
 
 void  do_edit_copy_fragment() {
+
+#ifdef __APPLE__
+   bandicoot_molecule_chooser_dialog("Copy Fragment",
+                                     "Copy a fragment from which molecule?",
+                                     TRUE, "//A/1-10", BANDICOOT_CHOOSER_COPY_FRAGMENT);
+   return;
+#endif
 
 #ifdef USE_PYTHON
 #ifdef USE_GUILE

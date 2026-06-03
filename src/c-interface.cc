@@ -485,7 +485,89 @@ int make_updating_model_molecule(const char *filename) {
    return status;
 }
 
+#ifdef __APPLE__
+// BANDICOOT: native C "Updating Maps" dialog, replacing the stubbed Python
+// show_updating_maps_chooser(). Pick model + 2Fo-Fc map (with data attached) +
+// difference map; on OK, (optionally auto-)update them via sfcalc as the model
+// changes. The ops are already C (sfcalc_genmap / set_auto_updating_sfcalc_genmap);
+// only the chooser UI was stranded in the stubbed Python gtk.
+int my_combobox_get_imol(GtkComboBox *combobox);   // gtk-manual.h
+
+typedef struct {
+   GtkWidget *model_combobox;
+   GtkWidget *map_combobox;
+   GtkWidget *diff_combobox;
+   GtkWidget *auto_check;
+} bandicoot_upmaps_t;
+
+static void bandicoot_pack_left_label(GtkWidget *vbox, const char *text) {
+   GtkWidget *l = gtk_label_new(text);
+   gtk_misc_set_alignment(GTK_MISC(l), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), l, FALSE, FALSE, 2);
+}
+
+static void bandicoot_updating_maps_response(GtkDialog *dialog, gint response,
+                                             gpointer user_data) {
+   bandicoot_upmaps_t *d = (bandicoot_upmaps_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol      = my_combobox_get_imol(GTK_COMBO_BOX(d->model_combobox));
+      int imol_map  = my_combobox_get_imol(GTK_COMBO_BOX(d->map_combobox));
+      int imol_diff = my_combobox_get_imol(GTK_COMBO_BOX(d->diff_combobox));
+      gboolean use_auto = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(d->auto_check));
+      if (is_valid_model_molecule(imol) && is_valid_map_molecule(imol_map)) {
+         if (use_auto)
+            set_auto_updating_sfcalc_genmap(imol, imol_map, imol_diff);
+         else
+            sfcalc_genmap(imol, imol_map, imol_diff);
+      }
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(d);
+}
+#endif // __APPLE__
+
 void show_calculate_updating_maps_gui() {
+
+#ifdef __APPLE__
+   if (graphics_info_t::use_graphics_interface_flag) {
+      graphics_info_t g;
+      GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+      GtkWidget *dialog =
+         gtk_dialog_new_with_buttons("Updating Maps", GTK_WINDOW(main_window),
+                                     GTK_DIALOG_DESTROY_WITH_PARENT,
+                                     GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                     GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                     (char *) NULL);
+      GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+      gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+
+      bandicoot_upmaps_t *d = g_new0(bandicoot_upmaps_t, 1);
+
+      bandicoot_pack_left_label(vbox, "Model:");
+      d->model_combobox = gtk_combo_box_new();
+      g.fill_combobox_with_coordinates_options(d->model_combobox, NULL, first_coords_imol());
+      gtk_box_pack_start(GTK_BOX(vbox), d->model_combobox, FALSE, FALSE, 2);
+
+      bandicoot_pack_left_label(vbox, "Map (with data attached):");
+      d->map_combobox = gtk_combo_box_new();
+      g.fill_combobox_with_map_options(d->map_combobox, NULL, imol_refinement_map());
+      gtk_box_pack_start(GTK_BOX(vbox), d->map_combobox, FALSE, FALSE, 2);
+
+      bandicoot_pack_left_label(vbox, "Difference map to update:");
+      d->diff_combobox = gtk_combo_box_new();
+      g.fill_combobox_with_difference_map_options(d->diff_combobox, NULL, -1);
+      gtk_box_pack_start(GTK_BOX(vbox), d->diff_combobox, FALSE, FALSE, 2);
+
+      d->auto_check = gtk_check_button_new_with_label("Auto-update as the model changes");
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(d->auto_check), TRUE);
+      gtk_box_pack_start(GTK_BOX(vbox), d->auto_check, FALSE, FALSE, 6);
+
+      g_signal_connect(dialog, "response",
+                       G_CALLBACK(bandicoot_updating_maps_response), d);
+      gtk_widget_show_all(dialog);
+   }
+   return;
+#endif
 
 #ifdef USE_PYTHON
    std::string cmd = "show_updating_maps_chooser()";

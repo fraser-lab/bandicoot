@@ -6281,6 +6281,17 @@ on_ncs_differences1_activate           (GtkMenuItem     *menuitem,
   }
 }
 
+void
+on_pandda_inspect1_activate            (GtkMenuItem     *menuitem,
+                                        gpointer         user_data)
+{
+#ifdef __APPLE__
+  /* BANDICOOT: launch the native PanDDA inspect panel (c-interface-build-gui.cc). */
+  void bandicoot_pandda_dialog(void);
+  bandicoot_pandda_dialog();
+#endif
+}
+
 ////B B FACTOR
 void
 on_temp_fact_analysis1_activate
@@ -12696,7 +12707,9 @@ on_curlew_dialog_response              (GtkDialog       *dialog,
 void
 on_modelling_activate                  (GtkMenuItem     *menuitem,
                                         gpointer         user_data) {
-
+  /* BANDICOOT: "Modelling..." is suppressed in the native menu; its useful ops
+     were folded into the "Other Modelling Tools..." dialog. (Upstream's submenu
+     was dead pygtk anyway.) */
 }
 
 

@@ -4037,6 +4037,10 @@ on_ncs_differences1_activate           (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
 
 void
+on_pandda_inspect1_activate            (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);
+
+void
 on_fix_atom_togglebutton_toggled       (GtkToggleButton *togglebutton,
                                         gpointer         user_data);
 

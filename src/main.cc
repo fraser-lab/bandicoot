@@ -164,6 +164,12 @@ main (int argc, char *argv[]) {
    GtkWidget *glarea = NULL;
 
    graphics_info_t graphics_info;
+
+   // Expose the Bandicoot version to the embedded Python (hello.py reads it via
+   // os.getenv) so the welcome banner shows the Bandicoot version rather than
+   // Coot's underlying snapshot. Set before Python init / module loading.
+   setenv("BANDICOOT_VERSION",
+          (std::string(BANDICOOT_VERSION) + BANDICOOT_BUILD_SUFFIX).c_str(), 1);
   
 #ifdef ENABLE_NLS // not used currently in Gtk1. Gkt2, yes.
    // 

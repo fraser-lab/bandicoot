@@ -75,3 +75,8 @@ cootrc
 # v0.1.0.3 per-build counter + generated header
 .build-counter
 src/bandicoot-build-id.h
+
+# Python bytecode (e.g. python/__pycache__/ from importing the ported modules)
+__pycache__/
+*.pyc
+*.pyo

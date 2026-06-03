@@ -3435,6 +3435,10 @@ int main_toolbar_style_state() {
 // other modelling tools
 /*  ------------------------------------------------------------------------ */
 
+#ifdef __APPLE__
+extern "C" void bandicoot_add_modelling_tools_buttons(GtkWidget *dialog);
+#endif
+
 GtkWidget *wrapped_create_other_model_tools_dialog() {
 
    GtkWidget *widget = graphics_info_t::other_modelling_tools_dialog;
@@ -3442,6 +3446,12 @@ GtkWidget *wrapped_create_other_model_tools_dialog() {
       GtkWidget *w = create_other_model_tools_dialog();
       graphics_info_t::other_modelling_tools_dialog = w;
       graphics_info_t::set_other_modelling_tools_button_names(w);
+#ifdef __APPLE__
+      // BANDICOOT: fold the salvaged "Modelling..." ops into this dialog so the
+      // two redundant menu items consolidate (the separate "Modelling..." item
+      // is suppressed in the native menu).
+      bandicoot_add_modelling_tools_buttons(w);
+#endif
       widget = w;
    }
    return widget;

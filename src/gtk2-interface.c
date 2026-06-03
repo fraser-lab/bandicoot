@@ -258,6 +258,7 @@ create_window1 (void)
   GtkWidget *probe_clashes1;
   GtkWidget *image14477;
   GtkWidget *ncs_differences1;
+  GtkWidget *pandda_inspect1;
   GtkWidget *help1;
   GtkWidget *help1_menu;
   GtkWidget *remarks_browser1;
@@ -1334,6 +1335,10 @@ create_window1 (void)
   ncs_differences1 = gtk_menu_item_new_with_mnemonic ("NCS Differences");
   gtk_widget_show (ncs_differences1);
   gtk_container_add (GTK_CONTAINER (validate1_menu), ncs_differences1);
+
+  pandda_inspect1 = gtk_menu_item_new_with_mnemonic ("PanDDA Inspect...");
+  gtk_widget_show (pandda_inspect1);
+  gtk_container_add (GTK_CONTAINER (validate1_menu), pandda_inspect1);
 
   help1 = gtk_menu_item_new_with_mnemonic ("About");
   gtk_widget_show (help1);
@@ -2441,6 +2446,9 @@ create_window1 (void)
   g_signal_connect ((gpointer) ncs_differences1, "activate",
                     G_CALLBACK (on_ncs_differences1_activate),
                     NULL);
+  g_signal_connect ((gpointer) pandda_inspect1, "activate",
+                    G_CALLBACK (on_pandda_inspect1_activate),
+                    NULL);
   g_signal_connect ((gpointer) remarks_browser1, "activate",
                     G_CALLBACK (on_remarks_browser1_activate),
                     NULL);
@@ -2829,6 +2837,7 @@ create_window1 (void)
   GLADE_HOOKUP_OBJECT (window1, probe_clashes1, "probe_clashes1");
   GLADE_HOOKUP_OBJECT (window1, image14477, "image14477");
   GLADE_HOOKUP_OBJECT (window1, ncs_differences1, "ncs_differences1");
+  GLADE_HOOKUP_OBJECT (window1, pandda_inspect1, "pandda_inspect1");
   GLADE_HOOKUP_OBJECT (window1, help1, "help1");
   GLADE_HOOKUP_OBJECT (window1, help1_menu, "help1_menu");
   GLADE_HOOKUP_OBJECT (window1, remarks_browser1, "remarks_browser1");
