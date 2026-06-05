@@ -294,6 +294,21 @@ extern "C" void bandicoot_activate_app(void) {
     [NSApp activateIgnoringOtherApps:YES];
 }
 
+// Disable macOS automatic window tabbing (NSWindow, 10.12+). Bandicoot is not
+// a document-based tabbed app: its dialogs are independent GTK-Quartz NSWindows
+// all left at the default tabbingMode == .automatic, so AppKit is free to merge
+// each new one into the main window's tab group. That fires once the user has
+// entered full-screen (the system "Prefer tabs when opening documents" default
+// is "In Full Screen Only"), and the grouping persists after leaving full
+// screen — so every dialog then opens as a tab inside the main window. Flipping
+// the class-level switch off removes the automatic-tabbing mechanism entirely
+// (no "Prefer tabs" value or full-screen state can re-trigger it) and strips the
+// system tabbing menu items. Must run before any windows are created.
+extern "C" void bandicoot_disable_window_tabbing(void) {
+    if ([NSWindow respondsToSelector:@selector(setAllowsAutomaticWindowTabbing:)])
+        [NSWindow setAllowsAutomaticWindowTabbing:NO];
+}
+
 extern "C" int bandicoot_shift_pressed(void) {
     return ([NSEvent modifierFlags] & NSEventModifierFlagShift) ? 1 : 0;
 }

@@ -235,6 +235,10 @@ main (int argc, char *argv[]) {
       // bandicoot_appkit.h.
       bandicoot_setup_window_positioning();
       bandicoot_setup_window_raising();
+      // Turn off macOS automatic window tabbing before any windows exist, so
+      // dialogs never get merged into the main window as tabs (which otherwise
+      // happens after a full-screen toggle). See bandicoot_appkit.h.
+      bandicoot_disable_window_tabbing();
 #endif
    } else {
 

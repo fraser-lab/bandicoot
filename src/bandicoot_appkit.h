@@ -95,6 +95,14 @@ void bandicoot_ar_bar_apply_prefs(int active, int always_show);
 // shell wrapper script are background apps by default on macOS.
 void bandicoot_activate_app(void);
 
+// Disable macOS automatic window tabbing app-wide. Without this, once the user
+// has entered full-screen mode (the "Prefer tabs" system default is "In Full
+// Screen Only") AppKit merges Bandicoot's dialogs into the main window's tab
+// group, and the grouping persists after leaving full screen — so every dialog
+// opens as a tab. Call once at startup, before any windows are created.
+// No-op on non-macOS builds.
+void bandicoot_disable_window_tabbing(void);
+
 // Install a global GTK emission hook that gives every newly-realized top-
 // level window a sane default position: GTK_WIN_POS_CENTER_ON_PARENT for
 // transient dialogs, GTK_WIN_POS_MOUSE otherwise. Windows that explicitly
