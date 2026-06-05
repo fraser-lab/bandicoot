@@ -433,28 +433,51 @@ main (int argc, char *argv[]) {
 	    // free of the main window's GL backing layer.
 	    bandicoot_float_widget_in_window(model_tb, "Model Tools");
 
-	    // Apply the user's preferred model-toolbar style at startup.
-	    // set_model_toolbar_style() just toggles a radio item, which only
-	    // emits "activate" if the state actually changes — so we call
-	    // gtk_menu_item_activate() directly to force the visual + button-
-	    // label updates done by the activation callback regardless of
-	    // Glade's initial radio state.
-	    {
-	       const char *mi_name;
-	       switch (graphics_info_t::model_toolbar_style_state) {
-	       case 1:  mi_name = "model_toolbar_icons1"; break;
-	       case 2:  mi_name = "model_toolbar_icons_and_text1"; break;
-	       default: mi_name = "model_toolbar_text1"; break;
-	       }
-	       GtkWidget *mi = lookup_widget(window1, mi_name);
-	       if (mi) gtk_menu_item_activate(GTK_MENU_ITEM(mi));
-	    }
+	    // Add the Dock/Undock toggle to the toolbar's own settings popup
+	    // (the bottom triangle button), rather than a separate button row.
+	    // The toolbar style (icons / icons+text / text) is left to the saved
+	    // preference, applied later via set-model-toolbar-style — default 2
+	    // (icons and text), which is the wanted starting mode.
+	    bandicoot_sidebar_add_dock_menu_item(
+	       lookup_widget(window1, "model_toolbar_setting1_menu"));
+
+	    // Replace the settings triangle with a full-width "Settings ▸"
+	    // button at the bottom of the sidebar; its menu pops to the side
+	    // (so it never fights the bottom status strip's z-order).
+	    bandicoot_sidebar_pin_settings_item(
+	       lookup_widget(window1, "model_toolbar_style_toolitem"),
+	       lookup_widget(window1, "model_toolbar_setting1_menu"));
+
+	    // Native Accept/Reject bar docked to the top edge. Replaces Coot's
+	    // stock dialog while active; visibility governed by the docked-A/R
+	    // preference (see do_accept_reject_dialog()).
+	    bandicoot_install_accept_reject_bar(window1);
+	    // Apply the saved docked-A/R preference now that the bar exists (the
+	    // pref may have been loaded before this point). Defined in
+	    // graphics-info-gui.cc.
+	    { extern void bandicoot_ar_sync_prefs(void); bandicoot_ar_sync_prefs(); }
 
 	    // Install the native status bar (bottom child window). GTK's
 	    // main_window_statusbar is occluded by the GL backing layer, so
 	    // add_status_bar_text() also pushes to this. Must run after
 	    // gtk_widget_show(window1) so window1's NSWindow is realized.
 	    bandicoot_install_status_bar(window1);
+
+	    // Floor the main window's size at half its (screen-relative)
+	    // default starting size. Shrinking smaller than this leaves no
+	    // room for the docked sidebar's buttons and Bandicoot segfaults
+	    // in that regime — and nobody works at that size anyway. The hint
+	    // maps to the NSWindow's minSize on GTK-Quartz, so the resize is
+	    // simply clamped.
+	    {
+	       int cur_w = 0, cur_h = 0;
+	       gtk_window_get_size(GTK_WINDOW(window1), &cur_w, &cur_h);
+	       GdkGeometry geom;
+	       geom.min_width  = cur_w > 0 ? cur_w / 2 : 300;
+	       geom.min_height = cur_h > 0 ? cur_h / 2 : 250;
+	       gtk_window_set_geometry_hints(GTK_WINDOW(window1), NULL,
+	                                     &geom, GDK_HINT_MIN_SIZE);
+	    }
 	 }
 #endif
 	 create_rot_trans_menutoolbutton_menu(window1);

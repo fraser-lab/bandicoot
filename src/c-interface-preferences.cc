@@ -79,6 +79,86 @@ void preferences() {
 
 }
 
+#ifdef __APPLE__
+// Bandicoot tailoring of the Preferences dialog. Defined in the AppKit shim.
+extern "C" int  bandicoot_sidebar_is_docked(void);
+extern "C" void bandicoot_sidebar_set_docked_ext(int docked);
+
+static void bandicoot_dock_toolbar_yes_toggled(GtkToggleButton *b, gpointer u) {
+   if (gtk_toggle_button_get_active(b)) bandicoot_sidebar_set_docked_ext(1);
+}
+static void bandicoot_dock_toolbar_no_toggled(GtkToggleButton *b, gpointer u) {
+   if (gtk_toggle_button_get_active(b)) bandicoot_sidebar_set_docked_ext(0);
+}
+static GtkWidget *bandicoot_ancestor_frame(GtkWidget *w) {
+   while (w && !GTK_IS_FRAME(w)) w = gtk_widget_get_parent(w);
+   return w;
+}
+
+// Tailor the Refinement-Toolbar preferences for Bandicoot's native UI:
+//  - drop the "Main Toolbar" tab (we use the native macOS Customize Toolbar);
+//  - replace the "Show Toolbar?" frame (show/hide + screen-edge position, none
+//    of which apply) with a fresh "Dock Toolbar?" Yes/No wired to the sidebar.
+static void bandicoot_fixup_preferences(GtkWidget *prefs) {
+   if (!prefs) return;
+
+   // 1. Remove the "Main Toolbar" notebook page.
+   GtkWidget *nb = lookup_widget(prefs, "preferences_notebook");
+   GtkWidget *mt = lookup_widget(prefs, "preferences_main_toolbar_style");
+   if (nb && mt) {
+      GtkWidget *page = mt;
+      while (page && gtk_widget_get_parent(page) != nb) page = gtk_widget_get_parent(page);
+      if (page) {
+         int n = gtk_notebook_page_num(GTK_NOTEBOOK(nb), page);
+         if (n >= 0) gtk_notebook_remove_page(GTK_NOTEBOOK(nb), n);
+      }
+   }
+
+   // 2. Reuse the "Show Toolbar?" frame as "Dock Toolbar?": relabel it, hide its
+   //    show/hide + position radios, and drop fresh Yes/No into the same box.
+   //    (Reusing the frame keeps the existing layout slot; the old radios stay
+   //    in-tree but hidden so update_preference_gui() can still set them safely.)
+   GtkWidget *show_rb = lookup_widget(prefs, "preferences_model_toolbar_show_radiobutton");
+   GtkWidget *hide_rb = lookup_widget(prefs, "preferences_model_toolbar_hide_radiobutton");
+   GtkWidget *pos_box = lookup_widget(prefs, "hbox356");
+   GtkWidget *box     = show_rb ? gtk_widget_get_parent(show_rb) : NULL;  // vbox285
+   GtkWidget *frame   = bandicoot_ancestor_frame(show_rb);
+
+   if (frame) gtk_frame_set_label(GTK_FRAME(frame), "Dock Toolbar?");
+   if (show_rb) gtk_widget_hide(show_rb);
+   if (hide_rb) gtk_widget_hide(hide_rb);
+   if (pos_box) gtk_widget_hide(pos_box);
+
+   if (box && GTK_IS_BOX(box)) {
+      GtkWidget *yes = gtk_radio_button_new_with_label(NULL, "Yes");
+      GtkWidget *no  = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(yes), "No");
+      gtk_box_pack_start(GTK_BOX(box), yes, FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(box), no,  FALSE, FALSE, 0);
+      gtk_box_reorder_child(GTK_BOX(box), yes, 0);
+      gtk_box_reorder_child(GTK_BOX(box), no,  1);
+      // Initial state from the sidebar — set BEFORE connecting so it doesn't dock.
+      if (bandicoot_sidebar_is_docked())
+         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(yes), TRUE);
+      else
+         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(no), TRUE);
+      g_signal_connect(yes, "toggled", G_CALLBACK(bandicoot_dock_toolbar_yes_toggled), NULL);
+      g_signal_connect(no,  "toggled", G_CALLBACK(bandicoot_dock_toolbar_no_toggled), NULL);
+      gtk_widget_show(yes);
+      gtk_widget_show(no);
+   }
+
+   // The frame row used to be sized for ~6 radios and expands to fill the
+   // column; with just Yes/No that leaves a tall empty frame. Stop its row
+   // (hbox379) from expanding so the frame hugs its content.
+   if (frame) {
+      GtkWidget *row = gtk_widget_get_parent(frame);          // hbox379
+      GtkWidget *col = row ? gtk_widget_get_parent(row) : NULL; // vbox274
+      if (row && col && GTK_IS_BOX(col))
+         gtk_box_set_child_packing(GTK_BOX(col), row, FALSE, FALSE, 0, GTK_PACK_START);
+   }
+}
+#endif
+
 void show_preferences(){
 
   GtkWidget *w = create_preferences();
@@ -108,6 +188,10 @@ void show_preferences(){
 	gtk_combo_box_append_text(combobox, fonts[j].c_str());
      }
   }
+
+#ifdef __APPLE__
+  bandicoot_fixup_preferences(w);   // native-UI tailoring (see above)
+#endif
 
   gtk_widget_show(w);
 

@@ -90,11 +90,96 @@
 
 
 
+#ifdef __APPLE__
+// Bandicoot native Accept/Reject bar bridges. Declared at namespace scope to
+// dodge this file's delicate include ordering (same approach as the status-bar
+// extern below). The free refinement functions are forward-declared rather
+// than pulling in c-interface.h. They are extern "C" there (BEGIN_C_DECLS,
+// called from the C callbacks.c), so the linkage must match here.
+extern "C" void c_accept_moving_atoms();
+extern "C" void clear_up_moving_atoms();
+extern "C" void stop_refinement_internal();
+
+extern "C" void bandicoot_ar_bar_set_lights(int n, const char *const *names,
+                                            const char *const *values,
+                                            const char *const *tooltips,
+                                            const GdkColor *colors);
+extern "C" int  bandicoot_ar_bar_is_active(void);
+extern "C" void bandicoot_ar_bar_present(void);
+extern "C" void bandicoot_ar_bar_apply_prefs(int active, int always_show);
+
+// Sync the native bar to Coot's docked-A/R-dialog preference flags. docked_flag
+// == DIALOG_DOCKED → "Yes"; show_flag == DIALOG_DOCKED_SHOW → "Always show".
+// Call after the bar exists and whenever the preference changes.
+void bandicoot_ar_sync_prefs(void) {
+   int active      = (graphics_info_t::accept_reject_dialog_docked_flag
+                          == coot::DIALOG_DOCKED) ? 1 : 0;
+   int always_show = (graphics_info_t::accept_reject_dialog_docked_show_flag
+                          == coot::DIALOG_DOCKED_SHOW) ? 1 : 0;
+   bandicoot_ar_bar_apply_prefs(active, always_show);
+}
+
+// Accept = stop + commit moving atoms; Reject = stop + discard. Same calls the
+// stock dialog's buttons make (callbacks.c).
+extern "C" void bandicoot_ar_accept(void) {
+   stop_refinement_internal();
+   c_accept_moving_atoms();
+}
+extern "C" void bandicoot_ar_reject(void) {
+   stop_refinement_internal();
+   clear_up_moving_atoms();
+}
+
+// Push the geometry lights (Bonds/Angles/...) into the native bar, coloured by
+// distortion exactly as add_accept_reject_lights() colours the stock boxes,
+// but rendered by us — never through Coot's docked-frame path (which SIGSEGVs).
+void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr) {
+   int n = rr.lights.size();
+   std::vector<GdkColor> cols;
+   std::vector<std::string> names, vals, tips;
+   cols.reserve(n); names.reserve(n); vals.reserve(n); tips.reserve(n);
+   for (int i=0; i<n; i++) {
+      const coot::refinement_lights_info_t &li = rr.lights[i];
+      GdkColor c = (li.name == "Rama")
+                      ? colour_by_rama_plot_distortion(li.value, li.rama_type)
+                      : colour_by_distortion(li.value);
+      cols.push_back(c);
+      names.push_back(li.name);
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%.2f", li.value);
+      vals.push_back(buf);
+      tips.push_back(li.label);
+   }
+   std::vector<const char *> nameptrs, valptrs, tipptrs;
+   nameptrs.reserve(n); valptrs.reserve(n); tipptrs.reserve(n);
+   for (int i=0; i<n; i++) {
+      nameptrs.push_back(names[i].c_str());
+      valptrs.push_back(vals[i].c_str());
+      tipptrs.push_back(tips[i].c_str());
+   }
+   bandicoot_ar_bar_set_lights(n, n ? nameptrs.data() : NULL, n ? valptrs.data() : NULL,
+                               n ? tipptrs.data() : NULL, n ? cols.data() : NULL);
+}
+#endif
+
 // e.g. fit type is "Rigid Body Fit" or "Regularization" etc.
 //
 // if fit_type is "Torsion General" show the Reverse button.
 //
 void do_accept_reject_dialog(std::string fit_type, const coot::refinement_results_t &rr) {
+
+#ifdef __APPLE__
+   // While the native A/R bar is active it replaces Coot's stock dialog: refresh
+   // its lights, present it (enable buttons; pop it up in Always-hide mode), and
+   // return (the stock dialog is left untouched but unshown). The bar's own
+   // Accept/Reject buttons drive the commit/discard. Works for lightless fits
+   // (Rigid Body Fit) too — just Accept/Reject, no rectangles.
+   if (bandicoot_ar_bar_is_active()) {
+      bandicoot_update_ar_bar_from_results(rr);
+      bandicoot_ar_bar_present();
+      return;
+   }
+#endif
 
    bool debug = false;
    GtkWidget *window = wrapped_create_accept_reject_refinement_dialog();

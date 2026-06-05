@@ -817,6 +817,13 @@ static char kToggleApplyKey;   // associated object on NSButton (toggle subview)
                                // NSValue wrapping a GSourceFunc that takes
                                // GPOINTER_TO_INT(state).
 
+// Tint a push-on toggle button's bezel: dark grey when on (a calmer, more
+// "recessed" look than the system-accent blue), default when off.
+static void bandicoot_apply_toggle_bezel(NSButton *btn, int on) {
+    if (!btn) return;
+    btn.bezelColor = on ? [NSColor colorWithCalibratedWhite:0.42 alpha:1.0] : nil;
+}
+
 // ---- Toggle button target
 //
 // Used for NSToolbarItems whose `view` is an NSButton configured as
@@ -844,6 +851,8 @@ static char kToggleApplyKey;   // associated object on NSButton (toggle subview)
     GSourceFunc fn = box ? (GSourceFunc)[box pointerValue] : NULL;
     if (!fn) return;
     int on = (sender.state == NSControlStateValueOn) ? 1 : 0;
+    // Tint the "on" bezel dark grey instead of the garish system-accent blue.
+    bandicoot_apply_toggle_bezel(sender, on);
     g_idle_add(fn, GINT_TO_POINTER(on));
 }
 @end
@@ -1180,6 +1189,7 @@ static void catalog_bandicoot_extras(BandicootToolbarDelegate *delegate,
             [btn setImagePosition:NSImageOnly];
             [btn setState:e->toggle_initial ? NSControlStateValueOn
                                             : NSControlStateValueOff];
+            bandicoot_apply_toggle_bezel(btn, e->toggle_initial);
             [btn setTarget:[BandicootToggleTarget shared]];
             [btn setAction:@selector(toggle:)];
             // Stash the apply function so the toggle target can find it.
@@ -1465,6 +1475,307 @@ extern "C" void bandicoot_install_right_click_handler(void) {
         }];
 }
 
+// ---- Model-toolbar sidebar: dock / undock --------------------------------
+// The model toolbar floats in its own "Model Tools" window (created just below
+// in bandicoot_float_widget_in_window). "Docked" pins that window flush to the
+// RIGHT edge of the main window -- a child window that follows it on move/resize
+// (the status-bar trick) -- and "undocked" is the free-floating default. A
+// Dock/Undock button on the sidebar toggles between them.
+static GtkWidget *bandicoot_sidebar_floater    = NULL; // the floating GTK window
+static GtkWidget *bandicoot_sidebar_parent_gtk = NULL; // main window (GTK)
+static GtkWidget *bandicoot_sidebar_dock_btn   = NULL; // the Dock/Undock menu item
+static GtkWidget *bandicoot_sidebar_toolbar    = NULL; // the model GtkToolbar inside
+static GtkWidget *bandicoot_sidebar_settings_bar = NULL; // hidden holder keeping the settings toolitem in-tree
+static GtkWidget *bandicoot_sidebar_settings_btn = NULL; // full-width Settings button at the bottom
+static GtkWidget *bandicoot_sidebar_settings_gear = NULL; // gear glyph, left edge (icons+text)
+static GtkWidget *bandicoot_sidebar_settings_text = NULL; // "Settings" label, centered in the button
+static GtkWidget *bandicoot_sidebar_settings_pad  = NULL; // right spacer matching the gear (balances center)
+static GtkWidget *bandicoot_sidebar_settings_menu = NULL; // the settings popup (still attached to setting1)
+static NSWindow  *bandicoot_sidebar_ns         = nil;  // floater's NSWindow
+static NSWindow  *bandicoot_sidebar_parent_ns  = nil;  // main NSWindow
+static BOOL       bandicoot_sidebar_docked     = NO;
+static NSUInteger bandicoot_sidebar_orig_mask  = 0;    // styleMask before docking
+static BOOL       bandicoot_sidebar_mask_saved = NO;
+
+// Defined with the native status bar further below; lets the docked sidebar
+// stop short of the bottom status strip (and its resize grip).
+static NSWindow *bandicoot_get_status_window(void);
+// Defined just below; lazily resolves the floater + main NSWindows.
+static void bandicoot_resolve_sidebar_windows(void);
+// Defined in the Accept/Reject bar section; re-fit the A/R bar when the sidebar
+// docks/undocks (the bar shortens to stop at the sidebar's left edge).
+static void bandicoot_ar_reposition(void);
+// Defined in the status-bar section; the bottom strip likewise shortens to
+// clear the docked sidebar's column.
+static void bandicoot_reposition_status_bar(void);
+
+// Natural size the sidebar wants for the *current* toolbar style: width = the
+// widest item + padding, height = the sum of every item's height. Walking the
+// children works in every style (icons-only / icons+text / text) and counts
+// overflowed items too, so the figure is stable.
+static void bandicoot_sidebar_compute_natural(int *out_w, int *out_h) {
+    int natural_h = 0, max_child_w = 0;
+    GtkWidget *tb = bandicoot_sidebar_toolbar;
+    if (tb && GTK_IS_CONTAINER(tb)) {
+        GList *kids = gtk_container_get_children(GTK_CONTAINER(tb));
+        for (GList *l = kids; l; l = l->next) {
+            GtkRequisition cr = {0, 0};
+            gtk_widget_size_request(GTK_WIDGET(l->data), &cr);
+            natural_h += cr.height;
+            if (cr.width > max_child_w) max_child_w = cr.width;
+        }
+        g_list_free(kids);
+    }
+    // Hug the widest item (in icon-only mode that's the "R/RC" button) with
+    // just a hair of padding so the column never clips. With the undocked
+    // window's traffic lights gone there's no title-bar minimum width fighting
+    // this, so icon-only collapses to its natural minimum.
+    int w = max_child_w > 0 ? max_child_w + 8 : 340;
+    if (w < 44) w = 44;
+    // The full-width "Settings ▸" button below mustn't clip, so widen to fit it
+    // (this gently widens icon-only mode so "Settings" stays readable).
+    if (bandicoot_sidebar_settings_btn) {
+        GtkRequisition sr = {0, 0};
+        gtk_widget_size_request(bandicoot_sidebar_settings_btn, &sr);
+        if (sr.width > w) w = sr.width;
+    }
+    if (out_w) *out_w = w;
+    if (out_h) *out_h = natural_h;
+}
+
+static void bandicoot_reposition_sidebar(void) {
+    if (!bandicoot_sidebar_docked || !bandicoot_sidebar_ns || !bandicoot_sidebar_parent_ns) return;
+    NSWindow *p = bandicoot_sidebar_parent_ns;
+    // Usable region = the content area BELOW the toolbar. contentLayoutRect
+    // excludes both the title bar and the toolbar (contentRectForFrameRect did
+    // not, which is why the old top edge overlapped the toolbar's bevel).
+    NSView *cv = p.contentView;
+    NSRect usable = [p convertRectToScreen:[cv convertRect:p.contentLayoutRect
+                                                    toView:nil]];
+    // Stop short of the bottom status strip (full-width, but z-ordered BELOW
+    // this sidebar so the settings popup isn't occluded by it). Leaving the
+    // strip's lower-right corner clear keeps its passthrough resize grip usable.
+    NSWindow *sw = bandicoot_get_status_window();
+    CGFloat statusH = sw ? NSHeight(sw.frame) : 0.0;
+    CGFloat top    = NSMaxY(usable);
+    CGFloat bottom = NSMinY(usable) + statusH;
+    CGFloat availH = top - bottom;
+    if (availH < 0) availH = 0;
+    // Fill the full available height: stretch when the window is taller than
+    // the sidebar's natural height, and shrink (letting the toolbar overflow
+    // chevron appear) when it is shorter. Flush to the content's right edge.
+    NSRect sb = bandicoot_sidebar_ns.frame;
+    NSRect sf = NSMakeRect(NSMaxX(usable) - sb.size.width, bottom,
+                           sb.size.width, availH);
+    [bandicoot_sidebar_ns setFrame:sf display:YES];
+}
+
+// Re-fit the sidebar after a toolbar-style change: width follows the new
+// style (icons-only is narrow, icons+text wide, etc.). Undocked → resize the
+// floater to the new natural size; docked → set the new width and let
+// reposition refill the height. Run from an idle so GTK has settled the new
+// item requisitions first.
+// Height the bottom "Settings ▸" button wants (0 before it exists).
+static int bandicoot_sidebar_settings_bar_height(void) {
+    if (!bandicoot_sidebar_settings_btn) return 0;
+    GtkRequisition r = {0, 0};
+    gtk_widget_size_request(bandicoot_sidebar_settings_btn, &r);
+    return r.height;
+}
+
+// Match the Settings button's content to the toolbar's current display style:
+// just the gear in icon-only mode (keeps the column tight), gear + word in
+// icons+text, word alone in text-only. (The Coot 0.9 iconset has no gear/wrench
+// icon, so we use the ⚙ glyph.)
+static void bandicoot_sidebar_update_settings_label(void) {
+    if (!bandicoot_sidebar_settings_btn || !bandicoot_sidebar_toolbar) return;
+    if (!GTK_IS_TOOLBAR(bandicoot_sidebar_toolbar)) return;
+    if (!bandicoot_sidebar_settings_text) return;
+    GtkToolbarStyle st = gtk_toolbar_get_style(GTK_TOOLBAR(bandicoot_sidebar_toolbar));
+    GtkWidget *gear = bandicoot_sidebar_settings_gear;
+    GtkWidget *text = bandicoot_sidebar_settings_text;
+    GtkWidget *pad  = bandicoot_sidebar_settings_pad;
+    const char *gear_markup = "<span size='xx-large'>⚙</span>";  // gear ~2x
+    if (st == GTK_TOOLBAR_ICONS) {
+        // Just the gear, centered (like the icon-only tool buttons).
+        gtk_label_set_markup(GTK_LABEL(text), gear_markup);
+        gtk_widget_hide(gear);
+        gtk_widget_hide(pad);
+    } else if (st == GTK_TOOLBAR_TEXT) {
+        gtk_label_set_text(GTK_LABEL(text), "Settings");
+        gtk_widget_hide(gear);
+        gtk_widget_hide(pad);
+    } else {
+        // icons+text: gear hugs the left edge, "Settings" centered in the full
+        // button — a right spacer matched to the gear width balances the center.
+        gtk_label_set_markup(GTK_LABEL(gear), gear_markup);
+        gtk_label_set_text(GTK_LABEL(text), "Settings");
+        gtk_widget_show(gear);
+        GtkRequisition gr = {0, 0};
+        gtk_widget_size_request(gear, &gr);
+        gtk_widget_set_size_request(pad, gr.width, -1);
+        gtk_widget_show(pad);
+    }
+}
+
+static void bandicoot_sidebar_relayout(void) {
+    if (!bandicoot_sidebar_floater) return;
+    bandicoot_sidebar_update_settings_label();  // before measuring (width depends on it)
+    int w = 0, h = 0;
+    bandicoot_sidebar_compute_natural(&w, &h);
+    if (bandicoot_sidebar_docked) {
+        bandicoot_resolve_sidebar_windows();
+        if (bandicoot_sidebar_ns) {
+            NSRect f = bandicoot_sidebar_ns.frame;
+            f.size.width = w;
+            [bandicoot_sidebar_ns setFrame:f display:YES];
+        }
+        bandicoot_reposition_sidebar();
+        // The sidebar's width just changed (icon style switch), so re-fit the
+        // A/R bar which stops at the sidebar's left edge — otherwise it leaves a
+        // gap or overlaps until the next window move/resize.
+        bandicoot_ar_reposition();
+    } else if (h > 0) {
+        // Undocked: natural toolbar height + the pinned settings strip +
+        // a small buffer below the last item.
+        gtk_window_resize(GTK_WINDOW(bandicoot_sidebar_floater),
+                          w, h + bandicoot_sidebar_settings_bar_height() + 16);
+    }
+}
+
+static gboolean bandicoot_sidebar_relayout_idle(gpointer u) {
+    bandicoot_sidebar_relayout();
+    return FALSE;  // one-shot
+}
+
+static void bandicoot_sidebar_style_changed(GtkToolbar *tb, gpointer u) {
+    g_idle_add(bandicoot_sidebar_relayout_idle, NULL);
+}
+
+@interface BandicootSidebarObserver : NSObject
+@end
+@implementation BandicootSidebarObserver
+- (void)parentGeometryChanged:(NSNotification *)note { bandicoot_reposition_sidebar(); }
+@end
+static BandicootSidebarObserver *bandicoot_sidebar_observer = nil;
+
+static void bandicoot_resolve_sidebar_windows(void) {
+    if (!bandicoot_sidebar_ns && bandicoot_sidebar_floater && bandicoot_sidebar_floater->window)
+        bandicoot_sidebar_ns =
+            (NSWindow *)gdk_quartz_window_get_nswindow(bandicoot_sidebar_floater->window);
+    if (!bandicoot_sidebar_parent_ns && bandicoot_sidebar_parent_gtk &&
+        bandicoot_sidebar_parent_gtk->window)
+        bandicoot_sidebar_parent_ns =
+            (NSWindow *)gdk_quartz_window_get_nswindow(bandicoot_sidebar_parent_gtk->window);
+}
+
+// The undocked sidebar must never be closed or minimized: there is no way to
+// bring it back once it's gone, and the toolbar is essential. Strip Closable +
+// Miniaturizable from the mask (kills the red/yellow buttons and Cmd-W) and
+// hide all three traffic lights; keep Titled + Resizable so it can still be
+// dragged and resized. Removing the buttons also drops the title bar's minimum
+// width, which lets the icon-only sidebar shrink to its widest item.
+static void bandicoot_sidebar_lock_undocked_chrome(void) {
+    if (!bandicoot_sidebar_ns) return;
+    NSUInteger m = bandicoot_sidebar_ns.styleMask;
+    m &= ~(NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable);
+    [bandicoot_sidebar_ns setStyleMask:m];
+    [[bandicoot_sidebar_ns standardWindowButton:NSWindowCloseButton] setHidden:YES];
+    [[bandicoot_sidebar_ns standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+    [[bandicoot_sidebar_ns standardWindowButton:NSWindowZoomButton] setHidden:YES];
+}
+
+static void bandicoot_sidebar_set_docked(BOOL docked) {
+    @autoreleasepool {
+        bandicoot_resolve_sidebar_windows();
+        if (!bandicoot_sidebar_ns || !bandicoot_sidebar_parent_ns) return;
+        if (docked) {
+            bandicoot_sidebar_docked = YES;
+            // Strip the title bar while docked: a titled window lets the user
+            // drag the sidebar off the edge, and it looks wrong pinned inside
+            // the main window. Borderless removes the chrome (and the drag
+            // handle); the original mask is restored on undock.
+            if (!bandicoot_sidebar_mask_saved) {
+                bandicoot_sidebar_orig_mask  = bandicoot_sidebar_ns.styleMask;
+                bandicoot_sidebar_mask_saved = YES;
+            }
+            [bandicoot_sidebar_ns setStyleMask:NSWindowStyleMaskBorderless];
+            if (![bandicoot_sidebar_ns parentWindow])
+                [bandicoot_sidebar_parent_ns addChildWindow:bandicoot_sidebar_ns
+                                                    ordered:NSWindowAbove];
+            if (!bandicoot_sidebar_observer) {
+                bandicoot_sidebar_observer = [BandicootSidebarObserver new];
+                NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+                [nc addObserver:bandicoot_sidebar_observer selector:@selector(parentGeometryChanged:)
+                           name:NSWindowDidResizeNotification object:bandicoot_sidebar_parent_ns];
+                [nc addObserver:bandicoot_sidebar_observer selector:@selector(parentGeometryChanged:)
+                           name:NSWindowDidMoveNotification object:bandicoot_sidebar_parent_ns];
+            }
+            bandicoot_reposition_sidebar();
+        } else {
+            bandicoot_sidebar_docked = NO;
+            if ([bandicoot_sidebar_ns parentWindow])
+                [bandicoot_sidebar_parent_ns removeChildWindow:bandicoot_sidebar_ns];
+            // Give the title bar (and resize chrome) back, then re-lock it so
+            // the restored window still has no close/minimize/zoom buttons.
+            if (bandicoot_sidebar_mask_saved)
+                [bandicoot_sidebar_ns setStyleMask:bandicoot_sidebar_orig_mask];
+            bandicoot_sidebar_lock_undocked_chrome();
+        }
+        // The A/R bar and the bottom status strip both shorten to clear the
+        // docked sidebar's column, so re-fit them when the sidebar toggles.
+        bandicoot_ar_reposition();
+        bandicoot_reposition_status_bar();
+    }
+}
+
+static void bandicoot_sidebar_dock_clicked(GtkMenuItem *item, gpointer u) {
+    BOOL want = ! bandicoot_sidebar_docked;
+    bandicoot_sidebar_set_docked(want);
+    if (bandicoot_sidebar_dock_btn)
+        gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn),
+                                want ? "Undock" : "Dock");
+}
+
+// Start Bandicoot with the sidebar docked (the default). Call once at startup,
+// after the sidebar windows are realized (i.e. from pin_settings_item).
+extern "C" void bandicoot_sidebar_dock_default(void) {
+    bandicoot_sidebar_set_docked(YES);
+    if (bandicoot_sidebar_dock_btn)
+        gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn), "Undock");
+}
+
+// Get / set the sidebar dock state from outside (the "Dock Toolbar?" preference).
+// Keeps the settings-popup Dock/Undock label in sync.
+extern "C" int bandicoot_sidebar_is_docked(void) {
+    return bandicoot_sidebar_docked ? 1 : 0;
+}
+extern "C" void bandicoot_sidebar_set_docked_ext(int docked) {
+    BOOL want = docked ? YES : NO;
+    if (want == bandicoot_sidebar_docked) return;
+    bandicoot_sidebar_set_docked(want);
+    if (bandicoot_sidebar_dock_btn)
+        gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn),
+                                want ? "Undock" : "Dock");
+}
+
+// Append a Dock/Undock toggle to the model toolbar's settings popup (the
+// bottom triangle button). Replaces the old standalone Dock button row.
+extern "C" void bandicoot_sidebar_add_dock_menu_item(GtkWidget *menu) {
+    if (!menu || !GTK_IS_MENU_SHELL(menu)) return;
+    GtkWidget *sep = gtk_separator_menu_item_new();
+    gtk_widget_show(sep);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
+    // Start label matches the startup dock state (undocked → offer "Dock").
+    GtkWidget *item = gtk_menu_item_new_with_label(bandicoot_sidebar_docked
+                                                       ? "Undock" : "Dock");
+    g_signal_connect(item, "activate",
+                     G_CALLBACK(bandicoot_sidebar_dock_clicked), NULL);
+    gtk_widget_show(item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    bandicoot_sidebar_dock_btn = item;
+}
+
 extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *title) {
     if (!widget) return;
 
@@ -1508,53 +1819,133 @@ extern "C" void bandicoot_float_widget_in_window(GtkWidget *widget, const char *
         gtk_window_set_default_size(GTK_WINDOW(floater), 340, 600);
     }
 
-    // Reparent the widget into the new floating window. gtk_widget_reparent
-    // handles ref-counting and removal-from-old-parent for us.
-    gtk_widget_reparent(widget, floater);
+    // Layout: floater > vbox > [ model_toolbar (expands), settings strip ].
+    // The model toolbar expands to fill, so its overflow chevron lands at its
+    // bottom edge; the settings strip below it always stays visible (the
+    // settings item is reparented into it by bandicoot_sidebar_pin_settings_item
+    // from main.cc, after this runs). gtk_widget_reparent handles ref-counting.
+    GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(floater), vbox);
+    gtk_widget_reparent(widget, vbox);
+    gtk_box_set_child_packing(GTK_BOX(vbox), widget, TRUE, TRUE, 0, GTK_PACK_START);
+
+    GtkWidget *settings_bar = gtk_toolbar_new();
+    gtk_toolbar_set_orientation(GTK_TOOLBAR(settings_bar), GTK_ORIENTATION_VERTICAL);
+    gtk_toolbar_set_style(GTK_TOOLBAR(settings_bar), GTK_TOOLBAR_ICONS);
+    gtk_toolbar_set_show_arrow(GTK_TOOLBAR(settings_bar), FALSE);  // never overflow it
+    // A few px below the strip keeps the settings triangle off the very bottom
+    // edge so the window's bottom resize border stays grabbable.
+    gtk_box_pack_end(GTK_BOX(vbox), settings_bar, FALSE, FALSE, 4);
+
+    bandicoot_sidebar_floater      = floater;
+    bandicoot_sidebar_parent_gtk   = parent_toplevel;
+    bandicoot_sidebar_toolbar      = widget;
+    bandicoot_sidebar_settings_bar = settings_bar;
 
     // Closing the floater hides rather than destroys it, so the widget tree
     // stays intact and the window can be brought back later.
     g_signal_connect(floater, "delete-event",
                      G_CALLBACK(gtk_widget_hide_on_delete), NULL);
 
-    // Disable the toolbar's overflow chevron BEFORE size_request, so
-    // GTK doesn't budget the toolbar's height around the chevron's
-    // collapse behaviour. With show-arrow off, every item is always
-    // visible — which is what we want for a dedicated tool window.
     if (GTK_IS_TOOLBAR(widget)) {
-        gtk_toolbar_set_show_arrow(GTK_TOOLBAR(widget), FALSE);
+        // Show the overflow chevron: when the docked sidebar is too short for
+        // every item, GtkToolbar moves the spillover into the chevron's pop-up
+        // menu (whose proxy items carry icon + label) — exactly the behaviour
+        // of the main toolbar when the window is too narrow.
+        gtk_toolbar_set_show_arrow(GTK_TOOLBAR(widget), TRUE);
+        // Re-fit width/height whenever the user switches icons / icons+text /
+        // text in the settings popup.
+        g_signal_connect(widget, "style-changed",
+                         G_CALLBACK(bandicoot_sidebar_style_changed), NULL);
     }
 
     gtk_widget_show_all(floater);
+    // Final sizing happens in bandicoot_sidebar_pin_settings_item (called next
+    // from main.cc), once the settings item has moved out of the toolbar.
+}
 
-    // Sum the natural heights and find the max natural width across
-    // the toolbar's individual children. gtk_widget_size_request() on
-    // the GtkToolbar itself returns its *minimum* (just one item +
-    // chevron) on GTK-Quartz — useless here. Walking the children
-    // gives us the real dimensions each item wants.
-    int natural_h = 0;
-    int max_child_w = 0;
-    if (GTK_IS_CONTAINER(widget)) {
-        GList *kids = gtk_container_get_children(GTK_CONTAINER(widget));
-        for (GList *l = kids; l; l = l->next) {
-            GtkWidget *child = GTK_WIDGET(l->data);
-            GtkRequisition cr = {0, 0};
-            gtk_widget_size_request(child, &cr);
-            natural_h += cr.height;
-            if (cr.width > max_child_w) max_child_w = cr.width;
-        }
-        g_list_free(kids);
+// Position the settings popup just to the RIGHT of the Settings button (its
+// top-right corner), so it appears alongside the window like the overflow
+// chevron's menu — never popping down into the bottom status strip.
+static void bandicoot_sidebar_settings_menu_pos(GtkMenu *menu, gint *x, gint *y,
+                                                gboolean *push_in, gpointer u) {
+    GtkWidget *btn = GTK_WIDGET(u);
+    GtkWidget *top = gtk_widget_get_toplevel(btn);
+    GtkAllocation a = {0, 0, 0, 0};
+    gtk_widget_get_allocation(btn, &a);
+    gint tx = 0, ty = 0;  // button's top-right corner, in the toplevel's coords
+    gtk_widget_translate_coordinates(btn, top, a.width, 0, &tx, &ty);
+    gint ox = 0, oy = 0;
+    GdkWindow *tw = gtk_widget_get_window(top);
+    if (tw) gdk_window_get_origin(tw, &ox, &oy);
+    *x = ox + tx;
+    *y = oy + ty;
+    *push_in = FALSE;     // keep it to the side, don't shove it back under the button
+}
+
+static void bandicoot_sidebar_settings_clicked(GtkButton *b, gpointer u) {
+    if (!bandicoot_sidebar_settings_menu) return;
+    gtk_menu_popup(GTK_MENU(bandicoot_sidebar_settings_menu), NULL, NULL,
+                   bandicoot_sidebar_settings_menu_pos, b, 0,
+                   gtk_get_current_event_time());
+}
+
+// Replace the model toolbar's tiny settings triangle with a full-width
+// "Settings ▸" button at the bottom of the sidebar whose menu pops to the SIDE.
+// The original settings toolitem is moved into a HIDDEN holder (kept in-tree so
+// its submenu stays attached and the item callbacks still resolve via
+// lookup_widget). `settings_menu` is model_toolbar_setting1_menu. Called once at
+// startup from main.cc right after bandicoot_float_widget_in_window.
+extern "C" void bandicoot_sidebar_pin_settings_item(GtkWidget *item,
+                                                    GtkWidget *settings_menu) {
+    if (!item || !bandicoot_sidebar_settings_bar) return;
+    // Move the original settings toolitem (menubar + triangle) into the hidden
+    // holder so it stops cluttering the toolbar but stays in the widget tree.
+    if (GTK_IS_TOOL_ITEM(item)) {
+        g_object_ref(item);
+        if (item->parent)
+            gtk_container_remove(GTK_CONTAINER(item->parent), item);
+        gtk_toolbar_insert(GTK_TOOLBAR(bandicoot_sidebar_settings_bar),
+                           GTK_TOOL_ITEM(item), -1);
+        g_object_unref(item);
     }
-    if (natural_h > 0) {
-        // + 32 px buffer below the last item so it isn't flush with
-        // the window chrome, and a small allowance for the title bar.
-        // Width = widest item + 24 px for left/right padding around
-        // the toolbar column, with an 80 px floor in case the items
-        // somehow report 0.
-        int win_w = max_child_w > 0 ? max_child_w + 24 : 340;
-        if (win_w < 80) win_w = 80;
-        gtk_window_resize(GTK_WINDOW(floater), win_w, natural_h + 48);
-    }
+    gtk_widget_hide(bandicoot_sidebar_settings_bar);  // in-tree but invisible
+
+    bandicoot_sidebar_settings_menu = settings_menu;
+
+    // The visible, full-width Settings button. Its child is a 3-part row so the
+    // gear can hug the left edge while "Settings" stays centered in the FULL
+    // button width (a right spacer matched to the gear balances the center).
+    // Content per toolbar style is set by bandicoot_sidebar_update_settings_label.
+    GtkWidget *vbox = gtk_widget_get_parent(bandicoot_sidebar_settings_bar);
+    GtkWidget *btn  = gtk_button_new();
+    GtkWidget *brow = gtk_hbox_new(FALSE, 0);
+    GtkWidget *gear = gtk_label_new(NULL);
+    GtkWidget *text = gtk_label_new(NULL);
+    GtkWidget *pad  = gtk_label_new(NULL);
+    gtk_misc_set_alignment(GTK_MISC(text), 0.5, 0.5);
+    gtk_box_pack_start(GTK_BOX(brow), gear, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(brow), text, TRUE,  TRUE,  0);
+    gtk_box_pack_start(GTK_BOX(brow), pad,  FALSE, FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(btn), brow);
+    bandicoot_sidebar_settings_btn  = btn;
+    bandicoot_sidebar_settings_gear = gear;
+    bandicoot_sidebar_settings_text = text;
+    bandicoot_sidebar_settings_pad  = pad;
+    g_signal_connect(btn, "clicked",
+                     G_CALLBACK(bandicoot_sidebar_settings_clicked), NULL);
+    if (vbox) gtk_box_pack_end(GTK_BOX(vbox), btn, FALSE, TRUE, 4);
+    gtk_widget_show_all(btn);
+
+    // Strip the undocked window's traffic lights so it can never be closed and
+    // lost — and so the title bar's button minimum-width stops fighting the
+    // tight icon-only column. Do this BEFORE fitting so the resize isn't clamped.
+    bandicoot_resolve_sidebar_windows();
+    bandicoot_sidebar_lock_undocked_chrome();
+    // Now that the toolbar's item set is final, fit the floater to it.
+    bandicoot_sidebar_relayout();
+    // Ship with the sidebar docked by default.
+    bandicoot_sidebar_dock_default();
 }
 
 // --- Default placement for newly-realized top-level windows -----------------
@@ -1671,12 +2062,18 @@ static const CGFloat BANDICOOT_STATUS_BAR_HEIGHT = 26.0;
 
 static NSWindow    *bandicoot_status_window = nil;  // the child strip (singleton)
 static NSTextField *bandicoot_status_field  = nil;  // its label (owned by contentView)
+
+// Forward-declared up in the sidebar section so the docked sidebar can avoid
+// overlapping this strip; defined here once the static exists.
+static NSWindow *bandicoot_get_status_window(void) { return bandicoot_status_window; }
 static NSWindow    *bandicoot_status_parent = nil;  // the main NSWindow (unretained)
 
 static void bandicoot_reposition_status_bar(void) {
     if (!bandicoot_status_window || !bandicoot_status_parent) return;
-    // Pin to the bottom edge of the parent's *content* area, full width, so
-    // the strip never overlaps the title bar / toolbar chrome at the top.
+    // Pin to the bottom edge of the parent's *content* area, full width, so the
+    // strip never overlaps the title bar / toolbar chrome at the top. The strip
+    // is z-ordered BELOW the sidebar (see install), so the sidebar and its
+    // settings popup draw over it cleanly where they share the bottom band.
     NSRect cf = [bandicoot_status_parent
                     contentRectForFrameRect:bandicoot_status_parent.frame];
     NSRect sf = NSMakeRect(cf.origin.x, cf.origin.y,
@@ -1737,7 +2134,18 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
         sw.releasedWhenClosed = NO;
-        sw.backgroundColor = [NSColor windowBackgroundColor];
+        // Match the GTK theme's window background (the gray of the sidebar / A-R
+        // bar) instead of the stark white of windowBackgroundColor.
+        NSColor *bg = [NSColor windowBackgroundColor];
+        GtkStyle *style = gtk_widget_get_style(main_window);
+        if (style) {
+            GdkColor c = style->bg[GTK_STATE_NORMAL];
+            bg = [NSColor colorWithCalibratedRed:c.red / 65535.0
+                                           green:c.green / 65535.0
+                                            blue:c.blue / 65535.0
+                                           alpha:1.0];
+        }
+        sw.backgroundColor = bg;
         sw.opaque = YES;
         sw.hasShadow = NO;
         [sw setIgnoresMouseEvents:YES];  // never steal clicks from the GL canvas
@@ -1761,7 +2169,8 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
         bandicoot_status_field = tf;  // unretained ref, valid for the window's life
 
         // Cosmetic resize grip, pinned to the bottom-right (the strip's lower-
-        // right overlaps the window's functional resize corner).
+        // right overlaps the window's functional resize corner; the strip
+        // ignoresMouseEvents so the drag passes straight through to resize).
         const CGFloat grip = 14.0;
         BandicootResizeGrip *rg = [[BandicootResizeGrip alloc] initWithFrame:
             NSMakeRect(frame.size.width - grip, 0, grip, grip)];
@@ -1787,6 +2196,9 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
 
         bandicoot_reposition_status_bar();
         [sw orderFront:nil];
+        // (The settings-menu occlusion is handled by raising the menu above
+        // this strip on map — see bandicoot_settings_menu_mapped — rather than
+        // reordering the strip, which doesn't stick for a glued child window.)
     }
 }
 
@@ -1797,4 +2209,311 @@ extern "C" void bandicoot_set_status_text(const char *text) {
         if (!s) s = @"";  // invalid UTF-8 → stringWithUTF8String returns nil
         bandicoot_status_field.stringValue = s;
     }
+}
+
+// ---- Native Accept/Reject bar (top child window) -------------------------
+//
+// A self-contained native replacement for Coot's docked Accept/Reject dialog.
+// We deliberately do NOT reuse Coot's DIALOG_DOCKED path (its in-window frame
+// labels aren't ported in Bandicoot and it SIGSEGVs on geometry update). This
+// bar is a borderless GTK floater docked as a child window to the TOP edge of
+// the main window — the same mechanism as the model-toolbar sidebar — holding
+// a row of geometry "lights" (rendered natively from the refinement results)
+// plus Accept / Reject buttons. "Always shown" mode: it lives for the whole
+// session; refinements just refresh the lights. Coot's stock UNDOCKED dialog
+// is left completely untouched; do_accept_reject_dialog() routes here instead
+// while this bar is active.
+
+#define BANDICOOT_AR_MAX_LIGHTS 8
+
+// Accept/Reject action bridges, implemented Coot-side (graphics-info-gui.cc)
+// where the c-interface refinement calls are in scope.
+extern "C" void bandicoot_ar_accept(void);
+extern "C" void bandicoot_ar_reject(void);
+
+static GtkWidget *bandicoot_ar_floater    = NULL;
+static GtkWidget *bandicoot_ar_parent_gtk = NULL;
+static GtkWidget *bandicoot_ar_lights_box = NULL;
+static GtkWidget *bandicoot_ar_accept_btn = NULL;
+static GtkWidget *bandicoot_ar_reject_btn = NULL;
+static GtkWidget *bandicoot_ar_lights[BANDICOOT_AR_MAX_LIGHTS] = { NULL };
+static NSWindow  *bandicoot_ar_ns        = nil;
+static NSWindow  *bandicoot_ar_parent_ns = nil;
+static BOOL       bandicoot_ar_pinned    = NO;   // window is a pinned child (always YES post-install)
+static NSUInteger bandicoot_ar_orig_mask = 0;
+static BOOL       bandicoot_ar_mask_saved = NO;
+// Driven by the "Dock Accept/Reject Dialog?" preference (Coot's docked flags):
+//  pref_active     = docked? (YES → our bar handles A/R, stock dialog suppressed)
+//  pref_always_show= Always show (YES) vs Always hide (NO, bar only during refine)
+static BOOL       bandicoot_ar_pref_active      = YES;
+static BOOL       bandicoot_ar_pref_always_show = YES;
+
+// Defined further below in this section; referenced before their definitions.
+static void bandicoot_ar_resolve_windows(void);
+
+// One geometry light = a colour-filled rectangle with the parameter name
+// stacked over its value, both drawn inside. Colour + the two strings are
+// stored on the widget; the full label is also the tooltip.
+static gboolean bandicoot_ar_light_expose(GtkWidget *w, GdkEventExpose *e, gpointer u) {
+    cairo_t *cr = gdk_cairo_create(w->window);
+    double W = w->allocation.width, H = w->allocation.height;
+    GdkColor *c = (GdkColor *)g_object_get_data(G_OBJECT(w), "bcoot-light-color");
+    double r = c ? c->red / 65535.0   : 0.82;
+    double g = c ? c->green / 65535.0 : 0.82;
+    double b = c ? c->blue / 65535.0  : 0.82;
+    cairo_set_source_rgb(cr, r, g, b);
+    cairo_rectangle(cr, 0, 0, W, H);
+    cairo_fill(cr);
+    cairo_set_source_rgb(cr, 0.30, 0.30, 0.30);       // thin border
+    cairo_set_line_width(cr, 1.0);
+    cairo_rectangle(cr, 0.5, 0.5, W - 1, H - 1);
+    cairo_stroke(cr);
+
+    // Text colour for contrast against the fill (luminance threshold).
+    double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum < 0.5) cairo_set_source_rgb(cr, 1, 1, 1);
+    else           cairo_set_source_rgb(cr, 0, 0, 0);
+    const char *name = (const char *)g_object_get_data(G_OBJECT(w), "bcoot-light-name");
+    const char *val  = (const char *)g_object_get_data(G_OBJECT(w), "bcoot-light-value");
+    cairo_text_extents_t te;
+    if (name && *name) {
+        cairo_select_font_face(cr, "sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_set_font_size(cr, 8.5);
+        cairo_text_extents(cr, name, &te);
+        cairo_move_to(cr, (W - te.width) / 2 - te.x_bearing, H * 0.40);
+        cairo_show_text(cr, name);
+    }
+    if (val && *val) {
+        cairo_select_font_face(cr, "sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+        cairo_set_font_size(cr, 13.0);
+        cairo_text_extents(cr, val, &te);
+        cairo_move_to(cr, (W - te.width) / 2 - te.x_bearing, H * 0.92);
+        cairo_show_text(cr, val);
+    }
+    cairo_destroy(cr);
+    return TRUE;
+}
+
+// Refresh the lights from refinement results. names[i]/values[i] are drawn
+// inside each rectangle; tooltips[i] is the full label; colors[i] the
+// distortion colour. n past the pool max is clamped, remaining lights hidden.
+// (Button enable/disable is handled separately by present/dismiss, because a
+// lightless dialog — e.g. Rigid Body Fit — still needs working buttons.)
+extern "C" void bandicoot_ar_bar_set_lights(int n, const char *const *names,
+                                            const char *const *values,
+                                            const char *const *tooltips,
+                                            const GdkColor *colors) {
+    if (n < 0) n = 0;
+    if (n > BANDICOOT_AR_MAX_LIGHTS) n = BANDICOOT_AR_MAX_LIGHTS;
+    for (int i = 0; i < BANDICOOT_AR_MAX_LIGHTS; i++) {
+        GtkWidget *w = bandicoot_ar_lights[i];
+        if (!w) continue;
+        if (i < n) {
+            GdkColor *c = (GdkColor *)g_object_get_data(G_OBJECT(w), "bcoot-light-color");
+            if (!c) {
+                c = g_new0(GdkColor, 1);
+                g_object_set_data_full(G_OBJECT(w), "bcoot-light-color", c, g_free);
+            }
+            *c = colors[i];
+            g_object_set_data_full(G_OBJECT(w), "bcoot-light-name",
+                                   g_strdup(names && names[i] ? names[i] : ""), g_free);
+            g_object_set_data_full(G_OBJECT(w), "bcoot-light-value",
+                                   g_strdup(values && values[i] ? values[i] : ""), g_free);
+            gtk_widget_set_tooltip_text(w, tooltips && tooltips[i] ? tooltips[i] : "");
+            gtk_widget_show(w);
+            gtk_widget_queue_draw(w);
+        } else {
+            gtk_widget_hide(w);
+        }
+    }
+}
+
+// Show/hide the docked bar window (a pinned borderless child). Used by the
+// "Always hide" preference: the bar only appears while a refinement is pending.
+static void bandicoot_ar_bar_show_window(BOOL show) {
+    bandicoot_ar_resolve_windows();
+    if (!bandicoot_ar_ns) return;
+    if (show) {
+        if (![bandicoot_ar_ns parentWindow] && bandicoot_ar_parent_ns)
+            [bandicoot_ar_parent_ns addChildWindow:bandicoot_ar_ns ordered:NSWindowAbove];
+        bandicoot_ar_reposition();
+        [bandicoot_ar_ns orderFront:nil];
+    } else {
+        [bandicoot_ar_ns orderOut:nil];
+    }
+}
+
+// A refinement/fit is pending: enable Accept/Reject, and (in Always-hide mode)
+// pop the bar into view. Called from do_accept_reject_dialog.
+extern "C" void bandicoot_ar_bar_present(void) {
+    if (bandicoot_ar_accept_btn) gtk_widget_set_sensitive(bandicoot_ar_accept_btn, TRUE);
+    if (bandicoot_ar_reject_btn) gtk_widget_set_sensitive(bandicoot_ar_reject_btn, TRUE);
+    if (!bandicoot_ar_pref_always_show)
+        bandicoot_ar_bar_show_window(YES);
+}
+
+// The accept/reject decision was made (or no refinement is pending): clear the
+// lights, disable the buttons, and (in Always-hide mode) hide the bar again.
+static void bandicoot_ar_bar_dismiss(void) {
+    bandicoot_ar_bar_set_lights(0, NULL, NULL, NULL, NULL);
+    if (bandicoot_ar_accept_btn) gtk_widget_set_sensitive(bandicoot_ar_accept_btn, FALSE);
+    if (bandicoot_ar_reject_btn) gtk_widget_set_sensitive(bandicoot_ar_reject_btn, FALSE);
+    if (!bandicoot_ar_pref_always_show)
+        bandicoot_ar_bar_show_window(NO);
+}
+
+static void bandicoot_ar_button_clicked(GtkButton *b, gpointer accept_ptr) {
+    if (GPOINTER_TO_INT(accept_ptr)) bandicoot_ar_accept();
+    else                            bandicoot_ar_reject();
+    bandicoot_ar_bar_dismiss();
+}
+
+static void bandicoot_ar_resolve_windows(void) {
+    if (!bandicoot_ar_ns && bandicoot_ar_floater && bandicoot_ar_floater->window)
+        bandicoot_ar_ns = (NSWindow *)gdk_quartz_window_get_nswindow(bandicoot_ar_floater->window);
+    if (!bandicoot_ar_parent_ns && bandicoot_ar_parent_gtk && bandicoot_ar_parent_gtk->window)
+        bandicoot_ar_parent_ns =
+            (NSWindow *)gdk_quartz_window_get_nswindow(bandicoot_ar_parent_gtk->window);
+}
+
+static void bandicoot_ar_reposition(void) {
+    if (!bandicoot_ar_pinned || !bandicoot_ar_ns || !bandicoot_ar_parent_ns) return;
+    NSWindow *p = bandicoot_ar_parent_ns;
+    NSView *cv = p.contentView;
+    NSRect usable = [p convertRectToScreen:[cv convertRect:p.contentLayoutRect toView:nil]];
+    CGFloat barH = NSHeight(bandicoot_ar_ns.frame);
+    // Span the content width, but stop at the docked sidebar's left edge.
+    CGFloat sidebarW = (bandicoot_sidebar_docked && bandicoot_sidebar_ns)
+                           ? NSWidth(bandicoot_sidebar_ns.frame) : 0.0;
+    CGFloat w = NSWidth(usable) - sidebarW;
+    if (w < 1) w = 1;
+    NSRect sf = NSMakeRect(NSMinX(usable), NSMaxY(usable) - barH, w, barH);
+    [bandicoot_ar_ns setFrame:sf display:YES];
+}
+
+static gboolean bandicoot_ar_reposition_idle(gpointer u) {
+    bandicoot_ar_reposition();
+    return FALSE;  // one-shot
+}
+
+// Re-snap every child bar into place. Used at startup: the bars are positioned
+// before the main window's geometry is final, so they look misaligned until the
+// first move/resize — this settles them without the user having to nudge.
+static gboolean bandicoot_settle_all_bars_idle(gpointer u) {
+    bandicoot_reposition_sidebar();
+    bandicoot_ar_reposition();
+    bandicoot_reposition_status_bar();
+    return FALSE;  // one-shot
+}
+
+@interface BandicootARObserver : NSObject
+@end
+@implementation BandicootARObserver
+- (void)parentGeometryChanged:(NSNotification *)note { bandicoot_ar_reposition(); }
+@end
+static BandicootARObserver *bandicoot_ar_observer = nil;
+
+// Pin the bar as a borderless child of the main window (done once at install;
+// the bar stays pinned for the whole session — the Dock/Undock button toggles
+// the MODE, not the window).
+static void bandicoot_ar_pin(void) {
+    @autoreleasepool {
+        bandicoot_ar_resolve_windows();
+        if (!bandicoot_ar_ns || !bandicoot_ar_parent_ns) return;
+        bandicoot_ar_pinned = YES;
+        if (!bandicoot_ar_mask_saved) {
+            bandicoot_ar_orig_mask  = bandicoot_ar_ns.styleMask;
+            bandicoot_ar_mask_saved = YES;
+        }
+        [bandicoot_ar_ns setStyleMask:NSWindowStyleMaskBorderless];
+        if (![bandicoot_ar_ns parentWindow])
+            [bandicoot_ar_parent_ns addChildWindow:bandicoot_ar_ns ordered:NSWindowAbove];
+        if (!bandicoot_ar_observer) {
+            bandicoot_ar_observer = [BandicootARObserver new];
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            [nc addObserver:bandicoot_ar_observer selector:@selector(parentGeometryChanged:)
+                       name:NSWindowDidResizeNotification object:bandicoot_ar_parent_ns];
+            [nc addObserver:bandicoot_ar_observer selector:@selector(parentGeometryChanged:)
+                       name:NSWindowDidMoveNotification object:bandicoot_ar_parent_ns];
+        }
+        bandicoot_ar_reposition();
+    }
+}
+
+// Build the Accept/Reject bar and dock it to the top edge.
+extern "C" void bandicoot_install_accept_reject_bar(GtkWidget *main_window) {
+    GtkWidget *floater = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(floater), "Accept / Reject");
+    gtk_window_set_resizable(GTK_WINDOW(floater), TRUE);
+    gtk_window_set_keep_above(GTK_WINDOW(floater), TRUE);
+    if (main_window && GTK_IS_WINDOW(main_window))
+        g_object_set_data(G_OBJECT(floater), "GladeParentKey", main_window);
+
+    GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
+    gtk_container_set_border_width(GTK_CONTAINER(hbox), 3);
+    gtk_container_add(GTK_CONTAINER(floater), hbox);
+
+    // Geometry lights row — rectangles big enough to hold name-over-value.
+    GtkWidget *lights_box = gtk_hbox_new(TRUE, 2);
+    for (int i = 0; i < BANDICOOT_AR_MAX_LIGHTS; i++) {
+        GtkWidget *light = gtk_drawing_area_new();
+        gtk_widget_set_size_request(light, 58, 38);
+        g_signal_connect(light, "expose-event",
+                         G_CALLBACK(bandicoot_ar_light_expose), NULL);
+        gtk_box_pack_start(GTK_BOX(lights_box), light, FALSE, FALSE, 0);
+        bandicoot_ar_lights[i] = light;   // shown on demand by set_lights
+    }
+    gtk_box_pack_start(GTK_BOX(hbox), lights_box, FALSE, FALSE, 4);
+
+    GtkWidget *reject = gtk_button_new_with_label("Reject");
+    g_signal_connect(reject, "clicked",
+                     G_CALLBACK(bandicoot_ar_button_clicked), GINT_TO_POINTER(0));
+    gtk_box_pack_start(GTK_BOX(hbox), reject, FALSE, FALSE, 0);
+
+    GtkWidget *accept = gtk_button_new_with_label("Accept");
+    g_signal_connect(accept, "clicked",
+                     G_CALLBACK(bandicoot_ar_button_clicked), GINT_TO_POINTER(1));
+    gtk_box_pack_start(GTK_BOX(hbox), accept, FALSE, FALSE, 0);
+
+    g_signal_connect(floater, "delete-event",
+                     G_CALLBACK(gtk_widget_hide_on_delete), NULL);
+
+    bandicoot_ar_floater    = floater;
+    bandicoot_ar_parent_gtk = main_window;
+    bandicoot_ar_lights_box = lights_box;
+    bandicoot_ar_accept_btn = accept;
+    bandicoot_ar_reject_btn = reject;
+
+    gtk_widget_show_all(floater);
+    // Start idle: no lights, Accept/Reject disabled until a refinement runs.
+    bandicoot_ar_bar_set_lights(0, NULL, NULL, NULL, NULL);
+    if (bandicoot_ar_accept_btn) gtk_widget_set_sensitive(bandicoot_ar_accept_btn, FALSE);
+    if (bandicoot_ar_reject_btn) gtk_widget_set_sensitive(bandicoot_ar_reject_btn, FALSE);
+    // Pin to the top edge. Visibility is then governed by the docked preference
+    // (applied via bandicoot_ar_bar_apply_prefs once Coot's flags are known).
+    bandicoot_ar_resolve_windows();
+    bandicoot_ar_pin();
+    // Re-snap ALL bars (sidebar, A/R, status) once layout settles — on idle and
+    // again after a short delay — so nothing looks misaligned on first paint.
+    g_idle_add(bandicoot_settle_all_bars_idle, NULL);
+    g_timeout_add(200, bandicoot_settle_all_bars_idle, NULL);
+}
+
+// Whether the native bar is currently handling Accept/Reject (docked == Yes), so
+// do_accept_reject_dialog should route to it instead of Coot's stock dialog.
+extern "C" int bandicoot_ar_bar_is_active(void) {
+    return (bandicoot_ar_floater && bandicoot_ar_pref_active) ? 1 : 0;
+}
+
+// Apply the "Dock Accept/Reject Dialog?" preference. active = docked (Yes);
+// always_show = "Always show" (vs "Always hide"). Updates bar visibility now:
+// hidden when undocked (No) or Always-hide-and-idle; shown when Always-show.
+extern "C" void bandicoot_ar_bar_apply_prefs(int active, int always_show) {
+    bandicoot_ar_pref_active      = active ? YES : NO;
+    bandicoot_ar_pref_always_show = always_show ? YES : NO;
+    if (!bandicoot_ar_floater) return;
+    if (bandicoot_ar_pref_active && bandicoot_ar_pref_always_show)
+        bandicoot_ar_bar_show_window(YES);   // docked + always shown
+    else
+        bandicoot_ar_bar_show_window(NO);    // undocked, or wait for a refinement
 }

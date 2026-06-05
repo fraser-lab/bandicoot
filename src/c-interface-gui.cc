@@ -5390,6 +5390,12 @@ void set_filename_for_filechooserselection(GtkWidget *fileselection,
 }
 
 // functions to dock the accept/reject dialog
+#ifdef __APPLE__
+// Defined in graphics-info-gui.cc: re-applies the docked-A/R preference to
+// Bandicoot's native bar (shows/hides it, sets active state).
+void bandicoot_ar_sync_prefs(void);
+#endif
+
 void set_accept_reject_dialog_docked(int istate){
    if (graphics_info_t::use_graphics_interface_flag) {
      // we should destroy/hide the dialog if existing
@@ -5408,6 +5414,9 @@ void set_accept_reject_dialog_docked(int istate){
      // now change the state
      graphics_info_t::accept_reject_dialog_docked_flag = istate;
    }
+#ifdef __APPLE__
+   bandicoot_ar_sync_prefs();   // drive Bandicoot's native A/R bar from the pref
+#endif
 }
 
 int accept_reject_dialog_docked_state(){
@@ -5427,6 +5436,9 @@ void set_accept_reject_dialog_docked_show(int state){
 		 set_accept_reject_dialog(0);
 	  }
    }
+#ifdef __APPLE__
+   bandicoot_ar_sync_prefs();   // drive Bandicoot's native A/R bar from the pref
+#endif
 }
 
 int accept_reject_dialog_docked_show_state() {

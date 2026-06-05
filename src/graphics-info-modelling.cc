@@ -105,7 +105,15 @@
 
 #include "utils/coot-utils.hh"
 
- 
+#ifdef __APPLE__
+// Bandicoot native Accept/Reject bar: feed it the live geometry results during
+// the threaded refinement loop (defined in graphics-info-gui.cc / the AppKit
+// shim). Forward-declared here to avoid extra include coupling.
+extern "C" int bandicoot_ar_bar_is_active(void);
+void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
+#endif
+
+
 void
 graphics_info_t::get_restraints_lock(const std::string &calling_function_name) {
 
@@ -866,6 +874,13 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function() {
       moving_atoms_bonds_lock = 0;
       moving_atoms_lock = false;
 
+#ifdef __APPLE__
+      // Bandicoot's native A/R bar gets the live geometry updates (the stock
+      // dialog is suppressed, so accept_reject_dialog is NULL).
+      if (bandicoot_ar_bar_is_active())
+	 bandicoot_update_ar_bar_from_results(saved_dragged_refinement_results);
+      else
+#endif
       if (accept_reject_dialog)
 	 update_accept_reject_dialog_with_results(accept_reject_dialog, coot::CHI_SQUAREDS,
 						  saved_dragged_refinement_results);

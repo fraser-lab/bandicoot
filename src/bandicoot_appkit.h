@@ -56,6 +56,40 @@ void bandicoot_install_right_click_handler(void);
 // so the window can be re-shown.
 void bandicoot_float_widget_in_window(GtkWidget *widget, const char *title);
 
+// Append a "Dock"/"Undock" toggle item to the model toolbar's settings
+// popup menu (the bottom triangle button, model_toolbar_setting1_menu).
+// Replaces the standalone Dock button row; the item's label flips between
+// "Dock" and "Undock" as the sidebar is pinned/released. Call once at
+// startup after bandicoot_float_widget_in_window.
+void bandicoot_sidebar_add_dock_menu_item(GtkWidget *menu);
+
+// Replace the model toolbar's settings triangle (model_toolbar_style_toolitem)
+// with a full-width "Settings ▸" button at the bottom of the sidebar whose menu
+// (settings_menu = model_toolbar_setting1_menu) pops to the SIDE. Call once at
+// startup right after bandicoot_float_widget_in_window.
+void bandicoot_sidebar_pin_settings_item(GtkWidget *item, GtkWidget *settings_menu);
+
+// ---- Native Accept/Reject bar (top child window) ------------------------
+// Build the always-shown native A/R bar and dock it to the top edge. Call once
+// at startup after the main window is realized.
+void bandicoot_install_accept_reject_bar(GtkWidget *main_window);
+// Refresh the geometry lights from refinement results: n colour rectangles,
+// names[i]/values[i] drawn inside, tooltips[i] the full label, colors[i] the
+// distortion colour. n=0 hides them and disables Accept/Reject (idle bar).
+void bandicoot_ar_bar_set_lights(int n, const char *const *names,
+                                 const char *const *values,
+                                 const char *const *tooltips,
+                                 const GdkColor *colors);
+// 1 if the native bar is handling Accept/Reject (docked == Yes), so
+// do_accept_reject_dialog should route to it instead of Coot's stock dialog.
+int bandicoot_ar_bar_is_active(void);
+// A refinement/fit is pending: enable Accept/Reject and (in Always-hide mode)
+// pop the bar into view. Call from do_accept_reject_dialog when routing to it.
+void bandicoot_ar_bar_present(void);
+// Apply the "Dock Accept/Reject Dialog?" preference: active = docked (Yes/No),
+// always_show = Always show (1) vs Always hide (0). Updates bar visibility.
+void bandicoot_ar_bar_apply_prefs(int active, int always_show);
+
 // Force the application to the foreground (raises all our NSWindows above
 // the windows of other apps). Needed because GUI apps launched from a
 // shell wrapper script are background apps by default on macOS.
