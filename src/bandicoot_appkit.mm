@@ -2051,6 +2051,84 @@ extern "C" void bandicoot_setup_window_raising(void) {
     }
 }
 
+// --- Persistent, always-on-top dialogs -----------------------------------
+//
+// Some Coot dialogs are rebuilt from scratch on every invocation — the
+// residue-type chooser behind Simple Mutate / Mutate & Auto Fit is the worst
+// offender. Two annoyances follow on GTK-Quartz/Tahoe: (1) the chooser opens
+// in front, but because the user just clicked in the GL view to pick the
+// residue the main window is key and immediately reclaims the top z-slot,
+// burying the chooser behind it; (2) since the widget is a brand-new instance
+// each time, it always reappears at the realize-hook's default placement
+// (center-on-parent / mouse) rather than wherever the user last dragged it.
+//
+// Fix: register such a dialog under a stable `role` string. We pin its
+// NSWindow to the floating level so it stays above the normal-level main
+// window until the user dismisses it, and we remember its on-screen origin
+// (captured on unmap, keyed by role) so the next incarnation reappears there.
+
+static NSMutableDictionary *bandicoot_dialog_origins = nil;  // role -> NSValue(point)
+
+static const char *bandicoot_dialog_role(GtkWidget *w) {
+    return (const char *)g_object_get_data(G_OBJECT(w), "bandicoot-dialog-role");
+}
+
+static NSWindow *bandicoot_nswindow_for(GtkWidget *w) {
+    GdkWindow *gw = gtk_widget_get_window(w);
+    return gw ? (NSWindow *)gdk_quartz_window_get_nswindow(gw) : nil;
+}
+
+// On unmap (which fires before unrealize — including when the dialog is
+// destroyed by an amino-acid button — while the NSWindow is still alive),
+// stash the window's current origin so a freshly-built replacement can be put
+// back in the same spot.
+static void bandicoot_dialog_unmap_cb(GtkWidget *w, gpointer data) {
+    const char *role = bandicoot_dialog_role(w);
+    NSWindow *nw = bandicoot_nswindow_for(w);
+    if (!role || !nw) return;
+    if (!bandicoot_dialog_origins)
+        bandicoot_dialog_origins = [[NSMutableDictionary alloc] init];
+    NSRect f = [nw frame];
+    [bandicoot_dialog_origins setObject:[NSValue valueWithPoint:f.origin]
+                                 forKey:[NSString stringWithUTF8String:role]];
+}
+
+// Deferred to idle so GTK's own initial placement (the realize hook plus any
+// queued AppKit windowDidMove) has settled before we override the origin and
+// pin the level. Mirrors the bandicoot_raise_idle pattern.
+static gboolean bandicoot_dialog_map_idle(gpointer data) {
+    GtkWidget *w = (GtkWidget *)data;
+    if (w && GTK_IS_WINDOW(w)) {
+        NSWindow *nw = bandicoot_nswindow_for(w);
+        if (nw) {
+            [nw setLevel:NSFloatingWindowLevel];
+            const char *role = bandicoot_dialog_role(w);
+            if (role && bandicoot_dialog_origins) {
+                NSValue *v = [bandicoot_dialog_origins
+                                 objectForKey:[NSString stringWithUTF8String:role]];
+                if (v) [nw setFrameOrigin:[v pointValue]];
+            }
+            [nw orderFrontRegardless];
+        }
+    }
+    g_object_unref(data);
+    return G_SOURCE_REMOVE;
+}
+
+static void bandicoot_dialog_map_cb(GtkWidget *w, gpointer data) {
+    g_object_ref(w);
+    g_idle_add(bandicoot_dialog_map_idle, w);
+}
+
+extern "C" void bandicoot_register_persistent_dialog(GtkWidget *w, const char *role) {
+    if (!w) return;
+    if (role)
+        g_object_set_data_full(G_OBJECT(w), "bandicoot-dialog-role",
+                               g_strdup(role), g_free);
+    g_signal_connect(w, "map",   G_CALLBACK(bandicoot_dialog_map_cb),   NULL);
+    g_signal_connect(w, "unmap", G_CALLBACK(bandicoot_dialog_unmap_cb), NULL);
+}
+
 // ---- Native status bar (bottom child window) ----------------------------
 //
 // GTK's main_window_statusbar lives on the GL-owned contentView and is

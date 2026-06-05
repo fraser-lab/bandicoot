@@ -767,7 +767,16 @@ make_link(int imol, coot::atom_spec_t &spec_1, coot::atom_spec_t &spec_2,
       graphics_info_t g;
       g.molecules[imol].make_link(spec_1, spec_2, link_name, length, *g.Geom_p());
       graphics_draw();
-   } 
+   }
+}
+
+// Bandicoot: arm the interactive "Make Link (click 2 atoms)" mode. The native
+// pick collection + completion lives in graphics_info_t::check_if_in_make_link_define.
+void bandicoot_make_link_interactive() {
+   graphics_info_t g;
+   graphics_info_t::in_make_link_define = 2;
+   g.pick_cursor_maybe();
+   g.add_status_bar_text("Make Link: click on the first of two atoms");
 }
 
 #ifdef USE_GUILE

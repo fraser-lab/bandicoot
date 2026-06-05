@@ -91,6 +91,10 @@
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
 
+#ifdef __APPLE__
+#include "bandicoot_appkit.h"
+#endif
+
 #include "cmtz-interface.hh" // for valid columns mtz_column_types_info_t
 #include "c-interface-mmdb.hh"
 #include "c-interface-scm.hh"
@@ -636,6 +640,9 @@ void mutate_active_residue() {
       int imol = pp.second.first;
       bool show_stub_flag = true;
       GtkWidget *widget = g.wrapped_create_residue_type_chooser_window(show_stub_flag);
+#ifdef __APPLE__
+      bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
+#endif
       gtk_widget_show(widget);
       g.in_mutate_auto_fit_define = 0;
       g.residue_type_chooser_auto_fit_flag = 1;

@@ -3833,6 +3833,9 @@ def setup_reverse_direction(i):
 def add_OXT_to_residue(imol, chain_id, reso, insertion_code):
     return _coot.add_OXT_to_residue(imol, chain_id, reso, insertion_code)
 
+def bandicoot_make_link_interactive():
+    return _coot.bandicoot_make_link_interactive()
+
 def set_draw_crosshairs(i):
     return _coot.set_draw_crosshairs(i)
 

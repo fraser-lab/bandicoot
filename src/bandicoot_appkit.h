@@ -113,6 +113,17 @@ void bandicoot_setup_window_positioning(void);
 // re-order NSWindows on its own. Call once at startup, after gtk_init().
 void bandicoot_setup_window_raising(void);
 
+// Pin a recreated-each-time dialog above the main window and remember where
+// the user last left it. `role` is a stable key (e.g. "residue-type-chooser")
+// used to restore the on-screen origin across invocations. The NSWindow is
+// placed at the floating level so it stays above the normal-level main window
+// until dismissed — fixing the "chooser opens then the main window buries it"
+// behaviour for the Mutate residue-type / nucleotide-base choosers. The origin
+// is captured on unmap (keyed by role) so the next incarnation reappears in
+// the same spot. Call once on the freshly-created widget, before showing it.
+// No-op on non-macOS builds.
+void bandicoot_register_persistent_dialog(GtkWidget *w, const char *role);
+
 // Query AppKit's modifier flags directly. GTK-Quartz on Tahoe doesn't
 // populate event->state with the shift/control bits, so any code that
 // relies on event->state (e.g. shift-click for atom labeling) sees no

@@ -23438,6 +23438,7 @@ create_other_model_tools_dialog (void)
   GtkWidget *other_tools_RNA_button;
   GtkWidget *other_tools_base_pair_toggle_button;
   GtkWidget *set_undo_molecule_button;
+  GtkWidget *make_link_button;
   GtkWidget *dialog_action_area88;
   GtkWidget *other_modelling_tools_close_button;
   GtkWidget *alignment97;
@@ -23601,6 +23602,12 @@ create_other_model_tools_dialog (void)
   gtk_container_set_border_width (GTK_CONTAINER (set_undo_molecule_button), 1);
   gtk_tooltips_set_tip (tooltips, set_undo_molecule_button, "Choose the molecule number to which \"Undo\" actions occur.", NULL);
 
+  make_link_button = gtk_button_new_with_mnemonic ("Make Link (click 2 atoms)...");
+  gtk_widget_show (make_link_button);
+  gtk_box_pack_start (GTK_BOX (vbox163), make_link_button, FALSE, FALSE, 1);
+  gtk_container_set_border_width (GTK_CONTAINER (make_link_button), 1);
+  gtk_tooltips_set_tip (tooltips, make_link_button, "Click on two atoms (in the same molecule) to create a LINK record between them.", NULL);
+
   dialog_action_area88 = GTK_DIALOG (other_model_tools_dialog)->action_area;
   gtk_widget_show (dialog_action_area88);
   gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area88), GTK_BUTTONBOX_END);
@@ -23673,6 +23680,9 @@ create_other_model_tools_dialog (void)
   g_signal_connect ((gpointer) set_undo_molecule_button, "clicked",
                     G_CALLBACK (on_set_undo_molecule_button_clicked),
                     NULL);
+  g_signal_connect ((gpointer) make_link_button, "clicked",
+                    G_CALLBACK (on_make_link_button_clicked),
+                    NULL);
   g_signal_connect ((gpointer) other_modelling_tools_close_button, "clicked",
                     G_CALLBACK (on_other_modelling_tools_close_button_clicked),
                     NULL);
@@ -23710,6 +23720,7 @@ create_other_model_tools_dialog (void)
   GLADE_HOOKUP_OBJECT (other_model_tools_dialog, other_tools_RNA_button, "other_tools_RNA_button");
   GLADE_HOOKUP_OBJECT (other_model_tools_dialog, other_tools_base_pair_toggle_button, "other_tools_base_pair_toggle_button");
   GLADE_HOOKUP_OBJECT (other_model_tools_dialog, set_undo_molecule_button, "set_undo_molecule_button");
+  GLADE_HOOKUP_OBJECT (other_model_tools_dialog, make_link_button, "make_link_button");
   GLADE_HOOKUP_OBJECT_NO_REF (other_model_tools_dialog, dialog_action_area88, "dialog_action_area88");
   GLADE_HOOKUP_OBJECT (other_model_tools_dialog, other_modelling_tools_close_button, "other_modelling_tools_close_button");
   GLADE_HOOKUP_OBJECT (other_model_tools_dialog, alignment97, "alignment97");

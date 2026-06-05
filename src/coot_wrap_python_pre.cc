@@ -45678,6 +45678,19 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_make_link_interactive(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_make_link_interactive", 0, 0, 0)) SWIG_fail;
+  bandicoot_make_link_interactive();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_set_draw_crosshairs(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   short arg1 ;
@@ -77680,6 +77693,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "reverse_direction_of_fragment", _wrap_reverse_direction_of_fragment, METH_VARARGS, NULL},
 	 { "setup_reverse_direction", _wrap_setup_reverse_direction, METH_O, NULL},
 	 { "add_OXT_to_residue", _wrap_add_OXT_to_residue, METH_VARARGS, NULL},
+	 { "bandicoot_make_link_interactive", _wrap_bandicoot_make_link_interactive, METH_NOARGS, NULL},
 	 { "set_draw_crosshairs", _wrap_set_draw_crosshairs, METH_O, NULL},
 	 { "draw_crosshairs_state", _wrap_draw_crosshairs_state, METH_NOARGS, NULL},
 	 { "setup_edit_chi_angles", _wrap_setup_edit_chi_angles, METH_O, NULL},

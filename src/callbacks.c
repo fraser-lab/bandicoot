@@ -9871,6 +9871,15 @@ on_set_undo_molecule_button_clicked    (GtkButton       *button,
 
 
 void
+on_make_link_button_clicked            (GtkButton       *button,
+                                        gpointer         user_data)
+{
+  /* Bandicoot: arm the interactive 2-atom Make Link pick. */
+  bandicoot_make_link_interactive();
+}
+
+
+void
 on_gln_and_asn_b_factor_outliers1_activate
                                         (GtkMenuItem     *menuitem,
                                         gpointer         user_data)

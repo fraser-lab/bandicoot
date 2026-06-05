@@ -5719,6 +5719,12 @@ void setup_reverse_direction(short int i);
 /*! \{ */
 short int add_OXT_to_residue(int imol, const char *chain_id, int reso, const char *insertion_code);
 
+/*! \brief Bandicoot: arm the interactive "Make Link (click 2 atoms)" mode.
+    The next two atom picks (which must be in the same molecule) define a LINK
+    record between them. Restores the GUI entry lost with the dead PyGTK
+    extensions.py "Modelling" menu. */
+void bandicoot_make_link_interactive();
+
 /*! \} */
 
 /*  ----------------------------------------------------------------------- */

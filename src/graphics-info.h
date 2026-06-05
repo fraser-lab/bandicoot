@@ -805,6 +805,10 @@ class graphics_info_t {
    void check_if_in_fixed_atom_define(GdkEventButton *event,
 				      const GdkModifierType &state); // can use Ctrl key
    void check_if_in_user_defined_define(GdkEventButton *event);
+   // Bandicoot: restored "Make Link (click 2 atoms)" interactive mode (the GUI
+   // entry was lost with the dead PyGTK extensions.py Modelling menu). Native
+   // 2-atom pick that completes by calling molecules[imol].make_link().
+   void check_if_in_make_link_define(GdkEventButton *event);
    static std::vector<std::string> model_fit_refine_toggle_button_name_list();
    static std::vector<std::string> model_fit_refine_button_name_list();
    static std::vector<std::string> other_modelling_tools_toggle_button_name_list();
@@ -1759,6 +1763,12 @@ public:
    static double residue_partial_alt_locs_rotate_fragment_angle;
 
    static short int in_user_defined_define;
+
+   // Bandicoot: "Make Link (click 2 atoms)" interactive state. 0 = off, 2 =
+   // awaiting first atom, 1 = first atom stored, awaiting second.
+   static short int in_make_link_define;
+   static int make_link_atom_1_imol;
+   static coot::atom_spec_t make_link_atom_1_spec;
 
    // save symmetry?
    static short int in_save_symmetry_define;

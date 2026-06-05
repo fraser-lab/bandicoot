@@ -1076,6 +1076,11 @@ PyObject *graphics_info_t::user_defined_click_py_func = NULL;
 #endif // PYTHON
 std::vector<coot::atom_spec_t> graphics_info_t::user_defined_atom_pick_specs;
 
+// Bandicoot: "Make Link (click 2 atoms)" interactive state.
+short int graphics_info_t::in_make_link_define = 0;
+int graphics_info_t::make_link_atom_1_imol = -1;
+coot::atom_spec_t graphics_info_t::make_link_atom_1_spec;
+
 
 // Miguel's axis orientation matrix ---------------
 GL_matrix graphics_info_t::axes_orientation = GL_matrix();

@@ -43,6 +43,10 @@
 
 #include "coot-fileselections.h"
 
+#ifdef __APPLE__
+#include "bandicoot_appkit.h"
+#endif
+
 void
 graphics_info_t::clear_pending_picks() {
    a_is_pressed = 0;
@@ -244,6 +248,7 @@ graphics_info_t::check_if_in_range_defines(GdkEventButton *event,
    int iv = 0;
 
    check_if_in_user_defined_define(event);
+   check_if_in_make_link_define(event);
    check_if_in_residue_info_define(event);
    iv += check_if_in_regularize_define(event);
    iv += check_if_in_refine_define(event);
@@ -300,8 +305,54 @@ graphics_info_t::check_if_in_user_defined_define(GdkEventButton *event) {
 	 }
 	 normal_cursor();
       }
-   } 
-} 
+   }
+}
+
+
+// Bandicoot: restored "Make Link (click 2 atoms)" interactive pick. The
+// upstream GUI entry lived in the now-dead PyGTK extensions.py "Modelling"
+// menu and drove user_defined_click(2, ...); this is the equivalent native
+// 2-atom pick. in_make_link_define: 2 = awaiting first atom, 1 = first atom
+// stored. The link is made within a single molecule (matching upstream, which
+// rejected a cross-molecule pick).
+void
+graphics_info_t::check_if_in_make_link_define(GdkEventButton *event) {
+
+   if (in_make_link_define) {
+      pick_info naii = atom_pick(event);
+      if (naii.success == GL_TRUE) {
+	 int im = naii.imol;
+	 molecules[im].add_to_labelled_atom_list(naii.atom_index);
+	 mmdb::Atom *at = molecules[im].atom_sel.atom_selection[naii.atom_index];
+	 if (at) {
+	    coot::atom_spec_t spec(at);
+	    graphics_draw(); // show the atom label
+
+	    if (in_make_link_define == 2) {
+	       // first atom of the pair
+	       make_link_atom_1_imol = im;
+	       make_link_atom_1_spec = spec;
+	       in_make_link_define = 1;
+	       add_status_bar_text("Make Link: now click the second atom");
+	    } else {
+	       // second atom: create the link
+	       if (im == make_link_atom_1_imol) {
+		  molecules[im].make_link(make_link_atom_1_spec, spec,
+					  "dummy", 0.1, *Geom_p());
+		  graphics_draw();
+		  add_status_bar_text("Make Link: link created");
+	       } else {
+		  std::cout << "WARNING:: Make Link: the two atoms are in "
+			    << "different molecules - no link made" << std::endl;
+		  add_status_bar_text("Make Link: atoms must be in the same molecule");
+	       }
+	       in_make_link_define = 0;
+	       normal_cursor();
+	    }
+	 }
+      }
+   }
+}
 
 
 void
@@ -1380,9 +1431,15 @@ graphics_info_t::check_if_in_mutate_define(GdkEventButton *event) {
 	 
                      if (is_nuc) {
                         GtkWidget *w = create_nucleic_acid_base_chooser_dialog();
+#ifdef __APPLE__
+                        bandicoot_register_persistent_dialog(w, "nucleic-acid-base-chooser");
+#endif
                         gtk_widget_show(w);
                      } else {
                         GtkWidget *widget = wrapped_create_residue_type_chooser_window(1);
+#ifdef __APPLE__
+                        bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
+#endif
                         gtk_widget_show(widget);
                      }
                      g.in_mutate_define = 0;
@@ -1416,6 +1473,9 @@ graphics_info_t::check_if_in_mutate_auto_fit_define(GdkEventButton *event) {
          g.mutate_auto_fit_residue_imol = naii.imol;
          g.mutate_auto_fit_residue_atom_index = naii.atom_index;
          GtkWidget *widget = wrapped_create_residue_type_chooser_window(0);
+#ifdef __APPLE__
+         bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
+#endif
          gtk_widget_show(widget);
          g.in_mutate_auto_fit_define = 0;
          g.residue_type_chooser_auto_fit_flag = 1;

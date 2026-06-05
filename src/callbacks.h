@@ -3555,6 +3555,10 @@ on_set_undo_molecule_button_clicked    (GtkButton       *button,
                                         gpointer         user_data);
 
 void
+on_make_link_button_clicked            (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
 on_gln_and_asn_b_factor_outiers1_activate
                                         (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
