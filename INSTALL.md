@@ -11,9 +11,7 @@ from source instead, see [BUILD.md](BUILD.md).
   ```sh
   brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
   ```
-- Miniconda installed at `/opt/miniconda3` (installation instructions are [here](https://www.anaconda.com/docs/getting-started/miniconda/install/mac-cli-install))
-
-**NOTE:** Homebrew _has to be_ installed in `/opt/homebrew` and Miniconda _has to be_ installed in `/opt/miniconda` or the binary distribution of Bandicoot won't work. If you wish to have Homebrew and Miniconda in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
+**NOTE:** Homebrew _has to be_ installed in `/opt/homebrew` or the binary distribution of Bandicoot won't work. If you wish to have Homebrew in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
 
 ## Install
 
@@ -76,8 +74,8 @@ you launch from — clean those up if you want a fully clean removal.
 ## Notes
 
 - Starting in v0.1.0.0, Bandicoot embeds Python so it can
-talk to Phenix (live model/map updates during refinement). The
-`libpython3.13.dylib` from Miniconda is loaded at runtime; that is
-why Miniconda is now listed as a runtime requirement. The Coot
-scientific libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++)
-are still bundled inside the tarball.
+talk to Phenix (live model/map updates during refinement). As of
+v0.1.1.3 `libpython3.13.dylib` is bundled inside the tarball, so
+Miniconda is no longer required at runtime. The Coot scientific
+libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++) and the
+graphics libraries (libpng16, libfreetype6) are bundled too.

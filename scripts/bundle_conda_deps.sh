@@ -44,6 +44,14 @@ TOPLEVEL_LIBS=(
     libc++.1.dylib
     libintl.8.dylib
     libiconv.2.dylib
+    # v0.1.1.3: previously resolved only via the /opt/miniconda3/lib rpath,
+    # so launch failed for any user whose conda isn't at that exact path
+    # (beta-tester crash: dyld "Library not loaded: @rpath/libpng16.16.dylib").
+    # libpython3.13 (embedded Python, added v0.1.0.0) has no deps but libSystem;
+    # libpng16 / libfreetype6 only pull in libz (rewritten to system /usr/lib).
+    libpng16.16.dylib
+    libfreetype.6.dylib
+    libpython3.13.dylib
 )
 
 # FFTW2 single-precision lives in a sub-prefix under conda (artefact of
@@ -140,6 +148,9 @@ echo "==> rewriting remaining external @rpath refs to absolute paths"
 EXTERNAL_REWRITES=(
     "libcurl.4.dylib=/usr/lib/libcurl.4.dylib"
     "libsqlite3.dylib=/usr/lib/libsqlite3.dylib"
+    # bundled libpng16 / libfreetype6 reference @rpath/libz.1.dylib; macOS
+    # ships an ABI-stable libz in the dyld cache, so don't bundle it.
+    "libz.1.dylib=/usr/lib/libz.1.dylib"
 )
 
 rewrite_external_in() {
@@ -185,35 +196,42 @@ for d in libexec bin lib; do
         < <(find "$PREFIX/$d" -type f)
 done
 
-echo "==> normalising conda rpath on binaries in libexec/ and bin/"
-# Bandicoot v0.1.0.0: we now ship with embedded Python (--with-python), so
-# libpython3.13.dylib must resolve via the conda lib dir at runtime. Keep
-# exactly one conda-lib LC_RPATH on every executable. Earlier versions
-# stripped the rpath entirely (because Coot's other deps were all bundled
-# via @rpath/@executable_path); now Python forces the conda dep back in.
-# Lab members all have conda installed for Phenix/CCP4 anyway, so this
-# remains acceptable.
+echo "==> stripping conda rpath from binaries in libexec/ and bin/"
+# Bandicoot v0.1.1.3: libpython3.13 / libpng16 / libfreetype6 are now bundled
+# in lib/ (above), so NOTHING needs to resolve from the conda lib dir at
+# runtime anymore. Earlier (v0.1.0.0..v0.1.1.2) we deliberately KEPT a single
+# /opt/miniconda3/lib LC_RPATH so embedded Python's libpython3.13 would load.
+# That rpath silently MASKED the missing bundled libs on the build machine
+# (which has conda at /opt/miniconda3) and made the app crash on every user
+# whose conda lives elsewhere — the libpng16.16 "Library not loaded" report.
+# Removing it makes the install genuinely conda-independent at runtime AND
+# means any future unbundled conda dep fails loudly on the build host instead
+# of shipping broken. Delete every copy of the conda-lib rpath (rebuilds can
+# accumulate duplicates); leave @executable_path/../lib untouched.
 
 for d in libexec bin; do
     [ -d "$PREFIX/$d" ] || continue
     while IFS= read -r f; do
         file -b "$f" 2>/dev/null | grep -q "Mach-O" || continue
         chmod u+w "$f"
-        # Collapse to exactly one conda rpath: delete duplicates, then add
-        # one if missing. (install_name_tool can otherwise accumulate them
-        # across rebuilds.)
-        while [ "$(otool -l "$f" 2>/dev/null | \
-                   awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
-                   grep -cx "$CONDA_PREFIX_ARG/lib")" -gt 1 ]; do
+        while otool -l "$f" 2>/dev/null | \
+              awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
+              grep -qx "$CONDA_PREFIX_ARG/lib"; do
             install_name_tool -delete_rpath "$CONDA_PREFIX_ARG/lib" "$f" 2>/dev/null || break
         done
-        # Add if entirely missing.
-        if ! otool -l "$f" 2>/dev/null | \
-             awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
-             grep -qx "$CONDA_PREFIX_ARG/lib"; then
-            install_name_tool -add_rpath "$CONDA_PREFIX_ARG/lib" "$f" 2>/dev/null || true
-        fi
     done < <(find "$PREFIX/$d" -type f -perm -u+x)
+done
+
+# The bundled/relocated dylibs in lib/ may also carry a conda rpath (libcoot-*
+# do). Strip it there too so the whole tree is conda-free.
+for dylib in "$PREFIX"/lib/*.dylib; do
+    [ -f "$dylib" ] || continue
+    chmod u+w "$dylib"
+    while otool -l "$dylib" 2>/dev/null | \
+          awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
+          grep -qx "$CONDA_PREFIX_ARG/lib"; do
+        install_name_tool -delete_rpath "$CONDA_PREFIX_ARG/lib" "$dylib" 2>/dev/null || break
+    done
 done
 
 echo "==> bundle_conda_deps: done"
