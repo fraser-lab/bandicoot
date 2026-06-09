@@ -4900,3 +4900,60 @@ void
 on_fetch_alphafold_model_using_uniprot_id1_activate
                                         (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
+
+/* Bandicoot: native "Modelling" main-menu (v0.1.2.x). Restores the orphaned
+   extensions.py "Modelling..." submenu (dead PyGTK gtk.Menu()) as native C
+   menu items. Every item shares one activate handler; the op is passed as the
+   signal's user_data (GINT_TO_POINTER) and dispatched by
+   bandicoot_modelling_dispatch() in c-interface-build-gui.cc. The op ids live
+   here so both gtk2-interface.c (sender) and c-interface-build-gui.cc
+   (dispatcher) agree. See bandicoot-extensions-modelling-roadmap. */
+enum {
+  BMOD_ADD_HYDROGENS = 1,
+  BMOD_ADD_HYDROGENS_REFMAC,
+  BMOD_ASSIGN_HETATMS_RESIDUE,
+  BMOD_INVERT_CHIRAL,
+  BMOD_PHOSPHORYLATE,
+  BMOD_WHATS_THIS,
+  BMOD_MORPH_FIT_7,
+  BMOD_MORPH_FIT_11,
+  BMOD_MORPH_FIT_SS,
+  BMOD_FIND_HELICES,
+  BMOD_FIND_STRANDS,
+  BMOD_BACKRUB_ON,
+  BMOD_BACKRUB_OFF,
+  BMOD_DUPLICATE_RANGE,
+  BMOD_SYMM_SHIFT_REF_CHAIN,
+  /* Tier 2 -- act on a molecule chosen via the native chooser */
+  BMOD_ARRANGE_WATERS,
+  BMOD_MERGE_WATER_CHAINS,
+  BMOD_RENUMBER_WATERS,
+  BMOD_ASSIGN_HETATM_MOL,
+  BMOD_FIX_NOMENCLATURE,
+  BMOD_REORDER_CHAINS,
+  BMOD_RIGID_BODY_FIT_MOL,
+  BMOD_USE_SEGIDS,
+  /* Tier 3 -- chooser and/or text-entry dialog */
+  BMOD_MONOMER_FROM_DICT,
+  BMOD_NEW_MOL_SPHERE,
+  BMOD_NEW_MOL_SYMOP,
+  BMOD_RESIDUE_TYPE_SEL,
+  BMOD_FETCH_PDBE_LIGAND,
+  BMOD_FETCH_PDBE_THIS_LIGAND,
+  /* Tier 4 -- custom result-window GUIs */
+  BMOD_RENAME_RESIDUE,
+  BMOD_RES_ALT_CONFS,
+  BMOD_RES_CIS_PEPTIDES,
+  BMOD_RES_MISSING_ATOMS,
+  BMOD_RES_ZERO_OCC,
+  /* Tier 4 Batch B */
+  BMOD_RIGID_BODY_RANGES,
+  BMOD_ADD_SOLVENT,
+  BMOD_SUPERPOSE_LIGANDS,
+  BMOD_ASSOC_SEQUENCE,
+  BMOD_COOTANEER
+};
+
+void
+on_bandicoot_modelling_activate         (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);

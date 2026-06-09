@@ -920,7 +920,8 @@ create_window1 (void)
 
   other_modelling_tools1 = gtk_image_menu_item_new_with_mnemonic ("Other Modelling Tools...");
   gtk_widget_show (other_modelling_tools1);
-  gtk_container_add (GTK_CONTAINER (calculate1_menu), other_modelling_tools1);
+  /* BANDICOOT v0.1.2.0: moved out of Calculate to the bottom of the new
+     Modelling menu (parented there, after a separator -- see below). */
 
   image14441 = gtk_image_new_from_stock ("gnome-run.png", GTK_ICON_SIZE_MENU);
   gtk_widget_show (image14441);
@@ -965,6 +966,90 @@ create_window1 (void)
   calculate_updating_maps1 = gtk_menu_item_new_with_mnemonic ("Updating Maps...");
   gtk_widget_show (calculate_updating_maps1);
   gtk_container_add (GTK_CONTAINER (calculate1_menu), calculate_updating_maps1);
+
+  /* BANDICOOT v0.1.2.x: native "Modelling" top-level menu. Restores the
+     orphaned extensions.py "Modelling..." submenu (dead PyGTK gtk.Menu()) --
+     every item routes through on_bandicoot_modelling_activate keyed by its
+     BMOD_* op id (see callbacks.h / bandicoot_modelling_dispatch). The native
+     NSMenu mirror picks this up automatically; "Modelling" (no ellipsis) is
+     not on the appkit suppress list (which targets "Modelling..."). */
+  {
+    static const struct { const char *label; int op; } bandicoot_modelling_items[] = {
+      { "Add Hydrogen Atoms",                       BMOD_ADD_HYDROGENS },
+      { "Add Hydrogens using Refmac",               BMOD_ADD_HYDROGENS_REFMAC },
+      { "Assign (force) HETATMs for this Residue",  BMOD_ASSIGN_HETATMS_RESIDUE },
+      { "Invert This Chiral Centre",                BMOD_INVERT_CHIRAL },
+      { "Phosphorylate this Residue",               BMOD_PHOSPHORYLATE },
+      { "What's this?",                             BMOD_WHATS_THIS },
+      { NULL, 0 },
+      { "Morph Fit Chain (Averaging Radius 7)",     BMOD_MORPH_FIT_7 },
+      { "Morph Fit Chain (Averaging Radius 11)",    BMOD_MORPH_FIT_11 },
+      { "Morph Fit Chain by Secondary Structure",   BMOD_MORPH_FIT_SS },
+      { "Find Helices",                             BMOD_FIND_HELICES },
+      { "Find Strands",                             BMOD_FIND_STRANDS },
+      { NULL, 0 },
+      { "Use \"Backrub\" Rotamers",                 BMOD_BACKRUB_ON },
+      { "Don't use \"Backrub\" Rotamers",           BMOD_BACKRUB_OFF },
+      { NULL, 0 },
+      { "Duplicate Range (pick atoms)",             BMOD_DUPLICATE_RANGE },
+      { "Symm Shift Reference Chain Here",          BMOD_SYMM_SHIFT_REF_CHAIN },
+      { NULL, 0 },
+      { "Arrange Waters Around Protein...",         BMOD_ARRANGE_WATERS },
+      { "Merge Water Chains...",                    BMOD_MERGE_WATER_CHAINS },
+      { "Renumber Waters...",                       BMOD_RENUMBER_WATERS },
+      { "Assign HETATM to Molecule...",             BMOD_ASSIGN_HETATM_MOL },
+      { "Fix Nomenclature Errors...",               BMOD_FIX_NOMENCLATURE },
+      { "Reorder Chains...",                        BMOD_REORDER_CHAINS },
+      { "Rigid Body Fit Molecule...",               BMOD_RIGID_BODY_FIT_MOL },
+      { "Rigid Body Fit Residue Range...",          BMOD_RIGID_BODY_RANGES },
+      { "Use SEGIDs...",                            BMOD_USE_SEGIDS },
+      { NULL, 0 },
+      { "Monomer from Dictionary...",               BMOD_MONOMER_FROM_DICT },
+      { "New Molecule by Sphere...",                BMOD_NEW_MOL_SPHERE },
+      { "New Molecule from Symmetry Op...",         BMOD_NEW_MOL_SYMOP },
+      { "Residue Type Selection...",                BMOD_RESIDUE_TYPE_SEL },
+      { "Fetch PDBe Ligand Description...",         BMOD_FETCH_PDBE_LIGAND },
+      { "Fetch PDBe description for this ligand",   BMOD_FETCH_PDBE_THIS_LIGAND },
+      { NULL, 0 },
+      { "Rename Residue...",                        BMOD_RENAME_RESIDUE },
+      { "Add Other Solvent Molecules...",           BMOD_ADD_SOLVENT },
+      { "Superpose Ligands...",                     BMOD_SUPERPOSE_LIGANDS },
+      { "Associate Sequence to Chain...",           BMOD_ASSOC_SEQUENCE },
+      { "Assign Sequence (Cootaneer)...",           BMOD_COOTANEER },
+      { "Residues with Alt Confs...",               BMOD_RES_ALT_CONFS },
+      { "Residues with Cis Peptide Bonds...",       BMOD_RES_CIS_PEPTIDES },
+      { "Residues with Missing Atoms...",           BMOD_RES_MISSING_ATOMS },
+      { "Atoms with Zero Occupancies...",           BMOD_RES_ZERO_OCC }
+    };
+    GtkWidget *modelling1 = gtk_menu_item_new_with_mnemonic ("_Modelling");
+    GtkWidget *modelling1_menu = gtk_menu_new ();
+    GtkWidget *bmod_it;
+    unsigned int bmi;
+    gtk_widget_show (modelling1);
+    gtk_container_add (GTK_CONTAINER (menubar1), modelling1);
+    gtk_menu_item_set_submenu (GTK_MENU_ITEM (modelling1), modelling1_menu);
+    for (bmi = 0; bmi < G_N_ELEMENTS (bandicoot_modelling_items); bmi++) {
+      if (bandicoot_modelling_items[bmi].label == NULL) {
+        bmod_it = gtk_separator_menu_item_new ();
+      } else {
+        bmod_it = gtk_menu_item_new_with_label (bandicoot_modelling_items[bmi].label);
+        g_signal_connect ((gpointer) bmod_it, "activate",
+                          G_CALLBACK (on_bandicoot_modelling_activate),
+                          GINT_TO_POINTER (bandicoot_modelling_items[bmi].op));
+      }
+      gtk_widget_show (bmod_it);
+      gtk_container_add (GTK_CONTAINER (modelling1_menu), bmod_it);
+    }
+    /* Other Modelling Tools... pinned to the bottom, set off by a separator
+       (created/shown/signal-connected/hooked-up in the Calculate section
+       above; only its parenting moved here). */
+    {
+      GtkWidget *bmod_sep = gtk_separator_menu_item_new ();
+      gtk_widget_show (bmod_sep);
+      gtk_container_add (GTK_CONTAINER (modelling1_menu), bmod_sep);
+      gtk_container_add (GTK_CONTAINER (modelling1_menu), other_modelling_tools1);
+    }
+  }
 
   draw1 = gtk_menu_item_new_with_mnemonic ("_Draw");
   gtk_widget_show (draw1);

@@ -1450,14 +1450,10 @@ def missing_atoms_gui(imol):
 def zero_occ_atoms_gui(imol):
 
    atom_ls = atoms_with_zero_occ(imol)
-   if atom_ls:
-      interesting_things_gui("Residues with zero occupancy atoms",
-                             atom_ls)
-   else:
-      s  = "No atoms with zero occupancy found\n"
-      s += "in molecule "
-      s += str(imol)
-      info_dialog(s)
+   # Route the empty case through the native results dialog too (it pops a
+   # "No ... found" dialog on an empty list; the old info_dialog is a stub).
+   interesting_things_gui("Residues with zero occupancy atoms",
+                          atom_ls if atom_ls else [])
 
 
 # Make an interesting things GUI for residues of molecule number
@@ -1465,7 +1461,7 @@ def zero_occ_atoms_gui(imol):
 #
 def interesting_residues_gui(imol, title, interesting_residues):
 
-   from types import ListType
+   ListType = list  # Py3: types.ListType was removed
    centre_atoms = []
    if valid_model_molecule_qm(imol):
       residues = interesting_residues
@@ -1483,7 +1479,7 @@ def interesting_residues_gui(imol, title, interesting_residues):
 
       interesting_things_gui(
          title,
-         map(lambda residue_cpmd, centre_atom: 
+         list(map(lambda residue_cpmd, centre_atom:
              [residue_cpmd[0] + " " +
               str(residue_cpmd[1]) + " " +
               residue_cpmd[2] + " " +
@@ -1492,7 +1488,7 @@ def interesting_residues_gui(imol, title, interesting_residues):
               imol, residue_cpmd[0], residue_cpmd[1], residue_cpmd[2],
               centre_atom[0], centre_atom[1]] if centre_atom else
               ["[oops - why did this happen?]", 0, 0, 0, 0, 0, 0],
-             residues, centre_atoms))
+             residues, centre_atoms)))
 
    else:
       print("BL WARNING:: no valid molecule", imol)
@@ -2746,7 +2742,7 @@ def cis_peptides_gui(imol):
          else:
             p1 = ca_1[2]
             p2 = ca_2[2]
-            pos = map(lambda x, y: (x + y) / 2.0, p1, p2)
+            pos = list(map(lambda x, y: (x + y) / 2.0, p1, p2))  # Py3: map is an iterator
             tors_s1 = str(omega)
             if (len(tors_s1) < 6):
                tors_string = tors_s1
@@ -2764,12 +2760,11 @@ def cis_peptides_gui(imol):
       return ret
 
    cis_peps = cis_peptides(imol)
-
-   if (cis_peps == []):
-      info_dialog("No Cis Peptides found")
-   else:
-      list_of_cis_peptides = make_list_of_cis_peps(imol, cis_peps)
-      interesting_things_gui("Cis Peptides:", list_of_cis_peptides)
+   # Route the empty case through interesting_things_gui too: the native
+   # results dialog pops a "No Cis Peptides found" dialog on an empty list
+   # (the old info_dialog path is the gtk stub -- a no-op here).
+   list_of_cis_peptides = make_list_of_cis_peps(imol, cis_peps) if cis_peps else []
+   interesting_things_gui("Cis Peptides:", list_of_cis_peptides)
 
 #
 def transform_map_using_lsq_matrix_gui():

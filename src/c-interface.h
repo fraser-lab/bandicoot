@@ -5725,6 +5725,23 @@ short int add_OXT_to_residue(int imol, const char *chain_id, int reso, const cha
     extensions.py "Modelling" menu. */
 void bandicoot_make_link_interactive();
 
+/*! \brief Bandicoot: run one operation of the native "Modelling" menu.
+    op_id is one of the BMOD_* values in callbacks.h. Restores the orphaned
+    extensions.py "Modelling..." submenu (dead PyGTK menu path) as native C. */
+void bandicoot_modelling_dispatch(int op_id);
+
+#ifdef __cplusplus
+#ifdef USE_PYTHON
+/*! \brief Bandicoot: native replacement for coot_gui.py interesting_things_gui().
+    Renders baddie_list (the same [label, imol, chain, resno, ins, atom, alt] /
+    [label, x, y, z] format) as a scrollable list of navigate-on-click buttons in
+    a native dialog. The Python interesting_things_gui is rebound to this in
+    coot_load_modules.py, so the Modelling validation lists (Alt Confs, Cis
+    Peptides, Missing Atoms, Zero Occupancies) and any other caller work. */
+void bandicoot_interesting_things_py(const char *title, PyObject *baddie_list);
+#endif /* USE_PYTHON */
+#endif /* __cplusplus */
+
 /*! \} */
 
 /*  ----------------------------------------------------------------------- */

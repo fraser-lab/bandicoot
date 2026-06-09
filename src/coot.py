@@ -3836,6 +3836,12 @@ def add_OXT_to_residue(imol, chain_id, reso, insertion_code):
 def bandicoot_make_link_interactive():
     return _coot.bandicoot_make_link_interactive()
 
+def bandicoot_modelling_dispatch(op_id):
+    return _coot.bandicoot_modelling_dispatch(op_id)
+
+def bandicoot_interesting_things_py(title, baddie_list):
+    return _coot.bandicoot_interesting_things_py(title, baddie_list)
+
 def set_draw_crosshairs(i):
     return _coot.set_draw_crosshairs(i)
 

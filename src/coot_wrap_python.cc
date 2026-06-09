@@ -45694,6 +45694,56 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_modelling_dispatch(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "bandicoot_modelling_dispatch" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  bandicoot_modelling_dispatch(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_interesting_things_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  char *arg1 = 0 ;
+  PyObject *arg2 = 0 ;
+  int res1 ;
+  char *buf1 = 0 ;
+  int alloc1 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_interesting_things_py", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_AsCharPtrAndSize(swig_obj[0], &buf1, NULL, &alloc1);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "bandicoot_interesting_things_py" "', argument " "1"" of type '" "char const *""'");
+  }
+  arg1 = reinterpret_cast< char * >(buf1);
+  arg2 = swig_obj[1];
+  bandicoot_interesting_things_py((char const *)arg1,arg2);
+  resultobj = SWIG_Py_Void();
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  return resultobj;
+fail:
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_set_draw_crosshairs(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   short arg1 ;
@@ -77697,6 +77747,8 @@ static PyMethodDef SwigMethods[] = {
 	 { "setup_reverse_direction", _wrap_setup_reverse_direction, METH_O, NULL},
 	 { "add_OXT_to_residue", _wrap_add_OXT_to_residue, METH_VARARGS, NULL},
 	 { "bandicoot_make_link_interactive", _wrap_bandicoot_make_link_interactive, METH_NOARGS, NULL},
+	 { "bandicoot_modelling_dispatch", _wrap_bandicoot_modelling_dispatch, METH_O, NULL},
+	 { "bandicoot_interesting_things_py", _wrap_bandicoot_interesting_things_py, METH_VARARGS, NULL},
 	 { "set_draw_crosshairs", _wrap_set_draw_crosshairs, METH_O, NULL},
 	 { "draw_crosshairs_state", _wrap_draw_crosshairs_state, METH_NOARGS, NULL},
 	 { "setup_edit_chi_angles", _wrap_setup_edit_chi_angles, METH_O, NULL},

@@ -9880,6 +9880,16 @@ on_make_link_button_clicked            (GtkButton       *button,
 
 
 void
+on_bandicoot_modelling_activate        (GtkMenuItem     *menuitem,
+                                        gpointer         user_data)
+{
+  /* Bandicoot: shared handler for the native "Modelling" menu. The op id was
+     bound as user_data when the item was created (gtk2-interface.c). */
+  bandicoot_modelling_dispatch(GPOINTER_TO_INT(user_data));
+}
+
+
+void
 on_gln_and_asn_b_factor_outliers1_activate
                                         (GtkMenuItem     *menuitem,
                                         gpointer         user_data)

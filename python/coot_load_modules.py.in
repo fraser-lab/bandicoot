@@ -345,6 +345,20 @@ else:
     print("BL WARNING:: no COOT_PYTHON_DIR or @pkgpythondir@ set; no modules loaded")
 
 
+# BANDICOOT: route coot_gui.py's interesting_things_gui() to the native results
+# dialog. The GTK version builds a window against the `gtk` stub (invisible);
+# the C binding bandicoot_interesting_things_py renders the same baddie_list as
+# a native navigate-on-click list. Done here (after the gui modules load, in
+# __main__) so it overrides coot_gui's definition -- the Modelling validation
+# lists (Alt Confs / Cis Peptides / Missing Atoms / Zero Occupancies) and any
+# other caller then work. Bare name via the startup `from coot import *`.
+try:
+    interesting_things_gui = bandicoot_interesting_things_py
+    interesting_things_with_fix_maybe = bandicoot_interesting_things_py
+except NameError:
+    pass  # no C binding (e.g. older build) -- leave the stubbed GTK version
+
+
 # One-line summary
 print("[bandicoot-py] loaded %d module(s), %d failed" %
       (len(_loaded), len(_failed)))

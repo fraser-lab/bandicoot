@@ -95,6 +95,8 @@
 #include "c-interface-gtk-widgets.h"
 #include "cc-interface.hh"
 #include "cc-interface-scripting.hh"
+#include "c-interface-ligands-swig.hh"  // coot_reduce, invert_chiral_centre (Modelling menu)
+#include "rotamer-search-modes.hh"   // ROTAMERSEARCHLOWRES / HIGHRES (Modelling menu)
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
 
@@ -1878,6 +1880,874 @@ extern "C" void bandicoot_add_modelling_tools_buttons(GtkWidget *dialog) {
    }
    gtk_box_pack_start(GTK_BOX(vbox), frame, FALSE, FALSE, 4);
    gtk_widget_show_all(frame);
+}
+
+/* ------------------------------------------------------------------------ */
+/* BANDICOOT native "Modelling" main-menu (v0.1.2.x)                        */
+/* ------------------------------------------------------------------------ */
+// Restores the orphaned extensions.py "Modelling..." submenu (built with the
+// stubbed PyGTK gtk.Menu(), so dead) as a native top-level menu. The C menu
+// items in gtk2-interface.c all route through on_bandicoot_modelling_activate
+// -> bandicoot_modelling_dispatch() here, keyed by the BMOD_* op id. Each op
+// calls the underlying C function directly (the engine ops were always C and
+// GTK-independent); the few genuinely-Python helpers (refmac H-add,
+// phosphorylate, water-chain merge, interactive duplicate-range) are driven
+// via safe_python_command -- they are module-level functions in the pre_list
+// (coot_utils.py / coot_gui.py), which load into __main__, so the bare names
+// resolve (unlike the nested make_link helper -- see make-link-orphaned).
+// Tier 2 ops act on a molecule picked through a native chooser (the Python
+// molecule_chooser_gui() is a no-op against the gtk stub).
+
+// Generic single-molecule chooser: pick a model molecule, then run op(imol).
+typedef void (*bandicoot_imol_op_fn)(int imol);
+typedef struct { GtkWidget *combobox; bandicoot_imol_op_fn op; } bandicoot_imol_chooser_t;
+
+static void bandicoot_imol_chooser_response(GtkDialog *dialog, gint response,
+                                            gpointer user_data) {
+   bandicoot_imol_chooser_t *cd = (bandicoot_imol_chooser_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combobox));
+      if (is_valid_model_molecule(imol)) cd->op(imol);
+      else add_status_bar_text("No model molecule chosen");
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_imol_chooser(const char *title, const char *label_text,
+                                   bandicoot_imol_op_fn op) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons(title, GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *label = gtk_label_new(label_text);
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+   GtkWidget *combobox = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combobox, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), combobox, FALSE, FALSE, 4);
+   bandicoot_imol_chooser_t *cd = g_new0(bandicoot_imol_chooser_t, 1);
+   cd->combobox = combobox;
+   cd->op = op;
+   g_signal_connect(dialog, "response",
+                    G_CALLBACK(bandicoot_imol_chooser_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// Tier 2 per-molecule ops (run after the chooser picks imol).
+static void bmod_op_arrange_waters(int imol)   { move_waters_to_around_protein(imol); }
+static void bmod_op_assign_hetatm(int imol)    { assign_hetatms(imol); }
+static void bmod_op_fix_nomenclature(int imol) { fix_nomenclature_errors(imol); }
+static void bmod_op_renumber_waters(int imol)  { renumber_waters(imol); }
+static void bmod_op_reorder_chains(int imol)   { sort_chains(imol); }
+static void bmod_op_rigid_body_fit(int imol)   { rigid_body_refine_by_atom_selection(imol, "//"); }
+static void bmod_op_use_segids(int imol)       { exchange_chain_ids_for_seg_ids(imol); }
+static void bmod_op_merge_water_chains(int imol) {
+   // No C entry point; merge_solvent_chains is a coot_utils.py helper (pure
+   // logic, no GUI) loaded into __main__.
+   char cmd[64];
+   snprintf(cmd, sizeof(cmd), "merge_solvent_chains(%d)", imol);
+   safe_python_command(cmd);
+}
+
+// Tier 1 active-atom ops.
+static void bmod_add_hydrogens() {
+   int imol = bandicoot_active_imol(NULL);
+   if (is_valid_model_molecule(imol)) coot_reduce(imol);
+}
+static void bmod_assign_hetatms_residue() {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (is_valid_model_molecule(imol))
+      hetify_residue(imol, spec.chain_id.c_str(), spec.res_no, spec.ins_code.c_str());
+}
+static void bmod_invert_chiral() {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (is_valid_model_molecule(imol))
+      invert_chiral_centre(imol, spec.chain_id, spec.res_no, spec.ins_code, spec.atom_name);
+}
+static void bmod_morph_fit(float radius) {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (is_valid_model_molecule(imol)) morph_fit_chain(imol, spec.chain_id, radius);
+}
+static void bmod_morph_fit_ss() {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (is_valid_model_molecule(imol))
+      morph_fit_by_secondary_structure_elements(imol, spec.chain_id);
+}
+static void bmod_whats_this() {
+   // Reimplemented natively (the upstream whats_this() lived nested in the
+   // not-loaded extensions.py). Show the active residue's comp-id and its full
+   // chemical name from the dictionary -- this is comp_id2name (aliased to the
+   // C comp_id_to_name, whose core is Geom_p()->get_monomer_name).
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (! is_valid_model_molecule(imol)) return;
+   std::string rn = residue_name(imol, spec.chain_id, spec.res_no, spec.ins_code);
+   graphics_info_t g;
+   std::pair<bool, std::string> name =
+      g.Geom_p()->get_monomer_name(rn, coot::protein_geometry::IMOL_ENC_ANY);
+   std::string full = name.first ? name.second : std::string("<no-name-found>");
+   std::string s = "(mol. no: " + std::to_string(imol) + ")  " + rn + ":  " + full;
+   add_status_bar_text(s.c_str());
+}
+
+// ---- Tier 3: choosers/entries (native generic_chooser_and_entry equivalents) --
+// molecule combobox + one labelled text entry, then op(imol, text).
+typedef void (*bandicoot_imol_text_op_fn)(int imol, const char *text);
+typedef struct { GtkWidget *combobox; GtkWidget *entry; bandicoot_imol_text_op_fn op; }
+   bandicoot_imol_entry_t;
+
+static void bandicoot_imol_entry_response(GtkDialog *dialog, gint response,
+                                          gpointer user_data) {
+   bandicoot_imol_entry_t *cd = (bandicoot_imol_entry_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combobox));
+      const char *txt = gtk_entry_get_text(GTK_ENTRY(cd->entry));
+      if (is_valid_model_molecule(imol)) cd->op(imol, txt);
+      else add_status_bar_text("No model molecule chosen");
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_imol_entry_chooser(const char *title, const char *label_text,
+                                         const char *entry_label, const char *entry_default,
+                                         bandicoot_imol_text_op_fn op) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons(title, GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *label = gtk_label_new(label_text);
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+   GtkWidget *combobox = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combobox, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), combobox, FALSE, FALSE, 4);
+   GtkWidget *hbox = gtk_hbox_new(FALSE, 4);
+   GtkWidget *elabel = gtk_label_new(entry_label);
+   gtk_box_pack_start(GTK_BOX(hbox), elabel, FALSE, FALSE, 0);
+   GtkWidget *entry = gtk_entry_new();
+   if (entry_default) gtk_entry_set_text(GTK_ENTRY(entry), entry_default);
+   gtk_box_pack_start(GTK_BOX(hbox), entry, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 4);
+   bandicoot_imol_entry_t *cd = g_new0(bandicoot_imol_entry_t, 1);
+   cd->combobox = combobox; cd->entry = entry; cd->op = op;
+   g_signal_connect(dialog, "response",
+                    G_CALLBACK(bandicoot_imol_entry_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// single labelled text entry (no molecule chooser), then op(text).
+typedef void (*bandicoot_text_op_fn)(const char *text);
+typedef struct { GtkWidget *entry; bandicoot_text_op_fn op; } bandicoot_entry_t;
+
+static void bandicoot_single_entry_response(GtkDialog *dialog, gint response,
+                                            gpointer user_data) {
+   bandicoot_entry_t *cd = (bandicoot_entry_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT)
+      cd->op(gtk_entry_get_text(GTK_ENTRY(cd->entry)));
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_single_entry(const char *title, const char *label_text,
+                                   const char *entry_default, bandicoot_text_op_fn op) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons(title, GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *label = gtk_label_new(label_text);
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+   GtkWidget *entry = gtk_entry_new();
+   if (entry_default) gtk_entry_set_text(GTK_ENTRY(entry), entry_default);
+   gtk_box_pack_start(GTK_BOX(vbox), entry, FALSE, FALSE, 4);
+   bandicoot_entry_t *cd = g_new0(bandicoot_entry_t, 1);
+   cd->entry = entry; cd->op = op;
+   g_signal_connect(dialog, "response",
+                    G_CALLBACK(bandicoot_single_entry_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// ---- Tier 4: native results-list dialog + rebound interesting_things_gui -----
+#ifdef USE_PYTHON
+// Navigation payload for one results-list row (freed with the button).
+typedef struct {
+   int has_coord;
+   int imol, resno;
+   double x, y, z;
+   char chain[16], atom[8];
+} bandicoot_baddie_t;
+
+static void bandicoot_baddie_clicked(GtkButton *button, gpointer user_data) {
+   bandicoot_baddie_t *bd = (bandicoot_baddie_t *) user_data;
+   if (bd->has_coord) {
+      set_rotation_centre(bd->x, bd->y, bd->z);
+   } else {
+      set_go_to_atom_molecule(bd->imol);
+      set_go_to_atom_chain_residue_atom_name(bd->chain, bd->resno, bd->atom);
+   }
+}
+static void bandicoot_results_close(GtkButton *button, gpointer window) {
+   gtk_widget_destroy(GTK_WIDGET(window));
+}
+static std::string bandicoot_py_str(PyObject *o) {
+   if (o && PyString_Check(o)) return PyString_AsString(o);
+   return std::string();
+}
+
+static void bandicoot_msg_dialog_response(GtkDialog *dialog, gint response,
+                                          gpointer user_data) {
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+// Coot-style native info dialog (the Python info_dialog is the gtk stub).
+static void bandicoot_native_info_dialog(const char *msg) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *d = gtk_message_dialog_new(mw ? GTK_WINDOW(mw) : NULL,
+                                         GTK_DIALOG_DESTROY_WITH_PARENT,
+                                         GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+                                         "%s", msg ? msg : "");
+   g_signal_connect(d, "response", G_CALLBACK(bandicoot_msg_dialog_response), NULL);
+   gtk_widget_show(d);
+}
+
+// Native replacement for coot_gui.py interesting_things_gui(): a scrollable
+// column of navigate-on-click buttons. Called from Python (so the GIL is held;
+// the click handlers touch only C nav functions). baddie_list entries are
+// [label, x, y, z] (go to point) or [label, imol, chain, resno, ins, atom, alt]
+// (go to atom); any trailing "fix" callables are ignored.
+void bandicoot_interesting_things_py(const char *title, PyObject *baddie_list) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   if (! baddie_list) return;
+   // Accept any iterable -- in Py3 a caller may pass a map()/generator, not a
+   // list (e.g. interesting_residues_gui). PySequence_List materialises it.
+   PyObject *blist = PySequence_List(baddie_list);
+   if (! blist) { PyErr_Clear(); return; }
+   Py_ssize_t n = PyList_Size(blist);
+
+   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+   gtk_window_set_title(GTK_WINDOW(window), title ? title : "Results");
+   gtk_window_set_default_size(GTK_WINDOW(window), 320, 340);
+   // Transient-for the main window so it doesn't open behind it (the normal-
+   // level z-order issue -- see macos-quartz-gl-nsview-facts).
+   GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   if (mw) gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(mw));
+   GtkWidget *outer = gtk_vbox_new(FALSE, 2);
+   gtk_container_set_border_width(GTK_CONTAINER(outer), 4);
+   gtk_container_add(GTK_CONTAINER(window), outer);
+   GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+   gtk_box_pack_start(GTK_BOX(outer), scrolled, TRUE, TRUE, 0);
+   GtkWidget *inside = gtk_vbox_new(FALSE, 0);
+   gtk_container_set_border_width(GTK_CONTAINER(inside), 4);
+   gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled), inside);
+
+   int nrows = 0;
+   for (Py_ssize_t i = 0; i < n; i++) {
+      PyObject *item = PyList_GetItem(blist, i);   // borrowed
+      if (! item || ! PyList_Check(item)) continue;
+      Py_ssize_t li = PyList_Size(item);
+      if (li < 1) continue;
+      std::string label = bandicoot_py_str(PyList_GetItem(item, 0));
+      bandicoot_baddie_t *bd = g_new0(bandicoot_baddie_t, 1);
+      if (li == 4) {
+         bd->has_coord = 1;
+         bd->x = PyFloat_AsDouble(PyList_GetItem(item, 1));
+         bd->y = PyFloat_AsDouble(PyList_GetItem(item, 2));
+         bd->z = PyFloat_AsDouble(PyList_GetItem(item, 3));
+      } else if (li >= 6) {
+         bd->has_coord = 0;
+         bd->imol  = (int) PyInt_AsLong(PyList_GetItem(item, 1));
+         bd->resno = (int) PyInt_AsLong(PyList_GetItem(item, 3));
+         g_strlcpy(bd->chain, bandicoot_py_str(PyList_GetItem(item, 2)).c_str(), sizeof(bd->chain));
+         g_strlcpy(bd->atom,  bandicoot_py_str(PyList_GetItem(item, 5)).c_str(), sizeof(bd->atom));
+      } else {
+         g_free(bd);
+         continue;
+      }
+      GtkWidget *button = gtk_button_new_with_label(label.c_str());
+      g_signal_connect_data(button, "clicked", G_CALLBACK(bandicoot_baddie_clicked),
+                            bd, (GClosureNotify) g_free, (GConnectFlags) 0);
+      gtk_box_pack_start(GTK_BOX(inside), button, FALSE, FALSE, 1);
+      nrows++;
+   }
+   Py_DECREF(blist);
+   PyErr_Clear();   // tolerate any per-item conversion hiccup; don't leak it to the caller
+
+   if (nrows == 0) {
+      // Nothing found -- pop a Coot-style "No ... found" dialog instead of an
+      // empty results window. Derive the phrase from the title (drop a trailing
+      // ':'): "Cis Peptides:" -> "No Cis Peptides found".
+      gtk_widget_destroy(window);
+      std::string t = title ? title : "";
+      if (! t.empty() && t[t.size() - 1] == ':') t.erase(t.size() - 1);
+      std::string msg = t.empty() ? std::string("Nothing found")
+                                  : ("No " + t + " found");
+      bandicoot_native_info_dialog(msg.c_str());
+      return;
+   }
+
+   GtkWidget *ok = gtk_button_new_with_label("  OK  ");
+   gtk_box_pack_start(GTK_BOX(outer), ok, FALSE, FALSE, 4);
+   g_signal_connect(ok, "clicked", G_CALLBACK(bandicoot_results_close), window);
+   gtk_widget_show_all(window);
+}
+#endif // USE_PYTHON
+
+// Tier 4 ops. Validation lists reuse the existing Python gatherers (which build
+// the baddie list and call interesting_things_gui, now rebound to the native
+// dialog above -- see coot_load_modules.py). Pick the molecule natively first.
+static void bmod_op_alt_confs(int imol) {
+   char c[48]; snprintf(c, sizeof(c), "alt_confs_gui(%d)", imol); safe_python_command(c);
+}
+static void bmod_op_cis_peptides(int imol) {
+   char c[48]; snprintf(c, sizeof(c), "cis_peptides_gui(%d)", imol); safe_python_command(c);
+}
+static void bmod_op_missing_atoms(int imol) {
+   char c[48]; snprintf(c, sizeof(c), "missing_atoms_gui(%d)", imol); safe_python_command(c);
+}
+static void bmod_op_zero_occ(int imol) {
+   char c[48]; snprintf(c, sizeof(c), "zero_occ_atoms_gui(%d)", imol); safe_python_command(c);
+}
+static void bmod_op_rename_residue(const char *text) {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (! is_valid_model_molecule(imol) || !text || !*text) return;
+   set_residue_name(imol, spec.chain_id.c_str(), spec.res_no, spec.ins_code.c_str(), text);
+}
+
+// Tier 3 ops.
+static void bmod_op_monomer_from_dict(const char *text) {
+   int imol = get_monomer_from_dictionary(text, 0);  // 0 = non-idealised model coords
+   if (! is_valid_model_molecule(imol)) get_monomer(text);  // fallback (with restraints)
+}
+static void bmod_op_new_mol_sphere(int imol, const char *text) {
+   if (! is_valid_model_molecule(imol)) return;
+   char *end = NULL;
+   double radius = strtod(text, &end);
+   if (end == text || radius <= 0) { add_status_bar_text("Bad radius"); return; }
+   new_molecule_by_sphere_selection(imol, rotation_centre_position(0),
+                                    rotation_centre_position(1), rotation_centre_position(2),
+                                    (float) radius, 0);
+}
+static void bmod_op_new_mol_symop(int imol, const char *text) {
+   if (! is_valid_model_molecule(imol)) return;
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+   try {
+      clipper::Coord_frac cf = coot::util::shift_to_origin(mol);  // same pre-shift as origin_pre_shift
+      new_molecule_by_symop(imol, text,
+                            (int) lround(cf.u()), (int) lround(cf.v()), (int) lround(cf.w()));
+   } catch (const std::runtime_error &rte) {
+      add_status_bar_text(rte.what());
+   }
+}
+static void bmod_op_residue_type_sel(int imol, const char *text) {
+   if (! is_valid_model_molecule(imol)) return;
+   new_molecule_by_residue_type_selection(imol, text);
+   update_go_to_atom_window_on_new_mol();
+}
+// Fetch the PDBe dictionary for comp_id (network helper get_SMILES_for_comp_id
+// _from_pdbe, in coot_utils.py / __main__; it reads the CIF into Coot's
+// dictionary) then SURFACE a description -- chemical name + SMILES. Upstream
+// computed the SMILES and threw it away, so the "...Description" menu items
+// showed nothing; here we read it back from the now-loaded dict (the C++
+// SMILES_for_comp_id / get_monomer_name) and report it.
+static void bmod_pdbe_describe(const std::string &comp_id, bool also_get_monomer) {
+   if (comp_id.empty()) return;
+   std::string cmd = "get_SMILES_for_comp_id_from_pdbe('" + comp_id + "')";
+   safe_python_command(cmd.c_str());          // network + read_cif_dictionary (manages GIL)
+   if (also_get_monomer) get_monomer(comp_id);
+   graphics_info_t g;
+   std::pair<bool, std::string> nm =
+      g.Geom_p()->get_monomer_name(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   std::string smiles = SMILES_for_comp_id(comp_id);   // from the now-loaded dict
+   std::cout << "INFO:: PDBe " << comp_id
+             << "   name: "   << (nm.first ? nm.second : std::string("(none found)"))
+             << "   SMILES: " << (smiles.empty() ? std::string("(none found)") : smiles)
+             << std::endl;
+   std::string s = comp_id;
+   if (nm.first && !nm.second.empty()) s += ":  " + nm.second;
+   else                                s += ":  <no PDBe description found>";
+   if (!smiles.empty()) s += "   [SMILES in console]";
+   add_status_bar_text(s.c_str());
+}
+static void bmod_op_fetch_pdbe_ligand(const char *text) {
+   if (!text || !*text) return;
+   bmod_pdbe_describe(text, true);    // entry version also places the monomer
+}
+static void bmod_fetch_pdbe_this_ligand() {
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (! is_valid_model_molecule(imol)) return;
+   std::string rn = residue_name(imol, spec.chain_id, spec.res_no, spec.ins_code);
+   bmod_pdbe_describe(rn, false);
+}
+
+// ---- Tier 4B: Rigid Body Fit Residue Range ---------------------------------
+// Native equivalent of residue_range_gui() driving rigid_body_refine_by_residue
+// _ranges. v1 supports a single [chain, start, end] range (the common case).
+typedef struct { GtkWidget *combobox, *e_chain, *e_start, *e_end; } bandicoot_rbr_t;
+
+static void bandicoot_rbr_response(GtkDialog *dialog, gint response, gpointer user_data) {
+   bandicoot_rbr_t *cd = (bandicoot_rbr_t *) user_data;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combobox));
+      const char *chain  = gtk_entry_get_text(GTK_ENTRY(cd->e_chain));
+      const char *s_strt = gtk_entry_get_text(GTK_ENTRY(cd->e_start));
+      const char *s_end  = gtk_entry_get_text(GTK_ENTRY(cd->e_end));
+      char *p1 = NULL, *p2 = NULL;
+      long r1 = strtol(s_strt, &p1, 10);
+      long r2 = strtol(s_end,  &p2, 10);
+      if (! is_valid_model_molecule(imol) || !chain || !*chain ||
+          p1 == s_strt || p2 == s_end) {
+         add_status_bar_text("Rigid Body Fit: need a molecule, chain and two residue numbers");
+      } else if (imol_refinement_map() == -1) {
+         add_status_bar_text("Rigid Body Fit: set a refinement map first");
+      } else {
+         char cmd[256];
+         snprintf(cmd, sizeof(cmd),
+                  "rigid_body_refine_by_residue_ranges(%d, [['%s', %ld, %ld]])",
+                  imol, chain, r1, r2);
+         safe_python_command(cmd);
+      }
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_rigid_body_ranges_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons("Rigid Body Fit Residue Range", GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *label = gtk_label_new("Rigid-body fit a residue range (needs a refinement map):");
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+   GtkWidget *combobox = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combobox, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), combobox, FALSE, FALSE, 4);
+   GtkWidget *hbox = gtk_hbox_new(FALSE, 4);
+   GtkWidget *e_chain = gtk_entry_new();
+   GtkWidget *e_start = gtk_entry_new();
+   GtkWidget *e_end   = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(e_chain), 3);
+   gtk_entry_set_width_chars(GTK_ENTRY(e_start), 5);
+   gtk_entry_set_width_chars(GTK_ENTRY(e_end),   5);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Chain:"),    FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), e_chain,                    FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Res start:"),FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), e_start,                    FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Res end:"),  FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), e_end,                      FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 4);
+   bandicoot_rbr_t *cd = g_new0(bandicoot_rbr_t, 1);
+   cd->combobox = combobox; cd->e_chain = e_chain; cd->e_start = e_start; cd->e_end = e_end;
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_rbr_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// ---- Tier 4B: Add Other Solvent Molecules ----------------------------------
+// Native equivalent of solvent_ligands_gui: molecule chooser + a button per
+// solvent comp-id (+ a custom entry). Each adds the solvent via the module-
+// level coot_utils.bandicoot_add_solvent_ligand (get_monomer + merge + jiggle).
+static const char *bandicoot_solvent_list[] = {
+   "EDO", "GOL", "DMS", "ACT", "MPD", "CIT", "SO4", "PO4",
+   "TRS", "TAM", "PEG", "PG4", "PE8", "EBE", "BTB" };
+
+static void bandicoot_add_solvent(GtkWidget *combobox, const char *comp_id) {
+   int imol = my_combobox_get_imol(GTK_COMBO_BOX(combobox));
+   if (! is_valid_model_molecule(imol)) { add_status_bar_text("Choose a model molecule"); return; }
+   if (!comp_id || !*comp_id) return;
+   char cmd[128];
+   snprintf(cmd, sizeof(cmd), "bandicoot_add_solvent_ligand(%d, '%s')", imol, comp_id);
+   safe_python_command(cmd);
+}
+typedef struct { GtkWidget *combobox; char comp_id[8]; } bandicoot_solvent_btn_t;
+static void bandicoot_solvent_btn_clicked(GtkButton *b, gpointer u) {
+   bandicoot_solvent_btn_t *cd = (bandicoot_solvent_btn_t *) u;
+   bandicoot_add_solvent(cd->combobox, cd->comp_id);
+}
+typedef struct { GtkWidget *combobox, *entry; } bandicoot_solvent_custom_t;
+static void bandicoot_solvent_custom_clicked(GtkButton *b, gpointer u) {
+   bandicoot_solvent_custom_t *cd = (bandicoot_solvent_custom_t *) u;
+   bandicoot_add_solvent(cd->combobox, gtk_entry_get_text(GTK_ENTRY(cd->entry)));
+}
+
+static void bandicoot_add_solvent_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+   gtk_window_set_title(GTK_WINDOW(window), "Add Solvent Molecules");
+   gtk_window_set_default_size(GTK_WINDOW(window), 320, 420);
+   if (mw) gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(mw));
+   gtk_container_set_border_width(GTK_CONTAINER(window), 8);
+   GtkWidget *outer = gtk_vbox_new(FALSE, 4);
+   gtk_container_add(GTK_CONTAINER(window), outer);
+   GtkWidget *label = gtk_label_new("Add a solvent molecule to the chosen molecule\n"
+                                    "(jiggle-fits into the refinement map if one is set):");
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(outer), label, FALSE, FALSE, 2);
+   GtkWidget *combobox = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combobox, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(outer), combobox, FALSE, FALSE, 2);
+   GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+   gtk_box_pack_start(GTK_BOX(outer), scrolled, TRUE, TRUE, 0);
+   GtkWidget *inside = gtk_vbox_new(FALSE, 0);
+   gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled), inside);
+   for (unsigned int i = 0; i < G_N_ELEMENTS(bandicoot_solvent_list); i++) {
+      GtkWidget *btn = gtk_button_new_with_label(bandicoot_solvent_list[i]);
+      bandicoot_solvent_btn_t *cd = g_new0(bandicoot_solvent_btn_t, 1);
+      cd->combobox = combobox;
+      g_strlcpy(cd->comp_id, bandicoot_solvent_list[i], sizeof(cd->comp_id));
+      g_signal_connect_data(btn, "clicked", G_CALLBACK(bandicoot_solvent_btn_clicked),
+                            cd, (GClosureNotify) g_free, (GConnectFlags) 0);
+      gtk_box_pack_start(GTK_BOX(inside), btn, FALSE, FALSE, 1);
+   }
+   gtk_box_pack_start(GTK_BOX(outer), gtk_hseparator_new(), FALSE, FALSE, 2);
+   GtkWidget *hbox = gtk_hbox_new(FALSE, 4);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Other code:"), FALSE, FALSE, 0);
+   GtkWidget *entry = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(entry), 5);
+   gtk_box_pack_start(GTK_BOX(hbox), entry, FALSE, FALSE, 0);
+   GtkWidget *add_btn = gtk_button_new_with_label("  Add  ");
+   bandicoot_solvent_custom_t *cc = g_new0(bandicoot_solvent_custom_t, 1);
+   cc->combobox = combobox; cc->entry = entry;
+   g_signal_connect_data(add_btn, "clicked", G_CALLBACK(bandicoot_solvent_custom_clicked),
+                         cc, (GClosureNotify) g_free, (GConnectFlags) 0);
+   gtk_box_pack_start(GTK_BOX(hbox), add_btn, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(outer), hbox, FALSE, FALSE, 2);
+   GtkWidget *close = gtk_button_new_with_label("  Close  ");
+   g_signal_connect(close, "clicked", G_CALLBACK(bandicoot_results_close), window);
+   gtk_box_pack_start(GTK_BOX(outer), close, FALSE, FALSE, 2);
+   gtk_widget_show_all(window);
+}
+
+// ---- Tier 4B: Superpose Ligands --------------------------------------------
+// Native equivalent of superpose_ligand_gui: pick reference + moving ligand
+// (molecule + chain + resno each) and overlay the moving one onto the reference
+// via the module-level coot_utils.overlay_my_ligands (overlap_ligands + transform).
+typedef struct {
+   GtkWidget *ref_combo, *ref_chain, *ref_resno;
+   GtkWidget *mov_combo, *mov_chain, *mov_resno;
+} bandicoot_superpose_t;
+
+static GtkWidget *bandicoot_ligand_pick_frame(const char *title, GtkWidget **combo_out,
+                                              GtkWidget **chain_out, GtkWidget **resno_out) {
+   GtkWidget *frame = gtk_frame_new(title);
+   GtkWidget *vbox = gtk_vbox_new(FALSE, 2);
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 4);
+   gtk_container_add(GTK_CONTAINER(frame), vbox);
+   GtkWidget *combo = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(combo, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), combo, FALSE, FALSE, 2);
+   GtkWidget *hbox = gtk_hbox_new(FALSE, 4);
+   GtkWidget *chain = gtk_entry_new();
+   GtkWidget *resno = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(chain), 3);
+   gtk_entry_set_width_chars(GTK_ENTRY(resno), 5);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Chain:"), FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), chain, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Res no:"), FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), resno, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 2);
+   *combo_out = combo; *chain_out = chain; *resno_out = resno;
+   return frame;
+}
+
+static void bandicoot_superpose_response(GtkDialog *dialog, gint response, gpointer u) {
+   bandicoot_superpose_t *cd = (bandicoot_superpose_t *) u;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol_ref = my_combobox_get_imol(GTK_COMBO_BOX(cd->ref_combo));
+      int imol_mov = my_combobox_get_imol(GTK_COMBO_BOX(cd->mov_combo));
+      const char *ch_ref = gtk_entry_get_text(GTK_ENTRY(cd->ref_chain));
+      const char *ch_mov = gtk_entry_get_text(GTK_ENTRY(cd->mov_chain));
+      const char *t_ref  = gtk_entry_get_text(GTK_ENTRY(cd->ref_resno));
+      const char *t_mov  = gtk_entry_get_text(GTK_ENTRY(cd->mov_resno));
+      char *p1 = NULL, *p2 = NULL;
+      long rn_ref = strtol(t_ref, &p1, 10);
+      long rn_mov = strtol(t_mov, &p2, 10);
+      if (is_valid_model_molecule(imol_ref) && is_valid_model_molecule(imol_mov) &&
+          *ch_ref && *ch_mov && p1 != t_ref && p2 != t_mov) {
+         char cmd[256];
+         snprintf(cmd, sizeof(cmd),
+                  "overlay_my_ligands(%d, '%s', %ld, %d, '%s', %ld)",
+                  imol_mov, ch_mov, rn_mov, imol_ref, ch_ref, rn_ref);
+         safe_python_command(cmd);
+      } else {
+         add_status_bar_text("Superpose Ligands: need two molecules, chains and residue numbers");
+      }
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_superpose_ligands_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons("Superpose Ligands", GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  "Superpose", GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *info = gtk_label_new("Overlay the moving ligand onto the reference ligand:");
+   gtk_misc_set_alignment(GTK_MISC(info), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), info, FALSE, FALSE, 2);
+   bandicoot_superpose_t *cd = g_new0(bandicoot_superpose_t, 1);
+   GtkWidget *ref_frame = bandicoot_ligand_pick_frame("Reference ligand (stays put)",
+                              &cd->ref_combo, &cd->ref_chain, &cd->ref_resno);
+   GtkWidget *mov_frame = bandicoot_ligand_pick_frame("Moving ligand (whole molecule moves)",
+                              &cd->mov_combo, &cd->mov_chain, &cd->mov_resno);
+   gtk_box_pack_start(GTK_BOX(vbox), ref_frame, FALSE, FALSE, 4);
+   gtk_box_pack_start(GTK_BOX(vbox), mov_frame, FALSE, FALSE, 4);
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_superpose_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+// ---- Tier 4B: Assign Sequence (associate FASTA/PIR + cootaneer) ------------
+// Native equivalents of associate_sequence_with_chain_gui and cootaneer_gui_bl;
+// drive the module-level coot_utils helpers bandicoot_associate_sequence /
+// bandicoot_cootaneer via safe_python_command.
+typedef struct {
+   GtkWidget *combo, *chain, *file_btn, *fasta_radio, *all_chains_chk;
+} bandicoot_assocseq_t;
+
+static void bandicoot_assocseq_response(GtkDialog *dialog, gint response, gpointer u) {
+   bandicoot_assocseq_t *cd = (bandicoot_assocseq_t *) u;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combo));
+      const char *chain = gtk_entry_get_text(GTK_ENTRY(cd->chain));
+      char *file = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(cd->file_btn));
+      const char *fmt = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cd->fasta_radio))
+                        ? "FASTA" : "PIR";
+      gboolean all = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cd->all_chains_chk));
+      if (is_valid_model_molecule(imol) && file && (*chain || all)) {
+         std::string cmd = "bandicoot_associate_sequence(" + std::to_string(imol) +
+                           ", '" + chain + "', '" + file + "', '" + fmt + "', " +
+                           (all ? "True" : "False") + ")";
+         safe_python_command(cmd.c_str());
+      } else {
+         add_status_bar_text("Associate Sequence: need a molecule, a chain (or all-chains), and a file");
+      }
+      if (file) g_free(file);
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_associate_sequence_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons("Associate Sequence to Chain", GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   bandicoot_assocseq_t *cd = g_new0(bandicoot_assocseq_t, 1);
+   cd->combo = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(cd->combo, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), cd->combo, FALSE, FALSE, 4);
+   GtkWidget *hbox = gtk_hbox_new(FALSE, 4);
+   gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Chain:"), FALSE, FALSE, 0);
+   cd->chain = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(cd->chain), 3);
+   gtk_box_pack_start(GTK_BOX(hbox), cd->chain, FALSE, FALSE, 0);
+   cd->fasta_radio = gtk_radio_button_new_with_label(NULL, "FASTA");
+   GtkWidget *pir_radio =
+      gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(cd->fasta_radio), "PIR");
+   gtk_box_pack_start(GTK_BOX(hbox), cd->fasta_radio, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(hbox), pir_radio, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 4);
+   cd->file_btn = gtk_file_chooser_button_new("Select sequence file",
+                                              GTK_FILE_CHOOSER_ACTION_OPEN);
+   gtk_box_pack_start(GTK_BOX(vbox), cd->file_btn, FALSE, FALSE, 4);
+   cd->all_chains_chk = gtk_check_button_new_with_label("Assign all protein chains (ignore chain above)");
+   gtk_box_pack_start(GTK_BOX(vbox), cd->all_chains_chk, FALSE, FALSE, 4);
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_assocseq_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+typedef struct { GtkWidget *combo, *file_btn, *refine_chk; } bandicoot_cootaneer_t;
+
+static void bandicoot_cootaneer_response(GtkDialog *dialog, gint response, gpointer u) {
+   bandicoot_cootaneer_t *cd = (bandicoot_cootaneer_t *) u;
+   if (response == GTK_RESPONSE_ACCEPT) {
+      int imol = my_combobox_get_imol(GTK_COMBO_BOX(cd->combo));
+      char *file = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(cd->file_btn));
+      gboolean refine = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(cd->refine_chk));
+      if (is_valid_model_molecule(imol)) {
+         std::string f = file ? file : "";
+         std::string cmd = "bandicoot_cootaneer(" + std::to_string(imol) +
+                           ", '" + f + "', " + (refine ? "True" : "False") + ")";
+         safe_python_command(cmd.c_str());
+      } else {
+         add_status_bar_text("Cootaneer: choose a model molecule");
+      }
+      if (file) g_free(file);
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   g_free(cd);
+}
+
+static void bandicoot_cootaneer_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons("Assign Sequence (Cootaneer)", GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *info = gtk_label_new("Assign sidechains from a sequence (needs a refinement map):");
+   gtk_misc_set_alignment(GTK_MISC(info), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), info, FALSE, FALSE, 2);
+   bandicoot_cootaneer_t *cd = g_new0(bandicoot_cootaneer_t, 1);
+   cd->combo = gtk_combo_box_new();
+   graphics_info_t g;
+   g.fill_combobox_with_coordinates_options(cd->combo, NULL, first_coords_imol());
+   gtk_box_pack_start(GTK_BOX(vbox), cd->combo, FALSE, FALSE, 4);
+   cd->file_btn = gtk_file_chooser_button_new("Select sequence file",
+                                              GTK_FILE_CHOOSER_ACTION_OPEN);
+   gtk_box_pack_start(GTK_BOX(vbox), cd->file_btn, FALSE, FALSE, 4);
+   cd->refine_chk = gtk_check_button_new_with_label("Refine (fit protein) afterwards");
+   gtk_box_pack_start(GTK_BOX(vbox), cd->refine_chk, FALSE, FALSE, 4);
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_cootaneer_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+extern "C" void bandicoot_modelling_dispatch(int op_id) {
+   switch (op_id) {
+   // ---- Tier 1 -------------------------------------------------------------
+   case BMOD_ADD_HYDROGENS:          bmod_add_hydrogens();                 break;
+   case BMOD_ADD_HYDROGENS_REFMAC:   // needs refmac on PATH; Python helper
+      safe_python_command("using_active_atom(add_hydrogens_using_refmac, \"aa_imol\")"); break;
+   case BMOD_ASSIGN_HETATMS_RESIDUE: bmod_assign_hetatms_residue();        break;
+   case BMOD_INVERT_CHIRAL:          bmod_invert_chiral();                 break;
+   case BMOD_PHOSPHORYLATE:          safe_python_command("phosphorylate_active_residue()"); break;
+   case BMOD_WHATS_THIS:             bmod_whats_this();                    break;
+   case BMOD_MORPH_FIT_7:            bmod_morph_fit(7);                    break;
+   case BMOD_MORPH_FIT_11:           bmod_morph_fit(11);                   break;
+   case BMOD_MORPH_FIT_SS:           bmod_morph_fit_ss();                  break;
+   case BMOD_FIND_HELICES:           find_helices();                       break;
+   case BMOD_FIND_STRANDS:           find_strands();                       break;
+   case BMOD_BACKRUB_ON:             set_rotamer_search_mode(ROTAMERSEARCHLOWRES);  break;
+   case BMOD_BACKRUB_OFF:            set_rotamer_search_mode(ROTAMERSEARCHHIGHRES); break;
+   case BMOD_DUPLICATE_RANGE:        safe_python_command("duplicate_range_by_atom_pick()"); break;
+   case BMOD_SYMM_SHIFT_REF_CHAIN:   move_reference_chain_to_symm_chain_position(); break;
+   // ---- Tier 2 (molecule chooser) -----------------------------------------
+   case BMOD_ARRANGE_WATERS:
+      bandicoot_imol_chooser("Arrange Waters Around Protein",
+                             "Arrange waters in molecule:", bmod_op_arrange_waters); break;
+   case BMOD_MERGE_WATER_CHAINS:
+      bandicoot_imol_chooser("Merge Water Chains",
+                             "Merge water chains in molecule:", bmod_op_merge_water_chains); break;
+   case BMOD_RENUMBER_WATERS:
+      bandicoot_imol_chooser("Renumber Waters",
+                             "Renumber waters of molecule:", bmod_op_renumber_waters); break;
+   case BMOD_ASSIGN_HETATM_MOL:
+      bandicoot_imol_chooser("Assign HETATM to Molecule",
+                             "Assign HETATMs as per PDB definition:", bmod_op_assign_hetatm); break;
+   case BMOD_FIX_NOMENCLATURE:
+      bandicoot_imol_chooser("Fix Nomenclature Errors",
+                             "Fix nomenclature errors in molecule:", bmod_op_fix_nomenclature); break;
+   case BMOD_REORDER_CHAINS:
+      bandicoot_imol_chooser("Reorder Chains",
+                             "Sort chain IDs in molecule:", bmod_op_reorder_chains); break;
+   case BMOD_RIGID_BODY_FIT_MOL:
+      bandicoot_imol_chooser("Rigid Body Fit Molecule",
+                             "Rigid body fit whole molecule:", bmod_op_rigid_body_fit); break;
+   case BMOD_USE_SEGIDS:
+      bandicoot_imol_chooser("Use SEGIDs",
+                             "Exchange chain IDs for SEG IDs in molecule:", bmod_op_use_segids); break;
+   // ---- Tier 3 (chooser and/or text entry) --------------------------------
+   case BMOD_MONOMER_FROM_DICT:
+      bandicoot_single_entry("Monomer from Dictionary",
+                             "Pull coordinates from CIF dictionary for 3-letter code:",
+                             "", bmod_op_monomer_from_dict); break;
+   case BMOD_NEW_MOL_SPHERE:
+      bandicoot_imol_entry_chooser("New Molecule by Sphere",
+                                   "Choose a molecule to select a sphere of atoms from:",
+                                   "Radius:", "10.0", bmod_op_new_mol_sphere); break;
+   case BMOD_NEW_MOL_SYMOP:
+      bandicoot_imol_entry_chooser("New Molecule from Symmetry Op",
+                                   "Molecule to generate a symmetry copy from:",
+                                   "SymOp:", "X,Y,Z", bmod_op_new_mol_symop); break;
+   case BMOD_RESIDUE_TYPE_SEL:
+      bandicoot_imol_entry_chooser("Residue Type Selection",
+                                   "Choose a molecule to select residues from:",
+                                   "Residue Type:", "", bmod_op_residue_type_sel); break;
+   case BMOD_FETCH_PDBE_LIGAND:
+      bandicoot_single_entry("Fetch PDBe Ligand Description",
+                             "Fetch PDBe Ligand Description for comp-id:",
+                             "", bmod_op_fetch_pdbe_ligand); break;
+   case BMOD_FETCH_PDBE_THIS_LIGAND:  bmod_fetch_pdbe_this_ligand(); break;
+   // ---- Tier 4 (custom result windows) ------------------------------------
+   case BMOD_RENAME_RESIDUE:
+      bandicoot_single_entry("Rename Residue",
+                             "New residue name for the centred residue:",
+                             "", bmod_op_rename_residue); break;
+   case BMOD_RES_ALT_CONFS:
+      bandicoot_imol_chooser("Residues with Alt Confs",
+                             "Which molecule to check for alt confs?", bmod_op_alt_confs); break;
+   case BMOD_RES_CIS_PEPTIDES:
+      bandicoot_imol_chooser("Residues with Cis Peptide Bonds",
+                             "Check for cis peptides in molecule:", bmod_op_cis_peptides); break;
+   case BMOD_RES_MISSING_ATOMS:
+      bandicoot_imol_chooser("Residues with Missing Atoms",
+                             "Which molecule to check for missing atoms?", bmod_op_missing_atoms); break;
+   case BMOD_RES_ZERO_OCC:
+      bandicoot_imol_chooser("Atoms with Zero Occupancies",
+                             "Which molecule to check for zero-occupancy atoms?", bmod_op_zero_occ); break;
+   // ---- Tier 4 Batch B ----------------------------------------------------
+   case BMOD_RIGID_BODY_RANGES:  bandicoot_rigid_body_ranges_dialog(); break;
+   case BMOD_ADD_SOLVENT:        bandicoot_add_solvent_dialog();       break;
+   case BMOD_SUPERPOSE_LIGANDS:  bandicoot_superpose_ligands_dialog(); break;
+   case BMOD_ASSOC_SEQUENCE:     bandicoot_associate_sequence_dialog(); break;
+   case BMOD_COOTANEER:          bandicoot_cootaneer_dialog();          break;
+   default:
+      break;
+   }
 }
 
 // ---- PanDDA Inspect panel -------------------------------------------------

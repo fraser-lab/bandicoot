@@ -2113,14 +2113,28 @@ def residues_with_alt_confs(imol):
     # return False if there are no atoms with alt-confs, else return
     # a list of the residue's spec [chain_id, res_no, ins_code]
     def alt_func1(chain_id, res_no, ins_code, res_serial_no):
-        r = False
+        # A residue has alternate conformations only if its NON-HYDROGEN atoms
+        # carry more than one distinct altLoc label, e.g. {"","A","B"} or
+        # {"A","B"}. Two corrections to the old "any non-blank altLoc" test,
+        # which produced false positives:
+        #  - count DISTINCT labels (a uniform stray "A" with no partner is not
+        #    an alt conf);
+        #  - skip H/D: "Split All of a Single Residue" alt-splits the *adjacent*
+        #    residue's backbone amide H (its orientation follows the now-two-
+        #    conformer peptide bond), so a neighbour with only a split H is not
+        #    itself an alt-conf residue.
+        # atom record = [[name, altLoc], [occ, b, element, segid], [x,y,z]].
+        alt_confs = []
         atom_ls = residue_info(imol, chain_id, res_no, ins_code)
-        for i in range(len(atom_ls)):
-            alt_conf_str = atom_ls[i][0][1]
-            if alt_conf_str:
-                r = True
-                break
-        return r
+        if atom_ls:
+            for atom in atom_ls:
+                element = atom[1][2].strip()
+                if element == "H" or element == "D":
+                    continue
+                ac = atom[0][1]
+                if ac not in alt_confs:
+                    alt_confs.append(ac)
+        return len(alt_confs) > 1
 
     return residues_matching_criteria(imol, lambda chain_id, res_no, ins_code, res_serial_no: alt_func1(chain_id, res_no, ins_code, res_serial_no))
 
@@ -4897,4 +4911,89 @@ global use_mogul
 use_mogul = True
 if (not command_in_path_qm("mogul")):
     use_mogul = False
+
+
+# BANDICOOT: module-level extract of the nested add_ligand_func() from
+# coot_gui.py's solvent_ligands_gui (which is GTK-stubbed here). Adds a solvent
+# molecule (comp-id tlc) to molecule imol; if a refinement map is set, merge +
+# jiggle-fit + refine near the active residue, else merge and hide. Driven from
+# the native "Add Other Solvent Molecules" dialog via safe_python_command.
+def bandicoot_add_solvent_ligand(imol, tlc, n_jiggle_trials=50):
+    imol_ligand = get_monomer(tlc)
+    if not valid_model_molecule_qm(imol_ligand):
+        return
+    # delete hydrogens from the ligand if the master molecule has none
+    if valid_model_molecule_qm(imol):
+        if not molecule_has_hydrogens(imol):
+            delete_residue_hydrogens(imol_ligand, "A", 1, "", "")
+    if valid_map_molecule_qm(imol_refinement_map()):
+        merge_molecules([imol_ligand], imol)
+        # upstream presumes the active residue is the jiggling residue
+        active_atom = active_residue()
+        aa_chain_id = active_atom[1]
+        aa_res_no = active_atom[2]
+        fit_to_map_by_random_jiggle(imol, aa_chain_id, aa_res_no, "",
+                                    n_jiggle_trials, 1.0)
+        with_auto_accept([refine_residues, imol, [[aa_chain_id, aa_res_no, ""]]])
+    else:
+        if valid_model_molecule_qm(imol):
+            merge_molecules([imol_ligand], imol)
+            set_mol_active(imol_ligand, 0)
+            set_mol_displayed(imol_ligand, 0)
+
+
+# BANDICOOT: module-level extracts of the nested handlers in coot_gui.py's
+# associate_sequence_with_chain_gui / cootaneer_gui_bl (both GTK-stubbed here),
+# driven from the native Assign-Sequence dialogs via safe_python_command.
+def bandicoot_associate_sequence(imol, chain_id, seq_file_name,
+                                 sequence_format="FASTA", use_all_chains=False):
+    if not seq_file_name:
+        return
+    if use_all_chains:
+        all_chains = [c for c in chain_ids(imol) if is_protein_chain_qm(imol, c)]
+    else:
+        all_chains = [chain_id]
+    n = 0
+    for ch in all_chains:
+        if sequence_format == "PIR":
+            associate_pir_file(imol, ch, seq_file_name)
+        else:
+            associate_fasta_file(imol, ch, seq_file_name)
+        n += 1
+    add_status_bar_text("Associated sequence with %d chain(s)" % n)
+
+
+def bandicoot_cootaneer(imol, seq_file_name, do_refine=False):
+    if seq_file_name:
+        # assign_sequence_from_file already assigns the file's sequences to the
+        # molecule (by alignment to each chain). The upstream go-button then
+        # called assign_sequences_to_mol(), but that is a nested helper of
+        # cootaneer_gui_bl that re-reads the dialog's editable sequence table --
+        # we don't have that table, and the assignment is already done -- so we
+        # go straight to cootaneer per chain.
+        assign_sequence_from_file(imol, str(seq_file_name))
+    imol_map = imol_refinement_map()
+    if not valid_map_molecule_qm(imol_map):
+        add_status_bar_text("Cootaneer needs a refinement map")
+        return
+    n_fail = 0
+    n_done = 0
+    for chain_id in chain_ids(imol):
+        atc = residue_spec_to_atom_for_centre(
+            imol, chain_id, seqnum_from_serial_number(imol, chain_id, 0),
+            insertion_code_from_serial_number(imol, chain_id, 0))
+        if not atc:
+            continue   # e.g. a water/ligand chain with no centre atom
+        res_no = seqnum_from_serial_number(imol, chain_id, 0)
+        ins_code = insertion_code_from_serial_number(imol, chain_id, 0)
+        if cootaneer(imol_map, imol, [chain_id, res_no, ins_code, atc[0], ""]) == 0:
+            n_fail += 1
+        else:
+            n_done += 1
+    if do_refine and n_done:
+        fit_protein(imol)
+    msg = "Cootaneer: assigned %d chain(s)" % n_done
+    if n_fail:
+        msg += ", %d too low-confidence to fit" % n_fail
+    add_status_bar_text(msg)
 

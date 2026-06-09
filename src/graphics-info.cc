@@ -6449,6 +6449,14 @@ void graphics_info_t::run_user_defined_click_func() {
 
    if (user_defined_click_py_func) {
 
+      // BANDICOOT: run_user_defined_click_func() is called from the GTK
+      // button-press handler (glarea_button_press), which does NOT hold the
+      // Python GIL in this embedded build -- the main loop runs without it and
+      // only safe_python_command re-acquires per call (v0.1.0.1 GIL work).
+      // Touching the Python C-API here (PyTuple_New etc.) without the GIL
+      // segfaults -- e.g. Modelling > Duplicate Range (pick atoms). Ensure it.
+      PyGILState_STATE gstate = PyGILState_Ensure();
+
       if (!PyCallable_Check(user_defined_click_py_func)) {
 	 std::cout<<"(PYTHON) ERROR:: user_defined_click function must be callable, is "
 		  << user_defined_click_py_func->ob_type->tp_name<<std::endl;
@@ -6479,6 +6487,7 @@ void graphics_info_t::run_user_defined_click_func() {
 	    if (!PyCallable_Check(user_defined_click_py_func)) {
 	       std::cout << "WARNING:: python user click function should have been callable." << std::endl;
 	       std::cout << "WARNING:: Ignoring it." << std::endl;
+	       PyGILState_Release(gstate);
 	       return;
 	    }
 	    PyObject *result = PyEval_CallObject(user_defined_click_py_func, arg_list_py);
@@ -6491,6 +6500,7 @@ void graphics_info_t::run_user_defined_click_func() {
 	    std::cout<<"ERROR:: executing user_defined_click" <<std::endl;
 	 }
       }
+      PyGILState_Release(gstate);
    }
 
 #endif // USE_PYTHON
