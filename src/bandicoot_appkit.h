@@ -19,6 +19,19 @@ extern "C" {
 // No-op on non-macOS builds.
 void bandicoot_install_native_menubar(GtkWidget *menubar);
 
+// Set the application name shown in the macOS app menu (the bold first
+// menu) to "Bandicoot". For an unbundled unix binary AppKit derives that
+// name from the process name (argv[0] = "coot-bin") and caches it the
+// first time NSApplication is instantiated — which happens inside
+// gtk_init() on the Quartz backend. Must therefore be called BEFORE
+// gtk_init(). No-op on non-macOS builds.
+void bandicoot_set_application_name(void);
+
+// Set the macOS Dock / application icon from a square PNG file. Without this
+// an unbundled binary shows the stock unix-tool (Terminal) Dock icon. No-op
+// on non-macOS builds, or if the file can't be loaded.
+void bandicoot_set_dock_icon(const char *png_path);
+
 // Backing scale factor of the main screen (2.0 on Retina, 1.0 on non-Retina).
 // Used to convert GTK logical-pixel widget allocations into physical pixels
 // for glViewport, which on Tahoe-quartz otherwise renders at quarter size.

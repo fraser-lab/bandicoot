@@ -125,8 +125,37 @@ for _name, _alias in (('unicode', str), ('basestring', str),
 # To upgrade to real PyGObject (gi.repository.Gtk) bindings later,
 # replace this stub with an API-translation shim that maps Py2-style
 # gtk.HBox / gtk.Window / etc. to their PyGObject equivalents.
+
+def _bandicoot_gtk_main_quit(*args, **kwargs):
+    """gtk.main_quit replacement that actually terminates Bandicoot.
+
+    In Bandicoot GTK's main loop runs in C (driven by NSApp); the Python
+    `gtk` module is a stub with no nested main loop to quit, so the stock
+    no-op stub made `gtk.main_quit()` do nothing. The one caller that means
+    "close the application" is Phenix's wxGUI2/Coot.py `quit()` XML-RPC
+    method -- invoked when the user, on quitting Phenix, answers "Yes" to
+    "close the Coot session too". Previously that RPC hit the no-op stub, so
+    Bandicoot kept running with a now-stale Phenix socket. Route it to Coot's
+    clean-exit path instead (saves state + history, closes molecules, exits).
+
+    The other in-tree callers (coot_gui.py / coot_output_to_window.py) only
+    reach gtk.main_quit() from real GtkWidget "delete_event"/"destroy"
+    handlers, which never fire against these invisible stub widgets (the
+    stub's connect() is a no-op), so terminating here doesn't disturb them.
+    """
+    try:
+        import coot
+        coot.coot_real_exit(0)
+    except Exception:
+        # Last resort if the C binding is unavailable (e.g. a dev build):
+        # leave without running atexit handlers rather than hang.
+        import os
+        os._exit(0)
+
 class _BandicootGtkStub(object):
     def __getattr__(self, name):
+        if name == 'main_quit':
+            return _bandicoot_gtk_main_quit
         return _BandicootGtkStub()
     def __call__(self, *args, **kwargs):
         return _BandicootGtkStub()

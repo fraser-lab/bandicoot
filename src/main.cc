@@ -218,6 +218,12 @@ main (int argc, char *argv[]) {
 #ifdef WINDOWS_MINGW
       gtk_disable_setlocale();
 #endif // MINGW
+#ifdef __APPLE__
+      // Name the macOS app menu "Bandicoot" (not "coot-bin"). Must run
+      // before gtk_init() instantiates NSApplication, which caches the
+      // app name. See bandicoot_appkit.h.
+      bandicoot_set_application_name();
+#endif
       gtk_init (&argc, &argv);
       // activate to force icons in menus; cannot get it to work with 
       // cootrc. Bug?
@@ -820,7 +826,23 @@ void setup_application_icon(GtkWindow *window) {
 	 // the refcount on a widget?
       }
    }
-   
+
+#ifdef __APPLE__
+   // macOS Dock icon. Prefer a Bandicoot-branded "bandicoot-icon.png" if one
+   // is dropped into the pixmaps dir; otherwise reuse the window icon
+   // (coot-icon.png). Replaces the stock Terminal icon for this unbundled
+   // binary. See bandicoot_appkit.h.
+   {
+      std::string dock_icon_path =
+	 coot::util::append_dir_file(splash_screen_pixmap_dir,
+				     "bandicoot-icon.png");
+      struct stat dbuf;
+      if (stat(dock_icon_path.c_str(), &dbuf) != 0)
+	 dock_icon_path = app_icon_path;  // fall back to coot-icon.png
+      bandicoot_set_dock_icon(dock_icon_path.c_str());
+   }
+#endif
+
    // load svg/png files to antialias icons
    // maybe should go somewhere else?!
    GtkIconSet* iconset;

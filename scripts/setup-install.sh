@@ -120,7 +120,9 @@ EOF
             while IFS= read -r f; do
                 if file -b "$f" 2>/dev/null | grep -q "Mach-O"; then
                     case "$(basename "$f")" in
-                        coot-bin)
+                        Bandicoot|coot-bin)
+                            # The main executable (installed as "Bandicoot",
+                            # formerly "coot-bin"). Both matched for safety.
                             # Apply with hardened runtime + entitlements.
                             codesign --force --sign - \
                                 --entitlements "$ENT_PLIST" \
@@ -138,7 +140,7 @@ EOF
                 fi
             done < <(find "$d" -type f)
         done
-        echo "    $CHECK signed $SIGNED Mach-O files (coot-bin gets Python-enabling entitlements)"
+        echo "    $CHECK signed $SIGNED Mach-O files (Bandicoot gets Python-enabling entitlements)"
     else
         echo "$WARN codesign not found in PATH; skipping signing step." >&2
     fi

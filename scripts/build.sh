@@ -153,6 +153,18 @@ echo "==> bundle_pixbuf_loaders.sh ${PREFIX}"
 echo "==> bundle_external_tools.sh ${PREFIX}"
 "${REPO_ROOT}/scripts/bundle_external_tools.sh" "${PREFIX}" "${PROBE_SRC:-}"
 
+# Rename the main executable coot-bin -> Bandicoot. macOS derives the
+# application-menu name and Dock identity from the executable's filename
+# (it ignores NSProcessInfo's mutable process name), so this is what makes
+# the app present as "Bandicoot" rather than "coot-bin". Done after the
+# relocation + bundling steps (which iterate Mach-O files by glob, so the
+# rename is transparent to them). The coot wrapper execs libexec/Bandicoot
+# and setup.sh codesigns it by this name.
+if [ -f "${PREFIX}/libexec/coot-bin" ]; then
+    mv -f "${PREFIX}/libexec/coot-bin" "${PREFIX}/libexec/Bandicoot"
+    echo "==> renamed libexec/coot-bin -> libexec/Bandicoot"
+fi
+
 # Add the bcoot symlink (the wrapper computes its prefix from $0's
 # location, so a symlink in the same bin dir works).
 ln -sf coot "${PREFIX}/bin/bcoot"

@@ -9,6 +9,7 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 #import <OpenGL/gl.h>
+#import <CoreServices/CoreServices.h>  // kCoreEventClass / kAEQuitApplication
 
 #include <gtk/gtk.h>
 #include <gdk/gdkquartz.h>
@@ -60,6 +61,11 @@ extern "C" {
     gboolean bandicoot_action_sphere_regularize_plus(gpointer);
     gboolean bandicoot_action_refine_tandem(gpointer);
     gboolean bandicoot_action_local_probe_dots(gpointer);
+
+    // Clean-exit path (c-interface-gui.cc): saves session state + history,
+    // closes all molecules, then exit(retval). Backs the "Exit Bandicoot"
+    // app-menu item.
+    void coot_real_exit(int retval);
 }
 
 static char kGtkMenuItemKey;
@@ -85,6 +91,9 @@ extern "C" void bandicoot_run_toolbar_customization(void);
 + (instancetype)shared;
 - (void)dispatch:(NSMenuItem *)sender;
 - (void)bandicootCustomizeToolbar:(id)sender;
+- (void)bandicootExit:(id)sender;
+- (void)bandicootHandleQuitEvent:(NSAppleEventDescriptor *)event
+                  withReplyEvent:(NSAppleEventDescriptor *)reply;
 - (void)bandicootSetToolbarDisplayModeIconAndLabel:(id)sender;
 - (void)bandicootSetToolbarDisplayModeIconOnly:(id)sender;
 - (void)bandicootSetToolbarDisplayModeLabelOnly:(id)sender;
@@ -118,6 +127,32 @@ static void bandicoot_set_toolbar_display_mode(NSToolbarDisplayMode mode) {
 }
 - (void)bandicootCustomizeToolbar:(id)sender {
     bandicoot_run_toolbar_customization();
+}
+- (void)bandicootExit:(id)sender {
+    // Confirm before quitting. NSAlert (native) rather than a GTK dialog:
+    // this item lives in the macOS app menu and the alert is pure AppKit,
+    // so it's safe to run modally from inside NSMenu's event tracking.
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Exit Bandicoot?"];
+    [alert setInformativeText:@"This will close the current session. "
+                               "Any unsaved changes will be lost."];
+    [alert addButtonWithTitle:@"Yes"];               // first -> default (Return)
+    NSButton *no = [alert addButtonWithTitle:@"No"];
+    [no setKeyEquivalent:@"\033"];                   // Escape selects No
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        coot_real_exit(0);  // saves state + history, closes molecules, exit(0)
+    }
+    // No -> fall through, returning to the session.
+}
+- (void)bandicootHandleQuitEvent:(NSAppleEventDescriptor *)event
+                  withReplyEvent:(NSAppleEventDescriptor *)reply {
+    // The Dock icon's right-click "Quit" (and any kAEQuitApplication event)
+    // lands here. Route it through the same "Exit Bandicoot?" confirmation
+    // and clean exit as the menu item. Without this handler the event went
+    // to GDK-Quartz's default delegate, which doesn't tear down the GTK main
+    // loop — so Quit appeared to do nothing.
+    (void)event; (void)reply;
+    [self bandicootExit:nil];
 }
 - (void)bandicootSetToolbarDisplayModeIconAndLabel:(id)sender {
     bandicoot_set_toolbar_display_mode(NSToolbarDisplayModeIconAndLabel);
@@ -405,6 +440,17 @@ extern "C" void bandicoot_free_text_texture(unsigned int tex) {
     glDeleteTextures(1, &t);
 }
 
+// Rename the app so the macOS application menu (the bold first menu) reads
+// "Bandicoot" instead of the binary name "coot-bin". AppKit takes that title
+// from the application name, which for this unbundled binary defaults to the
+// process name (argv[0] basename). It is read and cached the first time
+// NSApplication is instantiated (inside gtk_init on the Quartz backend), so
+// this MUST run before gtk_init() — setting it later (e.g. at menu-install
+// time) is too late, the cached "coot-bin" name has already been used.
+extern "C" void bandicoot_set_application_name(void) {
+    [[NSProcessInfo processInfo] setProcessName:@"Bandicoot"];
+}
+
 extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
     if (!menubar || !GTK_IS_MENU_BAR(menubar)) return;
 
@@ -428,6 +474,16 @@ extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
     [customize setTarget:[BandicootMenuTarget shared]];
     [app_sub addItem:customize];
 
+    // "Exit Bandicoot" with a separator above it. Confirms via an
+    // "Exit Bandicoot?" Yes/No alert before the clean exit (bandicootExit:).
+    [app_sub addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *exit_item = [[NSMenuItem alloc]
+                             initWithTitle:@"Exit Bandicoot"
+                                    action:@selector(bandicootExit:)
+                             keyEquivalent:@""];
+    [exit_item setTarget:[BandicootMenuTarget shared]];
+    [app_sub addItem:exit_item];
+
     [app_item setSubmenu:app_sub];
     [main_menu addItem:app_item];
 
@@ -440,8 +496,28 @@ extern "C" void bandicoot_install_native_menubar(GtkWidget *menubar) {
 
     [NSApp setMainMenu:main_menu];
 
+    // Intercept the Dock icon's "Quit" (kAEQuitApplication). Registered here,
+    // after gtk_init has finished launching NSApp, so this handler replaces
+    // GDK-Quartz's default one (whose terminate path doesn't stop gtk_main).
+    [[NSAppleEventManager sharedAppleEventManager]
+        setEventHandler:[BandicootMenuTarget shared]
+            andSelector:@selector(bandicootHandleQuitEvent:withReplyEvent:)
+          forEventClass:kCoreEventClass
+             andEventID:kAEQuitApplication];
+
     gtk_widget_set_no_show_all(menubar, TRUE);
     gtk_widget_hide(menubar);
+}
+
+// Set the macOS Dock icon (and the app's icon image generally). For an
+// unbundled binary the Dock otherwise shows the stock unix-executable
+// (Terminal) icon. png_path should point to a square PNG; no-op if it can't
+// be loaded.
+extern "C" void bandicoot_set_dock_icon(const char *png_path) {
+    if (!png_path || !*png_path) return;
+    NSString *p = [NSString stringWithUTF8String:png_path];
+    NSImage *img = [[NSImage alloc] initWithContentsOfFile:p];
+    if (img) [NSApp setApplicationIconImage:img];
 }
 
 // ----- NSToolbar shim --------------------------------------------------------
