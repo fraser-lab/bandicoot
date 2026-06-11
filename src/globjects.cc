@@ -1787,7 +1787,7 @@ gint
 init_gl_widget(GtkWidget *widget) {
 
 #ifdef __APPLE__
-   double s = bandicoot_get_backing_scale_factor();
+   double s = bandicoot_get_backing_scale_factor_for_widget(widget);
    glViewport(0, 0, widget->allocation.width * s, widget->allocation.height * s);
 #else
    glViewport(0,0, widget->allocation.width, widget->allocation.height);
@@ -1999,7 +1999,7 @@ gint reshape(GtkWidget *widget, GdkEventConfigure *event) {
 
    if (graphics_info_t::make_current_gl_context(widget)) {
 #ifdef __APPLE__
-      double s = bandicoot_get_backing_scale_factor();
+      double s = bandicoot_get_backing_scale_factor_for_widget(widget);
       glViewport(0, 0, widget->allocation.width * s, widget->allocation.height * s);
 #else
       glViewport(0,0, widget->allocation.width, widget->allocation.height);

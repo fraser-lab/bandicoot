@@ -322,6 +322,24 @@ extern "C" double bandicoot_get_backing_scale_factor(void) {
     return screen ? (double)[screen backingScaleFactor] : 1.0;
 }
 
+// Backing scale of the screen the widget's window is ACTUALLY on. Prefer this
+// over bandicoot_get_backing_scale_factor(): [NSScreen mainScreen] tracks the
+// focused / menu-bar screen, which is the wrong scale on a mixed-DPI
+// multi-monitor setup (e.g. a 2x Retina built-in + a 1x external). NSWindow's
+// backingScaleFactor follows the screen the window currently sits on and
+// updates as it is dragged between displays. Falls back to mainScreen, then 1.
+extern "C" double bandicoot_get_backing_scale_factor_for_widget(GtkWidget *w) {
+    if (w) {
+        GtkWidget *top = gtk_widget_get_toplevel(w);
+        if (top && top->window) {
+            NSWindow *win = (NSWindow *) gdk_quartz_window_get_nswindow(top->window);
+            if (win) return (double)[win backingScaleFactor];
+        }
+    }
+    NSScreen *screen = [NSScreen mainScreen];
+    return screen ? (double)[screen backingScaleFactor] : 1.0;
+}
+
 extern "C" void bandicoot_activate_app(void) {
     // Apps launched from a wrapper script start as background apps; their
     // windows can appear behind the launcher's own windows. Force foreground.

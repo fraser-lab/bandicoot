@@ -385,7 +385,9 @@ coot::Cartesian unproject_xyz(int x, int y, float screen_z) {
 #ifdef __APPLE__
    // Viewport is in physical (backing-store) pixels; GTK mouse coords are
    // logical. Scale x/y so gluUnProject sees them in the same coord system.
-   double s = bandicoot_get_backing_scale_factor();
+   // Use the GL widget's own screen scale (same source the viewport used in
+   // reshape) so picking stays consistent on mixed-DPI multi-monitor setups.
+   double s = bandicoot_get_backing_scale_factor_for_widget(graphics_info_t::glarea);
    double x_as_double = x * s;
    realy = viewport[3] - (GLint)(y * s) - 1;
    double realy_as_double = realy;

@@ -35,7 +35,10 @@ void bandicoot_set_dock_icon(const char *png_path);
 // Backing scale factor of the main screen (2.0 on Retina, 1.0 on non-Retina).
 // Used to convert GTK logical-pixel widget allocations into physical pixels
 // for glViewport, which on Tahoe-quartz otherwise renders at quarter size.
+// The _for_widget variant uses the widget's actual screen (correct on mixed-DPI
+// multi-monitor setups); prefer it. The no-arg version uses [NSScreen mainScreen].
 double bandicoot_get_backing_scale_factor(void);
+double bandicoot_get_backing_scale_factor_for_widget(GtkWidget *w);
 
 // Mirror a GtkToolbar into a native NSToolbar attached to the toplevel
 // NSWindow's title bar. Walks gtk_toolbar's children to build the initial
