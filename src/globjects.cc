@@ -319,6 +319,10 @@ std::pair<clipper::Coord_orth, clipper::Coord_orth> graphics_info_t::flash_bond 
    std::pair<clipper::Coord_orth, clipper::Coord_orth> (clipper::Coord_orth(0,0,0),
 							clipper::Coord_orth(0,0,0));
 bool graphics_info_t::flash_intermediate_atom_pick_flag = 0;
+double graphics_info_t::pick_atom_dist_cutoff = 0.6;
+double graphics_info_t::symm_pick_atom_dist_cutoff = 0.4;
+double graphics_info_t::intermediate_pick_near_cutoff = 0.8;
+double graphics_info_t::intermediate_pick_far_cutoff = 0.04;
 clipper::Coord_orth graphics_info_t::intermediate_flash_point;
 
 

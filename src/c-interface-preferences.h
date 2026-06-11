@@ -74,6 +74,14 @@ void update_toolbar_icons_menu(int toolbar_index);
 
 int preferences_internal_font_own_colour_flag();
 
+/* Bandicoot: configurable atom-pick radii (Preferences > Pick Atom). */
+void set_pick_atom_distance_cutoff(float d);  /* static-atom radius; sets + persists */
+float get_pick_atom_distance_cutoff();
+void set_symmetry_pick_atom_distance_cutoff(float d);   /* symmetry-atom radius */
+void set_intermediate_pick_distance_cutoffs(float far_lo, float near_hi); /* depth-weighted range */
+void bandicoot_save_pick_atom_radius();
+void bandicoot_load_pick_atom_radius();       /* called at startup from main */
+
 END_C_DECLS
 
 #endif /* C_INTERFACE_PREFERENCES_H */

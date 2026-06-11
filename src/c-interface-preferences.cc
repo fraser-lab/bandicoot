@@ -41,6 +41,10 @@
 #endif // HAVE_STRING
 
 #include <algorithm>
+#include <fstream>  // Bandicoot pick-radius persistence
+#include <cstdlib>  // atof
+#include <cmath>    // fabs
+#include <cstdio>   // snprintf
 
 #include <string.h> // strlen, strcpy
 #include <sys/types.h> // for stating
@@ -79,6 +83,72 @@ void preferences() {
 
 }
 
+// ---------------------------------------------------------------------------
+// Bandicoot: configurable atom-pick radii (Preferences > Pick Atom).
+// Persisted in ~/.coot-preferences/bandicoot-pick-atom-radius as four
+// whitespace-separated floats (one per line), in this order:
+//    1. static-atom radius        (pick_atom_dist_cutoff)
+//    2. symmetry-atom radius      (symm_pick_atom_dist_cutoff)
+//    3. intermediate FAR radius   (intermediate_pick_far_cutoff)
+//    4. intermediate NEAR radius  (intermediate_pick_near_cutoff)
+// Re-applied at startup (bandicoot_load_pick_atom_radius, called from main).
+// Trailing values may be absent (e.g. files written by an earlier build that
+// only stored the first value) - missing ones keep their defaults.
+// ---------------------------------------------------------------------------
+static std::string bandicoot_pick_radius_dir() {
+   std::string home = coot::get_home_dir();
+   if (home.empty()) return "";
+   return home + "/.coot-preferences";
+}
+
+void bandicoot_save_pick_atom_radius() {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::string fn = dir + "/bandicoot-pick-atom-radius";
+   std::ofstream f(fn.c_str());
+   if (f)
+      f << graphics_info_t::pick_atom_dist_cutoff       << "\n"
+        << graphics_info_t::symm_pick_atom_dist_cutoff  << "\n"
+        << graphics_info_t::intermediate_pick_far_cutoff  << "\n"
+        << graphics_info_t::intermediate_pick_near_cutoff << std::endl;
+}
+
+void bandicoot_load_pick_atom_radius() {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   std::string fn = dir + "/bandicoot-pick-atom-radius";
+   std::ifstream f(fn.c_str());
+   double v = 0.0;
+   if (f && (f >> v) && v > 0.0 && v < 100.0) graphics_info_t::pick_atom_dist_cutoff = v;
+   if (f && (f >> v) && v > 0.0 && v < 100.0) graphics_info_t::symm_pick_atom_dist_cutoff = v;
+   if (f && (f >> v) && v > 0.0 && v < 100.0) graphics_info_t::intermediate_pick_far_cutoff = v;
+   if (f && (f >> v) && v > 0.0 && v < 100.0) graphics_info_t::intermediate_pick_near_cutoff = v;
+}
+
+void set_pick_atom_distance_cutoff(float d) {
+   if (d > 0.0)
+      graphics_info_t::pick_atom_dist_cutoff = d;
+   bandicoot_save_pick_atom_radius();
+}
+
+float get_pick_atom_distance_cutoff() {
+   return graphics_info_t::pick_atom_dist_cutoff;
+}
+
+void set_symmetry_pick_atom_distance_cutoff(float d) {
+   if (d > 0.0)
+      graphics_info_t::symm_pick_atom_dist_cutoff = d;
+   bandicoot_save_pick_atom_radius();
+}
+
+// far_lo == back/far tolerance, near_hi == front/near tolerance (depth-weighted)
+void set_intermediate_pick_distance_cutoffs(float far_lo, float near_hi) {
+   if (far_lo  > 0.0) graphics_info_t::intermediate_pick_far_cutoff  = far_lo;
+   if (near_hi > 0.0) graphics_info_t::intermediate_pick_near_cutoff = near_hi;
+   bandicoot_save_pick_atom_radius();
+}
+
 #ifdef __APPLE__
 // Bandicoot tailoring of the Preferences dialog. Defined in the AppKit shim.
 extern "C" int  bandicoot_sidebar_is_docked(void);
@@ -93,6 +163,230 @@ static void bandicoot_dock_toolbar_no_toggled(GtkToggleButton *b, gpointer u) {
 static GtkWidget *bandicoot_ancestor_frame(GtkWidget *w) {
    while (w && !GTK_IS_FRAME(w)) w = gtk_widget_get_parent(w);
    return w;
+}
+
+// ---- Bandicoot "Pick Atom" preferences tab --------------------------------
+// Adds a "Pick Atom" notebook page (its own page, like Console/Tips/etc.)
+// carrying three framed radius controls: static atoms, symmetry atoms (both
+// single-value 0.4/0.6/0.8/1.0 + Other), and intermediate/refinement atoms
+// (a depth-weighted far-near RANGE: 0.4-0.8 / 0.6-1.0 / 0.8-1.2 + Other). Each
+// applies live and persists. The page belongs to the "Others" category: it
+// tracks the Others radio tool-button so it is shown only when "Others" is
+// selected. Per-frame state lives in a heap struct freed with the frame.
+struct bcoot_sv_ctrl { GtkWidget *entry; void (*setter)(float); };
+struct bcoot_rg_ctrl { GtkWidget *lo; GtkWidget *hi; void (*setter)(float, float); };
+
+static void bcoot_sv_radio_toggled(GtkToggleButton *b, gpointer data) {
+   if (!gtk_toggle_button_get_active(b)) return;
+   bcoot_sv_ctrl *c = (bcoot_sv_ctrl *) data;
+   int tenths = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(b), "bcoot-tenths"));  // 0 == Other
+   if (tenths == 0) {
+      gtk_widget_set_sensitive(c->entry, TRUE);
+      gtk_widget_grab_focus(c->entry);
+      double v = atof(gtk_entry_get_text(GTK_ENTRY(c->entry)));
+      if (v > 0.0) c->setter(v);
+   } else {
+      gtk_widget_set_sensitive(c->entry, FALSE);
+      c->setter(tenths / 10.0);
+   }
+}
+
+static void bcoot_sv_entry_activate(GtkEntry *e, gpointer data) {
+   bcoot_sv_ctrl *c = (bcoot_sv_ctrl *) data;
+   double v = atof(gtk_entry_get_text(GTK_ENTRY(c->entry)));
+   if (v > 0.0) c->setter(v);
+}
+
+static void bcoot_rg_radio_toggled(GtkToggleButton *b, gpointer data) {
+   if (!gtk_toggle_button_get_active(b)) return;
+   bcoot_rg_ctrl *c = (bcoot_rg_ctrl *) data;
+   // lo (far) stored in hundredths (4/6/8 -> 0.04/0.06/0.08), 0 == Other.
+   // hi (near) stored in tenths (8/10/12 -> 0.8/1.0/1.2).
+   int lo_h = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(b), "bcoot-lo-hundredths"));
+   int hi_t = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(b), "bcoot-hi-tenths"));
+   if (lo_h == 0) {
+      gtk_widget_set_sensitive(c->lo, TRUE);
+      gtk_widget_set_sensitive(c->hi, TRUE);
+      gtk_widget_grab_focus(c->lo);
+      double lo = atof(gtk_entry_get_text(GTK_ENTRY(c->lo)));
+      double hi = atof(gtk_entry_get_text(GTK_ENTRY(c->hi)));
+      if (lo > 0.0 && hi > 0.0) c->setter(lo, hi);
+   } else {
+      gtk_widget_set_sensitive(c->lo, FALSE);
+      gtk_widget_set_sensitive(c->hi, FALSE);
+      c->setter(lo_h / 100.0, hi_t / 10.0);
+   }
+}
+
+static void bcoot_rg_entry_activate(GtkEntry *e, gpointer data) {
+   bcoot_rg_ctrl *c = (bcoot_rg_ctrl *) data;
+   double lo = atof(gtk_entry_get_text(GTK_ENTRY(c->lo)));
+   double hi = atof(gtk_entry_get_text(GTK_ENTRY(c->hi)));
+   if (lo > 0.0 && hi > 0.0) c->setter(lo, hi);
+}
+
+// Single-value radius frame: 0.4 / 0.6 / 0.8 / 1.0 + Other.
+static GtkWidget *bcoot_build_sv_frame(const char *title, double cur, void (*setter)(float)) {
+   bcoot_sv_ctrl *c = g_new0(bcoot_sv_ctrl, 1);
+   GtkWidget *frame = gtk_frame_new(title);
+   GtkWidget *vbox = gtk_vbox_new(FALSE, 4);
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   gtk_container_add(GTK_CONTAINER(frame), vbox);
+
+   GtkWidget *r04 = gtk_radio_button_new_with_label(NULL, "0.4 \xC3\x85");
+   GtkWidget *r06 = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r04), "0.6 \xC3\x85");
+   GtkWidget *r08 = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r04), "0.8 \xC3\x85");
+   GtkWidget *r10 = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r04), "1.0 \xC3\x85");
+   GtkWidget *other_box = gtk_hbox_new(FALSE, 6);
+   GtkWidget *rother = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r04), "Other:");
+   GtkWidget *entry = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(entry), 6);
+   c->entry = entry; c->setter = setter;
+   gtk_box_pack_start(GTK_BOX(other_box), rother, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), entry,  FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), gtk_label_new("\xC3\x85"), FALSE, FALSE, 0);
+
+   gtk_box_pack_start(GTK_BOX(vbox), r04, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), r06, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), r08, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), r10, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), other_box, FALSE, FALSE, 0);
+
+   g_object_set_data(G_OBJECT(r04),    "bcoot-tenths", GINT_TO_POINTER(4));
+   g_object_set_data(G_OBJECT(r06),    "bcoot-tenths", GINT_TO_POINTER(6));
+   g_object_set_data(G_OBJECT(r08),    "bcoot-tenths", GINT_TO_POINTER(8));
+   g_object_set_data(G_OBJECT(r10),    "bcoot-tenths", GINT_TO_POINTER(10));
+   g_object_set_data(G_OBJECT(rother), "bcoot-tenths", GINT_TO_POINTER(0));
+
+   char buf[32];
+   snprintf(buf, sizeof(buf), "%g", cur);
+   gtk_entry_set_text(GTK_ENTRY(entry), buf);
+   bool preset = (fabs(cur-0.4) < 1e-6) || (fabs(cur-0.6) < 1e-6) ||
+                 (fabs(cur-0.8) < 1e-6) || (fabs(cur-1.0) < 1e-6);
+   if      (fabs(cur-0.4) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r04), TRUE);
+   else if (fabs(cur-0.6) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r06), TRUE);
+   else if (fabs(cur-0.8) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r08), TRUE);
+   else if (fabs(cur-1.0) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r10), TRUE);
+   else                           gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rother), TRUE);
+   gtk_widget_set_sensitive(entry, !preset);
+
+   g_signal_connect(r04,    "toggled",  G_CALLBACK(bcoot_sv_radio_toggled), c);
+   g_signal_connect(r06,    "toggled",  G_CALLBACK(bcoot_sv_radio_toggled), c);
+   g_signal_connect(r08,    "toggled",  G_CALLBACK(bcoot_sv_radio_toggled), c);
+   g_signal_connect(r10,    "toggled",  G_CALLBACK(bcoot_sv_radio_toggled), c);
+   g_signal_connect(rother, "toggled",  G_CALLBACK(bcoot_sv_radio_toggled), c);
+   g_signal_connect(entry,  "activate", G_CALLBACK(bcoot_sv_entry_activate), c);
+
+   g_object_set_data_full(G_OBJECT(frame), "bcoot-ctrl", c, g_free);
+   return frame;
+}
+
+// Depth-weighted range frame: lo == far tolerance, hi == near tolerance.
+static GtkWidget *bcoot_build_rg_frame(const char *title, double cur_lo, double cur_hi,
+                                       void (*setter)(float, float)) {
+   bcoot_rg_ctrl *c = g_new0(bcoot_rg_ctrl, 1);
+   GtkWidget *frame = gtk_frame_new(title);
+   GtkWidget *vbox = gtk_vbox_new(FALSE, 4);
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   gtk_container_add(GTK_CONTAINER(frame), vbox);
+
+   GtkWidget *r1 = gtk_radio_button_new_with_label(NULL, "0.04 \xC3\x85 - 0.8 \xC3\x85");
+   GtkWidget *r2 = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r1), "0.06 \xC3\x85 - 1.0 \xC3\x85");
+   GtkWidget *r3 = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r1), "0.08 \xC3\x85 - 1.2 \xC3\x85");
+   GtkWidget *other_box = gtk_hbox_new(FALSE, 6);
+   GtkWidget *rother = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(r1), "Other:");
+   GtkWidget *lo = gtk_entry_new();  gtk_entry_set_width_chars(GTK_ENTRY(lo), 5);
+   GtkWidget *hi = gtk_entry_new();  gtk_entry_set_width_chars(GTK_ENTRY(hi), 5);
+   c->lo = lo; c->hi = hi; c->setter = setter;
+   gtk_box_pack_start(GTK_BOX(other_box), rother, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), lo, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), gtk_label_new("\xC3\x85 -"), FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), hi, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(other_box), gtk_label_new("\xC3\x85"), FALSE, FALSE, 0);
+
+   gtk_box_pack_start(GTK_BOX(vbox), r1, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), r2, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), r3, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), other_box, FALSE, FALSE, 0);
+
+   g_object_set_data(G_OBJECT(r1), "bcoot-lo-hundredths", GINT_TO_POINTER(4));
+   g_object_set_data(G_OBJECT(r1), "bcoot-hi-tenths",     GINT_TO_POINTER(8));
+   g_object_set_data(G_OBJECT(r2), "bcoot-lo-hundredths", GINT_TO_POINTER(6));
+   g_object_set_data(G_OBJECT(r2), "bcoot-hi-tenths",     GINT_TO_POINTER(10));
+   g_object_set_data(G_OBJECT(r3), "bcoot-lo-hundredths", GINT_TO_POINTER(8));
+   g_object_set_data(G_OBJECT(r3), "bcoot-hi-tenths",     GINT_TO_POINTER(12));
+   g_object_set_data(G_OBJECT(rother), "bcoot-lo-hundredths", GINT_TO_POINTER(0));
+
+   char b1[32], b2[32];
+   snprintf(b1, sizeof(b1), "%g", cur_lo);
+   snprintf(b2, sizeof(b2), "%g", cur_hi);
+   gtk_entry_set_text(GTK_ENTRY(lo), b1);
+   gtk_entry_set_text(GTK_ENTRY(hi), b2);
+   bool preset = true;
+   if      (fabs(cur_lo-0.04) < 1e-6 && fabs(cur_hi-0.8) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r1), TRUE);
+   else if (fabs(cur_lo-0.06) < 1e-6 && fabs(cur_hi-1.0) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r2), TRUE);
+   else if (fabs(cur_lo-0.08) < 1e-6 && fabs(cur_hi-1.2) < 1e-6) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(r3), TRUE);
+   else { gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rother), TRUE); preset = false; }
+   gtk_widget_set_sensitive(lo, !preset);
+   gtk_widget_set_sensitive(hi, !preset);
+
+   g_signal_connect(r1,     "toggled",  G_CALLBACK(bcoot_rg_radio_toggled), c);
+   g_signal_connect(r2,     "toggled",  G_CALLBACK(bcoot_rg_radio_toggled), c);
+   g_signal_connect(r3,     "toggled",  G_CALLBACK(bcoot_rg_radio_toggled), c);
+   g_signal_connect(rother, "toggled",  G_CALLBACK(bcoot_rg_radio_toggled), c);
+   g_signal_connect(lo,     "activate", G_CALLBACK(bcoot_rg_entry_activate), c);
+   g_signal_connect(hi,     "activate", G_CALLBACK(bcoot_rg_entry_activate), c);
+
+   g_object_set_data_full(G_OBJECT(frame), "bcoot-ctrl", c, g_free);
+   return frame;
+}
+
+// Show/hide the Pick Atom page in step with the "Others" category button.
+static void bandicoot_pick_atom_follow_other(GtkToggleToolButton *b, gpointer page) {
+   if (gtk_toggle_tool_button_get_active(b))
+      gtk_widget_show(GTK_WIDGET(page));
+   else
+      gtk_widget_hide(GTK_WIDGET(page));
+}
+
+static void bandicoot_add_pick_atom_tab(GtkWidget *prefs) {
+   GtkWidget *nb = lookup_widget(prefs, "preferences_notebook");
+   if (!nb || !GTK_IS_NOTEBOOK(nb)) return;
+
+   GtkWidget *page = gtk_vbox_new(FALSE, 8);
+   gtk_container_set_border_width(GTK_CONTAINER(page), 12);
+
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_build_sv_frame("Atom Pick Radius",
+                           graphics_info_t::pick_atom_dist_cutoff,
+                           set_pick_atom_distance_cutoff),
+      FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_build_sv_frame("Symmetry Atom Pick Radius",
+                           graphics_info_t::symm_pick_atom_dist_cutoff,
+                           set_symmetry_pick_atom_distance_cutoff),
+      FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_build_rg_frame("Intermediate Atom Pick Radius",
+                           graphics_info_t::intermediate_pick_far_cutoff,
+                           graphics_info_t::intermediate_pick_near_cutoff,
+                           set_intermediate_pick_distance_cutoffs),
+      FALSE, FALSE, 0);
+
+   GtkWidget *tab_label = gtk_label_new("Pick Atom");
+   gtk_notebook_append_page(GTK_NOTEBOOK(nb), page, tab_label);
+   gtk_widget_show(tab_label);
+   gtk_widget_show_all(page);
+
+   // Belong to the "Others" category: follow its radio tool-button and match
+   // its current state (so the page is hidden unless "Others" is selected).
+   GtkWidget *other_btn = lookup_widget(prefs, "preferences_other_radiotoolbutton");
+   if (other_btn && GTK_IS_TOGGLE_TOOL_BUTTON(other_btn)) {
+      g_signal_connect(other_btn, "toggled",
+                       G_CALLBACK(bandicoot_pick_atom_follow_other), page);
+      if (!gtk_toggle_tool_button_get_active(GTK_TOGGLE_TOOL_BUTTON(other_btn)))
+         gtk_widget_hide(page);
+   }
 }
 
 // Tailor the Refinement-Toolbar preferences for Bandicoot's native UI:
@@ -156,6 +450,9 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
       if (row && col && GTK_IS_BOX(col))
          gtk_box_set_child_packing(GTK_BOX(col), row, FALSE, FALSE, 0, GTK_PACK_START);
    }
+
+   // 3. Add the "Pick Atom" tab (atom-pick radius control).
+   bandicoot_add_pick_atom_tab(prefs);
 }
 #endif
 

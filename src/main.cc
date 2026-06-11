@@ -225,7 +225,9 @@ main (int argc, char *argv[]) {
       bandicoot_set_application_name();
 #endif
       gtk_init (&argc, &argv);
-      // activate to force icons in menus; cannot get it to work with 
+      // Bandicoot: restore the user's saved atom-pick radius (Preferences > Pick Atom)
+      bandicoot_load_pick_atom_radius();
+      // activate to force icons in menus; cannot get it to work with
       // cootrc. Bug?
       // seems to be neccessary to make sure the type is realized 
       // and we use newer g_object_set instead of deprecated (gtk3)

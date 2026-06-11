@@ -3688,6 +3688,16 @@ public:
    // ---- a debugging thing for user to give me feedback
    static int debug_atom_picking;
 
+   // Bandicoot: user-configurable atom-pick radii (Angstroms) - the maximum
+   // perpendicular distance from the click ray to an atom centre for a pick to
+   // succeed. Set via Preferences > Pick Atom. Defaults are the upstream values.
+   static double pick_atom_dist_cutoff;            // static model atoms (0.6)
+   static double symm_pick_atom_dist_cutoff;       // symmetry atoms (0.4)
+   // Intermediate (moving/refinement) atoms use a depth-weighted tolerance that
+   // interpolates from "near" at the front clip plane to "far" at the back.
+   static double intermediate_pick_near_cutoff;    // front/near tolerance (0.8)
+   static double intermediate_pick_far_cutoff;     // back/far  tolerance (0.04)
+
    // ---- default new atoms b factor
    static float default_new_atoms_b_factor;
 

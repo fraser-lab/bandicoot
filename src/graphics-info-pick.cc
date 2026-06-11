@@ -92,7 +92,7 @@ graphics_info_t::symmetry_atom_pick(const coot::Cartesian &front, const coot::Ca
 #endif 
    coot::Symm_Atom_Pick_Info_t p_i;
    p_i.success = GL_FALSE; // no atom found initially.
-   float dist, min_dist = 0.4;
+   float dist, min_dist = graphics_info_t::symm_pick_atom_dist_cutoff;  // Bandicoot configurable
 
    for (int imol=0; imol<n_molecules(); imol++) {
 
@@ -379,8 +379,8 @@ graphics_info_t::moving_atoms_atom_pick(short int pick_mode) const {
    // This is the signal that moving_atoms_asc is clear
    if (moving_atoms_asc->n_selected_atoms > 0) {
 
-      float m_front = 0.8;   // pickable distance
-      float m_back =  0.04;
+      float m_front = graphics_info_t::intermediate_pick_near_cutoff;  // Bandicoot configurable (near)
+      float m_back  = graphics_info_t::intermediate_pick_far_cutoff;   // Bandicoot configurable (far)
       float close_score_best = 999.9;
       float d_front_to_back = (back-front).amplitude();
 
