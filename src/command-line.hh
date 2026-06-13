@@ -31,10 +31,11 @@ public:
    bool disable_state_script_writing;
    bool use_splash_screen;
    bool update_self;
-   std::string alternate_splash_screen_file_name; 
+   std::string alternate_splash_screen_file_name;
    bool run_internal_tests_and_exit;
    bool em_mode;
-   command_line_data() { 
+   std::string pandda_dir;  // --pandda <dir>: open PanDDA Inspect on this folder
+   command_line_data() {
      hardware_stereo_flag = 0; // default off
      port = 0;
      try_listener = 0;

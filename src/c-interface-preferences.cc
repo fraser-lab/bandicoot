@@ -389,6 +389,213 @@ static void bandicoot_add_pick_atom_tab(GtkWidget *prefs) {
    }
 }
 
+// ---- Bandicoot "Ligands" preferences tab ----------------------------------
+// PanDDA Inspect's ligand auto-loader needs to know two project paths:
+//   * a dataset->ligand index CSV (columns "dataset id","ligand id")
+//   * a root directory of per-ligand .pdb/.cif subdirectories
+// They are stored as two lines (index path, cifs dir) in
+// ~/.coot-preferences/bandicoot-ligands and read DIRECTLY by the Python driver
+// (python/bandicoot_pandda.py) — no SWIG / C<->Python plumbing. This tab is the
+// editor. Designed to grow (more ligand settings later, e.g. a "starting state").
+static GtkWidget *bcoot_ligands_index_entry = NULL;
+static GtkWidget *bcoot_ligands_cifs_entry  = NULL;
+static GtkWidget *bcoot_ligands_split_yes   = NULL;   // "Ligand Splitting" Yes radio
+
+static std::string bandicoot_ligands_config_path() {
+   std::string dir = bandicoot_pick_radius_dir();   // ~/.coot-preferences
+   if (dir.empty()) return "";
+   return dir + "/bandicoot-ligands";
+}
+// File: line0 = index path (now unused/empty), line1 = cifs dir,
+//       line2 = "1"/"0" split-on-fitted-model-load flag. Read by the driver.
+static void bandicoot_save_ligands_config() {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::string fn = bandicoot_ligands_config_path();
+   std::ofstream f(fn.c_str());
+   if (!f) return;
+   const char *idx = bcoot_ligands_index_entry
+      ? gtk_entry_get_text(GTK_ENTRY(bcoot_ligands_index_entry)) : "";
+   const char *cif = bcoot_ligands_cifs_entry
+      ? gtk_entry_get_text(GTK_ENTRY(bcoot_ligands_cifs_entry)) : "";
+   const char *split = (bcoot_ligands_split_yes &&
+      gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(bcoot_ligands_split_yes))) ? "1" : "0";
+   f << (idx ? idx : "") << "\n" << (cif ? cif : "") << "\n" << split << "\n";
+}
+static void bandicoot_load_ligands_config(std::string &index_out, std::string &cifs_out,
+                                          bool &split_out) {
+   std::string fn = bandicoot_ligands_config_path();
+   if (fn.empty()) return;
+   std::ifstream f(fn.c_str());
+   if (!f) return;
+   std::getline(f, index_out);
+   std::getline(f, cifs_out);
+   std::string s;
+   if (std::getline(f, s)) split_out = (s == "1" || s == "Yes" || s == "true");
+}
+static void bcoot_ligands_entry_activate(GtkEntry *e, gpointer u) {
+   bandicoot_save_ligands_config();
+}
+static gboolean bcoot_ligands_entry_focus_out(GtkWidget *w, GdkEventFocus *ev, gpointer u) {
+   bandicoot_save_ligands_config();
+   return FALSE;
+}
+static void bcoot_ligands_split_toggled(GtkToggleButton *b, gpointer u) {
+   bandicoot_save_ligands_config();      // persist on either Yes/No toggle
+}
+
+// PanDDA UI-mode default, persisted in ~/.coot-preferences/bandicoot-pandda-uimode
+// as a single int: 0 = Full (pandda.inspect), 1 = Basic, 2 = Expanded. Read by
+// the PanDDA dialog when it opens (bandicoot_load_pandda_uimode, non-static).
+void bandicoot_save_pandda_uimode(int mode) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-pandda-uimode").c_str());
+   if (f) f << mode << std::endl;
+}
+int bandicoot_load_pandda_uimode() {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return 0;
+   std::ifstream f((dir + "/bandicoot-pandda-uimode").c_str());
+   int m = 0;
+   if (f && (f >> m) && m >= 0 && m <= 2) return m;
+   return 0;   // default = Full
+}
+static void bcoot_uimode_toggled(GtkToggleButton *b, gpointer data) {
+   if (gtk_toggle_button_get_active(b))
+      bandicoot_save_pandda_uimode(GPOINTER_TO_INT(data));
+}
+static void bcoot_ligands_browse_file(GtkButton *b, gpointer entry) {
+   GtkWidget *fc = gtk_file_chooser_dialog_new(
+      "Select ligand index CSV", NULL, GTK_FILE_CHOOSER_ACTION_OPEN,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OPEN,   GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkFileFilter *ff = gtk_file_filter_new();
+   gtk_file_filter_set_name(ff, "CSV files");
+   gtk_file_filter_add_pattern(ff, "*.csv");
+   gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(fc), ff);
+   if (gtk_dialog_run(GTK_DIALOG(fc)) == GTK_RESPONSE_ACCEPT) {
+      char *p = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
+      if (p) { gtk_entry_set_text(GTK_ENTRY(entry), p); g_free(p);
+               bandicoot_save_ligands_config(); }
+   }
+   gtk_widget_destroy(fc);
+}
+static void bcoot_ligands_browse_dir(GtkButton *b, gpointer entry) {
+   GtkWidget *fc = gtk_file_chooser_dialog_new(
+      "Select ligand CIFs directory", NULL, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OPEN,   GTK_RESPONSE_ACCEPT, (char *) NULL);
+   if (gtk_dialog_run(GTK_DIALOG(fc)) == GTK_RESPONSE_ACCEPT) {
+      char *p = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
+      if (p) { gtk_entry_set_text(GTK_ENTRY(entry), p); g_free(p);
+               bandicoot_save_ligands_config(); }
+   }
+   gtk_widget_destroy(fc);
+}
+
+// One "label | entry | Browse…" row in the ligand-sources table.
+static void bcoot_ligands_add_row(GtkWidget *tbl, int row, const char *label_text,
+                                  GtkWidget **entry_out, const char *cur,
+                                  void (*browse)(GtkButton *, gpointer)) {
+   GtkWidget *l = gtk_label_new(label_text);
+   gtk_misc_set_alignment(GTK_MISC(l), 0.0, 0.5);
+   GtkWidget *e = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(e), 36);
+   if (cur && *cur) gtk_entry_set_text(GTK_ENTRY(e), cur);
+   g_signal_connect(e, "activate", G_CALLBACK(bcoot_ligands_entry_activate), NULL);
+   g_signal_connect(e, "focus-out-event",
+                    G_CALLBACK(bcoot_ligands_entry_focus_out), NULL);
+   GtkWidget *btn = gtk_button_new_with_label("Browse\xe2\x80\xa6");
+   g_signal_connect(btn, "clicked", G_CALLBACK(browse), e);
+   gtk_table_attach(GTK_TABLE(tbl), l, 0, 1, row, row + 1, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(tbl), e, 1, 2, row, row + 1,
+                    (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(tbl), btn, 2, 3, row, row + 1, GTK_FILL, GTK_FILL, 0, 0);
+   *entry_out = e;
+}
+
+static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
+   GtkWidget *nb = lookup_widget(prefs, "preferences_notebook");
+   if (!nb || !GTK_IS_NOTEBOOK(nb)) return;
+
+   std::string cur_index, cur_cifs;
+   bool cur_split = false;
+   bandicoot_load_ligands_config(cur_index, cur_cifs, cur_split);
+   int cur_uimode = bandicoot_load_pandda_uimode();   // 0 Full, 1 Basic, 2 Expanded
+
+   GtkWidget *page = gtk_vbox_new(FALSE, 8);
+   gtk_container_set_border_width(GTK_CONTAINER(page), 12);
+
+   // ---- ligand sources (CIFs dir; index is auto-located by the driver) ----
+   (void) cur_index;
+   GtkWidget *tbl = gtk_table_new(1, 3, FALSE);
+   gtk_table_set_row_spacings(GTK_TABLE(tbl), 6);
+   gtk_table_set_col_spacings(GTK_TABLE(tbl), 6);
+   gtk_container_set_border_width(GTK_CONTAINER(tbl), 6);
+   bcoot_ligands_add_row(tbl, 0, "Ligand CIFs directory:", &bcoot_ligands_cifs_entry,
+                         cur_cifs.c_str(), bcoot_ligands_browse_dir);
+
+   GtkWidget *frame = gtk_frame_new("PanDDA ligand sources");
+   gtk_container_add(GTK_CONTAINER(frame), tbl);
+   gtk_box_pack_start(GTK_BOX(page), frame, FALSE, FALSE, 0);
+
+   // ---- Ligand Splitting on Fitted-Model Load (Yes/No, default No) ----
+   {
+      GtkWidget *sf = gtk_frame_new("Ligand Splitting on Fitted-Model Load");
+      GtkWidget *sb = gtk_hbox_new(FALSE, 12);
+      gtk_container_set_border_width(GTK_CONTAINER(sb), 6);
+      GtkWidget *syes = gtk_radio_button_new_with_label(NULL, "Yes");
+      GtkWidget *sno  = gtk_radio_button_new_with_label_from_widget(
+                           GTK_RADIO_BUTTON(syes), "No");
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cur_split ? syes : sno), TRUE);
+      g_signal_connect(syes, "toggled", G_CALLBACK(bcoot_ligands_split_toggled), NULL);
+      gtk_box_pack_start(GTK_BOX(sb), syes, FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(sb), sno,  FALSE, FALSE, 0);
+      gtk_container_add(GTK_CONTAINER(sf), sb);
+      gtk_box_pack_start(GTK_BOX(page), sf, FALSE, FALSE, 0);
+      bcoot_ligands_split_yes = syes;
+   }
+
+   // ---- UI Mode (Basic / Full / Expanded; Expanded is wired up in 0.1.4.1) ----
+   {
+      GtkWidget *uf = gtk_frame_new("UI Mode");
+      GtkWidget *ub = gtk_hbox_new(FALSE, 12);
+      gtk_container_set_border_width(GTK_CONTAINER(ub), 6);
+      GtkWidget *basic = gtk_radio_button_new_with_label(NULL, "Basic");
+      GtkWidget *full  = gtk_radio_button_new_with_label_from_widget(
+                            GTK_RADIO_BUTTON(basic), "Full");
+      GtkWidget *exp   = gtk_radio_button_new_with_label_from_widget(
+                            GTK_RADIO_BUTTON(basic), "Expanded");
+      GtkWidget *active = (cur_uimode == 1) ? basic : (cur_uimode == 2) ? exp : full;
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(active), TRUE);
+      g_signal_connect(basic, "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(1));
+      g_signal_connect(full,  "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(0));
+      g_signal_connect(exp,   "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(2));
+      gtk_box_pack_start(GTK_BOX(ub), basic, FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(ub), full,  FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(ub), exp,   FALSE, FALSE, 0);
+      gtk_container_add(GTK_CONTAINER(uf), ub);
+      gtk_box_pack_start(GTK_BOX(page), uf, FALSE, FALSE, 0);
+   }
+
+   GtkWidget *tab_label = gtk_label_new("Ligands");
+   gtk_notebook_append_page(GTK_NOTEBOOK(nb), page, tab_label);
+   gtk_widget_show(tab_label);
+   gtk_widget_show_all(page);
+
+   // Belong to the "Others" category (reuse the Pick Atom show/hide follower).
+   GtkWidget *other_btn = lookup_widget(prefs, "preferences_other_radiotoolbutton");
+   if (other_btn && GTK_IS_TOGGLE_TOOL_BUTTON(other_btn)) {
+      g_signal_connect(other_btn, "toggled",
+                       G_CALLBACK(bandicoot_pick_atom_follow_other), page);
+      if (!gtk_toggle_tool_button_get_active(GTK_TOGGLE_TOOL_BUTTON(other_btn)))
+         gtk_widget_hide(page);
+   }
+}
+
 // Tailor the Refinement-Toolbar preferences for Bandicoot's native UI:
 //  - drop the "Main Toolbar" tab (we use the native macOS Customize Toolbar);
 //  - replace the "Show Toolbar?" frame (show/hide + screen-edge position, none
@@ -453,6 +660,9 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
 
    // 3. Add the "Pick Atom" tab (atom-pick radius control).
    bandicoot_add_pick_atom_tab(prefs);
+
+   // 4. Add the "Ligands" tab (PanDDA ligand-source paths).
+   bandicoot_add_ligands_tab(prefs);
 }
 #endif
 

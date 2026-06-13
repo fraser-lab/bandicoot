@@ -1423,7 +1423,7 @@ create_window1 (void)
 
   pandda_inspect1 = gtk_menu_item_new_with_mnemonic ("PanDDA Inspect...");
   gtk_widget_show (pandda_inspect1);
-  gtk_container_add (GTK_CONTAINER (validate1_menu), pandda_inspect1);
+  gtk_container_add (GTK_CONTAINER (calculate1_menu), pandda_inspect1);
 
   help1 = gtk_menu_item_new_with_mnemonic ("About");
   gtk_widget_show (help1);

@@ -156,6 +156,18 @@ int setup_database();
 #include "sound.hh"
 
 
+#ifdef __APPLE__
+// --pandda <dir>: open PanDDA Inspect on a results folder once the GTK loop is
+// running (deferred via a one-shot idle so the main window is realized first).
+extern "C" void bandicoot_pandda_dialog_with_folder(const char *dir);
+static gboolean bandicoot_pandda_idle_open(gpointer data) {
+   char *dir = (char *) data;
+   bandicoot_pandda_dialog_with_folder(dir);
+   g_free(dir);
+   return FALSE;   // one-shot
+}
+#endif
+
 // This main is used for both python/guile useage and unscripted.
 int
 main (int argc, char *argv[]) {
@@ -636,6 +648,10 @@ main (int argc, char *argv[]) {
 #if ! defined (USE_GUILE)
 #ifdef USE_PYTHON
    run_command_line_scripts();
+#ifdef __APPLE__
+   if (!cld.pandda_dir.empty() && graphics_info_t::use_graphics_interface_flag)
+      g_idle_add(bandicoot_pandda_idle_open, g_strdup(cld.pandda_dir.c_str()));
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       // v0.1.0.0: release the GIL around gtk_main so Python threads can
       // actually run. Without this, daemon threads spawned by injected

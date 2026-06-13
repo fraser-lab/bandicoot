@@ -85,6 +85,49 @@ def _fix_ccp4_map(path, centre):
         return None
 
 
+# Standard residue / solvent codes; anything else in a HETATM record is treated
+# as a modelled ligand when splitting a fitted model (from the shim).
+_STANDARD_RESIDUES = frozenset([
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE", "LEU",
+    "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "MSE",
+    "HOH", "WAT", "SO4", "PO4", "GOL", "EDO", "PEG", "MPD", "NA", "CL", "MG", "ZN",
+])
+
+
+def _rename_pdb_residue(src_path, new_code):
+    """Temp PDB with residue name LIG replaced by new_code (cols 18-20). The
+    original file is never touched. Returns the temp path (or src on failure)."""
+    try:
+        with open(src_path) as f:
+            lines = f.readlines()
+        out = []
+        for ln in lines:
+            if ln[:6].rstrip() in ("ATOM", "HETATM", "ANISOU", "TER") \
+               and len(ln) > 20 and ln[17:20] == "LIG":
+                ln = ln[:17] + new_code + ln[20:]
+            out.append(ln)
+        fd, tmp = tempfile.mkstemp(suffix="_" + new_code + ".pdb")
+        with os.fdopen(fd, "w") as f:
+            f.writelines(out)
+        return tmp
+    except Exception:
+        return src_path
+
+
+def _rename_cif_residue(src_path, new_code):
+    """Temp CIF with LIG replaced by new_code (LIG only appears as the compound
+    id). Returns the temp path (or src on failure)."""
+    try:
+        with open(src_path) as f:
+            content = f.read()
+        fd, tmp = tempfile.mkstemp(suffix="_" + new_code + ".cif")
+        with os.fdopen(fd, "w") as f:
+            f.write(content.replace("LIG", new_code))
+        return tmp
+    except Exception:
+        return src_path
+
+
 class PanddaInspect(object):
 
     _ALIASES = {
@@ -96,6 +139,7 @@ class PanddaInspect(object):
         "high_resolution": "resolution", "analysed_resolution": "resolution",
         "r_free": "r_free", "r_work": "r_work",
         "cluster_size": "cluster_size",
+        "z_peak": "z_peak", "map_uncertainty": "map_uncertainty",
     }
 
     # pandda_inspect_events.csv annotation columns (appended to the analyse CSV),
@@ -129,16 +173,28 @@ class PanddaInspect(object):
         self.pos = 0                  # position within self.order
         self.index = 0                # = self.order[self.pos] (current elist row)
         self._csv_backed_up = False
+        # site annotations (pandda_inspect_sites.csv): Name/Comment per site_idx
+        self.sitesCSV = None
+        self.slist = []               # rows of the sites CSV (incl. header)
+        self.scol = {}                # sites-CSV column name -> index
+        self._sites_backed_up = False
+        # ligand auto-loader config (from ~/.coot-preferences/bandicoot-ligands)
+        self._lig_index = {}          # dtag -> ligand_id
+        self._lig_cifs_dir = None     # root of per-ligand isomer directories
+        self._split_on_load = False   # split fitted models into protein+ligand mols
         self.reset_event()
 
     def reset_event(self):
         self.xtal = self.event = self.site = self.bdc = None
         self.x = self.y = self.z = None
         self.resolution = self.r_free = self.r_work = None
+        self.z_peak = self.cluster_size = self.map_uncertainty = None
         self.pdb = self.emap = self.zmap = self.ligcif = None
         self.merged = False
+        self._lig_cycle = -1          # index into the open_next_ligand candidate list
+        self._lig_mols = []           # all shim-loaded/split ligand molecules
         self.mol = {"protein": None, "emap": None, "zmap": None, "ligand": None,
-                    "xray": None, "average": None}
+                    "xray": None, "average": None, "compare": None}
 
     def _ensure_view_setup(self):
         if not self._view_setup_done:
@@ -154,6 +210,7 @@ class PanddaInspect(object):
         if not path or not os.path.isdir(path):
             return self._msg("PanDDA: not a folder: %s" % path)
         self.panddaDir = os.path.realpath(path)
+        self._load_ligand_config()    # needs panddaDir for the project-relative index
         self.analysis_folder = None
         for sub in ("analyses", "results", "analysis"):
             cand = os.path.join(self.panddaDir, sub)
@@ -191,10 +248,101 @@ class PanddaInspect(object):
         if src != self.eventCSV:          # just seeded -> write the inspect copy
             self._save_csv()
 
+        self._load_sites()
         self.order = list(range(1, len(self.elist)))   # all events, file order
         self.pos = 0
         self._ensure_view_setup()
         return self._load_pos()
+
+    # ---- site annotations (pandda_inspect_sites.csv) ---------------------
+    def _load_sites(self):
+        """Parse pandda_inspect_sites.csv (the working copy with Name/Comment),
+        seeding it from pandda_analyse_sites.csv if absent. Best-effort: site
+        annotation is optional, so any failure just leaves it disabled."""
+        self.sitesCSV = self.slist = None
+        self.slist = []
+        self.scol = {}
+        self._sites_backed_up = False
+        if not self.analysis_folder:
+            return
+        self.sitesCSV = os.path.join(self.analysis_folder, "pandda_inspect_sites.csv")
+        src = self.sitesCSV
+        if not os.path.isfile(src):
+            src = os.path.join(self.analysis_folder, "pandda_analyse_sites.csv")
+            if not os.path.isfile(src):
+                self.sitesCSV = None
+                return
+        try:
+            with open(src) as f:
+                self.slist = list(csv.reader(f))
+        except Exception:
+            self.sitesCSV = None
+            self.slist = []
+            return
+        if len(self.slist) < 1:
+            self.sitesCSV = None
+            return
+        header = self.slist[0]
+        for name in ("Name", "Comment"):
+            if name not in header:
+                header.append(name)
+                for row in self.slist[1:]:
+                    row.append("None")
+        for n, name in enumerate(header):
+            self.scol[name] = n
+        if src != self.sitesCSV:          # just seeded -> write the inspect copy
+            self._save_sites()
+
+    def _save_sites(self):
+        if not self.sitesCSV:
+            return
+        try:
+            if not self._sites_backed_up and os.path.isfile(self.sitesCSV):
+                import shutil
+                bak = self.sitesCSV + ".bcoot-bak"
+                if not os.path.isfile(bak):
+                    shutil.copyfile(self.sitesCSV, bak)
+            self._sites_backed_up = True
+            with open(self.sitesCSV, "w", newline="") as f:
+                csv.writer(f).writerows(self.slist)
+        except Exception as e:
+            print("PanDDA: sites CSV save failed (%s)" % e)
+
+    def _site_row(self):
+        """The current site's row in self.slist, or None."""
+        if not self.slist or "site_idx" not in self.scol or self.site is None:
+            return None
+        k = self.scol["site_idx"]
+        for row in self.slist[1:]:
+            if k < len(row) and row[k] == str(self.site):
+                return row
+        return None
+
+    def _site_get(self, name, default="None"):
+        row = self._site_row()
+        n = self.scol.get(name)
+        if row is None or n is None or n >= len(row):
+            return default
+        return row[n] or default
+
+    def _site_set(self, name, value):
+        row = self._site_row()
+        n = self.scol.get(name)
+        if row is None or n is None:
+            return
+        while len(row) <= n:
+            row.append("")
+        row[n] = value
+        self._save_sites()
+
+    def get_site_name(self):    return self._site_get("Name")
+    def set_site_name(self, s):
+        s = (s or "").strip()
+        self._site_set("Name", s if s else "None"); return self.status()
+    def get_site_comment(self): return self._site_get("Comment")
+    def set_site_comment(self, s):
+        s = (s or "").strip()
+        self._site_set("Comment", s if s else "None"); return self.status()
 
     # ---- annotation columns + CSV writeback ------------------------------
     def _ensure_annotation_columns(self):
@@ -258,6 +406,44 @@ class PanddaInspect(object):
     def set_comment(self, s):
         s = (s or "").strip()
         self._annot_set("comment", s if s else "None"); return self.status()
+    def get_placed(self):      return self._annot_get("placed", "False")
+    def set_placed(self, on):
+        # the inspect-UI "Ligand Placed / No Ligand Placed" radio, independent of Save
+        self._annot_set("placed", "True" if on else "False"); return self.status()
+
+    # ---- state queries for the inspect UI --------------------------------
+    def is_loaded(self):
+        return "True" if self.order else "False"
+
+    def get_map_state(self):
+        # "emap|zmap|xray|average" booleans, so a rebuilt panel's map
+        # checkboxes can reflect what is actually displayed.
+        return "%s|%s|%s|%s" % (self.show_emap, self.show_zmap,
+                                self.show_xray, self.show_average)
+
+    def progress(self):
+        # "event_pos|event_total|site_pos|site_total" for the inspect header
+        if not self.order:
+            return "0|0|0|0"
+        sites = self._sites_in_order()
+        cur = self.elist[self.index][self.col["site"]] if (
+            "site" in self.col and self.index > 0) else None
+        try:
+            si = sites.index(cur) + 1
+        except (ValueError, TypeError):
+            si = 0
+        return "%d|%d|%d|%d" % (self.pos + 1, len(self.order), si, len(sites))
+
+    def _sites_in_order(self):
+        if "site" not in self.col:
+            return []
+        k = self.col["site"]
+        sites = []
+        for ri in self.order:
+            s = self.elist[ri][k]
+            if s not in sites:
+                sites.append(s)
+        return sites
 
     # ---- event selection / sorting / filtering ---------------------------
     def set_selection(self, criterion):
@@ -273,6 +459,23 @@ class PanddaInspect(object):
                 except (ValueError, IndexError):
                     return 0.0
             rows.sort(key=csize, reverse=True)
+        elif c.startswith("sort by z") and "z_peak" in self.col and "dtag" in self.col:
+            # shim's default order: datasets by their max z-peak desc, then
+            # events within a dataset by z-peak desc (keeps a dataset together).
+            zk = self.col["z_peak"]
+            dk = self.col["dtag"]
+            def zval(i):
+                try:
+                    return float(self.elist[i][zk])
+                except (ValueError, IndexError):
+                    return float("-inf")
+            dmax = {}
+            for i in rows:
+                d = self.elist[i][dk]
+                z = zval(i)
+                if d not in dmax or z > dmax[d]:
+                    dmax[d] = z
+            rows.sort(key=lambda i: (-dmax[self.elist[i][dk]], -zval(i)))
         elif c.startswith("sort alpha") and "dtag" in self.col:
             k = self.col["dtag"]
             rows.sort(key=lambda i: self.elist[i][k])
@@ -282,6 +485,8 @@ class PanddaInspect(object):
             rows = [i for i in rows if self._row(i, "interesting") == "True"]
         elif c.startswith("not modelled"):
             rows = [i for i in rows if not self._is_modelled(i)]
+        elif c.startswith("modelled"):
+            rows = [i for i in rows if self._is_modelled(i)]
         if not rows:
             return self._msg("PanDDA: no events match '%s'" % criterion)
         self.order = rows
@@ -345,11 +550,7 @@ class PanddaInspect(object):
         if "site" not in self.col:
             return self._msg("PanDDA: event CSV has no site column")
         k = self.col["site"]
-        sites = []                              # unique site ids, in view order
-        for ri in self.order:
-            s = self.elist[ri][k]
-            if s not in sites:
-                sites.append(s)
+        sites = self._sites_in_order()          # unique site ids, in view order
         cur = self.elist[self.index][k] if self.index > 0 else ""
         try:
             i = sites.index(cur)
@@ -362,6 +563,27 @@ class PanddaInspect(object):
                 self.index = ri
                 break
         return self._load_current()
+
+    def next_unviewed(self):
+        return self._go_match(lambda i: self._row(i, "viewed") != "True",
+                              "no more unviewed events")
+
+    def next_modelled(self):
+        return self._go_match(lambda i: self._is_modelled(i),
+                              "no modelled events ahead")
+
+    def _go_match(self, pred, none_msg):
+        """Advance to the next event (wrapping) whose elist row matches pred."""
+        if not self.order:
+            return self._msg("PanDDA: no events in current selection")
+        n = len(self.order)
+        for off in range(1, n + 1):
+            p = (self.pos + off) % n
+            if pred(self.order[p]):
+                self.pos = p
+                self.index = self.order[p]
+                return self._load_current()
+        return self._msg("PanDDA: %s" % none_msg)
 
     def dataset_list(self):
         # unique dataset codes (dtags) in current view order, newline-joined
@@ -433,6 +655,119 @@ class PanddaInspect(object):
         return self.status()
 
     # ---- ligand modelling ------------------------------------------------
+    # ---- ligand auto-loader (Preferences > Others > Ligands) -------------
+    def _load_ligand_config(self):
+        """Resolve the ligand index CSV + cifs dir for the auto-loader.
+
+        The index is PROJECT-specific, so it is hardcoded (for now) to
+        'dataset_ligand_index.csv' one level up from the selected PanDDA folder
+        (i.e. in the project folder); the Ligands-prefs index path is only a
+        fallback. The cifs dir (a shared ligand library) comes from the
+        Preferences > Others > Ligands tab. Best-effort: missing config just
+        disables the auto-loader."""
+        self._lig_index = {}
+        self._lig_cifs_dir = None
+        self._split_on_load = False
+        # prefs file lines: 0 index(unused) | 1 cifs dir | 2 split flag "1"/"0"
+        cfg_index = ""
+        cfg = os.path.expanduser("~/.coot-preferences/bandicoot-ligands")
+        try:
+            with open(cfg) as f:
+                lines = f.read().splitlines()
+            cfg_index = lines[0].strip() if len(lines) > 0 else ""
+            cifs_dir = lines[1].strip() if len(lines) > 1 else ""
+            if cifs_dir and os.path.isdir(cifs_dir):
+                self._lig_cifs_dir = cifs_dir
+            split = lines[2].strip() if len(lines) > 2 else ""
+            self._split_on_load = split in ("1", "Yes", "true")   # default No
+        except Exception:
+            pass
+        # project-relative index (one up from the pandda folder) wins
+        index_path = ""
+        if self.panddaDir:
+            proj = os.path.join(os.path.dirname(self.panddaDir),
+                                "dataset_ligand_index.csv")
+            if os.path.isfile(proj):
+                index_path = proj
+        if not index_path and cfg_index and os.path.isfile(cfg_index):
+            index_path = cfg_index            # fallback to the prefs path
+        if index_path:
+            self._lig_index = self._parse_ligand_index(index_path)
+
+    def _parse_ligand_index(self, path):
+        """CSV with columns 'dataset id' and 'ligand id' (shim format); lenient
+        about 'dtag'/'ligand' synonyms. Returns {dtag: ligand_id}."""
+        out = {}
+        try:
+            with open(path) as f:
+                rows = list(csv.reader(f))
+            if not rows:
+                return out
+            hdr = [h.strip().lower() for h in rows[0]]
+            def col(*names, **kw):
+                for n in names:
+                    if n in hdr:
+                        return hdr.index(n)
+                return kw.get("default")
+            di = col("dataset id", "dtag", "dataset", default=0)
+            li = col("ligand id", "ligand", "ligand_id", default=1)
+            for r in rows[1:]:
+                if len(r) > max(di, li):
+                    d = r[di].strip()
+                    lg = r[li].strip()
+                    if d and lg:
+                        out[d] = lg
+        except Exception as e:
+            print("PanDDA: could not read ligand index (%s)" % e)
+        return out
+
+    @staticmethod
+    def _stereo_suffix(dir_basename):
+        """Trailing R/S stereo token of a dir name (e.g. 'R','RS','RRR'), else
+        None. Case-insensitive (handles lowercase 'rr'/'ss' directories)."""
+        last = dir_basename.split("_")[-1].upper()
+        if last and all(c in "RS" for c in last):
+            return last
+        return None
+
+    @staticmethod
+    def _stereo_to_code(stereo):
+        """Map a stereo suffix to a unique 3-letter PDB residue code."""
+        if len(stereo) == 1:
+            return "LI" + stereo          # R->LIR, S->LIS
+        if len(stereo) == 2:
+            return "L" + stereo           # RR->LRR, RS->LRS, ...
+        return stereo[:3]                 # RRR..SSS used as-is
+
+    def _resolve_isomer_files(self, idir):
+        """(pdb, cif) for an isomer dir, preferring the {base}-1 tautomer files."""
+        base = os.path.basename(idir)
+        taut_pdb = os.path.join(idir, base + "-1.pdb")
+        taut_cif = os.path.join(idir, base + "-1.cif")
+        pdb = taut_pdb if os.path.isfile(taut_pdb) else os.path.join(idir, base + ".pdb")
+        cif = taut_cif if os.path.isfile(taut_cif) else os.path.join(idir, base + ".cif")
+        return pdb, cif
+
+    def _resolve_isomer_dirs(self, dtag):
+        """Isomer directories for a dataset's ligand_id: an exact {ligand_id}
+        directory, else all {ligand_id}_{stereo} directories."""
+        if not self._lig_cifs_dir:
+            return []
+        lig_id = self._lig_index.get(dtag)
+        if not lig_id:
+            return []
+        exact = os.path.join(self._lig_cifs_dir, lig_id)
+        if os.path.isdir(exact):
+            return [exact]
+        prefix = lig_id + "_"
+        try:
+            return sorted(os.path.join(self._lig_cifs_dir, e)
+                          for e in os.listdir(self._lig_cifs_dir)
+                          if e.startswith(prefix)
+                          and os.path.isdir(os.path.join(self._lig_cifs_dir, e)))
+        except OSError:
+            return []
+
     def _find_ligand_cif(self):
         """The expected ligand restraints .cif for this dataset/event: the
         event-specific rhofit result first, else the dataset's ligand_files/."""
@@ -448,19 +783,12 @@ class PanddaInspect(object):
         return None
 
     def _load_ligand(self):
-        """Read the ligand dictionary + coords; return its imol (or None)."""
-        cif = self._find_ligand_cif()
-        if not cif:
+        """Lazy-load the first available ligand candidate; return imol (or None)."""
+        cands = self._ligand_candidates()
+        if not cands:
             return None
-        pdb = cif[:-4] + ".pdb" if cif.endswith(".cif") else None
-        if not pdb or not os.path.isfile(pdb):
-            return None
-        self.ligcif = cif
-        coot.read_cif_dictionary(cif)
-        imol = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
-        self.mol["ligand"] = imol
-        self._set_ligand_occupancy(imol)
-        return imol
+        coord, cif, code = cands[0]
+        return self._open_candidate(coord, cif, code)
 
     def _set_ligand_occupancy(self, imol):
         # match pandda.inspect: ligand occupancy = (1-BDC). Harmless no-op if the
@@ -555,31 +883,196 @@ class PanddaInspect(object):
         coot.graphics_draw()
         return self.status()
 
+    def _no_ligand_reason(self):
+        """A specific explanation for why the auto-loader found no ligand for the
+        current dataset (so the 'no ligand' message is diagnosable)."""
+        self._load_ligand_config()        # reflect any just-edited prefs path
+        if not self._lig_cifs_dir:
+            return ("no ligand CIFs directory set "
+                    "(Preferences > Others > Ligands) for %s" % self.xtal)
+        if not self._lig_index:
+            return ("no dataset_ligand_index.csv found (expected one level above "
+                    "the pandda folder) for %s" % self.xtal)
+        lig_id = self._lig_index.get(self.xtal)
+        if not lig_id:
+            return "%s is not listed in the ligand index" % self.xtal
+        dirs = self._resolve_isomer_dirs(self.xtal)
+        if not dirs:
+            return ("%s maps to ligand '%s' but no '%s'[_stereo] directory exists "
+                    "under %s" % (self.xtal, lig_id, lig_id, self._lig_cifs_dir))
+        return ("ligand '%s' directory found (%s) but no .pdb/.cif inside"
+                % (lig_id, ", ".join(os.path.basename(d) for d in dirs)))
+
+    def _ligand_candidates(self):
+        """Ligand coordinate files for this dataset/event as (coord, cif, code)
+        triples. Auto-loader isomers (from the Ligands prefs config, stereo-coded
+        + tautomer-preferred) come first, then the event rhofit result, then the
+        dataset's ligand_files/."""
+        self._load_ligand_config()        # pick up any just-edited Ligands prefs path
+        cands = []
+        seen = set()
+        def add(coord, cif, code="LIG"):
+            if coord and os.path.isfile(coord) and coord not in seen:
+                seen.add(coord)
+                cands.append((coord, cif if (cif and os.path.isfile(cif)) else None, code))
+        # auto-loader: isomer directories for this dataset's ligand_id
+        for idir in self._resolve_isomer_dirs(self.xtal):
+            sfx = self._stereo_suffix(os.path.basename(idir))
+            code = self._stereo_to_code(sfx) if sfx else "LIG"
+            pdb, cif = self._resolve_isomer_files(idir)
+            add(pdb, cif, code)
+        if self.event:
+            for d in self._candidate_dirs():
+                best = os.path.join(d, self.event, "rhofit", "best.pdb")
+                add(best, os.path.join(d, self.event, "rhofit", "best.cif"))
+        for d in self._candidate_dirs():
+            for pdb in sorted(glob.glob(os.path.join(d, "ligand_files", "*.pdb"))):
+                add(pdb, pdb[:-4] + ".cif")
+            for cif in sorted(glob.glob(os.path.join(d, "ligand_files", "*.cif"))):
+                sib = cif[:-4] + ".pdb"     # .cif may carry coords itself
+                add(sib if os.path.isfile(sib) else cif, cif)
+        return cands
+
+    def _open_candidate(self, coord, cif, code):
+        """Load one ligand candidate, renaming LIG->stereo code on the fly for
+        multi-isomer ligands (originals untouched). Tracks the imol in
+        self._lig_mols and sets it as the current ligand. Returns imol or None."""
+        load_pdb = _rename_pdb_residue(coord, code) if code != "LIG" else coord
+        load_cif = None
+        if cif:
+            self.ligcif = cif
+            load_cif = _rename_cif_residue(cif, code) if code != "LIG" else cif
+            coot.read_cif_dictionary(load_cif)
+        imol = coot.handle_read_draw_molecule_with_recentre(load_pdb, 0)
+        # temp renamed files are parsed into memory now -> remove them
+        if load_pdb != coord:
+            try: os.remove(load_pdb)
+            except OSError: pass
+        if load_cif and cif and load_cif != cif:
+            try: os.remove(load_cif)
+            except OSError: pass
+        if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
+            return None
+        self.mol["ligand"] = imol
+        if imol not in self._lig_mols:
+            self._lig_mols.append(imol)
+        self._set_ligand_occupancy(imol)
+        return imol
+
+    def open_next_ligand(self):
+        """Load the next available ligand coordinate file, cycling through them."""
+        if not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        cands = self._ligand_candidates()
+        if not cands:
+            return self._msg("PanDDA: %s" % self._no_ligand_reason())
+        self._lig_cycle = (self._lig_cycle + 1) % len(cands)
+        coord, cif, code = cands[self._lig_cycle]
+        old = self.mol.get("ligand")
+        if old is not None and old >= 0 and coot.is_valid_model_molecule(old):
+            coot.close_molecule(old)
+            if old in self._lig_mols:
+                self._lig_mols.remove(old)
+        imol = self._open_candidate(coord, cif, code)
+        if imol is None:
+            return self._msg("PanDDA: could not read %s" % os.path.basename(coord))
+        coot.graphics_draw()
+        return self._msg("PanDDA: ligand %d/%d  %s"
+                         % (self._lig_cycle + 1, len(cands), os.path.basename(coord)))
+
+    def reload_saved_model(self):
+        """Reload the last saved <dtag>-pandda-model.pdb (else the input model)."""
+        if not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        saved = self._find(
+            os.path.join("modelled_structures", "%s-pandda-model.pdb" % self.xtal))
+        path = saved or self._find("%s-pandda-input.pdb" % self.xtal)
+        if not path:
+            return self._msg("PanDDA: no model to reload for %s" % self.xtal)
+        return self._replace_protein(path,
+                                     "reloaded %s" % os.path.basename(path))
+
+    def reset_to_unfitted(self):
+        """Discard edits: reload the original <dtag>-pandda-input.pdb."""
+        if not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        path = self._find("%s-pandda-input.pdb" % self.xtal)
+        if not path:
+            return self._msg("PanDDA: no unfitted model for %s" % self.xtal)
+        return self._replace_protein(path, "reset to unfitted model")
+
+    def _replace_protein(self, path, note):
+        old = self.mol.get("protein")
+        if old is not None and old >= 0 and coot.is_valid_model_molecule(old):
+            coot.close_molecule(old)
+        coot.set_nomenclature_errors_on_read("ignore")
+        self.pdb = path
+        self.mol["protein"] = coot.handle_read_draw_molecule_with_recentre(path, 0)
+        self.merged = False
+        coot.set_rotation_centre(self.x, self.y, self.z)
+        coot.graphics_draw()
+        return self._msg("PanDDA: %s" % note)
+
+    def load_unfitted_comparison(self):
+        """Load <dtag>-pandda-input.pdb as an extra molecule for comparison only,
+        without replacing the working model."""
+        if not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        path = self._find("%s-pandda-input.pdb" % self.xtal)
+        if not path:
+            return self._msg("PanDDA: no unfitted model for %s" % self.xtal)
+        old = self.mol.get("compare")
+        if old is not None and old >= 0 and coot.is_valid_model_molecule(old):
+            coot.close_molecule(old)
+        coot.set_nomenclature_errors_on_read("ignore")
+        self.mol["compare"] = coot.handle_read_draw_molecule_with_recentre(path, 0)
+        coot.graphics_draw()
+        return self._msg("PanDDA: loaded comparison model %s" % os.path.basename(path))
+
     def place_ligand(self):
         if not self.elist:
             return self._msg("PanDDA: no folder loaded")
         imol = self.mol.get("ligand")
-        if imol is None or imol < 0:
-            imol = self._load_ligand()              # lazy-load on first Place
+        # re-load if there's no current ligand, or the previous one was deleted
+        # (a stale imol would crash _centre_molecule_on_view).
+        if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
+            imol = self._load_ligand()              # lazy-load / reload
             if imol is None or imol < 0:
-                return self._msg("PanDDA: no ligand file (ligand_files/*.cif) for %s" % self.xtal)
+                return self._msg("PanDDA: %s" % self._no_ligand_reason())
         self._centre_molecule_on_view(imol)
         coot.graphics_draw()
         return self.status()
 
     def merge_ligand(self):
-        lig = self.mol.get("ligand")
         prot = self.mol.get("protein")
-        if lig is None or lig < 0:
-            return self._msg("PanDDA: no ligand to merge (Place Ligand first)")
         if prot is None or prot < 0:
             return self._msg("PanDDA: no model loaded to merge into")
-        coot.merge_molecules_py([lig], prot)
-        coot.close_molecule(lig)
+        # merge only DISPLAYED ligand molecules, so hidden isomers (the ones you
+        # decided against) are excluded -- toggle them off before merging.
+        to_merge = []
+        for m in list(self._lig_mols):
+            if m is not None and m >= 0 and coot.is_valid_model_molecule(m):
+                try:
+                    shown = coot.mol_is_displayed(m)
+                except Exception:
+                    shown = 1
+                if shown:
+                    to_merge.append(m)
+        if not to_merge:                      # back-compat: the single current ligand
+            lig = self.mol.get("ligand")
+            if lig is not None and lig >= 0 and coot.is_valid_model_molecule(lig):
+                to_merge = [lig]
+        if not to_merge:
+            return self._msg("PanDDA: no displayed ligand to merge (Place/Open a ligand first)")
+        coot.merge_molecules_py(to_merge, prot)
+        for m in to_merge:
+            coot.close_molecule(m)
+            if m in self._lig_mols:
+                self._lig_mols.remove(m)
         self.mol["ligand"] = None
         self.merged = True
         coot.graphics_draw()
-        return self.status()
+        return self._msg("PanDDA: merged %d ligand(s) into the model" % len(to_merge))
 
     def save_model(self):
         if not self.elist:
@@ -633,6 +1126,9 @@ class PanddaInspect(object):
         self.resolution = self._cell("resolution", "?")
         self.r_free = self._cell("r_free", "?")
         self.r_work = self._cell("r_work", "?")
+        self.z_peak = self._cell("z_peak", "?")
+        self.cluster_size = self._cell("cluster_size", "?")
+        self.map_uncertainty = self._cell("map_uncertainty", "?")
         try:
             self.x = float(self._cell("x"))
             self.y = float(self._cell("y"))
@@ -713,7 +1209,76 @@ class PanddaInspect(object):
             return
         self.pdb = pdb
         coot.set_nomenclature_errors_on_read("ignore")
+        # Optional (Preferences > Others > Ligands, default OFF): a fitted model
+        # has ligand(s) merged in; split them into separate molecules so real-
+        # space refinement has no protein-ligand LJ clashes (use Merge Ligand
+        # With Model before saving). Only for already-modelled structures.
+        self._load_ligand_config()        # pick up the latest split-on-load pref
+        if self._split_on_load and "modelled_structures" in pdb:
+            prot = self._split_fitted_model(pdb)
+            if prot is not None:
+                self.mol["protein"] = prot
+                return
         self.mol["protein"] = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
+
+    def _split_fitted_model(self, filename):
+        """Parse a fitted model file, splitting non-standard ligand residues into
+        their own molecules. Loads a protein-only model (returned) plus one
+        molecule per ligand residue (tracked in self._lig_mols). Returns the
+        protein-only imol, or None when there are no ligands to split."""
+        cryst1 = ""
+        prot_lines = []
+        res_lines = {}                    # (chain,resseq,icode,code) -> [lines]
+        try:
+            with open(filename) as f:
+                for ln in f:
+                    if ln.startswith("CRYST1"):
+                        cryst1 = ln
+                        prot_lines.append(ln)
+                        continue
+                    if ln[:6] in ("HETATM", "ANISOU") and len(ln) >= 20:
+                        code = ln[17:20].strip()
+                        if code not in _STANDARD_RESIDUES:
+                            if len(ln) >= 27:
+                                key = (ln[21], ln[22:26].strip(), ln[26].strip(), code)
+                                res_lines.setdefault(key, []).append(ln)
+                            continue       # exclude from protein PDB
+                    prot_lines.append(ln)
+        except Exception as e:
+            print("PanDDA: could not parse fitted model (%s)" % e)
+            return None
+        if not res_lines:
+            return None                   # no ligands -> caller loads normally
+
+        try:
+            fd, prot_tmp = tempfile.mkstemp(suffix="_protein_only.pdb")
+            with os.fdopen(fd, "w") as f:
+                f.writelines(prot_lines)
+            prot_imol = coot.handle_read_draw_molecule_with_recentre(prot_tmp, 0)
+            try: os.remove(prot_tmp)
+            except OSError: pass
+        except Exception as e:
+            print("PanDDA: could not load protein-only model (%s)" % e)
+            return None
+
+        for (chain, resseq, icode, code), lines in res_lines.items():
+            try:
+                fd, lig_tmp = tempfile.mkstemp(suffix="_split_" + code + ".pdb")
+                with os.fdopen(fd, "w") as f:
+                    if cryst1:
+                        f.write(cryst1)
+                    f.writelines(lines)
+                    f.write("END\n")
+                lig_imol = coot.handle_read_draw_molecule_with_recentre(lig_tmp, 0)
+                try: os.remove(lig_tmp)
+                except OSError: pass
+                if lig_imol is not None and lig_imol >= 0:
+                    self._lig_mols.append(lig_imol)
+                    print("PanDDA: split %s chain %s resid %s -> imol %d"
+                          % (code, chain, resseq, lig_imol))
+            except Exception as e:
+                print("PanDDA: could not split ligand %s (%s)" % (code, e))
+        return prot_imol
 
     def _load_emap(self, missing):
         mtz = self._glob_one("%s-event_%s*.mtz" % (self.xtal, self.event),
@@ -811,6 +1376,167 @@ class PanddaInspect(object):
                   self.event, self.site, self.bdc]
         return "|".join("" if v is None else str(v) for v in fields)
 
+    def get_info_inspect(self):
+        # '|'-joined dataset/event fields for the pandda.inspect-style panel:
+        # dtag, event, bdc, z_peak, cluster_size, resolution, map_uncertainty,
+        # r_free, r_work.
+        if not self.order:
+            return ""
+        fields = [self.xtal, self.event, self.bdc, self.z_peak, self.cluster_size,
+                  self.resolution, self.map_uncertainty, self.r_free, self.r_work]
+        return "|".join("" if v is None else str(v) for v in fields)
+
+    # ---- HTML inspect summary --------------------------------------------
+    def _all_rows(self):
+        return list(range(1, len(self.elist))) if self.elist else []
+
+    def _cellval(self, i, key, default=""):
+        n = self.col.get(key)
+        if n is None:
+            return default
+        row = self.elist[i]
+        return row[n] if n < len(row) else default
+
+    def summary_html(self):
+        """Regenerate the HTML report and return its path (for the browser)."""
+        return self.write_html()
+
+    def write_html(self):
+        """Write analyses/pandda_inspect.html: a Bootstrap/DataTables progress
+        report styled like pandda_analyse.html. Returns the path (or a 'PanDDA: '
+        error string)."""
+        if not self.analysis_folder or not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        try:
+            import html as _html
+            esc = _html.escape
+        except Exception:                  # very old pythons
+            def esc(s): return (str(s).replace("&", "&amp;")
+                                .replace("<", "&lt;").replace(">", "&gt;"))
+        rows = self._all_rows()
+        total = len(rows)
+        viewed = sum(1 for i in rows if self._row(i, "viewed") == "True")
+        interesting = sum(1 for i in rows if self._row(i, "interesting") == "True")
+        modelled = sum(1 for i in rows if self._is_modelled(i))
+        conf_counts = {}
+        for i in rows:
+            c = self._row(i, "confidence") or "unassigned"
+            conf_counts[c] = conf_counts.get(c, 0) + 1
+        pct = lambda n: (100.0 * n / total) if total else 0.0
+
+        # per-site aggregation (in numeric site order where possible)
+        sk = self.col.get("site")
+        site_rows = {}
+        for i in rows:
+            s = self.elist[i][sk] if (sk is not None and sk < len(self.elist[i])) else "?"
+            site_rows.setdefault(s, []).append(i)
+        def site_sort_key(s):
+            try:
+                return (0, float(s))
+            except (ValueError, TypeError):
+                return (1, str(s))
+
+        H = []
+        H.append('<!DOCTYPE html>\n<html lang="en">\n  <head>\n'
+                 '    <meta charset="utf-8">\n'
+                 '    <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+                 '    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/'
+                 'bootstrap/3.3.6/css/bootstrap.min.css">\n'
+                 '    <link rel="stylesheet" href="https://cdn.datatables.net/'
+                 '1.10.11/css/dataTables.bootstrap.min.css">\n'
+                 '    <script src="https://code.jquery.com/jquery-1.12.0.min.js"></script>\n'
+                 '    <script src="https://cdn.datatables.net/1.10.11/js/'
+                 'jquery.dataTables.min.js"></script>\n'
+                 '    <script src="https://cdn.datatables.net/1.10.11/js/'
+                 'dataTables.bootstrap.min.js"></script>\n'
+                 '    <script type="text/javascript" class="init">\n'
+                 '$(document).ready(function() { $(\'#main-table\').DataTable('
+                 '{"paging": false}); } );\n'
+                 '    </script>\n'
+                 '    <title>PANDDA Inspect Summary</title>\n  </head>\n  <body>\n')
+        H.append('    <div class="container">\n')
+        H.append('      <h1>PANDDA Inspect Summary</h1>\n')
+        H.append('      <h4><samp>%s</samp></h4>\n' % esc(self.panddaDir or ""))
+
+        # progress bars
+        H.append('      <div class="row"><div class="col-xs-12">\n')
+        H.append('        <div class="progress">\n')
+        H.append('          <div class="progress-bar progress-bar-success" '
+                 'style="width:%.1f%%">Modelled %d</div>\n' % (pct(modelled), modelled))
+        H.append('          <div class="progress-bar progress-bar-info" '
+                 'style="width:%.1f%%">Viewed %d</div>\n'
+                 % (pct(max(0, viewed - modelled)), viewed))
+        H.append('        </div>\n      </div></div>\n')
+
+        # headline counts
+        def alert(kind, label, n):
+            return ('        <div class="col-xs-6 col-sm-3"><div class="alert alert-%s" '
+                    'role="alert"><strong>%s: %d</strong></div></div>\n'
+                    % (kind, label, n))
+        H.append('      <div class="row">\n')
+        H.append(alert("info", "Events", total))
+        H.append(alert("info", "Viewed", viewed))
+        H.append(alert("success", "Interesting", interesting))
+        H.append(alert("warning", "Modelled", modelled))
+        H.append('      </div>\n')
+        if conf_counts:
+            H.append('      <div class="row">\n')
+            for c in self.CONFIDENCE_VALUES:
+                if c in conf_counts:
+                    H.append(alert("info", esc(c), conf_counts[c]))
+            H.append('      </div>\n')
+
+        # per-site table
+        H.append('      <h2>Sites</h2>\n')
+        H.append('      <table class="table table-bordered table-striped">\n'
+                 '        <thead><tr><th>Site</th><th>Events</th><th>Modelled</th>'
+                 '<th>Name</th><th>Comment</th></tr></thead>\n        <tbody>\n')
+        for s in sorted(site_rows, key=site_sort_key):
+            ev = site_rows[s]
+            nmod = sum(1 for i in ev if self._is_modelled(i))
+            name = comment = "None"
+            if self.slist and "site_idx" in self.scol:
+                kk = self.scol["site_idx"]
+                for r in self.slist[1:]:
+                    if kk < len(r) and r[kk] == str(s):
+                        name = r[self.scol["Name"]] if "Name" in self.scol else "None"
+                        comment = r[self.scol["Comment"]] if "Comment" in self.scol else "None"
+                        break
+            H.append('          <tr><td>%s</td><td>%d</td><td>%d</td><td>%s</td>'
+                     '<td>%s</td></tr>\n'
+                     % (esc(s), len(ev), nmod, esc(name), esc(comment)))
+        H.append('        </tbody>\n      </table>\n')
+
+        # per-event DataTable
+        H.append('      <h2>Events</h2>\n')
+        H.append('      <table id="main-table" class="table table-bordered table-striped">\n'
+                 '        <thead><tr><th>Dataset</th><th>Event</th><th>Site</th>'
+                 '<th>1-BDC</th><th>Z-peak</th><th>Resolution</th><th>Interesting</th>'
+                 '<th>Confidence</th><th>Ligand Placed</th><th>Comment</th>'
+                 '<th>Viewed</th></tr></thead>\n        <tbody>\n')
+        for i in rows:
+            cells = [self._cellval(i, "dtag"), self._cellval(i, "event"),
+                     self._cellval(i, "site"), self._cellval(i, "bdc"),
+                     self._cellval(i, "z_peak"), self._cellval(i, "resolution"),
+                     self._row(i, "interesting") or "False",
+                     self._row(i, "confidence") or "unassigned",
+                     "True" if self._is_modelled(i) else "False",
+                     self._row(i, "comment") or "None",
+                     self._row(i, "viewed") or "False"]
+            H.append('          <tr>' + "".join("<td>%s</td>" % esc(c) for c in cells)
+                     + '</tr>\n')
+        H.append('        </tbody>\n      </table>\n')
+        H.append('    </div>\n  </body>\n</html>\n')
+
+        path = os.path.join(self.analysis_folder, "pandda_inspect.html")
+        try:
+            with open(path, "w") as f:
+                f.write("".join(H))
+        except Exception as e:
+            return self._msg("PanDDA: could not write HTML (%s)" % e)
+        print("PanDDA: wrote %s" % path)
+        return path
+
     def _msg(self, s):
         print(s)
         # "PanDDA: ..." (with a colon) is an error/notice -> pop a dialog so it
@@ -904,5 +1630,60 @@ def go_to_dataset(dtag):
 def get_info():
     return _get().get_info()
 
+def get_info_inspect():
+    return _get().get_info_inspect()
+
 def status():
     return _get().status()
+
+# ---- pandda.inspect-style UI extras -----------------------------------------
+def is_loaded():
+    return _get().is_loaded()
+
+def progress():
+    return _get().progress()
+
+def get_map_state():
+    return _get().get_map_state()
+
+def get_placed():
+    return _get().get_placed()
+
+def set_placed(on):
+    return _get().set_placed(on)
+
+def next_unviewed():
+    return _get().next_unviewed()
+
+def next_modelled():
+    return _get().next_modelled()
+
+def open_next_ligand():
+    return _get().open_next_ligand()
+
+def reload_saved_model():
+    return _get().reload_saved_model()
+
+def reset_to_unfitted():
+    return _get().reset_to_unfitted()
+
+def load_unfitted_comparison():
+    return _get().load_unfitted_comparison()
+
+def get_site_name():
+    return _get().get_site_name()
+
+def set_site_name(s):
+    return _get().set_site_name(s)
+
+def get_site_comment():
+    return _get().get_site_comment()
+
+def set_site_comment(s):
+    return _get().set_site_comment(s)
+
+def write_html():
+    return _get().write_html()
+
+def summary_html():
+    return _get().summary_html()

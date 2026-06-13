@@ -170,6 +170,14 @@ fi
 ln -sf coot "${PREFIX}/bin/bcoot"
 echo "==> created ${PREFIX}/bin/bcoot"
 
+# Install the pandda.inspect-compatible launcher (delegates to bcoot with
+# --pandda "$(pwd)"); users can alias `pandda.inspect` to it.
+if [ -f "${REPO_ROOT}/scripts/bandicoot.inspect" ]; then
+    cp "${REPO_ROOT}/scripts/bandicoot.inspect" "${PREFIX}/bin/bandicoot.inspect"
+    chmod +x "${PREFIX}/bin/bandicoot.inspect"
+    echo "==> installed ${PREFIX}/bin/bandicoot.inspect"
+fi
+
 # Asset directories: copy from FFTW_PREFIX/share/coot/ (which is the
 # Coot 0.9 install used as the dictionary / reference-structure source)
 # if they're not already in PREFIX.

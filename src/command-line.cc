@@ -117,6 +117,7 @@ parse_command_line(int argc, char ** argv ) {
       {"comp-id",    1, 0, 0},
       {"em",         0, 0, 0},
       {"emdb",       1, 0, 0},
+      {"pandda",     1, 0, 0}, // open PanDDA Inspect on this results folder
       {"title",      1, 0, 0},
       {"port",       1, 0, 0},
       {"host",       1, 0, 0},
@@ -216,8 +217,11 @@ parse_command_line(int argc, char ** argv ) {
 	    if (arg_str == "splash-screen") {
 	       cld.alternate_splash_screen_file_name = coot_optarg;
 	    }
+	    if (arg_str == "pandda") {
+	       cld.pandda_dir = coot_optarg;
+	    }
 
-	 } else { 
+	 } else {
 
 	    // long argument without parameter:
 	    std::string arg_str(long_options[option_index].name);
@@ -240,6 +244,7 @@ parse_command_line(int argc, char ** argv ) {
 			       << "            [--hklin mtz-file-name]\n"
 			       << "            [--auto mtz-file-name]\n"
 			       << "            [--dictionary cif-dictionary-file-name]\n"
+			       << "            [--pandda pandda-results-folder]\n"
 			       << "            [--script script-file-name]\n"
 			       << "            [--em]\n"
 			       << "            [--title some-title]\n"

@@ -1,0 +1,29 @@
+#!/bin/bash
+# -*-shell-script-*-
+# pandda.inspect-compatible launcher for Bandicoot.
+#
+# Opens Bandicoot's PanDDA Inspect UI on the CURRENT directory (a PanDDA
+# results folder). Intended to supersede CCP4's native `pandda.inspect`:
+# from a pandda output directory, just run it -- or alias it, e.g.
+#
+#     alias pandda.inspect="/path/to/bandicoot/bin/bandicoot.inspect"
+#
+# then `cd` into a pandda folder and run `pandda.inspect`.
+#
+# It simply delegates to the install's bin/bcoot wrapper (which sets up the
+# full Bandicoot runtime environment) with `--pandda "$(pwd)"`. Any extra
+# arguments are passed straight through to Bandicoot.
+
+# Resolve symlinks portably so invocation via PATH (or a ~/bin shim) still
+# finds the real install bin dir. macOS readlink lacks a reliable -f.
+unlinked_exe="$0"
+while [ -L "$unlinked_exe" ]; do
+    link_target="$(readlink "$unlinked_exe")"
+    case "$link_target" in
+        /*) unlinked_exe="$link_target" ;;
+        *)  unlinked_exe="$(dirname "$unlinked_exe")/$link_target" ;;
+    esac
+done
+BIN_DIR="$(cd "$(dirname "$unlinked_exe")" 2>/dev/null && pwd)"
+
+exec "$BIN_DIR/bcoot" --pandda "$(pwd)" "$@"
