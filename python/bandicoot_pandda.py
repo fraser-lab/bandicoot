@@ -806,6 +806,28 @@ class PanddaInspect(object):
         dz = coot.rotation_centre_position(2) - coot.molecule_centre_internal(imol, 2)
         coot.translate_molecule_by(imol, dx, dy, dz)
 
+    # Fixed carbon bond colour-map rotations (degrees), so models look the same
+    # across datasets instead of Coot's per-molecule hue rotation. Ligands get a
+    # distinct value so an unmerged ligand is visually obvious vs the model it
+    # will merge into.
+    MODEL_BOND_COLOUR = 18.0
+    LIGAND_BOND_COLOUR = 125.0
+
+    def _read_model(self, path, recentre=0, colour=None):
+        """Read a coordinate file and pin its bond colour-map rotation to a fixed
+        value (model vs ligand), so loads are consistent across datasets/isomers
+        rather than Coot's per-molecule hue rotation. All driver model loads route
+        through here; ligand loads pass colour=LIGAND_BOND_COLOUR."""
+        if colour is None:
+            colour = self.MODEL_BOND_COLOUR
+        imol = coot.handle_read_draw_molecule_with_recentre(path, recentre)
+        if imol is not None and imol >= 0:
+            try:
+                coot.set_molecule_bonds_colour_map_rotation(imol, colour)
+            except Exception:
+                pass
+        return imol
+
     def load_ligand_file(self, path):
         """Load a user-supplied ligand coordinate file as the current ligand.
         If it's a coordinate file with a sibling <stem>.cif restraints dictionary,
@@ -822,7 +844,7 @@ class PanddaInspect(object):
             if os.path.isfile(sibling_cif):
                 coot.read_cif_dictionary(sibling_cif)
                 print("PanDDA: auto-loaded restraints %s" % os.path.basename(sibling_cif))
-        imol = coot.handle_read_draw_molecule_with_recentre(path, 0)
+        imol = self._read_model(path, 0, self.LIGAND_BOND_COLOUR)
         if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
             return self._msg("PanDDA: no coordinates read from %s" % os.path.basename(path))
         self.mol["ligand"] = imol
@@ -872,7 +894,7 @@ class PanddaInspect(object):
                              "(see stdout)" % tlc)
         if os.path.isfile(cif):
             coot.read_cif_dictionary(cif)
-        imol = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
+        imol = self._read_model(pdb, 0, self.LIGAND_BOND_COLOUR)
         if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
             return self._msg("PanDDA: acedrg built %s but Coot could not read it"
                              % os.path.basename(pdb))
@@ -943,7 +965,7 @@ class PanddaInspect(object):
             self.ligcif = cif
             load_cif = _rename_cif_residue(cif, code) if code != "LIG" else cif
             coot.read_cif_dictionary(load_cif)
-        imol = coot.handle_read_draw_molecule_with_recentre(load_pdb, 0)
+        imol = self._read_model(load_pdb, 0, self.LIGAND_BOND_COLOUR)
         # temp renamed files are parsed into memory now -> remove them
         if load_pdb != coord:
             try: os.remove(load_pdb)
@@ -980,6 +1002,27 @@ class PanddaInspect(object):
         return self._msg("PanDDA: ligand %d/%d  %s"
                          % (self._lig_cycle + 1, len(cands), os.path.basename(coord)))
 
+    def open_ligand_here(self):
+        """Load ALL candidate ligands (every isomer/tautomer for this dataset) at
+        once, each centred on the current event. Use the display panel to hide
+        the isomers you don't want, then Merge (which merges only displayed)."""
+        if not self.elist:
+            return self._msg("PanDDA: no folder loaded")
+        cands = self._ligand_candidates()
+        if not cands:
+            return self._msg("PanDDA: %s" % self._no_ligand_reason())
+        n = 0
+        for coord, cif, code in cands:
+            imol = self._open_candidate(coord, cif, code)
+            if imol is not None and imol >= 0:
+                self._centre_molecule_on_view(imol)   # drop it on the event
+                n += 1
+        coot.graphics_draw()
+        if not n:
+            return self._msg("PanDDA: %s" % self._no_ligand_reason())
+        return self._msg("PanDDA: opened %d ligand(s) at the event "
+                         "(hide unwanted isomers, then Merge)" % n)
+
     def reload_saved_model(self):
         """Reload the last saved <dtag>-pandda-model.pdb (else the input model)."""
         if not self.elist:
@@ -1007,7 +1050,7 @@ class PanddaInspect(object):
             coot.close_molecule(old)
         coot.set_nomenclature_errors_on_read("ignore")
         self.pdb = path
-        self.mol["protein"] = coot.handle_read_draw_molecule_with_recentre(path, 0)
+        self.mol["protein"] = self._read_model(path, 0)
         self.merged = False
         coot.set_rotation_centre(self.x, self.y, self.z)
         coot.graphics_draw()
@@ -1025,7 +1068,7 @@ class PanddaInspect(object):
         if old is not None and old >= 0 and coot.is_valid_model_molecule(old):
             coot.close_molecule(old)
         coot.set_nomenclature_errors_on_read("ignore")
-        self.mol["compare"] = coot.handle_read_draw_molecule_with_recentre(path, 0)
+        self.mol["compare"] = self._read_model(path, 0)
         coot.graphics_draw()
         return self._msg("PanDDA: loaded comparison model %s" % os.path.basename(path))
 
@@ -1219,7 +1262,7 @@ class PanddaInspect(object):
             if prot is not None:
                 self.mol["protein"] = prot
                 return
-        self.mol["protein"] = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
+        self.mol["protein"] = self._read_model(pdb, 0)
 
     def _split_fitted_model(self, filename):
         """Parse a fitted model file, splitting non-standard ligand residues into
@@ -1254,7 +1297,7 @@ class PanddaInspect(object):
             fd, prot_tmp = tempfile.mkstemp(suffix="_protein_only.pdb")
             with os.fdopen(fd, "w") as f:
                 f.writelines(prot_lines)
-            prot_imol = coot.handle_read_draw_molecule_with_recentre(prot_tmp, 0)
+            prot_imol = self._read_model(prot_tmp, 0)
             try: os.remove(prot_tmp)
             except OSError: pass
         except Exception as e:
@@ -1269,7 +1312,7 @@ class PanddaInspect(object):
                         f.write(cryst1)
                     f.writelines(lines)
                     f.write("END\n")
-                lig_imol = coot.handle_read_draw_molecule_with_recentre(lig_tmp, 0)
+                lig_imol = self._read_model(lig_tmp, 0, self.LIGAND_BOND_COLOUR)
                 try: os.remove(lig_tmp)
                 except OSError: pass
                 if lig_imol is not None and lig_imol >= 0:
@@ -1320,6 +1363,12 @@ class PanddaInspect(object):
             self.mol["zmap"] = self._read_native_ccp4(ccp4, 1)
         zimol = self.mol["zmap"]
         if zimol is not None and zimol >= 0:
+            # fixed colour (green) so the z-map looks the same on every dataset,
+            # rather than Coot's per-map colour rotation (event map = blue).
+            try:
+                coot.set_map_colour(zimol, 0.0, 0.8, 0.0)
+            except Exception:
+                pass
             # z-map (pre-scaled): contour at z-score 3.0 absolute (pandda default)
             try:
                 coot.set_contour_level_absolute(zimol, 3.0)
@@ -1660,6 +1709,9 @@ def next_modelled():
 
 def open_next_ligand():
     return _get().open_next_ligand()
+
+def open_ligand_here():
+    return _get().open_ligand_here()
 
 def reload_saved_model():
     return _get().reload_saved_model()

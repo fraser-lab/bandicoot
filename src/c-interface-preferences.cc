@@ -559,7 +559,7 @@ static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
       bcoot_ligands_split_yes = syes;
    }
 
-   // ---- UI Mode (Basic / Full / Expanded; Expanded is wired up in 0.1.4.1) ----
+   // ---- UI Mode (Basic / Full) ----
    {
       GtkWidget *uf = gtk_frame_new("UI Mode");
       GtkWidget *ub = gtk_hbox_new(FALSE, 12);
@@ -567,16 +567,12 @@ static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
       GtkWidget *basic = gtk_radio_button_new_with_label(NULL, "Basic");
       GtkWidget *full  = gtk_radio_button_new_with_label_from_widget(
                             GTK_RADIO_BUTTON(basic), "Full");
-      GtkWidget *exp   = gtk_radio_button_new_with_label_from_widget(
-                            GTK_RADIO_BUTTON(basic), "Expanded");
-      GtkWidget *active = (cur_uimode == 1) ? basic : (cur_uimode == 2) ? exp : full;
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(active), TRUE);
+      // cur_uimode: 1 = Basic, else Full (a legacy 2/"Expanded" maps to Full)
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cur_uimode == 1 ? basic : full), TRUE);
       g_signal_connect(basic, "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(1));
       g_signal_connect(full,  "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(0));
-      g_signal_connect(exp,   "toggled", G_CALLBACK(bcoot_uimode_toggled), GINT_TO_POINTER(2));
       gtk_box_pack_start(GTK_BOX(ub), basic, FALSE, FALSE, 0);
       gtk_box_pack_start(GTK_BOX(ub), full,  FALSE, FALSE, 0);
-      gtk_box_pack_start(GTK_BOX(ub), exp,   FALSE, FALSE, 0);
       gtk_container_add(GTK_CONTAINER(uf), ub);
       gtk_box_pack_start(GTK_BOX(page), uf, FALSE, FALSE, 0);
    }

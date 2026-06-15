@@ -2798,7 +2798,8 @@ static GtkWidget *bandicoot_pandda_event_n_label = NULL;  // "Event  N  of  M"
 static GtkWidget *bandicoot_pandda_event_m_label = NULL;
 static GtkWidget *bandicoot_pandda_site_n_label  = NULL;  // "Site   i  of  k"
 static GtkWidget *bandicoot_pandda_site_m_label  = NULL;
-static GtkWidget *bandicoot_pandda_goto_entry       = NULL;
+static GtkWidget *bandicoot_pandda_goto_entry       = NULL;  // the editable child entry
+static GtkWidget *bandicoot_pandda_goto_combo       = NULL;  // GtkComboBoxEntry (list+type)
 static GtkWidget *bandicoot_pandda_uimode_combo     = NULL;  // bottom-bar UI Mode
 static GtkWidget *bandicoot_pandda_interesting_yes  = NULL;
 static GtkWidget *bandicoot_pandda_interesting_no   = NULL;
@@ -2813,6 +2814,7 @@ static GtkWidget *bandicoot_pandda_next_unviewed_btn = NULL;
 static GtkWidget *bandicoot_pandda_next_modelled_btn = NULL;
 static GtkWidget *bandicoot_pandda_next_save_btn    = NULL;  // Next (Save Model)
 static GtkWidget *bandicoot_pandda_openlig_btn      = NULL;
+static GtkWidget *bandicoot_pandda_openlighere_btn  = NULL;  // Expanded UI: all isomers at event
 static GtkWidget *bandicoot_pandda_reload_btn       = NULL;
 static GtkWidget *bandicoot_pandda_reset_btn        = NULL;
 static GtkWidget *bandicoot_pandda_compare_btn      = NULL;
@@ -2861,6 +2863,7 @@ static void bandicoot_pandda_set_nav_sensitive(gboolean on) {
                       bandicoot_pandda_site_name_entry, bandicoot_pandda_site_comment_entry,
                       bandicoot_pandda_next_unviewed_btn, bandicoot_pandda_next_modelled_btn,
                       bandicoot_pandda_next_save_btn,   bandicoot_pandda_openlig_btn,
+                      bandicoot_pandda_openlighere_btn,
                       bandicoot_pandda_reload_btn,      bandicoot_pandda_reset_btn,
                       bandicoot_pandda_compare_btn,     bandicoot_pandda_inmtz_btn,
                       bandicoot_pandda_avgmap_btn };
@@ -2869,6 +2872,7 @@ static void bandicoot_pandda_set_nav_sensitive(gboolean on) {
 }
 
 static void bandicoot_pandda_populate_datasets();   // defined below; used by handlers above it
+static void bandicoot_pandda_populate_goto_combo(); // (Full UI Go-to-Dataset combo-entry)
 
 // Run a python driver command, show its returned status in the label, and
 // return that status so callers can distinguish success ("PanDDA N/M …") from
@@ -3110,6 +3114,7 @@ static void bandicoot_pandda_selection_changed(GtkComboBox *c, gpointer u) {
       g_free(txt);
       bandicoot_pandda_refresh_annotations();
       bandicoot_pandda_populate_datasets();   // filter narrowed/changed the view
+      bandicoot_pandda_populate_goto_combo();
    }
 }
 static void bandicoot_pandda_interesting_toggled(GtkToggleButton *t, gpointer u) {
@@ -3322,8 +3327,36 @@ static void bandicoot_pandda_goto_clicked(GtkButton *b, gpointer u) {
    if (bandicoot_pandda_goto_entry)
       bandicoot_pandda_goto_activate(GTK_ENTRY(bandicoot_pandda_goto_entry), NULL);
 }
+// Fill the Go-to-Dataset combo-entry's dropdown with the current view's dtags
+// (dataset_list() reflects the active Event Selection filter).
+static void bandicoot_pandda_populate_goto_combo() {
+   if (!bandicoot_pandda_goto_combo) return;
+   GtkTreeModel *m = gtk_combo_box_get_model(GTK_COMBO_BOX(bandicoot_pandda_goto_combo));
+   if (GTK_IS_LIST_STORE(m)) gtk_list_store_clear(GTK_LIST_STORE(m));
+   std::string s = bandicoot_pandda_query("bandicoot_pandda.dataset_list()");
+   size_t start = 0;
+   while (start < s.size()) {
+      size_t nl = s.find('\n', start);
+      std::string d = s.substr(start, nl == std::string::npos ? std::string::npos : nl - start);
+      if (!d.empty())
+         gtk_combo_box_append_text(GTK_COMBO_BOX(bandicoot_pandda_goto_combo), d.c_str());
+      if (nl == std::string::npos) break;
+      start = nl + 1;
+   }
+}
+// Picking a row from the dropdown navigates immediately; typing requires Enter/Go
+// (a typed, non-matching entry leaves the active index at -1).
+static void bandicoot_pandda_goto_combo_changed(GtkComboBox *c, gpointer u) {
+   if (bandicoot_pandda_refreshing) return;
+   if (gtk_combo_box_get_active(c) < 0) return;     // typed, not a list selection
+   if (bandicoot_pandda_goto_entry)
+      bandicoot_pandda_goto_activate(GTK_ENTRY(bandicoot_pandda_goto_entry), NULL);
+}
 static void bandicoot_pandda_openlig_cb(GtkButton *b, gpointer u) {
    bandicoot_pandda_run("bandicoot_pandda.open_next_ligand()");
+}
+static void bandicoot_pandda_openlighere_cb(GtkButton *b, gpointer u) {
+   bandicoot_pandda_run("bandicoot_pandda.open_ligand_here()");
 }
 static void bandicoot_pandda_reload_cb(GtkButton *b, gpointer u) {
    bandicoot_pandda_run("bandicoot_pandda.reload_saved_model()");
@@ -3375,6 +3408,7 @@ static void bandicoot_pandda_load_folder(const char *path) {
       bandicoot_pandda_refreshing = FALSE;
       bandicoot_pandda_refresh_annotations();
       bandicoot_pandda_populate_datasets();       // NULL-checks the store internally
+      bandicoot_pandda_populate_goto_combo();
    }
 }
 
@@ -3424,6 +3458,7 @@ static void bandicoot_pandda_null_widgets() {
    bandicoot_pandda_site_n_label = NULL;
    bandicoot_pandda_site_m_label = NULL;
    bandicoot_pandda_goto_entry = NULL;
+   bandicoot_pandda_goto_combo = NULL;
    bandicoot_pandda_uimode_combo = NULL;
    bandicoot_pandda_interesting_yes = NULL;
    bandicoot_pandda_interesting_no = NULL;
@@ -3438,6 +3473,7 @@ static void bandicoot_pandda_null_widgets() {
    bandicoot_pandda_next_modelled_btn = NULL;
    bandicoot_pandda_next_save_btn = NULL;
    bandicoot_pandda_openlig_btn = NULL;
+   bandicoot_pandda_openlighere_btn = NULL;
    bandicoot_pandda_reload_btn = NULL;
    bandicoot_pandda_reset_btn = NULL;
    bandicoot_pandda_compare_btn = NULL;
@@ -3455,29 +3491,42 @@ static void bandicoot_pandda_dialog_response(GtkDialog *d, gint r, gpointer u) {
    gtk_widget_destroy(GTK_WIDGET(d));
 }
 
+// The Event Selection combo (filters/sorts) shared by the Basic and Expanded
+// UIs; sets bandicoot_pandda_sel_combo and wires the changed callback.
+static GtkWidget *bandicoot_pandda_make_sel_combo() {
+   static const char *items[] = {
+      "All events", "Sort by Z-score", "Sort by cluster size", "Sort alphabetically",
+      "Unviewed only", "Interesting only", "Modelled only", "Not modelled only" };
+   GtkWidget *c = gtk_combo_box_new_text();
+   for (unsigned i = 0; i < G_N_ELEMENTS(items); i++)
+      gtk_combo_box_append_text(GTK_COMBO_BOX(c), items[i]);
+   gtk_combo_box_set_active(GTK_COMBO_BOX(c), 0);
+   g_signal_connect(c, "changed", G_CALLBACK(bandicoot_pandda_selection_changed), NULL);
+   return c;
+}
+
+// The Go-to-Dataset row shared by Basic and Full: a combo-entry (pick from the
+// filtered dataset_list OR type) + a Go button. Sets the goto combo/entry
+// statics; populate via bandicoot_pandda_populate_goto_combo().
+static GtkWidget *bandicoot_pandda_make_goto_row() {
+   GtkWidget *row = gtk_hbox_new(FALSE, 4);
+   bandicoot_pandda_goto_combo = gtk_combo_box_entry_new_text();
+   gtk_widget_set_size_request(bandicoot_pandda_goto_combo, 120, -1);
+   bandicoot_pandda_goto_entry = gtk_bin_get_child(GTK_BIN(bandicoot_pandda_goto_combo));
+   g_signal_connect(bandicoot_pandda_goto_entry, "activate",
+                    G_CALLBACK(bandicoot_pandda_goto_activate), NULL);
+   g_signal_connect(bandicoot_pandda_goto_combo, "changed",
+                    G_CALLBACK(bandicoot_pandda_goto_combo_changed), NULL);
+   GtkWidget *go = gtk_button_new_with_label("Go");
+   g_signal_connect(go, "clicked", G_CALLBACK(bandicoot_pandda_goto_clicked), NULL);
+   gtk_box_pack_start(GTK_BOX(row), bandicoot_pandda_goto_combo, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(row), go, FALSE, FALSE, 0);
+   return row;
+}
+
 // ---- Basic (Krojer-style) UI builder: fills the swappable body `vbox` ----
 static void bandicoot_pandda_build_basic(GtkWidget *vbox) {
-   // ---- PanDDA Folder ----
-   GtkWidget *sel = gtk_button_new_with_label("Select PanDDA folder\xe2\x80\xa6");
-   g_signal_connect(sel, "clicked", G_CALLBACK(bandicoot_pandda_choose_folder), NULL);
-   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("PanDDA Folder", sel),
-                      FALSE, FALSE, 2);
-
-   // ---- Event Selection ----
-   GtkWidget *sel_combo = gtk_combo_box_new_text();
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "All events");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Sort by Z-score");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Sort by cluster size");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Sort alphabetically");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Unviewed only");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Interesting only");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Modelled only");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(sel_combo), "Not modelled only");
-   gtk_combo_box_set_active(GTK_COMBO_BOX(sel_combo), 0);
-   g_signal_connect(sel_combo, "changed", G_CALLBACK(bandicoot_pandda_selection_changed), NULL);
-   gtk_box_pack_start(GTK_BOX(vbox), bandicoot_pandda_frame("Event Selection", sel_combo),
-                      FALSE, FALSE, 2);
-
+   // ===== top panel: Dataset Info (left) | controls column (right) =====
    // ---- Dataset Info (title | value rows, filled on each event load) ----
    GtkWidget *info_tbl = gtk_table_new(BANDICOOT_PANDDA_NINFO, 2, FALSE);
    gtk_table_set_row_spacings(GTK_TABLE(info_tbl), 1);
@@ -3494,41 +3543,38 @@ static void bandicoot_pandda_build_basic(GtkWidget *vbox) {
                        (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
       bandicoot_pandda_info_val[i] = v;
    }
-   GtkWidget *info_row = gtk_hbox_new(FALSE, 4);
-   gtk_box_pack_start(GTK_BOX(info_row),
-                      bandicoot_pandda_frame("Dataset Info", info_tbl), TRUE, TRUE, 0);
+   GtkWidget *toprow = gtk_hbox_new(FALSE, 6);
+   // left: Dataset Info at its compact natural width (the controls take the rest)
+   gtk_box_pack_start(GTK_BOX(toprow),
+                      bandicoot_pandda_frame("Dataset Info", info_tbl), FALSE, FALSE, 0);
 
-   // ---- Go to (jump to a dataset; list reflects the current selection) ----
-   GtkWidget *gotobox = gtk_vbox_new(FALSE, 4);
-   GtkWidget *dset_scroll = gtk_scrolled_window_new(NULL, NULL);
-   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dset_scroll),
-                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(dset_scroll), GTK_SHADOW_IN);
-   gtk_widget_set_size_request(dset_scroll, 130, 132);   // fixed-height list
-   bandicoot_pandda_dataset_store = gtk_list_store_new(1, G_TYPE_STRING);
-   GtkWidget *dset_view = gtk_tree_view_new_with_model(
-                             GTK_TREE_MODEL(bandicoot_pandda_dataset_store));
-   g_object_unref(bandicoot_pandda_dataset_store);   // the view now holds the ref
-   gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(dset_view), FALSE);
-   {
-      GtkCellRenderer *rend = gtk_cell_renderer_text_new();
-      GtkTreeViewColumn *dcol = gtk_tree_view_column_new_with_attributes(
-                                   "Dataset", rend, "text", 0, (char *) NULL);
-      gtk_tree_view_append_column(GTK_TREE_VIEW(dset_view), dcol);
-   }
-   g_signal_connect(dset_view, "row-activated",
-                    G_CALLBACK(bandicoot_pandda_dataset_activated), NULL);
-   gtk_container_add(GTK_CONTAINER(dset_scroll), dset_view);
-   gtk_box_pack_start(GTK_BOX(gotobox), dset_scroll, TRUE, TRUE, 0);
-   GtkWidget *go_btn = gtk_button_new_with_label("Go");
-   g_signal_connect(go_btn, "clicked", G_CALLBACK(bandicoot_pandda_go_clicked), NULL);
-   gtk_box_pack_start(GTK_BOX(gotobox), go_btn, FALSE, FALSE, 0);
-   gtk_box_pack_start(GTK_BOX(info_row), bandicoot_pandda_frame("Go to", gotobox),
-                      FALSE, FALSE, 0);
-   bandicoot_pandda_dataset_view = dset_view;
-   bandicoot_pandda_go_btn = go_btn;
+   // right: Quit / Select folder / Event Selection / Go to Dataset, stacked
+   GtkWidget *ctl = gtk_vbox_new(FALSE, 4);
+   GtkWidget *quit = gtk_button_new_with_label("Quit");
+   g_signal_connect(quit, "clicked", G_CALLBACK(bandicoot_pandda_quit_cb), NULL);
+   gtk_box_pack_start(GTK_BOX(ctl), quit, FALSE, FALSE, 0);
+   GtkWidget *sel = gtk_button_new_with_label("Select PanDDA folder\xe2\x80\xa6");
+   g_signal_connect(sel, "clicked", G_CALLBACK(bandicoot_pandda_choose_folder), NULL);
+   gtk_box_pack_start(GTK_BOX(ctl), sel, FALSE, FALSE, 0);
 
-   gtk_box_pack_start(GTK_BOX(vbox), info_row, FALSE, FALSE, 2);
+   GtkWidget *esrow = gtk_hbox_new(FALSE, 6);
+   GtkWidget *esl = gtk_label_new("Event Selection");
+   gtk_misc_set_alignment(GTK_MISC(esl), 0.0, 0.5);
+   GtkWidget *sel_combo = bandicoot_pandda_make_sel_combo();
+   gtk_box_pack_start(GTK_BOX(esrow), esl, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(esrow), sel_combo, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(ctl), esrow, FALSE, FALSE, 0);
+   bandicoot_pandda_sel_combo = sel_combo;
+
+   GtkWidget *gdrow = gtk_hbox_new(FALSE, 6);
+   GtkWidget *gdl = gtk_label_new("Go to Dataset");
+   gtk_misc_set_alignment(GTK_MISC(gdl), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(gdrow), gdl, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(gdrow), bandicoot_pandda_make_goto_row(), TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(ctl), gdrow, FALSE, FALSE, 0);
+
+   gtk_box_pack_start(GTK_BOX(toprow), ctl, TRUE, TRUE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), toprow, FALSE, FALSE, 2);
 
    // ---- Navigator ----
    GtkWidget *navbox = gtk_vbox_new(FALSE, 4);
@@ -3723,12 +3769,11 @@ static gboolean bandicoot_pandda_rebuild_idle(gpointer u) {
    bandicoot_pandda_rebuild_body();
    return FALSE;   // one-shot
 }
-// UI-Mode dropdown: index 0 = Basic (mode 1), 1 = Full (mode 0). "Expanded"
-// (mode 2) will append later.
+// UI-Mode dropdown: index 0 = Basic (mode 1), 1 = Full (mode 0).
 static void bandicoot_pandda_uimode_changed(GtkComboBox *c, gpointer u) {
    if (bandicoot_pandda_refreshing) return;
    gint idx = gtk_combo_box_get_active(c);
-   int target = (idx == 0) ? 1 : (idx == 1) ? 0 : 2;
+   int target = (idx == 0) ? 1 : 0;
    if (target != bandicoot_pandda_mode) {
       bandicoot_pandda_mode = target;
       g_idle_add(bandicoot_pandda_rebuild_idle, NULL);
@@ -3752,17 +3797,14 @@ static void bandicoot_pandda_build_bottom(GtkWidget *vbox) {
    GtkWidget *combo = gtk_combo_box_new_text();
    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Basic");
    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Full");
-   gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Expanded");
    gtk_combo_box_set_active(GTK_COMBO_BOX(combo),
-      (bandicoot_pandda_mode == 1) ? 0 : (bandicoot_pandda_mode == 2) ? 2 : 1);
+                            bandicoot_pandda_mode == 1 ? 0 : 1);
    g_signal_connect(combo, "changed",
                     G_CALLBACK(bandicoot_pandda_uimode_changed), NULL);
    bandicoot_pandda_uimode_combo = combo;
    gtk_box_pack_start(GTK_BOX(row), combo, FALSE, FALSE, 0);
-
-   GtkWidget *close = gtk_button_new_with_label("Close");
-   g_signal_connect(close, "clicked", G_CALLBACK(bandicoot_pandda_quit_cb), NULL);
-   gtk_box_pack_start(GTK_BOX(row), close, FALSE, FALSE, 0);
+   // (No Close button here — both UIs have their own Quit; the title-bar/Escape
+   //  also dismiss the dialog.)
 
    // bottom spacer so nothing sits flush with the panel's lower edge
    GtkWidget *align = gtk_alignment_new(0.0, 0.0, 1.0, 1.0);
@@ -3771,7 +3813,10 @@ static void bandicoot_pandda_build_bottom(GtkWidget *vbox) {
    gtk_box_pack_start(GTK_BOX(vbox), align, FALSE, FALSE, 2);
 }
 
-// ---- pandda.inspect-style UI builder: fills the swappable body `vbox` ----
+// ---- "Full" UI builder (the pandda.inspect-style layout) ----
+// The single rich UI: the pandda.inspect layout + the Event Selection combo and
+// an "Open Ligand Here" button (load all isomers at the event at once). (The
+// earlier bare pandda.inspect "Full" mode was dropped; this is now "Full".)
 static void bandicoot_pandda_build_inspect(GtkWidget *vbox) {
    // ===== top row: [Quit/Summary/HTML] [Progress] [Go-to-Dataset + site nav] =====
    GtkWidget *top = gtk_hbox_new(FALSE, 6);
@@ -3794,34 +3839,49 @@ static void bandicoot_pandda_build_inspect(GtkWidget *vbox) {
    gtk_container_add(GTK_CONTAINER(btnalign), btncol);
    gtk_box_pack_start(GTK_BOX(top), bandicoot_pandda_frame(NULL, btnalign), FALSE, FALSE, 0);
 
-   // -- Overall Inspection progress: title + Event/Site rows, each in an
-   //    etched sub-frame; the rows are fully justified ("Event  N  of  M") --
+   // -- Overall Inspection progress: a two-line title + Event/Site rows, each
+   //    in an etched sub-frame, fully justified ("Event  N  of  M"). The three
+   //    sub-panels expand to share the column height evenly (the top row is
+   //    taller now that the selection widgets sit beside it). --
    GtkWidget *progv = gtk_vbox_new(FALSE, 3);
-   GtkWidget *progtitle = gtk_label_new("Overall Inspection Event/Site Progress:");
+   GtkWidget *progtitle = gtk_label_new("Overall Inspection of\nEvent and Site Progress");
+   gtk_label_set_justify(GTK_LABEL(progtitle), GTK_JUSTIFY_CENTER);
    gtk_misc_set_padding(GTK_MISC(progtitle), 6, 2);
-   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, progtitle),
-                      FALSE, FALSE, 0);
    GtkWidget *erow = bandicoot_pandda_progress_row("Event",
                         &bandicoot_pandda_event_n_label, &bandicoot_pandda_event_m_label);
    GtkWidget *srow = bandicoot_pandda_progress_row("Site",
                         &bandicoot_pandda_site_n_label, &bandicoot_pandda_site_m_label);
-   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, erow), FALSE, FALSE, 0);
-   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, srow), FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, progtitle), TRUE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, erow), TRUE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(progv), bandicoot_pandda_frame(NULL, srow), TRUE, FALSE, 0);
    gtk_box_pack_start(GTK_BOX(top), bandicoot_pandda_frame(NULL, progv), FALSE, FALSE, 0);
 
-   // -- Go to Dataset (inline label, not a frame title), with the four
-   //    site/quick-nav buttons framed beneath --
+   // -- Event Selection + Go to Dataset, side by side, each labelled above its
+   //    widget; the four site/quick-nav buttons framed beneath --
    GtkWidget *rightcol = gtk_vbox_new(FALSE, 4);
-   GtkWidget *gotorow = gtk_hbox_new(FALSE, 4);
-   gtk_box_pack_start(GTK_BOX(gotorow), gtk_label_new("Go to Dataset:"), FALSE, FALSE, 0);
-   bandicoot_pandda_goto_entry = gtk_entry_new();
-   g_signal_connect(bandicoot_pandda_goto_entry, "activate",
-                    G_CALLBACK(bandicoot_pandda_goto_activate), NULL);
-   GtkWidget *gobtn = gtk_button_new_with_label("Go");
-   g_signal_connect(gobtn, "clicked", G_CALLBACK(bandicoot_pandda_goto_clicked), NULL);
-   gtk_box_pack_start(GTK_BOX(gotorow), bandicoot_pandda_goto_entry, TRUE, TRUE, 0);
-   gtk_box_pack_start(GTK_BOX(gotorow), gobtn, FALSE, FALSE, 0);
-   gtk_box_pack_start(GTK_BOX(rightcol), gotorow, FALSE, FALSE, 0);
+   GtkWidget *selrow = gtk_hbox_new(FALSE, 8);
+
+   // Event Selection (filters/sorts) column
+   GtkWidget *escol = gtk_vbox_new(FALSE, 1);
+   GtkWidget *esl = gtk_label_new("Event Selection");
+   gtk_misc_set_alignment(GTK_MISC(esl), 0.0, 0.5);
+   GtkWidget *sel_combo = bandicoot_pandda_make_sel_combo();
+   gtk_box_pack_start(GTK_BOX(escol), esl, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(escol), sel_combo, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(selrow), escol, TRUE, TRUE, 0);
+   bandicoot_pandda_sel_combo = sel_combo;
+
+   // Go to Dataset column: a combo-entry (pick from the filtered list OR type),
+   // narrower than before, with a Go button
+   GtkWidget *gtcol = gtk_vbox_new(FALSE, 1);
+   GtkWidget *gtl = gtk_label_new("Go to Dataset");
+   gtk_misc_set_alignment(GTK_MISC(gtl), 0.0, 0.5);
+   GtkWidget *gtrow = bandicoot_pandda_make_goto_row();   // combo-entry + Go
+   gtk_box_pack_start(GTK_BOX(gtcol), gtl, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(gtcol), gtrow, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(selrow), gtcol, TRUE, TRUE, 0);
+
+   gtk_box_pack_start(GTK_BOX(rightcol), selrow, FALSE, FALSE, 0);
 
    GtkWidget *snav = gtk_table_new(2, 2, TRUE);
    gtk_table_set_row_spacings(GTK_TABLE(snav), 2);
@@ -3888,35 +3948,45 @@ static void bandicoot_pandda_build_inspect(GtkWidget *vbox) {
    gtk_box_pack_start(GTK_BOX(infocol), cols, TRUE, TRUE, 0);
    gtk_box_pack_start(GTK_BOX(midrow), infocol, TRUE, TRUE, 0);
 
-   GtkWidget *modtbl = gtk_table_new(3, 2, TRUE);
+   // 4x2 grid: left column = ligand controls, right column = model controls.
+   GtkWidget *modtbl = gtk_table_new(4, 2, TRUE);
    gtk_table_set_row_spacings(GTK_TABLE(modtbl), 2);
    gtk_table_set_col_spacings(GTK_TABLE(modtbl), 4);
    GtkWidget *mg  = gtk_button_new_with_label("Merge Ligand\nWith Model");
    GtkWidget *mv  = gtk_button_new_with_label("Move New\nLigand Here");
    GtkWidget *ol  = gtk_button_new_with_label("Open Next\nLigand");
+   GtkWidget *olh = gtk_button_new_with_label("Open Ligand Here\n(all isomers)");
    GtkWidget *sv  = gtk_button_new_with_label("Save Model");
    GtkWidget *rl  = gtk_button_new_with_label("Reload Last\nSaved Model");
    GtkWidget *rs  = gtk_button_new_with_label("Reset to\nUnfitted Model");
-   g_signal_connect(mg, "clicked", G_CALLBACK(bandicoot_pandda_merge_ligand), NULL);
-   g_signal_connect(mv, "clicked", G_CALLBACK(bandicoot_pandda_place_ligand), NULL);
-   g_signal_connect(ol, "clicked", G_CALLBACK(bandicoot_pandda_openlig_cb), NULL);
-   g_signal_connect(sv, "clicked", G_CALLBACK(bandicoot_pandda_save_model), NULL);
-   g_signal_connect(rl, "clicked", G_CALLBACK(bandicoot_pandda_reload_cb), NULL);
-   g_signal_connect(rs, "clicked", G_CALLBACK(bandicoot_pandda_reset_cb), NULL);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), mg, 0, 1, 0, 1);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), sv, 1, 2, 0, 1);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), mv, 0, 1, 1, 2);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), rl, 1, 2, 1, 2);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), ol, 0, 1, 2, 3);
-   gtk_table_attach_defaults(GTK_TABLE(modtbl), rs, 1, 2, 2, 3);
-   gtk_box_pack_start(GTK_BOX(midrow), modtbl, FALSE, FALSE, 0);
-   gtk_box_pack_start(GTK_BOX(vbox), midrow, FALSE, FALSE, 2);
+   GtkWidget *unfit = gtk_button_new_with_label("Load Unfitted Model\n(for comparison only)");
+   g_signal_connect(mg,  "clicked", G_CALLBACK(bandicoot_pandda_merge_ligand), NULL);
+   g_signal_connect(mv,  "clicked", G_CALLBACK(bandicoot_pandda_place_ligand), NULL);
+   g_signal_connect(ol,  "clicked", G_CALLBACK(bandicoot_pandda_openlig_cb), NULL);
+   g_signal_connect(olh, "clicked", G_CALLBACK(bandicoot_pandda_openlighere_cb), NULL);
+   g_signal_connect(sv,  "clicked", G_CALLBACK(bandicoot_pandda_save_model), NULL);
+   g_signal_connect(rl,  "clicked", G_CALLBACK(bandicoot_pandda_reload_cb), NULL);
+   g_signal_connect(rs,  "clicked", G_CALLBACK(bandicoot_pandda_reset_cb), NULL);
+   g_signal_connect(unfit, "clicked", G_CALLBACK(bandicoot_pandda_compare_cb), NULL);
+   // left column (ligand)                 right column (model)
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), mg,  0, 1, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), sv,  1, 2, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), mv,  0, 1, 1, 2);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), rl,  1, 2, 1, 2);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), ol,  0, 1, 2, 3);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), rs,  1, 2, 2, 3);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), olh, 0, 1, 3, 4);
+   gtk_table_attach_defaults(GTK_TABLE(modtbl), unfit, 1, 2, 3, 4);
    bandicoot_pandda_merge_btn = mg;
    bandicoot_pandda_place_btn = mv;
    bandicoot_pandda_openlig_btn = ol;
+   bandicoot_pandda_openlighere_btn = olh;
    bandicoot_pandda_save_btn = sv;
    bandicoot_pandda_reload_btn = rl;
    bandicoot_pandda_reset_btn = rs;
+   bandicoot_pandda_compare_btn = unfit;
+   gtk_box_pack_start(GTK_BOX(midrow), modtbl, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(vbox), midrow, FALSE, FALSE, 2);
 
    // ===== Record Event Information =====
    GtkWidget *evbox = gtk_vbox_new(FALSE, 3);
@@ -4004,15 +4074,12 @@ static void bandicoot_pandda_build_inspect(GtkWidget *vbox) {
    GtkWidget *folder = gtk_button_new_with_label("Select PanDDA folder\xe2\x80\xa6");
    GtkWidget *inmtz  = gtk_button_new_with_label("Load input mtz file");
    GtkWidget *avgmap = gtk_button_new_with_label("Load average map");
-   GtkWidget *unfit  = gtk_button_new_with_label("Load unfitted model\n(for comparison only)");
    g_signal_connect(folder, "clicked", G_CALLBACK(bandicoot_pandda_choose_folder), NULL);
    g_signal_connect(inmtz,  "clicked", G_CALLBACK(bandicoot_pandda_inmtz_cb), NULL);
    g_signal_connect(avgmap, "clicked", G_CALLBACK(bandicoot_pandda_avgmap_cb), NULL);
-   g_signal_connect(unfit,  "clicked", G_CALLBACK(bandicoot_pandda_compare_cb), NULL);
    gtk_box_pack_start(GTK_BOX(center), folder, FALSE, FALSE, 0);
    gtk_box_pack_start(GTK_BOX(center), inmtz,  FALSE, FALSE, 0);
    gtk_box_pack_start(GTK_BOX(center), avgmap, FALSE, FALSE, 0);
-   gtk_box_pack_start(GTK_BOX(center), unfit,  FALSE, FALSE, 0);
    // centre the button group horizontally (expand TRUE, fill FALSE)
    GtkWidget *misc_row = gtk_hbox_new(FALSE, 0);
    gtk_box_pack_start(GTK_BOX(misc_row), center, TRUE, FALSE, 0);
@@ -4026,7 +4093,7 @@ static void bandicoot_pandda_build_inspect(GtkWidget *vbox) {
    gtk_box_pack_start(GTK_BOX(vbox), miscframe, FALSE, FALSE, 2);
    bandicoot_pandda_inmtz_btn = inmtz;
    bandicoot_pandda_avgmap_btn = avgmap;
-   bandicoot_pandda_compare_btn = unfit;
+   // (compare_btn is the "Load Unfitted Model" button, now in the modeling grid)
 
    // ---- shared bottom bar: [ status ][ UI Mode ][ Close ] ----
    bandicoot_pandda_build_bottom(vbox);
@@ -4046,7 +4113,7 @@ static void bandicoot_pandda_rebuild_body() {
    bandicoot_pandda_refreshing = TRUE;
    if (bandicoot_pandda_mode == 1)
       bandicoot_pandda_build_basic(bandicoot_pandda_body);
-   else
+   else                                  // Full (the single rich UI)
       bandicoot_pandda_build_inspect(bandicoot_pandda_body);
    gtk_widget_show_all(bandicoot_pandda_body);
    bandicoot_pandda_refreshing = FALSE;
@@ -4059,6 +4126,9 @@ static void bandicoot_pandda_rebuild_body() {
    bandicoot_pandda_set_nav_sensitive(loaded);
    if (loaded) {
       bandicoot_pandda_refresh_annotations();
+      // refill the dataset widgets (Go-to combo / list) for the freshly-built body
+      bandicoot_pandda_populate_datasets();
+      bandicoot_pandda_populate_goto_combo();
       // carry the loaded-dataset status across a mode swap (don't revert to
       // the "Select a PanDDA folder to begin." placeholder).
       if (bandicoot_pandda_status_label) {
