@@ -75,7 +75,17 @@ you launch from — clean those up if you want a fully clean removal.
 
 - Starting in v0.1.0.0, Bandicoot embeds Python so it can
 talk to Phenix (live model/map updates during refinement). As of
-v0.1.1.3 `libpython3.13.dylib` is bundled inside the tarball, so
-Miniconda is no longer required at runtime. The Coot scientific
+v0.1.1.3 `libpython3.13.dylib` is bundled inside the tarball, and as
+of v0.1.4.2 the Python **standard library** is bundled too (under
+`lib/python3.13/`), so Miniconda is no longer required at runtime.
+(Before v0.1.4.2 the embedded interpreter still borrowed its standard
+library from an external conda via `PYTHONHOME`; on a machine without a
+matching conda it aborted at startup with `ModuleNotFoundError: No
+module named 'encodings'`.) The Coot scientific
 libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++) and the
 graphics libraries (libpng16, libfreetype6) are bundled too.
+- v0.1.4.2 also bundles **numpy** and **matplotlib** (self-contained
+PyPI wheels, under `lib/python3.13/site-packages/`): numpy is required
+by the PanDDA event-map tiling fix, matplotlib by the pathology plots.
+This is the bulk of the tarball's size; a future lean tarball may fetch
+them on demand at `setup.sh` time instead.

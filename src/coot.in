@@ -215,18 +215,39 @@ fi
 # paths that don't exist on a Py3 install. When Bandicoot is launched
 # from SBGrid's phenix.refine (or any caller that exports its own
 # PYTHONHOME / PYTHONPATH), the wrong values would break Python init.
-# Override unconditionally with values keyed to whatever conda Python
-# our libpython3.13.dylib was built against. Falls back to unset if no
-# conda is found at the known paths; libpython then uses its compiled-
-# in default prefix.
+# Override unconditionally; never trust the inherited PYTHONHOME.
+#
+# v0.1.4.2: prefer our OWN bundled standard library. Builds up to v0.1.4.1
+# bundled libpython3.13.dylib (the interpreter engine) but NOT the stdlib
+# (encodings/, os.py, lib-dynload/, ...), so PYTHONHOME had to borrow the
+# stdlib from an external conda that happened to have a matching Python.
+# On a machine without such a conda (e.g. default python 3.12, no conda at
+# the probed paths) embedded Python aborted at init with
+# "ModuleNotFoundError: No module named 'encodings'". scripts/
+# bundle_conda_deps.sh now copies the stdlib into $COOT_PREFIX/lib/
+# python3.X/, so when that's present point PYTHONHOME at our own prefix and
+# the install is genuinely self-contained. Fall back to the conda probe
+# only for legacy installs that predate the bundled stdlib.
 unset PYTHONHOME
-for _bcoot_conda in /opt/miniconda3 /opt/anaconda3 "$HOME/miniconda3" "$HOME/anaconda3"; do
-    if [ -x "$_bcoot_conda/bin/python3" ]; then
-        PYTHONHOME="$_bcoot_conda"
-        break
-    fi
+_bcoot_have_bundled_stdlib=""
+for _d in "$COOT_PREFIX"/lib/python3.*/encodings; do
+    [ -d "$_d" ] && _bcoot_have_bundled_stdlib=1 && break
 done
-unset _bcoot_conda
+if [ -n "$_bcoot_have_bundled_stdlib" ]; then
+    PYTHONHOME="$COOT_PREFIX"
+else
+    # Legacy fallback: borrow the stdlib from a conda at a standard path,
+    # keyed to whatever Python our libpython3.13.dylib was built against.
+    # Left unset if none found; libpython then uses its compiled-in prefix.
+    for _bcoot_conda in /opt/miniconda3 /opt/anaconda3 "$HOME/miniconda3" "$HOME/anaconda3"; do
+        if [ -x "$_bcoot_conda/bin/python3" ]; then
+            PYTHONHOME="$_bcoot_conda"
+            break
+        fi
+    done
+    unset _bcoot_conda
+fi
+unset _bcoot_have_bundled_stdlib _d
 # PYTHONPATH: prepend our coot/ module dir but preserve whatever the
 # parent process set (Phenix's libtbx etc. ride along this way). Strip
 # obvious version-incompatible entries -- a /python3.9/ or /python2.7/

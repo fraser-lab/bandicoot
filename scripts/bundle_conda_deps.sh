@@ -234,4 +234,99 @@ for dylib in "$PREFIX"/lib/*.dylib; do
     done
 done
 
+# ---------------------------------------------------------------------------
+# v0.1.4.2: bundle the Python standard library.
+#
+# libpython3.13.dylib (the interpreter engine) is copied above, but the
+# interpreter still needs its standard library at runtime: encodings/, os.py,
+# and the compiled C extensions in lib-dynload/. Builds up to v0.1.4.1 left
+# that to an external conda via the launcher's PYTHONHOME, so any user without
+# a matching conda crashed at Python init with "No module named 'encodings'".
+# Copy the stdlib into $PREFIX/lib/python3.X/ -- alongside Bandicoot's own
+# site-packages, which is already installed there and must NOT be clobbered --
+# so the launcher can set PYTHONHOME=$COOT_PREFIX and the install stands alone.
+echo "==> bundling Python standard library"
+
+PY_STDLIB_SRC=""
+for _d in "$CONDA_PREFIX_ARG"/lib/python3.*; do
+    [ -d "$_d/encodings" ] && PY_STDLIB_SRC="$_d" && break
+done
+
+if [ -z "$PY_STDLIB_SRC" ]; then
+    echo "    WARN: no python3.* stdlib found under $CONDA_PREFIX_ARG/lib; skipping" >&2
+else
+    PY_VER_DIR="$(basename "$PY_STDLIB_SRC")"        # e.g. python3.13
+    PY_STDLIB_DST="$PREFIX/lib/$PY_VER_DIR"
+    mkdir -p "$PY_STDLIB_DST"
+    # Copy the stdlib but NOT conda's site-packages (Bandicoot's own already
+    # lives at the destination), and trim dev/test/unused trees to keep the
+    # tarball slim. lib-dynload/ (compiled C extension modules) is essential
+    # and is copied. None of the excluded packages are imported by Coot's GTK
+    # Python layer. NOTE: optional C extensions in lib-dynload/ (_ssl, _hashlib,
+    # _sqlite3, _lzma, _bz2, ...) still record conda dep paths; Python boots
+    # fine without them (encodings is pure-Python, _codecs is built in), they
+    # only fail if imported. Bundling their transitive deps (openssl, ...) is a
+    # separate follow-up if any Coot script needs them at runtime.
+    rsync -a \
+        --exclude 'site-packages' \
+        --exclude '__pycache__' \
+        --exclude '*.pyc' \
+        --exclude 'test' \
+        --exclude 'tests' \
+        --exclude 'idlelib' \
+        --exclude 'tkinter' \
+        --exclude 'turtledemo' \
+        --exclude 'lib2to3' \
+        --exclude 'ensurepip' \
+        --exclude 'config-*' \
+        "$PY_STDLIB_SRC/" "$PY_STDLIB_DST/"
+    echo "    bundled $PY_VER_DIR stdlib -> $PY_STDLIB_DST (site-packages preserved)"
+fi
+unset _d PY_STDLIB_SRC PY_VER_DIR PY_STDLIB_DST
+
+# ---------------------------------------------------------------------------
+# v0.1.4.2: bundle numpy + matplotlib (self-contained PyPI wheels).
+#
+# The launcher sets PYTHONHOME=$COOT_PREFIX, so the embedded interpreter's
+# site-packages is $PREFIX/lib/python3.X/site-packages. Two shipped Python
+# features need third-party scientific packages there:
+#   * numpy      -- REQUIRED by the PanDDA map-tiling fix (_fix_ccp4_map in
+#                   bandicoot_pandda.py); without it the .ccp4 event map loads
+#                   un-retiled and sits off the model.
+#   * matplotlib -- drives the pathology plots.
+# Up to v0.1.4.1 these resolved from the external conda via PYTHONHOME; the
+# v0.1.4.2 self-contained-stdlib switch cut them off, so we bundle them here.
+#
+# We pull SELF-CONTAINED PyPI wheels, NOT conda's copies: conda's numpy
+# @rpath-links libcblas/liblapack into the conda prefix (not relocatable),
+# whereas PyPI wheels vendor OpenBLAS/libjpeg/... under <pkg>.libs/ with
+# @loader_path refs, so they import with no conda present. Installing
+# matplotlib pulls its closure (numpy, Pillow, contourpy, kiwisolver,
+# fonttools, ...) in one resolve. --only-binary=:all: forbids source builds
+# (those would link build-host libs and break relocatability). The bundled
+# .so / vendored .dylib get ad-hoc-signed by setup.sh's codesign pass, which
+# scans $PREFIX/lib recursively (site-packages lives under it).
+echo "==> bundling numpy + matplotlib (PyPI wheels) into site-packages"
+PY_SITE=""
+for _d in "$PREFIX"/lib/python3.*/site-packages; do
+    [ -d "$_d" ] && PY_SITE="$_d" && break
+done
+PIP_PY="$CONDA_PREFIX_ARG/bin/python3"
+if [ -z "$PY_SITE" ]; then
+    echo "    WARN: no site-packages dir under $PREFIX/lib; skipping" >&2
+elif [ ! -x "$PIP_PY" ] || ! "$PIP_PY" -m pip --version >/dev/null 2>&1; then
+    echo "    WARN: $PIP_PY has no usable pip; skipping numpy/matplotlib bundle" >&2
+else
+    "$PIP_PY" -m pip install --quiet --disable-pip-version-check \
+        --target="$PY_SITE" --upgrade --only-binary=:all: \
+        numpy matplotlib
+    # pip --target drops console-script shims (f2py, fonttools, ...) into
+    # <target>/bin with the build host's shebang -- useless inside the bundle.
+    rm -rf "$PY_SITE/bin"
+    # __pycache__ is regenerated on first import; don't ship it.
+    find "$PY_SITE" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+    echo "    bundled into $PY_SITE: $(ls "$PY_SITE" | grep -viE '^coot|\.dist-info$|\.pth$' | tr '\n' ' ')"
+fi
+unset _d PY_SITE PIP_PY
+
 echo "==> bundle_conda_deps: done"
