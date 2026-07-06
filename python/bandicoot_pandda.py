@@ -703,6 +703,18 @@ class PanddaInspect(object):
                 rows = list(csv.reader(f))
             if not rows:
                 return out
+            # Excel "Save As CSV" wraps a whole row in quotes when the cell's
+            # own text contains a comma, so csv.reader hands back a single
+            # field per row (e.g. ['x03697-1,pxr-1_C02']). Detect that over-
+            # quoting from the header and re-split every row on the comma.
+            if len(rows[0]) == 1 and "," in rows[0][0]:
+                split = []
+                for r in rows:
+                    if len(r) == 1 and "," in r[0]:
+                        split.append(next(csv.reader([r[0]])))
+                    else:
+                        split.append(r)
+                rows = split
             hdr = [h.strip().lower() for h in rows[0]]
             def col(*names, **kw):
                 for n in names:
