@@ -17,7 +17,7 @@ from source instead, see [BUILD.md](BUILD.md).
 
 1. Extract the tarball anywhere:
    ```sh
-   tar xf bandicoot-<version>-darwin-arm64.tar.gz
+   tar -xvf bandicoot-<version>-darwin-arm64.tar.gz
    ```
    This creates a `bandicoot-<version>/` directory with `bin/`, `lib/`,
    `libexec/`, `share/`, and a `setup.sh` helper.
@@ -26,8 +26,8 @@ from source instead, see [BUILD.md](BUILD.md).
 
 2. Run the one-time setup script:
    ```sh
-   cd bandicoot-<version> --add-to-path
-   ./setup.sh
+   cd bandicoot-<version>
+   ./setup.sh --add-to-path
    ```
 
   **NOTE:** If you don't want install to add the Bandicoot path to your `PATH`, omit the `--add-to-path` option. You can add the path manually:
