@@ -7498,6 +7498,10 @@ molecule_class_info_t::model_view_residue_tree_labels() const {
                   mmdb::PResidue residue_p;
                   for (int ires=0; ires<nres; ires++) {
                      residue_p = chain_p->GetResidue(ires);
+                     if (! residue_p) continue; // GetResidue() can return NULL
+                                                // for gaps in the residue table;
+                                                // GetChainID() on a null residue
+                                                // reads chain at +0x70 -> SIGSEGV
                      std::string label = residue_p->GetChainID();
                      label += " ";
                      label += coot::util::int_to_string(residue_p->GetSeqNum());

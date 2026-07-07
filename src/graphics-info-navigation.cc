@@ -132,7 +132,9 @@ int graphics_info_t::go_to_atom_residue() {
 	       //
 	       mmdb::Residue *res = molecules[imol].atom_sel.atom_selection[0]->residue;
 	       mmdb::Atom *atom = molecules[imol].intelligent_this_residue_mmdb_atom(res);
-	       go_to_atom_atom_name_ = std::string(atom->name);
+	       if (atom) // intelligent_this_residue_mmdb_atom() returns NULL for a
+			 // null/empty residue; guard the name deref
+		  go_to_atom_atom_name_ = std::string(atom->name);
 	       break;
 	    }
 	 }

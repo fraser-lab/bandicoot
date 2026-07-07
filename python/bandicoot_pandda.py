@@ -780,6 +780,25 @@ class PanddaInspect(object):
         except OSError:
             return []
 
+    def _near_ligand_dirs(self, lig_id):
+        """Directory names under the cifs dir that match lig_id but for '-'/'_'
+        separators or case — the usual CSV-vs-folder naming slip (e.g. CSV
+        'pxr-1_E14' vs folder 'pxr_1_E14'). Used only to enrich the error."""
+        def norm(s):
+            return s.lower().replace("-", "_")
+        target = norm(lig_id)
+        hits = []
+        try:
+            for e in sorted(os.listdir(self._lig_cifs_dir)):
+                if not os.path.isdir(os.path.join(self._lig_cifs_dir, e)):
+                    continue
+                ne = norm(e)
+                if ne == target or ne.startswith(target + "_"):
+                    hits.append(e)
+        except OSError:
+            pass
+        return hits
+
     def _find_ligand_cif(self):
         """The expected ligand restraints .cif for this dataset/event: the
         event-specific rhofit result first, else the dataset's ligand_files/."""
@@ -932,8 +951,16 @@ class PanddaInspect(object):
             return "%s is not listed in the ligand index" % self.xtal
         dirs = self._resolve_isomer_dirs(self.xtal)
         if not dirs:
-            return ("%s maps to ligand '%s' but no '%s'[_stereo] directory exists "
-                    "under %s" % (self.xtal, lig_id, lig_id, self._lig_cifs_dir))
+            msg = ("%s maps to ligand '%s', but no folder named '%s' (nor "
+                   "'%s_<stereo>') was found in the ligand CIFs directory %s"
+                   % (self.xtal, lig_id, lig_id, lig_id, self._lig_cifs_dir))
+            near = self._near_ligand_dirs(lig_id)
+            if near:
+                msg += (" -- but %s %s present; the ligand id in the CSV must "
+                        "match the folder name exactly (check '-' vs '_' and "
+                        "case)" % (", ".join("'%s'" % n for n in near),
+                                   "is" if len(near) == 1 else "are"))
+            return msg
         return ("ligand '%s' directory found (%s) but no .pdb/.cif inside"
                 % (lig_id, ", ".join(os.path.basename(d) for d in dirs)))
 
