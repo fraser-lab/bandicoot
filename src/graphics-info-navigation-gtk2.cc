@@ -189,7 +189,11 @@ graphics_info_t::fill_go_to_atom_residue_tree_and_atom_list_gtk2(int imol,
       GtkTreeIter   toplevel, child;
 
       // what is the connection between tree_store and model?
-      gtk_tree_view_set_model(GTK_TREE_VIEW(gtktree), GTK_TREE_MODEL(tree_store));
+      // Defensive: gtktree can be NULL if this is called before the residue
+      // tree widget exists (premature combobox "changed" during construction).
+      // gtk_tree_view_set_model() on a NULL view SIGSEGVs at 0x70.
+      if (gtktree)
+	 gtk_tree_view_set_model(GTK_TREE_VIEW(gtktree), GTK_TREE_MODEL(tree_store));
     
       for (unsigned int ichain=0; ichain<residue_chains.size(); ichain++) {
 	 // the chain label item e.g. "A"

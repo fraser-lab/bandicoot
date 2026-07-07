@@ -907,8 +907,17 @@ graphics_info_t::go_to_atom_mol_combobox_changed(GtkWidget *combobox, gpointer d
 						 "go_to_atom_residue_tree");
 	 GtkWidget *atom_list = lookup_widget(GTK_WIDGET(combobox),
 					      "go_to_atom_atom_list");
-	 std::cout << "Debug:: fill_go_to_atom_residue_tree_gtk2 " << imol << std::endl;
-	 fill_go_to_atom_residue_tree_and_atom_list_gtk2(imol, residue_tree, atom_list);
+	 // The combobox "changed" signal fires during window construction
+	 // (fill_combobox_with_coordinates_options -> gtk_combo_box_set_active),
+	 // before fill_go_to_atom_window_gtk2() has created the residue tree.
+	 // When the newly-active molecule differs from go_to_atom_molecule_
+	 // (e.g. after a residue delete shifts the selection), residue_tree is
+	 // still NULL here and gtk_tree_view_set_model() would SIGSEGV at 0x70.
+	 // Guard as is already done at the other fill_ call site; the tree is
+	 // filled properly later by fill_go_to_atom_window_gtk2().
+	 if (residue_tree) {
+	    fill_go_to_atom_residue_tree_and_atom_list_gtk2(imol, residue_tree, atom_list);
+	 }
 
       }
    } else {
