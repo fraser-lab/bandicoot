@@ -109,6 +109,14 @@ for _name, _alias in (('unicode', str), ('basestring', str),
     if not hasattr(builtins, _name):
         setattr(builtins, _name, _alias)
 
+# Py2's `apply(func, args, kwargs)` builtin was removed in Py3, but coot's
+# keyboard-shortcut dispatch (graphics_general_key_press_hook), the "Key
+# Bindings..." dialog's click-to-run buttons, and custom toolbuttons all still
+# call it. Without this shim every model-building keyboard shortcut raises
+# NameError on dispatch. Mirrors the type/builtin re-injection above.
+if not hasattr(builtins, 'apply'):
+    builtins.apply = lambda _f, _a=(), _k={}: _f(*_a, **_k)
+
 # Permissive GTK2 stub. PyGTK 2 (the `gtk` and `gobject` modules) is
 # Py2-only and not installable on Py3. Phenix's wxGUI2/Coot.py and
 # similar distributed driver scripts `import gtk` for their toolbar
@@ -386,6 +394,25 @@ try:
     interesting_things_with_fix_maybe = bandicoot_interesting_things_py
 except NameError:
     pass  # no C binding (e.g. older build) -- leave the stubbed GTK version
+
+
+# BANDICOOT: auto-install the model-building keyboard shortcuts so they work
+# out of the box. Stock Coot ships template_key_bindings.py but only wires it
+# in when the user clicks a menu item; we evaluate it here as a standard module
+# instead. add_key_binding() self-guards on use_gui_qm (inert without graphics),
+# and a user's own copy in ~/.coot-preferences still loads afterwards and
+# overrides these defaults. _load_file records the result in the summary below.
+# use_gui_qm is forced False in Bandicoot (no PyGTK), so gate on the graphics
+# interface state -- the real precondition for key bindings.
+_kb_gui_on = bool(globals().get("use_gui_qm"))
+if not _kb_gui_on:
+    try:
+        import coot as _coot
+        _kb_gui_on = bool(_coot.use_graphics_interface_state())
+    except Exception:
+        _kb_gui_on = False
+if _kb_gui_on:
+    _load_file("template_key_bindings.py")
 
 
 # One-line summary

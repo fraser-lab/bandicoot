@@ -1944,18 +1944,16 @@ except:
     key_bindings = []
 
 def decode_key(key_val_name):
-    try:
-        import gtk
-        key_value = int(gtk.gdk.keyval_from_name(key_val_name))
-        # on some windows: special characters seem to have high value,
-        # so need to convert these properly too 
-        if (not key_value or key_value >= 100000):
-            # new python needs a long there!? I hope it wont harm old!?
-            new_val = long(ord(key_val_name))
-            key_value = int(gtk.gdk.unicode_to_keyval(new_val))
-        return key_value
-    except:
-        return key_sym_code(key_val_name)
+    # BANDICOOT: upstream used gtk.gdk.keyval_from_name(), but Bandicoot's
+    # `gtk` module is a no-op stub whose result yields 0 via __int__ -- so
+    # every key binding silently registered under keycode 0 and no shortcut
+    # ever matched. For a single character the GDK keysym equals its code
+    # point, which is exactly what the graphics window reports as
+    # event->keyval, so use ord(). Fall back to coot's C-interface
+    # key_sym_code() for named keys (e.g. "Control_L", "space").
+    if len(key_val_name) == 1:
+        return ord(key_val_name)
+    return key_sym_code(key_val_name)
 
 # Add a key binding 
 #
@@ -1964,7 +1962,12 @@ def decode_key(key_val_name):
 #
 def add_key_binding(name, key, thunk):
 
-    if (use_gui_qm):
+    # BANDICOOT: upstream gated this on use_gui_qm, which Bandicoot forces to
+    # False -- use_gui_qm is only set true under USE_PYGTK (coot-setup-python.cc),
+    # and Bandicoot has no PyGTK (it drives its UI natively). Key bindings need
+    # only an interactive graphics window + the C-side dispatch, not PyGTK, so
+    # also register whenever the graphics interface is up.
+    if (use_gui_qm or use_graphics_interface_state()):
 
         from types import IntType, StringType
         
@@ -4626,7 +4629,7 @@ def setup_ccp4():
             CCP4_MASTER = os.path.abspath(os.path.join(ccp4_dir, os.pardir))
             # not all required I guess!? They should be set anyway
             ccp4_env_vars = {
-                "CCP4_SCR": ["C:\ccp4temp"],
+                "CCP4_SCR": [r"C:\ccp4temp"],
                 "CCP4I_TCLTK": [CCP4_MASTER, "TclTk84", "bin"],
                 "CBIN": [CCP4, "bin"],
                 "CLIB": [CCP4, "lib"],

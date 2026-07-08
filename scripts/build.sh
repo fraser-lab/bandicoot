@@ -209,6 +209,10 @@ if [ -f "${REPO_ROOT}/INSTALL.md" ]; then
     cp "${REPO_ROOT}/INSTALL.md" "${PREFIX}/INSTALL.md"
     echo "==> copied INSTALL.md to ${PREFIX}/INSTALL.md"
 fi
+if [ -f "${REPO_ROOT}/KEY_SHORTCUTS.md" ]; then
+    cp "${REPO_ROOT}/KEY_SHORTCUTS.md" "${PREFIX}/KEY_SHORTCUTS.md"
+    echo "==> copied KEY_SHORTCUTS.md to ${PREFIX}/KEY_SHORTCUTS.md"
+fi
 
 echo ""
 echo "Bandicoot installed in ${PREFIX}"
