@@ -128,6 +128,51 @@ def _rename_cif_residue(src_path, new_code):
         return src_path
 
 
+def _acedrg_build(smiles, tlc):
+    """Build a 3D ligand (.pdb + .cif) from a SMILES string by running acedrg
+    directly. Returns (pdb_path, cif_path, error_message); error_message is
+    None on success, and a human-readable string (no 'PanDDA:' prefix) on
+    failure.
+
+    Coot's own new_molecule_by_smiles_string goes through acedrg_env(), which
+    does os.environ['CBIN'] (KeyError when CCP4 vars aren't exported) and uses
+    a ';' PATH separator -- so we bypass it. The SBGrid acedrg wrapper sets up
+    its own CCP4 environment; we only need it on PATH. Shared by the PanDDA
+    ligand loader and the standalone ligand_from_smiles_standalone()."""
+    import subprocess
+    smiles = (smiles or "").strip()
+    tlc = ((tlc or "").strip() or "LIG")[:3]
+    if not smiles:
+        return (None, None, "empty SMILES string")
+    try:
+        from shutil import which
+    except Exception:
+        which = None
+    acedrg = (which("acedrg") if which else None)
+    if not acedrg:
+        return (None, None, "acedrg not on PATH "
+                "(launch Bandicoot from a shell with SBGrid/CCP4 active)")
+    workdir = tempfile.mkdtemp(prefix="bcoot_acedrg_")
+    smi = os.path.join(workdir, "ligand.smi")
+    with open(smi, "w") as f:
+        f.write(smiles + "\n")
+    stub = os.path.join(workdir, tlc)
+    try:
+        proc = subprocess.run([acedrg, "-i", smi, "-r", tlc, "-o", stub],
+                              cwd=workdir, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except Exception as e:
+        return (None, None, "could not run acedrg (%s)" % e)
+    pdb, cif = stub + ".pdb", stub + ".cif"
+    if proc.returncode != 0 or not os.path.isfile(pdb):
+        if proc.stdout:
+            print("acedrg output (tail):\n"
+                  + proc.stdout.decode("utf-8", "replace")[-500:])
+        return (None, None, "acedrg could not build %s from that SMILES "
+                "(see terminal)" % tlc)
+    return (pdb, cif, None)
+
+
 class PanddaInspect(object):
 
     _ALIASES = {
@@ -884,46 +929,16 @@ class PanddaInspect(object):
         return self.status()
 
     def ligand_from_smiles(self, smiles, tlc):
-        """Build a 3D ligand from a SMILES string by running acedrg directly.
-
-        Coot's own new_molecule_by_smiles_string goes through acedrg_env(), which
-        does os.environ['CBIN'] (KeyError when CCP4 vars aren't exported) and uses
-        a ';' PATH separator -- so we bypass it. The SBGrid acedrg wrapper sets up
-        its own CCP4 environment; we only need it on PATH."""
+        """Build a 3D ligand from a SMILES string via acedrg (see _acedrg_build)
+        and load it as the current PanDDA ligand: occupancy from BDC, dropped on
+        the event. The acedrg core is shared with the standalone
+        ligand_from_smiles_standalone() behind Other Modelling Tools."""
         if not self.elist:
             return self._msg("PanDDA: load a PanDDA folder and pick an event first")
-        smiles = (smiles or "").strip()
-        tlc = ((tlc or "").strip() or "LIG")[:3]
-        if not smiles:
-            return self._msg("PanDDA: empty SMILES string")
-        import subprocess
-        try:
-            from shutil import which
-        except Exception:
-            which = None
-        acedrg = (which("acedrg") if which else None)
-        if not acedrg:
-            return self._msg("PanDDA: acedrg not on PATH "
-                             "(launch Bandicoot from a shell with SBGrid/CCP4 active)")
-        workdir = tempfile.mkdtemp(prefix="bcoot_acedrg_")
-        smi = os.path.join(workdir, "ligand.smi")
-        with open(smi, "w") as f:
-            f.write(smiles + "\n")
-        stub = os.path.join(workdir, tlc)
-        try:
-            proc = subprocess.run([acedrg, "-i", smi, "-r", tlc, "-o", stub],
-                                  cwd=workdir, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        except Exception as e:
-            return self._msg("PanDDA: could not run acedrg (%s)" % e)
-        pdb, cif = stub + ".pdb", stub + ".cif"
-        if proc.returncode != 0 or not os.path.isfile(pdb):
-            if proc.stdout:
-                print("acedrg output (tail):\n"
-                      + proc.stdout.decode("utf-8", "replace")[-500:])
-            return self._msg("PanDDA: acedrg could not build %s from that SMILES "
-                             "(see stdout)" % tlc)
-        if os.path.isfile(cif):
+        pdb, cif, err = _acedrg_build(smiles, tlc)
+        if err:
+            return self._msg("PanDDA: " + err)
+        if cif and os.path.isfile(cif):
             coot.read_cif_dictionary(cif)
         imol = self._read_model(pdb, 0, self.LIGAND_BOND_COLOUR)
         if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
@@ -1699,6 +1714,33 @@ def load_ligand_file(path):
 
 def ligand_from_smiles(smiles, tlc):
     return _get().ligand_from_smiles(smiles, tlc)
+
+def ligand_from_smiles_standalone(smiles, tlc):
+    """Build a 3D ligand from SMILES via acedrg and load it at the current view
+    centre, with no PanDDA session required. Backs the 'Ligand from SMILES...'
+    button in Other Modelling Tools. Returns a one-line status string."""
+    tlc = ((tlc or "").strip() or "LIG")[:3]
+    pdb, cif, err = _acedrg_build(smiles, tlc)
+    if err:
+        return "Ligand from SMILES: " + err
+    if cif and os.path.isfile(cif):
+        coot.read_cif_dictionary(cif)
+    imol = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
+    if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
+        return ("Ligand from SMILES: acedrg built %s but Coot could not read it"
+                % os.path.basename(pdb))
+    try:
+        coot.set_molecule_bonds_colour_map_rotation(imol,
+                                                    PanddaInspect.LIGAND_BOND_COLOUR)
+    except Exception:
+        pass
+    # a freshly-built ligand has no meaningful pose -> drop it at the view centre
+    dx = coot.rotation_centre_position(0) - coot.molecule_centre_internal(imol, 0)
+    dy = coot.rotation_centre_position(1) - coot.molecule_centre_internal(imol, 1)
+    dz = coot.rotation_centre_position(2) - coot.molecule_centre_internal(imol, 2)
+    coot.translate_molecule_by(imol, dx, dy, dz)
+    coot.graphics_draw()
+    return "Ligand from SMILES: built %s as molecule %d" % (tlc, imol)
 
 def place_ligand():
     return _get().place_ligand()

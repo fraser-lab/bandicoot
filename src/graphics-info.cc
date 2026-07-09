@@ -2333,16 +2333,12 @@ graphics_info_t::draw_moving_atoms_atoms(bool against_a_dark_background) {
       coot::Cartesian back  = unproject(1.0);
       coot::Cartesian z_delta = (front - back) * 0.003;
 
+      // Pass 1: normal (bonded / non-water) atom centres as the original small
+      // points. Waters are skipped here and drawn as stars in pass 2.
       glBegin(GL_POINTS);
-      // glPointSize(700.0/zoom);
-      // glPointSize(2);
 
       float zsc = graphics_info_t::zoom;
       glPointSize(960.0/zsc);
-
-      // GLdouble point_size_data[2];
-      // glGetDoublev(GL_POINT_SIZE_RANGE, point_size_data);
-      // std::cout << "Point size range " << point_size_data[0] << " " << point_size_data[1] << std::endl;
 
       for (int icol=0; icol<regularize_object_bonds_box.n_consolidated_atom_centres; icol++) {
 
@@ -2361,12 +2357,54 @@ graphics_info_t::draw_moving_atoms_atoms(bool against_a_dark_background) {
 	 }
 
 	 for (unsigned int i=0; i<regularize_object_bonds_box.consolidated_atom_centres[icol].num_points; i++) {
-	    // no points for hydrogens
-	    if (! regularize_object_bonds_box.consolidated_atom_centres[icol].points[i].is_hydrogen_atom) {
-
-	       coot::Cartesian fake_pt = regularize_object_bonds_box.consolidated_atom_centres[icol].points[i].position;
+	    const auto &p = regularize_object_bonds_box.consolidated_atom_centres[icol].points[i];
+	    // no points for hydrogens; waters get a star in pass 2
+	    if (! p.is_hydrogen_atom && ! p.is_water) {
+	       coot::Cartesian fake_pt = p.position;
 	       fake_pt += z_delta;
 	       glVertex3f(fake_pt.x(), fake_pt.y(), fake_pt.z());
+	    }
+	 }
+      }
+      glEnd();
+
+      // Pass 2: waters (lone O atoms, e.g. a new conformer from "Add Alt Conf")
+      // as a small 3-line star, so they are visible instead of a near-invisible
+      // point. Confined to waters (points[i].is_water) so a split protein
+      // sidechain keeps the plain point look. star_size ~ coords/Bond_lines.cc.
+      const float star_size = 0.18;
+      const coot::Cartesian svx(star_size, 0.0, 0.0);
+      const coot::Cartesian svy(0.0, star_size, 0.0);
+      const coot::Cartesian svz(0.0, 0.0, star_size);
+      glLineWidth(graphics_info_t::bond_thickness_intermediate_atoms);
+      glBegin(GL_LINES);
+
+      for (int icol=0; icol<regularize_object_bonds_box.n_consolidated_atom_centres; icol++) {
+
+	 switch(icol) {
+	 case BLUE_BOND:
+	    glColor3f (0.40, 0.4, 0.79);
+	    break;
+	 case RED_BOND:
+	    glColor3f (0.79, 0.40, 0.640);
+	    break;
+	 default:
+	    if (against_a_dark_background)
+	       glColor3f (0.8, 0.8, 0.8);
+	    else
+	       glColor3f (0.5, 0.5, 0.5);
+	 }
+
+	 for (unsigned int i=0; i<regularize_object_bonds_box.consolidated_atom_centres[icol].num_points; i++) {
+	    const auto &p = regularize_object_bonds_box.consolidated_atom_centres[icol].points[i];
+	    if (p.is_water && ! p.is_hydrogen_atom) {
+	       coot::Cartesian pt = p.position + z_delta;
+	       coot::Cartesian p1 = pt + svx, p2 = pt - svx;
+	       coot::Cartesian p3 = pt + svy, p4 = pt - svy;
+	       coot::Cartesian p5 = pt + svz, p6 = pt - svz;
+	       glVertex3f(p1.x(), p1.y(), p1.z()); glVertex3f(p2.x(), p2.y(), p2.z());
+	       glVertex3f(p3.x(), p3.y(), p3.z()); glVertex3f(p4.x(), p4.y(), p4.z());
+	       glVertex3f(p5.x(), p5.y(), p5.z()); glVertex3f(p6.x(), p6.y(), p6.z());
 	    }
 	 }
       }

@@ -834,6 +834,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // atom
       if (g.delete_item_atom) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    mmdb::Residue *res = molecules[naii.imol].atom_sel.atom_selection[naii.atom_index]->residue;
 	    std::string resname(res->name);
@@ -887,6 +891,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // water
       if (g.delete_item_water) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    mmdb::Atom *at = molecules[naii.imol].atom_sel.atom_selection[naii.atom_index];
 	    mmdb::Residue *res = at->residue;
@@ -957,6 +965,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // side chain
       if (g.delete_item_sidechain) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    mmdb::Residue *res = molecules[naii.imol].atom_sel.atom_selection[naii.atom_index]->residue;
 	    std::string resname(res->name);
@@ -978,6 +990,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // side chain range
       if (g.delete_item_sidechain_range) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    if (g.delete_item_sidechain_range == 1) {
 	       // This was the first click:
@@ -1021,6 +1037,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // chain
       if (g.delete_item_chain) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    normal_cursor();
 	    mmdb::Atom *at = molecules[naii.imol].atom_sel.atom_selection[naii.atom_index];
@@ -1036,6 +1056,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // residue
       if (g.delete_item_residue) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    mmdb::Residue *res = molecules[naii.imol].atom_sel.atom_selection[naii.atom_index]->residue;
 	    std::string resname(res->name);
@@ -1087,6 +1111,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // residue's hydrogens
       if (g.delete_item_residue_hydrogens) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    delete_residue_hydrogens_by_atom_index(naii.imol, naii.atom_index,
 						   destroy_delete_dialog_flag_by_ctrl_press);
@@ -1129,6 +1157,10 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
       // residue zone
       if (g.delete_item_residue_zone) {
 	 pick_info naii = atom_pick(event);
+	 // guard: an intermediate/moving-atom pick (imol -1) or a closed molecule
+	 // must not index molecules[naii.imol]; treat it as a miss.
+	 if (naii.success == GL_TRUE && ! is_valid_model_molecule(naii.imol))
+	    naii.success = GL_FALSE;
 	 if (naii.success == GL_TRUE) {
 	    if (g.delete_item_residue_zone == 1) {
 	       // This was the first click:

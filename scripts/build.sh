@@ -165,6 +165,18 @@ if [ -f "${PREFIX}/libexec/coot-bin" ]; then
     echo "==> renamed libexec/coot-bin -> libexec/Bandicoot"
 fi
 
+# Re-sign the Mach-O tree NOW. The relocation/bundling steps above rewrite
+# load commands with install_name_tool, which invalidates each touched
+# file's code signature -- and dyld SIGKILLs a process the moment it maps
+# an invalidated page ("Code Signature Invalid" / bare `Killed: 9`). So a
+# freshly built install crashes on launch until it is re-signed. Done here
+# (after the coot-bin -> Bandicoot rename, so the entitlements are keyed to
+# the final basename) rather than only in the end-user setup.sh, so a
+# build.sh install runs immediately. Fails the build if anything is still
+# invalid afterwards.
+echo "==> codesign-install.sh ${PREFIX}"
+"${REPO_ROOT}/scripts/codesign-install.sh" "${PREFIX}"
+
 # Add the bcoot symlink (the wrapper computes its prefix from $0's
 # location, so a symlink in the same bin dir works).
 ln -sf coot "${PREFIX}/bin/bcoot"
@@ -204,6 +216,13 @@ if [ -f "${REPO_ROOT}/scripts/setup-install.sh" ]; then
     cp "${REPO_ROOT}/scripts/setup-install.sh" "${PREFIX}/setup.sh"
     chmod +x "${PREFIX}/setup.sh"
     echo "==> copied setup.sh to ${PREFIX}/setup.sh"
+fi
+# Ship the signing helper next to setup.sh so the extracted tarball can
+# re-sign itself (setup.sh delegates to it when present).
+if [ -f "${REPO_ROOT}/scripts/codesign-install.sh" ]; then
+    cp "${REPO_ROOT}/scripts/codesign-install.sh" "${PREFIX}/codesign-install.sh"
+    chmod +x "${PREFIX}/codesign-install.sh"
+    echo "==> copied codesign-install.sh to ${PREFIX}/codesign-install.sh"
 fi
 if [ -f "${REPO_ROOT}/INSTALL.md" ]; then
     cp "${REPO_ROOT}/INSTALL.md" "${PREFIX}/INSTALL.md"

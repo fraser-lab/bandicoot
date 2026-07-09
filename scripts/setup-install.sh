@@ -87,7 +87,13 @@ echo "    $CHECK quarantine cleared"
 # ----------------------------------------------------------------------
 
 if [ "$SKIP_SIGN" -eq 0 ]; then
-    if command -v codesign >/dev/null 2>&1; then
+    if [ -x "$INSTALL_DIR/codesign-install.sh" ]; then
+        # Delegate to the shared signing helper shipped alongside this
+        # script -- the single source of truth for the signing policy. See
+        # its header for why the tree must be re-signed after the
+        # install_name_tool relocation the build performs.
+        "$INSTALL_DIR/codesign-install.sh" "$INSTALL_DIR" || note_problem
+    elif command -v codesign >/dev/null 2>&1; then
         echo "$ARROW Ad-hoc-codesigning Mach-O files (suppresses repeat Gatekeeper prompts)..."
 
         # Bandicoot v0.1.0.0: coot-bin embeds Python and dlopens

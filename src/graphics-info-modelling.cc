@@ -2819,6 +2819,13 @@ graphics_info_t::execute_rigid_body_refine(short int auto_range_flag) {
 		  } 
 		  
 
+		  // For an alt-conf water, the sibling conformer overlaps the moving one
+		  // (both O atoms sit in the same density peak), so leaving it in the
+		  // reference mol would mask away the density we are fitting into -- the
+		  // water then can't move. For a water, drop the sibling from the mask
+		  // mol too. For non-water zones the other alt conf is elsewhere and
+		  // should still mask.
+		  bool is_water_res = (mol[ifrag][ires].name == "HOH" || mol[ifrag][ires].name == "WAT");
 		  for (unsigned int iat=0; iat<mol[ifrag][ires].atoms.size(); iat++) {
 		     if ((mol[ifrag][ires][iat].altLoc == altconf) || !select_altconf) {
 // 			std::cout << "From ref res delete atom "
@@ -2828,6 +2835,8 @@ graphics_info_t::execute_rigid_body_refine(short int auto_range_flag) {
 // 			std::cout << "From mov res delete atom "
 // 				  << range_mol[ifrag][ires][iat] << std::endl;
 			from_mov_delete_atom_indices.push_back(iat);
+			if (is_water_res)
+			   from_ref_delete_atom_indices.push_back(iat);
 		     }
 		  }
 // 		  std::cout << "--------------------------------" << std::endl;

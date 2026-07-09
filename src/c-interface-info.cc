@@ -290,9 +290,14 @@ void output_residue_info_dialog(int imol, int atom_index) {
 
    } else {
 
-      if (imol <graphics_info_t::n_molecules()) {
+      // imol >= 0 guard: a pick that lands on the intermediate/moving-atoms
+      // molecule (e.g. a water mid-refinement) returns imol == -1 from
+      // pick_moving_atoms(). molecules[-1] is an out-of-bounds vector access
+      // that segfaults, so bail out cleanly rather than indexing with it.
+      if (imol >= 0 && imol < graphics_info_t::n_molecules()) {
          if (graphics_info_t::molecules[imol].has_model()) {
-            if (atom_index < graphics_info_t::molecules[imol].atom_sel.n_selected_atoms) {
+            if (atom_index >= 0 &&
+                atom_index < graphics_info_t::molecules[imol].atom_sel.n_selected_atoms) {
 
                graphics_info_t g;
                output_residue_info_as_text(atom_index, imol);

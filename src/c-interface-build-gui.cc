@@ -1855,6 +1855,10 @@ static void bandicoot_modelling_delete_sidechains(GtkButton *b, gpointer u) {
    if (is_valid_model_molecule(imol)) delete_sidechains_for_chain(imol, spec.chain_id.c_str());
 }
 
+// "Ligand from SMILES..." handler (defined below, near the PanDDA SMILES
+// code it is adapted from). Standalone: no PanDDA session needed.
+static void bandicoot_ligand_from_smiles_cb(GtkButton *b, gpointer u);
+
 // Append the salvaged modelling ops as a "Modelling Tools" frame into an
 // existing dialog's content area. Called from wrapped_create_other_model_tools_dialog
 // so "Other Modelling Tools..." absorbs the old "Modelling..." submenu's ops
@@ -1878,6 +1882,15 @@ extern "C" void bandicoot_add_modelling_tools_buttons(GtkWidget *dialog) {
       g_signal_connect(btn, "clicked", cbs[i], NULL);
       gtk_box_pack_start(GTK_BOX(fbox), btn, FALSE, FALSE, 2);
    }
+
+   // BANDICOOT: build a 3D ligand from a SMILES string (via acedrg), available
+   // here without opening the PanDDA panel. Packed into the frame alongside the
+   // other modelling tools.
+   GtkWidget *smiles_btn = gtk_button_new_with_label("Ligand from SMILES...");
+   g_signal_connect(smiles_btn, "clicked",
+                    G_CALLBACK(bandicoot_ligand_from_smiles_cb), NULL);
+   gtk_box_pack_start(GTK_BOX(fbox), smiles_btn, FALSE, FALSE, 2);
+
    gtk_box_pack_start(GTK_BOX(vbox), frame, FALSE, FALSE, 4);
    gtk_widget_show_all(frame);
 }
@@ -3254,6 +3267,57 @@ static void bandicoot_pandda_smiles_ligand(GtkButton *b, gpointer u) {
       std::string code = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(tlc)));
       std::string ss   = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(smi)));
       bandicoot_pandda_run("bandicoot_pandda.ligand_from_smiles('" + ss + "', '" + code + "')");
+   }
+   gtk_widget_destroy(d);
+}
+// Standalone "Ligand from SMILES..." (Other Modelling Tools). Same input dialog
+// as the PanDDA one above, but drives bandicoot_pandda.ligand_from_smiles_standalone()
+// which needs no loaded PanDDA folder -- it builds the ligand with acedrg and drops
+// it at the view centre. The module is imported here so this works even if the
+// PanDDA panel has never been opened.
+static void bandicoot_ligand_from_smiles_cb(GtkButton *b, gpointer u) {
+   GtkWidget *d = gtk_dialog_new_with_buttons(
+      "Ligand from SMILES", NULL, GTK_DIALOG_MODAL,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT, (char *) NULL);
+   GtkWidget *vb = gtk_dialog_get_content_area(GTK_DIALOG(d));
+   gtk_container_set_border_width(GTK_CONTAINER(vb), 8);
+   GtkWidget *t = gtk_table_new(2, 2, FALSE);
+   gtk_table_set_row_spacings(GTK_TABLE(t), 4);
+   gtk_table_set_col_spacings(GTK_TABLE(t), 6);
+   GtkWidget *l1 = gtk_label_new("3-letter code:");
+   gtk_misc_set_alignment(GTK_MISC(l1), 0.0, 0.5);
+   GtkWidget *tlc = gtk_entry_new();
+   gtk_entry_set_text(GTK_ENTRY(tlc), "LIG");
+   gtk_entry_set_max_length(GTK_ENTRY(tlc), 3);
+   GtkWidget *l2 = gtk_label_new("SMILES:");
+   gtk_misc_set_alignment(GTK_MISC(l2), 0.0, 0.5);
+   GtkWidget *smi = gtk_entry_new();
+   gtk_entry_set_width_chars(GTK_ENTRY(smi), 36);
+   gtk_entry_set_activates_default(GTK_ENTRY(smi), TRUE);
+   gtk_table_attach_defaults(GTK_TABLE(t), l1, 0, 1, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(t), tlc, 1, 2, 0, 1);
+   gtk_table_attach_defaults(GTK_TABLE(t), l2, 0, 1, 1, 2);
+   gtk_table_attach_defaults(GTK_TABLE(t), smi, 1, 2, 1, 2);
+   gtk_box_pack_start(GTK_BOX(vb), t, FALSE, FALSE, 0);
+   gtk_dialog_set_default_response(GTK_DIALOG(d), GTK_RESPONSE_ACCEPT);
+   gtk_widget_show_all(d);
+   if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT) {
+      std::string code = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(tlc)));
+      std::string ss   = bandicoot_pandda_py_escape(gtk_entry_get_text(GTK_ENTRY(smi)));
+#ifdef USE_PYTHON
+      safe_python_command("import bandicoot_pandda");
+      std::string cmd = "bandicoot_pandda.ligand_from_smiles_standalone('"
+                        + ss + "', '" + code + "')";
+      PyGILState_STATE g = PyGILState_Ensure();
+      PyObject *r = safe_python_command_with_return(cmd);
+      std::string msg;
+      if (r && PyString_Check(r))
+         msg = PyString_AsString(r);
+      PyGILState_Release(g);
+      if (! msg.empty())
+         add_status_bar_text(msg.c_str());
+#endif
    }
    gtk_widget_destroy(d);
 }
