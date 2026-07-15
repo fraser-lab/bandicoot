@@ -66,6 +66,26 @@ echo "    tarball : ${TARBALL}"
 mkdir -p "$OUTDIR"
 rm -f "$TARBALL" "${TARBALL}.sha256"
 
+# --- bundle license + attribution docs at the tarball root -----------------
+# GPLv3 requires the license (COPYING) and copyright/attribution notices to
+# accompany the conveyed binary; THIRD_PARTY_LICENSES.md covers the bundled
+# non-GPL components. Copy them into the install tree so they land at
+# bandicoot-<version>/ inside the archive. COPYING is mandatory — fail without
+# it; the rest are warned about but not fatal.
+if [ ! -f "$REPO/COPYING" ]; then
+    echo "package.sh: ERROR — $REPO/COPYING is missing; refusing to ship a" >&2
+    echo "            GPL binary without its license text." >&2
+    exit 1
+fi
+for doc in COPYING README.md AUTHORS THIRD_PARTY_LICENSES.md CORRESPONDING_SOURCE.md; do
+    if [ -f "$REPO/$doc" ]; then
+        cp -f "$REPO/$doc" "$INSTALL/$doc"
+        echo "    bundling doc: $doc"
+    else
+        echo "package.sh: WARNING — $doc not found in repo root; not bundled." >&2
+    fi
+done
+
 INSTALL_PARENT="$(dirname "$INSTALL")"
 INSTALL_BASE="$(basename "$INSTALL")"
 

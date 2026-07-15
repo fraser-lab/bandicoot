@@ -8,7 +8,9 @@ built or tested on other macOS releases, Linux, or Windows.
 
 ## Why a fork?
 
-Coot 0.9.8.95 builds and runs on macOS Tahoe, but several long-standing GTK-Quartz interactions render the user interface unusable. Bandicoot addresses each of these with macOS-specific fixes layered on top of upstream Coot. See the end of this document for a list of major changes from Coot 0.9.8.95.
+The Crystallographic Object-Oriented Tool (Coot) has been the go-to suite of software for molecular modeling, used by thousands of structural biologists all over the world for over twenty years. Recently, Coot has been fully reimagined and redesigned, as well as giving the libraries and packages under the hood a much-needed upgrade. The resulting program (Coot 1) is in wide use today. However, many suites of software for structural biology rely on the old Coot 0.9 framework in order to function, making it necessary for both versions to remain in circulation. 
+
+While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (2.7x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, addresses each of these with macOS-specific fixes layered on top of upstream Coot. See the end of this document for a list of major changes from Coot 0.9.8.95.
 
 ## Quick start
 
@@ -71,10 +73,15 @@ Coot. The full text of the license is in [COPYING](COPYING).
 The Bandicoot-specific patches are licensed under the same GPL v3
 terms.
 
+The binary tarball also bundles a number of third-party libraries,
+tools, and fonts distributed under their own (GPL-compatible) licenses.
+These are enumerated in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
 ## Credits
 
 Bandicoot builds on the work of Paul Emsley, Bernhard Lohkamp, Kevin
 Cowtan, and the many other contributors to Coot. The macOS-native
-patches were developed for use within the Fraser Lab at UCSF.
+patches were developed by Art Lyubimov for use within the Fraser Lab at
+UCSF.
 
 For the upstream Coot README, see [README.coot.md](README.coot.md).
