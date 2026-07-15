@@ -8726,6 +8726,23 @@ on_residue_info_occ_apply_to_altconf_checkbutton_toggled
 }
 
 
+void
+on_residue_info_rename_altconf_checkbutton_toggled
+                                        (GtkToggleButton *togglebutton,
+                                        gpointer         user_data)
+{
+
+  GtkWidget *from_entry = lookup_widget(GTK_WIDGET(togglebutton),
+					"residue_info_rename_altconf_from_entry");
+  GtkWidget *to_entry   = lookup_widget(GTK_WIDGET(togglebutton),
+					"residue_info_rename_altconf_to_entry");
+  gboolean state = gtk_toggle_button_get_active(togglebutton);
+  gtk_widget_set_sensitive(from_entry, state);
+  gtk_widget_set_sensitive(to_entry,   state);
+
+}
+
+
 
 
 void

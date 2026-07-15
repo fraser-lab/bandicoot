@@ -3043,6 +3043,11 @@ on_residue_info_occ_apply_to_altconf_checkbutton_toggled
                                         (GtkToggleButton *togglebutton,
 					 gpointer         user_data);
 
+void
+on_residue_info_rename_altconf_checkbutton_toggled
+                                        (GtkToggleButton *togglebutton,
+					 gpointer         user_data);
+
 
 void
 on_residue_info_b_factor_apply_all_checkbutton_toggled

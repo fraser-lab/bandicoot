@@ -2,7 +2,7 @@
 # Bandicoot: configure + build + install on macOS Tahoe / Apple Silicon.
 # Customise via environment variables (all optional):
 #   PREFIX        install root         (default: $HOME/sw/bandicoot-install)
-#   FFTW_PREFIX   FFTW2 install        (default: $HOME/sw/coot-deps)
+#   FFTW_PREFIX   FFTW2 install        (default: auto-detected; see below)
 #   CONDA_PREFIX  miniconda root       (default: /opt/miniconda3)
 #   BREW_PREFIX   homebrew root        (default: /opt/homebrew or `brew --prefix`)
 #   JOBS          parallel make jobs   (default: number of CPUs)
@@ -12,8 +12,27 @@ cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
-FFTW_PREFIX="${FFTW_PREFIX:-$HOME/sw/coot-deps}"
 CONDA_PREFIX="${CONDA_PREFIX:-/opt/miniconda3}"
+
+# FFTW2 (single-precision, legacy) is the one dependency that isn't
+# pkg-config-discoverable, so we locate it by probing known install roots.
+# Override with FFTW_PREFIX=... if yours lives elsewhere. The old default
+# ($HOME/sw/coot-deps) never actually contained FFTW2, so a plain
+# ./scripts/build.sh used to fail configure with "single-precision FFTW 2
+# library not found" unless the caller happened to know the magic prefix.
+if [ -z "${FFTW_PREFIX:-}" ]; then
+    for cand in \
+        "${CONDA_PREFIX}/fftw2" \
+        "$HOME/sw/coot-builds/coot-deps" \
+        "$HOME/sw/coot-deps"; do
+        if [ -f "${cand}/include/fftw.h" ] || [ -f "${cand}/include/sfftw.h" ]; then
+            FFTW_PREFIX="${cand}"
+            break
+        fi
+    done
+    FFTW_PREFIX="${FFTW_PREFIX:-${CONDA_PREFIX}/fftw2}"
+    echo "==> FFTW_PREFIX auto-detected: ${FFTW_PREFIX}"
+fi
 BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 

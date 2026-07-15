@@ -6572,42 +6572,100 @@ create_dynarama_properties_window (void)
 GtkWidget*
 create_python_window (void)
 {
+  /* BANDICOOT: rebuilt as a native scripting console (macOS has no PyGTK, so
+     coot_gui()'s rich console can't run). Layout: a tall editable code editor
+     on top, a Run/Save/Exit button row, and a compact read-only output pane
+     below, split by a draggable divider. The eval/exec engine lives in
+     python/bandicoot_console.py; the button/key wiring is in
+     setup_python_window() (c-interface-gui.cc). */
   GtkWidget *python_window;
   GtkWidget *vbox41;
-  GtkWidget *scrolledwindow4;
-  GtkWidget *python_window_text;
-  GtkWidget *python_window_entry;
+  GtkWidget *python_window_vpaned;
+  GtkWidget *scrolledwindow_editor;
+  GtkWidget *python_window_editor;
+  GtkWidget *bottom_vbox;
+  GtkWidget *button_hbox;
+  GtkWidget *python_window_run_button;
+  GtkWidget *python_window_save_button;
+  GtkWidget *python_window_exit_button;
+  GtkWidget *scrolledwindow_output;
+  GtkWidget *python_window_output;
 
   python_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_container_set_border_width (GTK_CONTAINER (python_window), 10);
-  gtk_window_set_title (GTK_WINDOW (python_window), "window2");
+  gtk_container_set_border_width (GTK_CONTAINER (python_window), 6);
+  gtk_window_set_title (GTK_WINDOW (python_window), "Bandicoot Python Scripting");
+  gtk_window_set_default_size (GTK_WINDOW (python_window), 660, 560);
 
   vbox41 = gtk_vbox_new (FALSE, 0);
   gtk_widget_show (vbox41);
   gtk_container_add (GTK_CONTAINER (python_window), vbox41);
 
-  scrolledwindow4 = gtk_scrolled_window_new (NULL, NULL);
-  gtk_widget_show (scrolledwindow4);
-  gtk_box_pack_start (GTK_BOX (vbox41), scrolledwindow4, TRUE, TRUE, 0);
-  GTK_WIDGET_UNSET_FLAGS (scrolledwindow4, GTK_CAN_FOCUS);
-  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow4), GTK_SHADOW_IN);
+  python_window_vpaned = gtk_vpaned_new ();
+  gtk_widget_show (python_window_vpaned);
+  gtk_box_pack_start (GTK_BOX (vbox41), python_window_vpaned, TRUE, TRUE, 0);
+  gtk_paned_set_position (GTK_PANED (python_window_vpaned), 360);
 
-  python_window_text = gtk_text_view_new ();
-  gtk_widget_show (python_window_text);
-  gtk_container_add (GTK_CONTAINER (scrolledwindow4), python_window_text);
-  gtk_text_view_set_editable (GTK_TEXT_VIEW (python_window_text), FALSE);
-  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (python_window_text), GTK_WRAP_WORD);
+  /* --- editor (top of the paned) --- */
+  scrolledwindow_editor = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (scrolledwindow_editor);
+  gtk_paned_pack1 (GTK_PANED (python_window_vpaned), scrolledwindow_editor, TRUE, TRUE);
+  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolledwindow_editor),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow_editor), GTK_SHADOW_IN);
 
-  python_window_entry = gtk_entry_new ();
-  gtk_widget_show (python_window_entry);
-  gtk_box_pack_start (GTK_BOX (vbox41), python_window_entry, FALSE, FALSE, 5);
+  python_window_editor = gtk_text_view_new ();
+  gtk_widget_show (python_window_editor);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow_editor), python_window_editor);
+  gtk_text_view_set_editable (GTK_TEXT_VIEW (python_window_editor), TRUE);
+  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (python_window_editor), GTK_WRAP_NONE);
+  gtk_text_view_set_left_margin (GTK_TEXT_VIEW (python_window_editor), 4);
+
+  /* --- bottom of the paned: buttons + output --- */
+  bottom_vbox = gtk_vbox_new (FALSE, 0);
+  gtk_widget_show (bottom_vbox);
+  gtk_paned_pack2 (GTK_PANED (python_window_vpaned), bottom_vbox, FALSE, TRUE);
+
+  button_hbox = gtk_hbox_new (FALSE, 4);
+  gtk_widget_show (button_hbox);
+  gtk_box_pack_start (GTK_BOX (bottom_vbox), button_hbox, FALSE, FALSE, 4);
+
+  python_window_run_button = gtk_button_new_with_mnemonic ("_Run");
+  gtk_widget_show (python_window_run_button);
+  gtk_box_pack_start (GTK_BOX (button_hbox), python_window_run_button, FALSE, FALSE, 0);
+
+  python_window_save_button = gtk_button_new_with_mnemonic ("_Save\342\200\246");
+  gtk_widget_show (python_window_save_button);
+  gtk_box_pack_start (GTK_BOX (button_hbox), python_window_save_button, FALSE, FALSE, 0);
+
+  python_window_exit_button = gtk_button_new_with_mnemonic ("E_xit");
+  gtk_widget_show (python_window_exit_button);
+  gtk_box_pack_end (GTK_BOX (button_hbox), python_window_exit_button, FALSE, FALSE, 0);
+
+  scrolledwindow_output = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (scrolledwindow_output);
+  gtk_box_pack_start (GTK_BOX (bottom_vbox), scrolledwindow_output, TRUE, TRUE, 0);
+  GTK_WIDGET_UNSET_FLAGS (scrolledwindow_output, GTK_CAN_FOCUS);
+  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolledwindow_output),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow_output), GTK_SHADOW_IN);
+
+  python_window_output = gtk_text_view_new ();
+  gtk_widget_show (python_window_output);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow_output), python_window_output);
+  gtk_text_view_set_editable (GTK_TEXT_VIEW (python_window_output), FALSE);
+  gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW (python_window_output), FALSE);
+  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (python_window_output), GTK_WRAP_WORD_CHAR);
+  gtk_text_view_set_left_margin (GTK_TEXT_VIEW (python_window_output), 4);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
   GLADE_HOOKUP_OBJECT_NO_REF (python_window, python_window, "python_window");
   GLADE_HOOKUP_OBJECT (python_window, vbox41, "vbox41");
-  GLADE_HOOKUP_OBJECT (python_window, scrolledwindow4, "scrolledwindow4");
-  GLADE_HOOKUP_OBJECT (python_window, python_window_text, "python_window_text");
-  GLADE_HOOKUP_OBJECT (python_window, python_window_entry, "python_window_entry");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_vpaned, "python_window_vpaned");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_editor, "python_window_editor");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_run_button, "python_window_run_button");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_save_button, "python_window_save_button");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_exit_button, "python_window_exit_button");
+  GLADE_HOOKUP_OBJECT (python_window, python_window_output, "python_window_output");
 
   return python_window;
 }
@@ -10703,6 +10761,11 @@ create_residue_info_dialog (void)
   GtkWidget *residue_info_occ_apply_to_altconf_checkbutton;
   GtkWidget *residue_info_occ_apply_to_alt_conf_entry;
   GtkWidget *residue_info_b_factor_apply_all_checkbutton;
+  GtkWidget *hbox_rename_altconf;
+  GtkWidget *residue_info_rename_altconf_checkbutton;
+  GtkWidget *residue_info_rename_altconf_from_entry;
+  GtkWidget *residue_info_rename_altconf_to_label;
+  GtkWidget *residue_info_rename_altconf_to_entry;
   GtkWidget *label97;
   GtkWidget *hbox130;
   GtkWidget *label260;
@@ -10790,6 +10853,32 @@ create_residue_info_dialog (void)
   residue_info_b_factor_apply_all_checkbutton = gtk_check_button_new_with_mnemonic ("Apply Temperature Factor to all atoms in residue?");
   gtk_widget_show (residue_info_b_factor_apply_all_checkbutton);
   gtk_box_pack_start (GTK_BOX (vbox164), residue_info_b_factor_apply_all_checkbutton, FALSE, FALSE, 4);
+
+  hbox_rename_altconf = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox_rename_altconf);
+  gtk_box_pack_start (GTK_BOX (vbox164), hbox_rename_altconf, FALSE, FALSE, 0);
+
+  residue_info_rename_altconf_checkbutton = gtk_check_button_new_with_mnemonic ("Rename Alt-conf from ");
+  gtk_widget_show (residue_info_rename_altconf_checkbutton);
+  gtk_box_pack_start (GTK_BOX (hbox_rename_altconf), residue_info_rename_altconf_checkbutton, FALSE, FALSE, 4);
+
+  residue_info_rename_altconf_from_entry = gtk_entry_new ();
+  gtk_widget_show (residue_info_rename_altconf_from_entry);
+  gtk_box_pack_start (GTK_BOX (hbox_rename_altconf), residue_info_rename_altconf_from_entry, FALSE, FALSE, 0);
+  gtk_widget_set_sensitive (residue_info_rename_altconf_from_entry, FALSE);
+  gtk_entry_set_max_length (GTK_ENTRY (residue_info_rename_altconf_from_entry), 1);
+  gtk_entry_set_width_chars (GTK_ENTRY (residue_info_rename_altconf_from_entry), 2);
+
+  residue_info_rename_altconf_to_label = gtk_label_new (" to ");
+  gtk_widget_show (residue_info_rename_altconf_to_label);
+  gtk_box_pack_start (GTK_BOX (hbox_rename_altconf), residue_info_rename_altconf_to_label, FALSE, FALSE, 0);
+
+  residue_info_rename_altconf_to_entry = gtk_entry_new ();
+  gtk_widget_show (residue_info_rename_altconf_to_entry);
+  gtk_box_pack_start (GTK_BOX (hbox_rename_altconf), residue_info_rename_altconf_to_entry, FALSE, FALSE, 0);
+  gtk_widget_set_sensitive (residue_info_rename_altconf_to_entry, FALSE);
+  gtk_entry_set_max_length (GTK_ENTRY (residue_info_rename_altconf_to_entry), 1);
+  gtk_entry_set_width_chars (GTK_ENTRY (residue_info_rename_altconf_to_entry), 2);
 
   label97 = gtk_label_new ("                                       Occupancy                  Temperature Factor");
   gtk_widget_show (label97);
@@ -10950,6 +11039,9 @@ create_residue_info_dialog (void)
   g_signal_connect ((gpointer) residue_info_b_factor_apply_all_checkbutton, "toggled",
                     G_CALLBACK (on_residue_info_b_factor_apply_all_checkbutton_toggled),
                     NULL);
+  g_signal_connect ((gpointer) residue_info_rename_altconf_checkbutton, "toggled",
+                    G_CALLBACK (on_residue_info_rename_altconf_checkbutton_toggled),
+                    NULL);
   g_signal_connect ((gpointer) residue_info_ok_button, "clicked",
                     G_CALLBACK (on_residue_info_ok_button_clicked),
                     NULL);
@@ -10970,6 +11062,9 @@ create_residue_info_dialog (void)
   GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_occ_apply_to_altconf_checkbutton, "residue_info_occ_apply_to_altconf_checkbutton");
   GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_occ_apply_to_alt_conf_entry, "residue_info_occ_apply_to_alt_conf_entry");
   GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_b_factor_apply_all_checkbutton, "residue_info_b_factor_apply_all_checkbutton");
+  GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_rename_altconf_checkbutton, "residue_info_rename_altconf_checkbutton");
+  GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_rename_altconf_from_entry, "residue_info_rename_altconf_from_entry");
+  GLADE_HOOKUP_OBJECT (residue_info_dialog, residue_info_rename_altconf_to_entry, "residue_info_rename_altconf_to_entry");
   GLADE_HOOKUP_OBJECT (residue_info_dialog, label97, "label97");
   GLADE_HOOKUP_OBJECT (residue_info_dialog, hbox130, "hbox130");
   GLADE_HOOKUP_OBJECT (residue_info_dialog, label260, "label260");

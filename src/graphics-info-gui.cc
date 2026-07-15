@@ -1826,6 +1826,37 @@ graphics_info_t::apply_residue_info_changes(GtkWidget *dialog) {
    // This is where we accumulate the residue edits:
    std::vector<coot::select_atom_info> local_atom_edits;
 
+   // BANDICOOT: bulk "Rename Alt-conf from X to Y" convenience.
+   // When the checkbutton is active, rewrite every per-atom alt-conf entry
+   // whose current value matches "from" to "to" *before* the reader loop
+   // below picks the entries up. A single space or empty box means the blank
+   // alt-conf, so we strip whitespace from both fields.
+   {
+      GtkWidget *rename_checkbutton = lookup_widget(dialog, "residue_info_rename_altconf_checkbutton");
+      if (rename_checkbutton && GTK_TOGGLE_BUTTON(rename_checkbutton)->active) {
+         GtkWidget *from_entry = lookup_widget(dialog, "residue_info_rename_altconf_from_entry");
+         GtkWidget *to_entry   = lookup_widget(dialog, "residue_info_rename_altconf_to_entry");
+         if (from_entry && to_entry) {
+            std::string from_text = gtk_entry_get_text(GTK_ENTRY(from_entry));
+            std::string to_text   = gtk_entry_get_text(GTK_ENTRY(to_entry));
+            // treat a lone space as the blank alt-conf
+            from_text = coot::util::remove_whitespace(from_text);
+            to_text   = coot::util::remove_whitespace(to_text);
+            for (int i=0; i<graphics_info_t::residue_info_n_atoms; i++) {
+               std::string widget_name = "residue_info_altloc_entry_";
+               widget_name += int_to_string(i);
+               GtkWidget *altloc_entry = lookup_widget(dialog, widget_name.c_str());
+               if (altloc_entry) {
+                  std::string cur = gtk_entry_get_text(GTK_ENTRY(altloc_entry));
+                  cur = coot::util::remove_whitespace(cur);
+                  if (cur == from_text)
+                     gtk_entry_set_text(GTK_ENTRY(altloc_entry), to_text.c_str());
+               }
+            }
+         }
+      }
+   }
+
    GtkWidget *table = lookup_widget(dialog, "residue_info_atom_table");
 
 #if (GTK_MAJOR_VERSION > 1)

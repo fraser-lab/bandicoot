@@ -269,6 +269,7 @@ def no_coot_tips():
 # Phenix socket listener.
 pre_list = [
     "redefine_functions.py",
+    "bandicoot_console.py",     # eval/exec engine for the native scripting console
     "coot_utils.py",
     "filter.py",
     "coot_lsq.py",

@@ -461,6 +461,8 @@ void change_chain_ids_chain_menu_item_activate(GtkWidget *item,
 					       GtkPositionType pos);
 void setup_guile_window_entry(GtkWidget *entry);
 void setup_python_window_entry(GtkWidget *entry);
+/* BANDICOOT: wire the native scripting console (Run/Save/Exit + output pane). */
+void setup_python_window(GtkWidget *window);
 
 /*  Check if this is needed still, I think not. */
 #ifdef USE_GUILE

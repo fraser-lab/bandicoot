@@ -6908,8 +6908,7 @@ void post_python_scripting_window() {
      // Its Python entry callback (python_window_enter_callback) was GIL-fixed
      // in v0.1.0.1. (On non-APPLE this remains the original fallback path.)
      GtkWidget *window = create_python_window();
-     GtkWidget *python_entry = lookup_widget(window, "python_window_entry");
-     setup_python_window_entry(python_entry); // USE_PYTHON / USE_GUILE used here
+     setup_python_window(window); // wires Run/Save/Exit + output pane (BANDICOOT)
      gtk_widget_show(window);
   }
 

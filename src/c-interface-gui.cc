@@ -2034,6 +2034,215 @@ void python_window_enter_callback( GtkWidget *widget,
 #endif
 
 
+// ---------------------------------------------------------------------------
+// BANDICOOT native Python scripting console (macOS has no PyGTK, so coot_gui()'s
+// rich console can't run). The window is built in create_python_window()
+// (gtk2-interface.c); the eval/exec engine is python/bandicoot_console.py. Here
+// we wire the Run / Save / Exit buttons + Cmd/Ctrl+Enter and pump text in/out.
+// ---------------------------------------------------------------------------
+#ifdef USE_PYTHON
+
+// Run cmd through python/bandicoot_console.py's _bandicoot_console_eval (which
+// lives in __main__, so user variables persist and all coot functions are in
+// scope). Returns captured stdout/stderr; sets *had_error on an exception.
+static std::string
+bandicoot_console_eval(const std::string &cmd, bool *had_error) {
+
+   std::string result_str;
+   *had_error = false;
+
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   PyObject *main_module = PyImport_AddModule("__main__");        // borrowed
+   if (main_module) {
+      PyObject *main_dict = PyModule_GetDict(main_module);        // borrowed
+      PyObject *func = PyDict_GetItemString(main_dict, "_bandicoot_console_eval"); // borrowed
+      if (func && PyCallable_Check(func)) {
+         PyObject *rv = PyObject_CallFunction(func, "s", cmd.c_str()); // new ref
+         if (rv) {
+            if (PyTuple_Check(rv) && PyTuple_Size(rv) == 2) {
+               PyObject *err_o = PyTuple_GetItem(rv, 0);          // borrowed
+               PyObject *txt_o = PyTuple_GetItem(rv, 1);          // borrowed
+               if (err_o)
+                  *had_error = (PyObject_IsTrue(err_o) == 1);
+               if (txt_o) {
+                  PyObject *utf8 = PyUnicode_AsUTF8String(txt_o); // new ref
+                  if (utf8) {
+                     result_str = PyBytes_AsString(utf8);
+                     Py_DECREF(utf8);
+                  }
+               }
+            }
+            Py_DECREF(rv);
+         } else {
+            PyErr_Print(); // to terminal
+            *had_error = true;
+            result_str = "Bandicoot: error calling the console engine (see terminal).\n";
+         }
+      } else {
+         *had_error = true;
+         result_str = "Bandicoot: _bandicoot_console_eval not found "
+                      "(python/bandicoot_console.py did not load).\n";
+      }
+   }
+   PyGILState_Release(gstate);
+   return result_str;
+}
+
+// Append text to the read-only output pane, red if is_error, and auto-scroll.
+static void
+python_console_append_output(GtkWidget *window, const std::string &text, bool is_error) {
+
+   GtkWidget *output = lookup_widget(window, "python_window_output");
+   if (! output) return;
+   GtkTextBuffer *buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(output));
+
+   GtkTextTag *err_tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(buf), "err");
+   if (! err_tag)
+      err_tag = gtk_text_buffer_create_tag(buf, "err", "foreground", "red", NULL);
+
+   GtkTextIter end;
+   gtk_text_buffer_get_end_iter(buf, &end);
+   if (is_error)
+      gtk_text_buffer_insert_with_tags(buf, &end, text.c_str(), -1, err_tag, NULL);
+   else
+      gtk_text_buffer_insert(buf, &end, text.c_str(), -1);
+
+   gtk_text_buffer_get_end_iter(buf, &end);
+   GtkTextMark *mark = gtk_text_buffer_create_mark(buf, NULL, &end, FALSE);
+   gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(output), mark);
+   gtk_text_buffer_delete_mark(buf, mark);
+}
+
+// Read the whole editor buffer, run it, show the result.
+static void
+python_console_run_current(GtkWidget *window) {
+
+   GtkWidget *editor = lookup_widget(window, "python_window_editor");
+   if (! editor) return;
+
+   GtkTextBuffer *ebuf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(editor));
+   GtkTextIter start, end;
+   gtk_text_buffer_get_bounds(ebuf, &start, &end);
+   gchar *txt = gtk_text_buffer_get_text(ebuf, &start, &end, FALSE);
+   std::string cmd = txt ? txt : "";
+   if (txt) g_free(txt);
+
+   if (cmd.find_first_not_of(" \t\r\n") == std::string::npos)
+      return; // nothing to run
+
+   bool had_error = false;
+   std::string out = bandicoot_console_eval(cmd, &had_error);
+   if (out.empty() && ! had_error)
+      python_console_append_output(window, "(no output)\n", false);
+   else
+      python_console_append_output(window, out, had_error);
+}
+
+static void
+python_window_run_button_clicked(GtkButton *button, gpointer user_data) {
+   python_console_run_current(GTK_WIDGET(user_data));
+}
+
+static void
+python_window_exit_button_clicked(GtkButton *button, gpointer user_data) {
+   gtk_widget_destroy(GTK_WIDGET(user_data));
+}
+
+static void
+python_window_save_button_clicked(GtkButton *button, gpointer user_data) {
+
+   GtkWidget *window = GTK_WIDGET(user_data);
+   GtkWidget *editor = lookup_widget(window, "python_window_editor");
+   if (! editor) return;
+
+   GtkWidget *dialog =
+      gtk_file_chooser_dialog_new("Save Script", GTK_WINDOW(window),
+                                  GTK_FILE_CHOOSER_ACTION_SAVE,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+                                  GTK_STOCK_SAVE,   GTK_RESPONSE_ACCEPT,
+                                  NULL);
+   gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
+   gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog), "script.py");
+   GtkFileFilter *filter = gtk_file_filter_new();
+   gtk_file_filter_set_name(filter, "Python scripts (*.py)");
+   gtk_file_filter_add_pattern(filter, "*.py");
+   gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+   if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+      char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+      if (filename) {
+         GtkTextBuffer *ebuf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(editor));
+         GtkTextIter s, e;
+         gtk_text_buffer_get_bounds(ebuf, &s, &e);
+         gchar *txt = gtk_text_buffer_get_text(ebuf, &s, &e, FALSE);
+         FILE *fp = fopen(filename, "w");
+         if (fp) {
+            if (txt) fputs(txt, fp);
+            fclose(fp);
+            python_console_append_output(window, std::string("# saved to ") + filename + "\n", false);
+         } else {
+            python_console_append_output(window, std::string("# ERROR: could not write ") + filename + "\n", true);
+         }
+         if (txt) g_free(txt);
+         g_free(filename);
+      }
+   }
+   gtk_widget_destroy(dialog);
+}
+
+// Cmd/Ctrl+Enter in the editor runs the buffer (plain Enter inserts a newline).
+static gboolean
+python_editor_key_press(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
+   if ((event->keyval == GDK_Return || event->keyval == GDK_KP_Enter) &&
+       (event->state & (GDK_CONTROL_MASK | GDK_META_MASK))) {
+      python_console_run_current(GTK_WIDGET(user_data));
+      return TRUE; // consume, don't also insert a newline
+   }
+   return FALSE;
+}
+
+#endif // USE_PYTHON
+
+// Wire up the native scripting console. Called by post_python_scripting_window().
+void
+setup_python_window(GtkWidget *window) {
+
+#ifdef USE_PYTHON
+   GtkWidget *editor      = lookup_widget(window, "python_window_editor");
+   GtkWidget *output      = lookup_widget(window, "python_window_output");
+   GtkWidget *run_button  = lookup_widget(window, "python_window_run_button");
+   GtkWidget *save_button = lookup_widget(window, "python_window_save_button");
+   GtkWidget *exit_button = lookup_widget(window, "python_window_exit_button");
+
+   PangoFontDescription *fd = pango_font_description_from_string("monospace 12");
+   if (editor) gtk_widget_modify_font(editor, fd);
+   if (output) gtk_widget_modify_font(output, fd);
+   pango_font_description_free(fd);
+
+   if (run_button)
+      g_signal_connect(G_OBJECT(run_button), "clicked",
+                       G_CALLBACK(python_window_run_button_clicked), window);
+   if (save_button)
+      g_signal_connect(G_OBJECT(save_button), "clicked",
+                       G_CALLBACK(python_window_save_button_clicked), window);
+   if (exit_button)
+      g_signal_connect(G_OBJECT(exit_button), "clicked",
+                       G_CALLBACK(python_window_exit_button_clicked), window);
+   if (editor) {
+      g_signal_connect(G_OBJECT(editor), "key-press-event",
+                       G_CALLBACK(python_editor_key_press), window);
+      gtk_widget_grab_focus(editor);
+   }
+
+   python_console_append_output(window,
+      "# Bandicoot Python console. Write/paste a script above, then Run "
+      "(or Cmd/Ctrl+Enter).\n"
+      "# Variables and imports persist between runs; output and errors appear here.\n",
+      false);
+#endif // USE_PYTHON
+}
+
+
 #ifdef USE_GUILE
 void guile_window_enter_callback( GtkWidget *widget,
 				  GtkWidget *entry )
