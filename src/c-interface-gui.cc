@@ -5927,6 +5927,9 @@ void set_sequence_view_is_docked(short int state) {
 }
 
 
+#ifdef __APPLE__
+extern "C" void bandicoot_raise_sequence_view(GtkWidget *sv_dialog);
+#endif
 void nsv(int imol) {
 
 #if !defined(HAVE_GOOCANVAS)
@@ -5957,6 +5960,9 @@ void nsv(int imol) {
 	    } else {
 	       gdk_window_raise(widget->window);
 	    }
+#ifdef __APPLE__
+	    bandicoot_raise_sequence_view(widget);  // re-stack a docked strip to the front
+#endif
 	 } else {
 
             std::cout << "WARNING:: in nsv() lookup of nsv_dialog from canvas failed " << std::endl;
@@ -5975,9 +5981,18 @@ void nsv(int imol) {
 
 	 graphics_info_t g;
          GtkWidget *main_window_vbox = 0;
+#ifndef __APPLE__
          if (g.sequence_view_is_docked_flag) {
             main_window_vbox = lookup_widget(g.glarea, "main_window_vbox");
          }
+#else
+         // Bandicoot/macOS: the docked goocanvas strip never composites on the
+         // gdk-quartz backend (it paints correct opaque glyphs into an offscreen
+         // buffer that is never blitted to the main window). Always float the
+         // sequence view in its own top-level window, where the canvas composites
+         // normally. Passing a NULL main_window_vbox makes exptl::nsv build the
+         // top-level dialog path.
+#endif
 	 std::string name = g.molecules[imol].name_for_display_manager();
 	 exptl::nsv *seq_view =
 	    new exptl::nsv(g.molecules[imol].atom_sel.mol, name, imol,

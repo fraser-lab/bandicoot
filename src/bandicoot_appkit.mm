@@ -1611,12 +1611,21 @@ static BOOL       bandicoot_sidebar_mask_saved = NO;
 static NSWindow *bandicoot_get_status_window(void);
 // Defined just below; lazily resolves the floater + main NSWindows.
 static void bandicoot_resolve_sidebar_windows(void);
+// Persisted dock state (defined in c-interface-preferences.cc): the sidebar dock
+// choice survives restarts via ~/.coot-preferences/bandicoot-sidebar-docked.
+extern "C" void bandicoot_save_sidebar_docked(int docked);
+extern "C" int  bandicoot_load_sidebar_docked(void);
 // Defined in the Accept/Reject bar section; re-fit the A/R bar when the sidebar
 // docks/undocks (the bar shortens to stop at the sidebar's left edge).
 static void bandicoot_ar_reposition(void);
 // Defined in the status-bar section; the bottom strip likewise shortens to
 // clear the docked sidebar's column.
 static void bandicoot_reposition_status_bar(void);
+// Sequence-view dock (own section further below): the A/R bar stacks just under
+// a docked sequence view (needs its height), and the shared settle/observer
+// paths reposition the seqview too.
+static CGFloat bandicoot_sv_docked_height(void);
+static void    bandicoot_sv_reposition(void);
 
 // Natural size the sidebar wants for the *current* toolbar style: width = the
 // widest item + padding, height = the sum of every item's height. Walking the
@@ -1841,17 +1850,21 @@ static void bandicoot_sidebar_set_docked(BOOL docked) {
 static void bandicoot_sidebar_dock_clicked(GtkMenuItem *item, gpointer u) {
     BOOL want = ! bandicoot_sidebar_docked;
     bandicoot_sidebar_set_docked(want);
+    bandicoot_save_sidebar_docked(want ? 1 : 0);   // persist the user's choice
     if (bandicoot_sidebar_dock_btn)
         gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn),
                                 want ? "Undock" : "Dock");
 }
 
-// Start Bandicoot with the sidebar docked (the default). Call once at startup,
-// after the sidebar windows are realized (i.e. from pin_settings_item).
+// Apply the saved sidebar dock state at startup (docked by default when the
+// preference file is absent). Call once after the sidebar windows are realized
+// (i.e. from pin_settings_item). Reads, does not write, the persisted choice.
 extern "C" void bandicoot_sidebar_dock_default(void) {
-    bandicoot_sidebar_set_docked(YES);
+    BOOL docked = bandicoot_load_sidebar_docked() ? YES : NO;
+    bandicoot_sidebar_set_docked(docked);
     if (bandicoot_sidebar_dock_btn)
-        gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn), "Undock");
+        gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn),
+                                docked ? "Undock" : "Dock");
 }
 
 // Get / set the sidebar dock state from outside (the "Dock Toolbar?" preference).
@@ -1863,6 +1876,7 @@ extern "C" void bandicoot_sidebar_set_docked_ext(int docked) {
     BOOL want = docked ? YES : NO;
     if (want == bandicoot_sidebar_docked) return;
     bandicoot_sidebar_set_docked(want);
+    bandicoot_save_sidebar_docked(want ? 1 : 0);   // persist the user's choice
     if (bandicoot_sidebar_dock_btn)
         gtk_menu_item_set_label(GTK_MENU_ITEM(bandicoot_sidebar_dock_btn),
                                 want ? "Undock" : "Dock");
@@ -2574,7 +2588,9 @@ static void bandicoot_ar_reposition(void) {
                            ? NSWidth(bandicoot_sidebar_ns.frame) : 0.0;
     CGFloat w = NSWidth(usable) - sidebarW;
     if (w < 1) w = 1;
-    NSRect sf = NSMakeRect(NSMinX(usable), NSMaxY(usable) - barH, w, barH);
+    // A docked sequence view occupies the very top; sit just beneath it.
+    CGFloat svH = bandicoot_sv_docked_height();
+    NSRect sf = NSMakeRect(NSMinX(usable), NSMaxY(usable) - barH - svH, w, barH);
     [bandicoot_ar_ns setFrame:sf display:YES];
 }
 
@@ -2588,6 +2604,7 @@ static gboolean bandicoot_ar_reposition_idle(gpointer u) {
 // first move/resize — this settles them without the user having to nudge.
 static gboolean bandicoot_settle_all_bars_idle(gpointer u) {
     bandicoot_reposition_sidebar();
+    bandicoot_sv_reposition();
     bandicoot_ar_reposition();
     bandicoot_reposition_status_bar();
     return FALSE;  // one-shot
@@ -2703,4 +2720,173 @@ extern "C" void bandicoot_ar_bar_apply_prefs(int active, int always_show) {
         bandicoot_ar_bar_show_window(YES);   // docked + always shown
     else
         bandicoot_ar_bar_show_window(NO);    // undocked, or wait for a refinement
+}
+
+// ---- Native docked Sequence View (top child window, above the A/R bar) ------
+// The (top-level) nsv sequence-view dialog docks like the A/R bar: a borderless
+// child window pinned flush to the top edge of the main window's content area,
+// stacked ABOVE the A/R bar (which drops just beneath it). It stays its own
+// NSWindow, so it composites correctly on gdk-quartz (a GTK strip docked inside
+// the main window does not — that was the invisible-sequence-view bug). Driven
+// by bandicoot_dock_sequence_view()/..._undock().
+static GtkWidget *bandicoot_sv_floater    = NULL;  // the nsv top-level dialog
+static NSWindow  *bandicoot_sv_ns         = nil;
+static NSWindow  *bandicoot_sv_parent_ns  = nil;
+static BOOL       bandicoot_sv_docked     = NO;
+static NSUInteger bandicoot_sv_orig_mask  = 0;
+static BOOL       bandicoot_sv_mask_saved = NO;
+// The currently-active open sequence-view dialog (docked OR floating), so the
+// "Dock Sequence View Dialog?" preference can dock/undock it live. nsv.cc notes
+// it on open / NULL on destroy; dock and raise update it too.
+static GtkWidget *bandicoot_sv_current    = NULL;
+
+static void bandicoot_sv_resolve_windows(void) {
+    if (!bandicoot_sv_ns && bandicoot_sv_floater && bandicoot_sv_floater->window)
+        bandicoot_sv_ns = (NSWindow *)gdk_quartz_window_get_nswindow(bandicoot_sv_floater->window);
+    // Parent = the same main window the A/R bar docks to.
+    if (!bandicoot_sv_parent_ns) {
+        bandicoot_ar_resolve_windows();
+        bandicoot_sv_parent_ns = bandicoot_ar_parent_ns;
+    }
+}
+
+// Height a docked sequence view occupies at the top (0 when not docked). The
+// A/R bar reads this so it can sit just beneath the sequence view.
+static CGFloat bandicoot_sv_docked_height(void) {
+    if (!bandicoot_sv_docked || !bandicoot_sv_ns) return 0.0;
+    return NSHeight(bandicoot_sv_ns.frame);
+}
+
+static void bandicoot_sv_reposition(void) {
+    if (!bandicoot_sv_docked || !bandicoot_sv_ns || !bandicoot_sv_parent_ns) return;
+    NSWindow *p = bandicoot_sv_parent_ns;
+    NSView *cv = p.contentView;
+    NSRect usable = [p convertRectToScreen:[cv convertRect:p.contentLayoutRect toView:nil]];
+    CGFloat svH = NSHeight(bandicoot_sv_ns.frame);
+    // Never occupy more than 1/3 of the content height; a many-chain sequence
+    // then scrolls inside the strip (the scrolledwindow shows a vertical bar).
+    CGFloat cap = NSHeight(usable) / 3.0;
+    if (cap > 1.0 && svH > cap) svH = cap;
+    // Span the content width, but stop at the docked sidebar's left edge.
+    CGFloat sidebarW = (bandicoot_sidebar_docked && bandicoot_sidebar_ns)
+                           ? NSWidth(bandicoot_sidebar_ns.frame) : 0.0;
+    CGFloat w = NSWidth(usable) - sidebarW;
+    if (w < 1) w = 1;
+    // Flush to the top of the content area, directly under the native toolbar.
+    NSRect sf = NSMakeRect(NSMinX(usable), NSMaxY(usable) - svH, w, svH);
+    [bandicoot_sv_ns setFrame:sf display:YES];
+}
+
+// Re-apply the cap after GTK's post-dock layout settles. GTK can re-assert the
+// window's requested (uncapped) height in a resize idle that runs AFTER
+// bandicoot_dock_sequence_view()'s synchronous reposition, which is why a tall
+// strip initially overshot the 1/3 cap and only snapped back on the next manual
+// resize. Default idle priority runs after GTK's higher-priority resize idle.
+static gboolean bandicoot_sv_reposition_idle(gpointer u) {
+    bandicoot_sv_reposition();
+    bandicoot_ar_reposition();
+    return FALSE;   // one-shot
+}
+
+@interface BandicootSVObserver : NSObject
+@end
+@implementation BandicootSVObserver
+- (void)parentGeometryChanged:(NSNotification *)note {
+    bandicoot_sv_reposition();
+    bandicoot_ar_reposition();   // the A/R bar follows the seqview's height
+}
+@end
+static BandicootSVObserver *bandicoot_sv_observer = nil;
+
+extern "C" void bandicoot_dock_sequence_view(GtkWidget *sv_dialog) {
+    @autoreleasepool {
+        if (!sv_dialog) return;
+        // Only one docked sequence view at a time: if a DIFFERENT one is already
+        // docked, close it first, so a shorter new strip doesn't leave the
+        // previous one's bottom peeking out. (Floating seqviews stack freely and
+        // are unaffected — they never come through here.) Destroying it fires
+        // on_nsv_dialog_destroy, which undocks it and clears the globals below.
+        if (bandicoot_sv_docked && bandicoot_sv_floater && bandicoot_sv_floater != sv_dialog)
+            gtk_widget_destroy(bandicoot_sv_floater);
+        bandicoot_sv_floater = sv_dialog;
+        bandicoot_sv_ns = nil;           // re-resolve for this (possibly new) window
+        bandicoot_sv_resolve_windows();
+        if (!bandicoot_sv_ns || !bandicoot_sv_parent_ns) return;
+        bandicoot_sv_docked = YES;
+        if (!bandicoot_sv_mask_saved) {
+            bandicoot_sv_orig_mask  = bandicoot_sv_ns.styleMask;
+            bandicoot_sv_mask_saved = YES;
+        }
+        [bandicoot_sv_ns setStyleMask:NSWindowStyleMaskBorderless];
+        if (![bandicoot_sv_ns parentWindow])
+            [bandicoot_sv_parent_ns addChildWindow:bandicoot_sv_ns ordered:NSWindowAbove];
+        if (!bandicoot_sv_observer) {
+            bandicoot_sv_observer = [BandicootSVObserver new];
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            [nc addObserver:bandicoot_sv_observer selector:@selector(parentGeometryChanged:)
+                       name:NSWindowDidResizeNotification object:bandicoot_sv_parent_ns];
+            [nc addObserver:bandicoot_sv_observer selector:@selector(parentGeometryChanged:)
+                       name:NSWindowDidMoveNotification object:bandicoot_sv_parent_ns];
+        }
+        bandicoot_sv_reposition();
+        bandicoot_ar_reposition();
+        bandicoot_sv_current = sv_dialog;   // active window (closing a previous one cleared it)
+        // Re-cap once GTK finishes sizing the freshly-docked window (see above).
+        g_idle_add(bandicoot_sv_reposition_idle, NULL);
+    }
+}
+
+extern "C" void bandicoot_undock_sequence_view(void) {
+    @autoreleasepool {
+        bandicoot_sv_docked = NO;
+        if (bandicoot_sv_ns) {
+            if (bandicoot_sv_mask_saved)
+                [bandicoot_sv_ns setStyleMask:bandicoot_sv_orig_mask];
+            if ([bandicoot_sv_ns parentWindow] && bandicoot_sv_parent_ns)
+                [bandicoot_sv_parent_ns removeChildWindow:bandicoot_sv_ns];
+        }
+        bandicoot_sv_ns        = nil;
+        bandicoot_sv_floater   = NULL;
+        bandicoot_sv_mask_saved = NO;
+        bandicoot_ar_reposition();       // the A/R bar reclaims the top edge
+    }
+}
+
+extern "C" int bandicoot_sequence_view_is_docked(void) {
+    return bandicoot_sv_docked ? 1 : 0;
+}
+
+extern "C" void bandicoot_note_sequence_view(GtkWidget *sv_dialog) {
+    bandicoot_sv_current = sv_dialog;
+}
+
+// Apply the dock preference to the open sequence view immediately (live toggle).
+// No-op if nothing is open, or if it is already in the requested state.
+extern "C" void bandicoot_apply_sequence_view_dock_pref(int docked) {
+    if (!bandicoot_sv_current) return;   // applies on next open instead
+    if (docked) {
+        if (!bandicoot_sv_docked) bandicoot_dock_sequence_view(bandicoot_sv_current);
+    } else {
+        if (bandicoot_sv_docked) bandicoot_undock_sequence_view();
+    }
+}
+
+// Bring an already-open sequence view to the front. For a docked child window,
+// gdk_window_raise() does not re-order it among the parent's child windows, so a
+// second molecule's docked strip stays on top and re-selecting the first looks
+// like a no-op. Re-stack it explicitly (and make it the active one).
+extern "C" void bandicoot_raise_sequence_view(GtkWidget *sv_dialog) {
+    @autoreleasepool {
+        if (!sv_dialog || !sv_dialog->window) return;
+        NSWindow *w = (NSWindow *)gdk_quartz_window_get_nswindow(sv_dialog->window);
+        if (!w) return;
+        NSWindow *p = [w parentWindow];
+        if (p) {                       // docked child -> re-stack above its siblings
+            [p removeChildWindow:w];
+            [p addChildWindow:w ordered:NSWindowAbove];
+        } else {
+            [w orderFront:nil];
+        }
+        bandicoot_sv_current = sv_dialog;
+    }
 }

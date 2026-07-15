@@ -1776,13 +1776,20 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
    // BL says:: we can do it all in python API or use the 'lazy' method
    // and check in the python layer (which we will do...)
    PyObject *v;
-   int ret;
+   int ret = 0;
    std::string pms = "post_manipulation_script";
-   std::string check_pms = "callable(";
+   // Guard via globals().get() so an UNDEFINED name yields None (callable(None)
+   // -> False) rather than raising NameError. The old "callable(<name>)" check
+   // threw when the name was undefined (as it is in Bandicoot's Python), and
+   // PyInt_AsLong(NULL) on the errored return then segfaulted — the crash hit on
+   // Accept (post-manipulation fires; Reject does not). Same fix as the
+   // post-set-rotation-centre hook.
+   std::string check_pms = "callable(globals().get('";
    check_pms += pms;
-   check_pms += ")";
+   check_pms += "'))";
    v = safe_python_command_with_return(check_pms);
-   ret = PyInt_AsLong(v);
+   if (v)
+      ret = PyInt_AsLong(v);
    if (ret == 1) {
      std::string ss = pms;
      ss += "(";
@@ -1848,13 +1855,20 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
       // BL says:: we can do it all in python API or use the 'lazy' method
       // and check in the python layer (which we will do...)
       PyObject *v;
-      int ret;
+      int ret = 0;
       std::string ps = "post_set_rotation_centre_script";
-      std::string check_ps = "callable(";
+      // Guard via globals().get() so that an UNDEFINED name yields None
+      // (callable(None) -> False) instead of raising NameError. The old
+      // "callable(<name>)" check threw when the name was undefined (as it is in
+      // Bandicoot's Python layer), and PyInt_AsLong() on the resulting NULL
+      // return then segfaulted. This path is reachable now that the (floating)
+      // sequence view is clickable on macOS.
+      std::string check_ps = "callable(globals().get('";
       check_ps += ps;
-      check_ps += ")";
+      check_ps += "'))";
       v = safe_python_command_with_return(check_ps);
-      ret = PyInt_AsLong(v);
+      if (v)
+         ret = PyInt_AsLong(v);
       if (ret == 1) {
         std::string ss = ps;
         ss += "()";

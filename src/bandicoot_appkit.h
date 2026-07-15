@@ -106,6 +106,26 @@ void bandicoot_ar_bar_present(void);
 // always_show = Always show (1) vs Always hide (0). Updates bar visibility.
 void bandicoot_ar_bar_apply_prefs(int active, int always_show);
 
+// ---- Native docked Sequence View (top child window, above the A/R bar) ----
+// Dock the (top-level) nsv sequence-view dialog as a borderless child window
+// pinned to the top edge of the main window, stacked ABOVE the Accept/Reject
+// bar (which drops to sit just beneath it). Pass the nsv top-level GtkWidget;
+// call once the window is realized. It stays its own NSWindow, so it composites
+// correctly on gdk-quartz (a GTK strip docked inside the main window does not).
+void bandicoot_dock_sequence_view(GtkWidget *sv_dialog);
+// Undock/detach the docked sequence view (call before its window is destroyed).
+void bandicoot_undock_sequence_view(void);
+// 1 if the sequence view is currently docked.
+int  bandicoot_sequence_view_is_docked(void);
+// Track the open sequence-view dialog so the "Dock Sequence View Dialog?"
+// preference can dock/undock it live on toggle; pass NULL on destroy.
+void bandicoot_note_sequence_view(GtkWidget *sv_dialog);
+// Apply the dock preference (1 docked / 0 floating) to the open sequence view now.
+void bandicoot_apply_sequence_view_dock_pref(int docked);
+// Bring an already-open sequence view to the front (re-stacks a docked child
+// window, which gdk_window_raise cannot do).
+void bandicoot_raise_sequence_view(GtkWidget *sv_dialog);
+
 // Force the application to the foreground (raises all our NSWindows above
 // the windows of other apps). Needed because GUI apps launched from a
 // shell wrapper script are background apps by default on macOS.

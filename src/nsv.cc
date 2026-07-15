@@ -57,6 +57,20 @@
 
 #include "utils/win-compat.hh"
 
+#ifdef __APPLE__
+#include "bandicoot_appkit.h"
+// Persisted "Dock Sequence View Dialog?" preference (defined in
+// c-interface-preferences.cc): 1 = dock to the top edge, 0 = leave floating.
+extern "C" int bandicoot_load_sequence_view_docked(void);
+// One-shot idle: dock the (now-realized) top-level sequence-view window to the
+// top edge. Deferred from the nsv constructor so the GtkWidget has a realized
+// NSWindow by the time we pin it as a child of the main window.
+static gboolean nsv_dock_when_realized_idle(gpointer data) {
+   bandicoot_dock_sequence_view(GTK_WIDGET(data));
+   return FALSE; // one-shot
+}
+#endif
+
 exptl::nsv::nsv(mmdb::Manager *mol,
 		const std::string &molecule_name,
 		int molecule_number_in,
@@ -166,6 +180,11 @@ exptl::nsv::nsv(mmdb::Manager *mol,
 #ifdef HAVE_GOOCANVAS
    canvas = goo_canvas_new();
    g_object_set(G_OBJECT(canvas), "has-tooltip", TRUE, NULL); // needed for tooltips
+   // Bandicoot/macOS: draw the canvas straight to its window rather than through
+   // GTK's offscreen double-buffer pixmap, whose blit is unreliable on the
+   // gdk-quartz backend. (Combined with floating the sequence view in a top-level
+   // window - see nsv() - this makes the sequence render on macOS.)
+   gtk_widget_set_double_buffered(GTK_WIDGET(canvas), FALSE);
 
    canvas_group = goo_canvas_get_root_item(GOO_CANVAS(canvas));
 
@@ -174,6 +193,10 @@ exptl::nsv::nsv(mmdb::Manager *mol,
 #endif
 
    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+   // Automatic scrollbars: a vertical one appears only when the sequence is
+   // taller than the (capped) docked height; horizontal only when it is wider.
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
    if (make_top_level_dialog) {
       gtk_box_pack_start(GTK_BOX(container_vbox), GTK_WIDGET(scrolled_window), TRUE, TRUE, 1);
       gtk_widget_set_size_request(top_lev, 120, 70);
@@ -239,6 +262,18 @@ exptl::nsv::nsv(mmdb::Manager *mol,
    g_signal_connect(GTK_OBJECT(scrolled_window), "button_press_event",
                     G_CALLBACK(on_canvas_button_press), scrolled_window);
 
+#ifdef __APPLE__
+   // Bandicoot/macOS: track the open (top-level) sequence view so the "Dock
+   // Sequence View Dialog?" preference can dock/undock it live, and dock it now
+   // if the preference is Yes (default). The dock is deferred to an idle so the
+   // window is realized first. When the preference is No it stays floating.
+   if (make_top_level_dialog && top_lev) {
+      bandicoot_note_sequence_view(top_lev);
+      if (bandicoot_load_sequence_view_docked())
+         g_idle_add(nsv_dock_when_realized_idle, top_lev);
+   }
+#endif
+
    // how about capturing a scroll event here also?
 
 }
@@ -264,8 +299,12 @@ exptl::nsv::on_nsv_dialog_destroy (GtkObject *obj,
    int imol = GPOINTER_TO_INT(gtk_object_get_user_data(GTK_OBJECT(dialog)));
 
    std::cout << "DEBUG:: on_nsv_dialog_destroy() called for molecule " << imol << std::endl;
+#ifdef __APPLE__
+   bandicoot_undock_sequence_view();   // detach the child window before it is freed
+   bandicoot_note_sequence_view(NULL); // forget it (no live dock-pref toggling after close)
+#endif
    set_sequence_view_is_displayed(0, imol);
-} 
+}
 
 
 // return the height (y-size) of the canvas (which will be used to set the default size

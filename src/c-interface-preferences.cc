@@ -126,6 +126,54 @@ void bandicoot_load_pick_atom_radius() {
    if (f && (f >> v) && v > 0.0 && v < 100.0) graphics_info_t::intermediate_pick_near_cutoff = v;
 }
 
+// Persisted native-sidebar (model-toolbar) dock state, in
+// ~/.coot-preferences/bandicoot-sidebar-docked ("1" docked / "0" undocked). The
+// "Dock Toolbar?" preference and the sidebar's Dock/Undock menu write it; startup
+// (bandicoot_sidebar_dock_default) reads it. Default = docked when the file is
+// absent. (The native sidebar's dock state is NOT part of Coot's own preferences
+// machinery — model_toolbar_position_state is the legacy handlebox position — so
+// it needs its own tiny store, like the pick-radius settings above.)
+extern "C" void bandicoot_save_sidebar_docked(int docked) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sidebar-docked").c_str());
+   if (f) f << (docked ? 1 : 0) << std::endl;
+}
+
+extern "C" int bandicoot_load_sidebar_docked(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sidebar-docked").c_str());
+      int v = 1;
+      if (f && (f >> v)) return v ? 1 : 0;
+   }
+   return 1;   // default: docked
+}
+
+// Persisted "Dock Sequence View Dialog?" preference, in
+// ~/.coot-preferences/bandicoot-sequence-view-docked ("1" docked / "0" floating).
+// Same self-contained store as the sidebar dock above; read by nsv() when the
+// sequence view is opened, written by the General->Dialogs Yes/No radios.
+// Default = docked when absent.
+extern "C" void bandicoot_save_sequence_view_docked(int docked) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sequence-view-docked").c_str());
+   if (f) f << (docked ? 1 : 0) << std::endl;
+}
+
+extern "C" int bandicoot_load_sequence_view_docked(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sequence-view-docked").c_str());
+      int v = 1;
+      if (f && (f >> v)) return v ? 1 : 0;
+   }
+   return 1;   // default: docked
+}
+
 void set_pick_atom_distance_cutoff(float d) {
    if (d > 0.0)
       graphics_info_t::pick_atom_dist_cutoff = d;
@@ -159,6 +207,21 @@ static void bandicoot_dock_toolbar_yes_toggled(GtkToggleButton *b, gpointer u) {
 }
 static void bandicoot_dock_toolbar_no_toggled(GtkToggleButton *b, gpointer u) {
    if (gtk_toggle_button_get_active(b)) bandicoot_sidebar_set_docked_ext(0);
+}
+// "Dock Sequence View Dialog?" Yes/No. Persist the choice AND apply it live to an
+// open sequence view (dock/undock on click, like the other dialog prefs).
+extern "C" void bandicoot_apply_sequence_view_dock_pref(int docked);
+static void bandicoot_dock_seqview_yes_toggled(GtkToggleButton *b, gpointer u) {
+   if (gtk_toggle_button_get_active(b)) {
+      bandicoot_save_sequence_view_docked(1);
+      bandicoot_apply_sequence_view_dock_pref(1);
+   }
+}
+static void bandicoot_dock_seqview_no_toggled(GtkToggleButton *b, gpointer u) {
+   if (gtk_toggle_button_get_active(b)) {
+      bandicoot_save_sequence_view_docked(0);
+      bandicoot_apply_sequence_view_dock_pref(0);
+   }
 }
 static GtkWidget *bandicoot_ancestor_frame(GtkWidget *w) {
    while (w && !GTK_IS_FRAME(w)) w = gtk_widget_get_parent(w);
@@ -659,6 +722,46 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
 
    // 4. Add the "Ligands" tab (PanDDA ligand-source paths).
    bandicoot_add_ligands_tab(prefs);
+
+   // 5. Add a "Dock Sequence View Dialog?" Yes/No frame in the Dialogs section,
+   //    beside the "Dock Accept/Reject Dialog?" frame. Persists to
+   //    ~/.coot-preferences/bandicoot-sequence-view-docked; takes effect the next
+   //    time the Sequence View is opened (nsv() reads it).
+   {
+      GtkWidget *ar_rb    = lookup_widget(prefs, "preferences_dialog_accept_docked_radiobutton");
+      GtkWidget *ar_frame = bandicoot_ancestor_frame(ar_rb);
+      GtkWidget *ar_parent = ar_frame ? gtk_widget_get_parent(ar_frame) : NULL;
+      if (ar_frame && ar_parent && GTK_IS_BOX(ar_parent)) {
+         // Mirror the A/R dock frame's structure exactly (glade frame238):
+         // labelled frame with border 8 -> vbox -> two radios (border 5) stacked
+         // vertically. This matches its size and vertical arrangement.
+         GtkWidget *sv_frame = gtk_frame_new("Dock Sequence View Dialog?");
+         gtk_container_set_border_width(GTK_CONTAINER(sv_frame), 8);
+         GtkWidget *sv_box   = gtk_vbox_new(FALSE, 0);
+         gtk_container_add(GTK_CONTAINER(sv_frame), sv_box);
+         GtkWidget *yes = gtk_radio_button_new_with_mnemonic(NULL, "Yes");
+         GtkWidget *no  = gtk_radio_button_new_with_mnemonic(
+                             gtk_radio_button_get_group(GTK_RADIO_BUTTON(yes)), "No");
+         gtk_container_set_border_width(GTK_CONTAINER(yes), 5);
+         gtk_container_set_border_width(GTK_CONTAINER(no),  5);
+         gtk_box_pack_start(GTK_BOX(sv_box), yes, FALSE, FALSE, 0);
+         gtk_box_pack_start(GTK_BOX(sv_box), no,  FALSE, FALSE, 0);
+         // Initial state from the saved pref — set BEFORE connecting the signals.
+         if (bandicoot_load_sequence_view_docked())
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(yes), TRUE);
+         else
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(no), TRUE);
+         g_signal_connect(yes, "toggled", G_CALLBACK(bandicoot_dock_seqview_yes_toggled), NULL);
+         g_signal_connect(no,  "toggled", G_CALLBACK(bandicoot_dock_seqview_no_toggled), NULL);
+         // Place directly after the A/R dock frame in the Dialogs column.
+         GList *kids = gtk_container_get_children(GTK_CONTAINER(ar_parent));
+         int idx = g_list_index(kids, ar_frame);
+         g_list_free(kids);
+         gtk_box_pack_start(GTK_BOX(ar_parent), sv_frame, FALSE, FALSE, 0);
+         if (idx >= 0) gtk_box_reorder_child(GTK_BOX(ar_parent), sv_frame, idx + 1);
+         gtk_widget_show_all(sv_frame);
+      }
+   }
 }
 #endif
 
