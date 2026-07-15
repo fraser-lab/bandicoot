@@ -6,11 +6,13 @@ keeps Coot 0.9's full functionality while changing several UI elements in order 
 **NOTE:** Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not
 built or tested on other macOS releases, Linux, or Windows.
 
+**NOTE** Bandicoot is a work in progress; users are welcome to log issues and issue pull requests.
+
 ## Why a fork?
 
 The Crystallographic Object-Oriented Tool (Coot) has been the go-to suite of software for molecular modeling, used by thousands of structural biologists all over the world for over twenty years. Recently, Coot has been fully reimagined and redesigned, as well as giving the libraries and packages under the hood a much-needed upgrade. The resulting program (Coot 1) is in wide use today. However, many suites of software for structural biology rely on the old Coot 0.9 framework in order to function, making it necessary for both versions to remain in circulation. 
 
-While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (2.7x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, addresses each of these with macOS-specific fixes layered on top of upstream Coot. See the end of this document for a list of major changes from Coot 0.9.8.95.
+While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (2.6x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, addresses each of these with macOS-specific fixes layered on top of upstream Coot. See the end of this document for a list of major changes from Coot 0.9.8.95.
 
 ## Quick start
 
