@@ -419,8 +419,17 @@ main (int argc, char *argv[]) {
 	 // toplevel; otherwise the NSWindow's minSize/maxSize end up locked.
 	 // Set BANDICOOT_NO_NATIVE_MENU=1 in the environment to disable this
 	 // and leave the in-window GtkMenuBar visible (debug / bisect mode).
-	 if (!getenv("BANDICOOT_NO_NATIVE_MENU"))
-	    bandicoot_install_native_menubar(lookup_widget(window1, "menubar1"));
+	 if (!getenv("BANDICOOT_NO_NATIVE_MENU")) {
+	    GtkWidget *mb = lookup_widget(window1, "menubar1");
+	    bandicoot_install_native_menubar(mb);
+	    // The menu is now mirrored into the native macOS menu bar, so the
+	    // in-window GtkMenuBar is redundant: hide it. Done before show, so the
+	    // window geometry doesn't reserve its height. Left shown it renders as a
+	    // thin empty-looking black strip below the native toolbar. Its GtkMenu
+	    // submenus stay in the tree, so the native menu's on-open re-mirroring
+	    // still reads them. (BANDICOOT_NO_NATIVE_MENU keeps it visible for debug.)
+	    if (mb) gtk_widget_hide(mb);
+	 }
 
 	 // Enforce splash minimum duration and dismiss BEFORE showing the
 	 // main window, so the splash isn't visible alongside Bandicoot's UI.
@@ -450,6 +459,17 @@ main (int argc, char *argv[]) {
 	    GtkWidget *model_tb = lookup_widget(window1, "model_toolbar");
 	    bandicoot_install_native_toolbar(lookup_widget(window1, "main_toolbar"),
 	                                     model_tb);
+	    // The GtkToolbar is now mirrored into the native NSToolbar, so the
+	    // in-window horizontal toolbar is redundant: hide it. Left shown it
+	    // wastes a strip of the GL area below the native toolbar and its
+	    // icon-less (effectively invisible) buttons still catch stray clicks.
+	    // The GtkToolButtons stay in the tree, so the NSToolbar items keep
+	    // dispatching to them. (show_main_toolbar() is a no-op on macOS, so a
+	    // saved show-main-toolbar preference can't resurrect the bar.)
+	    {
+	       GtkWidget *mt = lookup_widget(window1, "main_toolbar");
+	       if (mt) gtk_widget_hide(mt);
+	    }
 	    // Restore native right-click → "Customize Toolbar…" context menu
 	    // that GTK-Quartz's contentView would otherwise intercept.
 	    bandicoot_install_right_click_handler();

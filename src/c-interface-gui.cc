@@ -3612,7 +3612,15 @@ void show_main_toolbar() {
 	 std::cout << "failed to lookup main toolbar" << std::endl;
       } else {
 	 graphics_info_t::main_toolbar_show_hide_state = 1;
+#ifdef __APPLE__
+	 // Bandicoot mirrors the main toolbar into the native NSToolbar; the
+	 // in-window GtkToolbar is permanently hidden. Keep it hidden here so a
+	 // saved show-main-toolbar preference (emitted for every user by default)
+	 // can't re-create the vestigial bar below the native toolbar.
+	 gtk_widget_hide(w);
+#else
 	 gtk_widget_show(w);
+#endif
       }
    }
 }
