@@ -52,6 +52,32 @@ TOPLEVEL_LIBS=(
     libpng16.16.dylib
     libfreetype.6.dylib
     libpython3.13.dylib
+    # v0.1.4.9: OpenSSL, needed by the stdlib _ssl and _hashlib C extensions
+    # in lib-dynload/. Both record @rpath/libssl.3.dylib + @rpath/libcrypto.3.dylib
+    # (lib-dynload's rpath is @loader_path/../../ = our lib/). Regression window:
+    # up to v0.1.4.1 the interpreter borrowed the WHOLE stdlib from an external
+    # conda via PYTHONHOME, so _ssl loaded from conda/lib-dynload/ and resolved
+    # OpenSSL from conda/lib/ -- Bandicoot never shipped it. v0.1.4.2 bundled the
+    # stdlib and set PYTHONHOME=$COOT_PREFIX, relocating _ssl next to our lib/,
+    # which had no OpenSSL -- so every SSL-using script has crashed since 0.1.4.2
+    # with dyld "Library not loaded: @rpath/libssl.3.dylib" (e.g. get_ebi_pdb()
+    # fetching a PDB by accession code). conda's libssl already references
+    # @rpath/libcrypto.3.dylib, so the generic id/ref rewriting below is enough.
+    libssl.3.dylib
+    libcrypto.3.dylib
+    # v0.1.4.9: libffi, needed by the stdlib _ctypes extension (@rpath/libffi.8.dylib).
+    # Same unbundled-dep class as _ssl above -- import ctypes crashed with dyld
+    # "Library not loaded: @rpath/libffi.8.dylib". macOS has no on-disk libffi.8
+    # to rewrite to, so bundle conda's.
+    libffi.8.dylib
+    # v0.1.4.9: libsqlite3, needed by the stdlib _sqlite3 extension. NOTE we do
+    # NOT rewrite _sqlite3's @rpath/libsqlite3.dylib to the system /usr/lib copy
+    # (the way coot-bin's C++ libsqlite3 ref is handled below): macOS's system
+    # libsqlite3 is built with SQLITE_OMIT_LOAD_EXTENSION, so import sqlite3
+    # against it dies with "Symbol not found: _sqlite3_enable_load_extension".
+    # conda's _sqlite3.so was built against conda's libsqlite3, which exports it,
+    # so bundle that and let _sqlite3 resolve it via @rpath from our lib/.
+    libsqlite3.dylib
 )
 
 # FFTW2 single-precision lives in a sub-prefix under conda (artefact of
@@ -175,6 +201,21 @@ done
 for dylib in "$PREFIX"/lib/*.dylib; do
     [ -f "$dylib" ] || continue
     rewrite_external_in "$dylib"
+done
+
+# v0.1.4.9: point the Python C extensions' libz refs at the system copy.
+# binascii/zlib record @rpath/libz.1.dylib; macOS ships an ABI-stable libz in
+# the dyld cache, so /usr/lib is the right target (matches how bundled png/
+# freetype are handled). This does NOT use the full rewrite set: _sqlite3's
+# @rpath/libsqlite3.dylib must be left alone so it resolves to the BUNDLED
+# conda libsqlite3 in lib/ (the system copy lacks a symbol it needs -- see the
+# libsqlite3 note in TOPLEVEL_LIBS). _ssl/_hashlib/_ctypes @rpath refs are
+# likewise left alone to resolve against the openssl/libffi we bundled.
+for so in "$PREFIX"/lib/python3.*/lib-dynload/*.so; do
+    [ -f "$so" ] || continue
+    file -b "$so" 2>/dev/null | grep -q "Mach-O" || continue
+    chmod u+w "$so" 2>/dev/null
+    install_name_tool -change "@rpath/libz.1.dylib" "/usr/lib/libz.1.dylib" "$so" 2>/dev/null || true
 done
 
 # v0.1.0.2: rewrite absolute $CANVAS_DEPS_PREFIX/lib/ refs in executables

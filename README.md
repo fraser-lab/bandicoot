@@ -87,3 +87,7 @@ patches were developed by Art Lyubimov for use within the Fraser Lab at
 UCSF.
 
 For the upstream Coot README, see [README.coot.md](README.coot.md).
+
+## Funding
+
+This work was supported by Radial (ROR: https://ror.org/050rbg919) as part of the DiffUSE project.

@@ -67,6 +67,9 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | Component | Files | License |
 |---|---|---|
 | LLVM libc++ | `libc++.1.dylib` | Apache-2.0 with LLVM exception |
+| OpenSSL | `libssl.3.dylib`, `libcrypto.3.dylib` | Apache-2.0 |
+| libffi | `libffi.8.dylib` | MIT |
+| SQLite | `libsqlite3.dylib` | Public domain |
 | CPython runtime | `libpython3.13.dylib`, `lib/python3.13/*.so` | Python Software Foundation License (`lib/python3.13/LICENSE.txt`) |
 | HarfBuzz | `libharfbuzz.0.dylib` | MIT ("Old MIT") |
 | Little CMS 2 | `liblcms2.2.dylib` | MIT |

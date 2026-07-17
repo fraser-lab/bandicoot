@@ -50,6 +50,34 @@ if [ ! -d "$INSTALL" ] || [ ! -x "$INSTALL/setup.sh" ]; then
     exit 1
 fi
 
+# --- pre-ship dependency gates ---------------------------------------------
+# These catch the class of bug that shipped v0.1.4.2..v0.1.4.8 with a broken
+# _ssl (a bundled Mach-O naming a dependency that isn't in the tree, which
+# only fails at dlopen -- i.e. on the user's machine). codesign --verify does
+# NOT catch it. Two complementary checks; set PACKAGE_SKIP_CHECKS=1 to bypass
+# (e.g. a deliberately partial install), but the default is to refuse to ship.
+#   1. check_install.sh   -- static: fails on any build-host (conda/canvas)
+#      path leak; warns on unresolved @rpath deps (some optional stdlib
+#      extensions dlopen fine via fallback, so those are a warning, not fatal).
+#   2. smoke_test_imports.sh -- runtime: launches the shipped interpreter and
+#      imports every module a session relies on (ssl, sqlite3, ctypes, numpy,
+#      matplotlib, coot, ...). Zero false positives; this is the authoritative
+#      "does it actually load" gate.
+if [ "${PACKAGE_SKIP_CHECKS:-0}" != "1" ]; then
+    echo "==> pre-ship gate: static dependency closure"
+    if ! "$SCRIPT_DIR/check_install.sh" --warn-unresolved "$INSTALL"; then
+        echo "package.sh: ERROR — dependency-closure check failed (build-host leak)." >&2
+        echo "            Fix the leak or set PACKAGE_SKIP_CHECKS=1 to override." >&2
+        exit 1
+    fi
+    echo "==> pre-ship gate: runtime import smoke test"
+    if ! "$SCRIPT_DIR/smoke_test_imports.sh" "$INSTALL"; then
+        echo "package.sh: ERROR — a critical module failed to import in the shipped" >&2
+        echo "            interpreter. Fix the bundling or set PACKAGE_SKIP_CHECKS=1." >&2
+        exit 1
+    fi
+fi
+
 # Warn (don't fail) if this looks like a dev build rather than a release one.
 BUILD_ID_H="$REPO/src/bandicoot-build-id.h"
 if [ -f "$BUILD_ID_H" ]; then
