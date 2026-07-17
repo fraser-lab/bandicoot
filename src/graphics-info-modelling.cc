@@ -3644,7 +3644,7 @@ graphics_info_t::execute_rotate_translate_ready() { // manual movement
       GtkWidget *widget = create_rotate_translate_obj_dialog();
       GtkWindow *main_window = GTK_WINDOW(lookup_widget(graphics_info_t::glarea,
 							"window1"));
-      gtk_window_set_transient_for(GTK_WINDOW(widget), main_window);
+      gtk_window_set_keep_above(GTK_WINDOW(widget), TRUE); // free-floating (was transient_for main window)
 
       do_rot_trans_adjustments(widget);
 

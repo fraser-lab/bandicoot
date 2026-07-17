@@ -320,7 +320,7 @@ GtkWidget *graphics_info_t::wrapped_nothing_bad_dialog(const std::string &label)
       // gtk_label_set_xalign (label1, 0.0);
 
       gtk_label_set_text(GTK_LABEL(label_widget), label.c_str());
-      gtk_window_set_transient_for(GTK_WINDOW(w), GTK_WINDOW(lookup_widget(graphics_info_t::glarea, "window1")));
+      gtk_window_set_keep_above(GTK_WINDOW(w), TRUE); // free-floating (was transient_for main window)
    }
    return w;
 }

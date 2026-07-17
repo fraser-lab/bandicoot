@@ -218,7 +218,7 @@ void do_phs_cell_choice_window() {
   // force to the top? (even on Mac?) 
   // maybe the above show may not be needed any more
 
-   gtk_window_set_transient_for(GTK_WINDOW(window), mw);
+   gtk_window_set_keep_above(GTK_WINDOW(window), TRUE); // free-floating (was transient_for main window)
    gtk_window_present(GTK_WINDOW(window));
 } 
 

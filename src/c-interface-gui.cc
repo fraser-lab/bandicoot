@@ -2362,9 +2362,10 @@ void set_contour_by_sigma_step_maybe(GtkWidget *window, int imol) {
 void set_transient_and_position(int widget_type, GtkWidget *window) {
 
    if (graphics_info_t::glarea) {
-      GtkWindow *main_window =
-	 GTK_WINDOW(lookup_widget(graphics_info_t::glarea, "window1"));
-      gtk_window_set_transient_for(GTK_WINDOW(window), main_window);
+      // Free-floating: keep_above, not transient_for -- see the member
+      // graphics_info_t::set_transient_and_position() for the full Quartz
+      // window-grouping rationale.
+      gtk_window_set_keep_above(GTK_WINDOW(window), TRUE);
       if (widget_type == COOT_DELETE_WINDOW) {
 	 bool done_set_pos = false;
 	 if (graphics_info_t::delete_item_widget_x_position > -100) {
@@ -3494,9 +3495,10 @@ GtkWidget *wrapped_create_model_fit_refine_dialog() {
 	 suck_model_fit_dialog();
       } else {
 	 if (graphics_info_t::model_fit_refine_dialog_stays_on_top_flag == 1) {
-	    gtk_window_set_transient_for(GTK_WINDOW(widget),
-					 GTK_WINDOW(lookup_widget(graphics_info_t::glarea,
-								  "window1")));
+	    // free-floating but stays above (this branch is the user's "stays on
+	    // top" preference); keep_above, not transient_for -- see
+	    // set_transient_and_position() for the Quartz grouping rationale.
+	    gtk_window_set_keep_above(GTK_WINDOW(widget), TRUE);
 
 	    if (graphics_info_t::model_fit_refine_x_position > -1) {
 	       gtk_widget_set_uposition(widget,

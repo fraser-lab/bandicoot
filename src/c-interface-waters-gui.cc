@@ -214,8 +214,7 @@ void execute_find_blobs(int imol_model, int imol_for_map,
 	    if ( n_big_blobs > 0 ) {
 
 	       GtkWidget *dialog = create_ligand_big_blob_dialog();
-	       GtkWidget *main_window = lookup_widget(graphics_info_t::glarea, "window1");
-	       gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(main_window));
+	       gtk_window_set_keep_above(GTK_WINDOW(dialog), TRUE); // free-floating (was transient_for main window)
 	       GtkWidget *vbox = lookup_widget(dialog, "ligand_big_blob_vbox");
 	       if (vbox) { 
 		  std::string label;
@@ -480,8 +479,7 @@ void find_waters(int imol_for_map,
 	       if (lig.big_blobs().size() > 0) {
 
 		  GtkWidget *dialog = create_ligand_big_blob_dialog();
-		  GtkWidget *main_window = lookup_widget(graphics_info_t::glarea, "window1");
-		  gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(main_window));
+		  gtk_window_set_keep_above(GTK_WINDOW(dialog), TRUE); // free-floating (was transient_for main window)
 		  GtkWidget *vbox = lookup_widget(dialog, "ligand_big_blob_vbox");
 		  if (vbox) { 
 		     std::string label;

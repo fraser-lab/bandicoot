@@ -692,9 +692,13 @@ graphics_info_t::store_window_position(int window_type, GtkWidget *widget) {
 void
 graphics_info_t::set_transient_and_position(int widget_type, GtkWidget *window) {
 
-   GtkWindow *main_window =
-      GTK_WINDOW(lookup_widget(graphics_info_t::glarea, "window1"));
-   gtk_window_set_transient_for(GTK_WINDOW(window), main_window);
+   // Bandicoot: free-floating dialogs, NOT transient-for the main window. On
+   // GTK-Quartz transient_for glues a dialog into the main window's WM group so
+   // it moves/minimizes in lockstep (Art, 2026-07-17: dialogs were "pinned to
+   // the main window"). keep_above keeps it above the GL window (so it can't
+   // open behind it) without the grouping -- same rationale as
+   // bandicoot_float_widget_in_window() in bandicoot_appkit.mm.
+   gtk_window_set_keep_above(GTK_WINDOW(window), TRUE);
 
    if (widget_type == COOT_EDIT_CHI_DIALOG) {
 
@@ -4492,8 +4496,7 @@ graphics_info_t::wrapped_create_lsq_plane_dialog() {
    GtkWidget *w = create_lsq_plane_dialog();
    pick_cursor_maybe();
    lsq_plane_dialog = w;
-   GtkWindow *main_window = GTK_WINDOW(lookup_widget(glarea, "window1"));
-   gtk_window_set_transient_for(GTK_WINDOW(w), main_window);
+   gtk_window_set_keep_above(GTK_WINDOW(w), TRUE); // free-floating (was transient_for main window)
 
    return w;
 }

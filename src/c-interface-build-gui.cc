@@ -2166,10 +2166,11 @@ void bandicoot_interesting_things_py(const char *title, PyObject *baddie_list) {
    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
    gtk_window_set_title(GTK_WINDOW(window), title ? title : "Results");
    gtk_window_set_default_size(GTK_WINDOW(window), 320, 340);
-   // Transient-for the main window so it doesn't open behind it (the normal-
-   // level z-order issue -- see macos-quartz-gl-nsview-facts).
-   GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
-   if (mw) gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(mw));
+   // Keep the dialog above the GL window so it doesn't open behind it (the
+   // normal-level z-order issue -- see macos-quartz-gl-nsview-facts), but
+   // free-floating: keep_above, NOT transient_for, which on GTK-Quartz would
+   // glue it to the main window's move/minimize group.
+   gtk_window_set_keep_above(GTK_WINDOW(window), TRUE);
    GtkWidget *outer = gtk_vbox_new(FALSE, 2);
    gtk_container_set_border_width(GTK_CONTAINER(outer), 4);
    gtk_container_add(GTK_CONTAINER(window), outer);
@@ -2424,7 +2425,7 @@ static void bandicoot_add_solvent_dialog() {
    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
    gtk_window_set_title(GTK_WINDOW(window), "Add Solvent Molecules");
    gtk_window_set_default_size(GTK_WINDOW(window), 320, 420);
-   if (mw) gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(mw));
+   if (mw) gtk_window_set_keep_above(GTK_WINDOW(window), TRUE); // free-floating (was transient_for)
    gtk_container_set_border_width(GTK_CONTAINER(window), 8);
    GtkWidget *outer = gtk_vbox_new(FALSE, 4);
    gtk_container_add(GTK_CONTAINER(window), outer);
