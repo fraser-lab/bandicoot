@@ -7,11 +7,11 @@ from source instead, see [BUILD.md](BUILD.md).
 ## Requirements
 
 - macOS Tahoe (26.x), Apple Silicon
-- Homebrew installed at `/opt/homebrew` with:
-  ```sh
-  brew install gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost
-  ```
-**NOTE:** Homebrew _has to be_ installed in `/opt/homebrew` or the binary distribution of Bandicoot won't work. If you wish to have Homebrew in a different location, you'll have to build Bandicoot from sources as described in [BUILD.md](BUILD.md)
+
+That's it. As of v0.1.4.10 the binary distribution is fully self-contained:
+the GTK2-Quartz stack and every other third-party library are bundled inside
+the tarball, so **no Homebrew, no XQuartz, and no conda are required** at
+runtime. Extract it anywhere and run.
 
 ## Install
 
@@ -22,7 +22,7 @@ from source instead, see [BUILD.md](BUILD.md).
    This creates a `bandicoot-<version>/` directory with `bin/`, `lib/`,
    `libexec/`, `share/`, and a `setup.sh` helper.
 
-    **NOTE:** In this case, `<version>` is a placeholder for the Bandicoot version number. E.g. for Bandicoot v.0.0.0.3 the tarball will have the filename `bandicoot-0.0.0.3-darwin-arm64.tar.gz`
+    **NOTE:** In this case, `<version>` is a placeholder for the Bandicoot version number. E.g. for Bandicoot v0.1.4.10 the tarball will have the filename `bandicoot-0.1.4.10-darwin-arm64.tar.gz`
 
 2. Run the one-time setup script:
    ```sh
@@ -55,10 +55,10 @@ you launch from — clean those up if you want a fully clean removal.
 
 ## Troubleshooting
 
-- **`dyld: Library not loaded: /opt/homebrew/...`** — a required
-  Homebrew package isn't installed, or Homebrew is at a non-standard
-  prefix. Install the missing package, or rebuild from source pointed
-  at your prefix.
+- **`dyld: Library not loaded: /opt/homebrew/...`** — should not happen with
+  v0.1.4.10 or later, which bundles every Homebrew library. If you see it,
+  the tarball predates self-containment (upgrade), or a file was moved out of
+  `lib/` — re-extract the tarball cleanly.
 - **`dyld: Library not loaded: @rpath/libclipper-...`** — the bundled
   copy of that library is missing from your extracted tree. Re-extract
   the tarball; do not move individual files out of `lib/`.

@@ -28,7 +28,10 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_INIT(coot, 0.9.8.95)
 AC_CONFIG_SRCDIR(src/main.cc)
-AM_INIT_AUTOMAKE
+dnl `foreign` strictness: Bandicoot is an app fork, not a GNU project, so don't
+dnl require the GNU-standard ChangeLog/NEWS/README/AUTHORS files (some were
+dnl removed as Coot-0.9 cruft in the cleanup; they live in the Coot source repo).
+AM_INIT_AUTOMAKE([foreign])
 
 dnl Pick up the macros.
 AM_ACLOCAL_INCLUDE(macros)
@@ -241,6 +244,18 @@ dnl Check for GLUT
 #
 AM_PATH_GLUT(, [echo You need the GLUT utility library; exit 1], AC_MSG_ERROR([Cannot find proper GLUT version]))
 
+dnl Bandicoot: do NOT link freeglut on macOS. Every freeglut call now has a
+dnl native replacement (elapsed-time timer, wire-sphere / solid-torus geometry,
+dnl and bitmap text via bandicoot_gl_bitmap_string), so no glut symbol is
+dnl referenced in the Apple build. Linking freeglut only dragged in Mesa libGL
+dnl plus an X11 stack and forced a pointless XQuartz launch at startup
+dnl (glutInit -> XOpenDisplay). GLUT_CFLAGS is kept so the header-only GLUT_*
+dnl constants still resolve; only GLUT_LIBS (-lglut -lXmu) is dropped.
+if test "$(uname)" = "Darwin"; then
+  GLUT_LIBS=""
+  AC_SUBST(GLUT_LIBS)
+fi
+
 
 dnl =========================== Python and Guile ======================
 
@@ -406,7 +421,6 @@ AC_OUTPUT([
 Makefile
 macros/Makefile
 pdb-templates/Makefile
-scheme/Makefile
 python/Makefile
 compat/Makefile
 utils/Makefile

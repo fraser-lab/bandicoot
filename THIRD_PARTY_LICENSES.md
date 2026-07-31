@@ -12,9 +12,11 @@ distributed under their own licenses. All of them are GPL-3-compatible, but
 their license notices must accompany binary redistribution. This file
 enumerates those components and their licenses.
 
-The GTK+ stack (GTK, GLib, Pango, Cairo, GDK, GObject) is **not** bundled in
-the tarball; it is resolved from Homebrew/the system at runtime and is therefore
-not covered here.
+As of Bandicoot 0.1.4.10 the GTK2-Quartz stack (GTK, GLib, GObject, GIO, Pango,
+Cairo, GDK, gdk-pixbuf, ATK, GtkGLExt) and its dependencies are **bundled** in
+the tarball and rewritten to `@rpath`, so Homebrew is no longer required at
+runtime. They are enumerated in the tables below. (freeglut is no longer linked
+at all — its calls have native replacements — so neither it nor Mesa libGL ship.)
 
 > **Note on completeness.** License classifications below are grouped by
 > component family. Where a component ships its own license file inside the
@@ -45,6 +47,7 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | Component | Files | License |
 |---|---|---|
 | FFTW 2 | `libfftw.2.dylib`, `librfftw.2.dylib` | GNU GPL v2 or later |
+| GNU Scientific Library | `libgsl.28.dylib`, `libgslcblas.0.dylib` | GNU GPL v3 |
 
 ### 2.2 LGPL / weak-copyleft
 
@@ -61,6 +64,17 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | gdk-pixbuf loaders | `lib/gdk-pixbuf-2.0/.../libpixbufloader-*` | LGPL v2+ |
 | GNU libiconv | `libiconv.2.dylib` | LGPL v2+ |
 | GNU gettext runtime | `libintl.8.dylib` | LGPL v2+ |
+| GTK+ 2 (GTK-Quartz) | `libgtk-quartz-2.0.0.dylib`, `libgdk-quartz-2.0.0.dylib`, `libgailutil.18.dylib` | LGPL v2+ |
+| GtkGLExt | `libgtkglext-quartz-1.0.0.dylib`, `libgdkglext-quartz-1.0.0.dylib` | LGPL v2+ |
+| GLib (GLib/GObject/GIO/GModule) | `libglib-2.0.0.dylib`, `libgobject-2.0.0.dylib`, `libgio-2.0.0.dylib`, `libgmodule-2.0.0.dylib` | LGPL v2+ |
+| Pango | `libpango-1.0.0.dylib`, `libpangocairo-1.0.0.dylib`, `libpangoft2-1.0.0.dylib` | LGPL v2+ |
+| Cairo | `libcairo.2.dylib`, `libcairo-gobject.2.dylib` | LGPL v2.1 / MPL 1.1 (dual) |
+| ATK | `libatk-1.0.0.dylib` | LGPL v2+ |
+| gdk-pixbuf | `libgdk_pixbuf-2.0.0.dylib` | LGPL v2+ |
+| GNU FriBidi | `libfribidi.0.dylib` | LGPL v2.1+ |
+| libthai | `libthai.0.dylib` | LGPL v2.1+ |
+| libdatrie | `libdatrie.1.dylib` | LGPL v2.1+ |
+| Graphite2 | `libgraphite2.3.dylib` | LGPL v2.1 / MPL / GPL (tri-license) |
 
 ### 2.3 Permissive (BSD / MIT / zlib / PSF / etc.)
 
@@ -83,6 +97,10 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | Brotli | `libbrotli*.dylib` | MIT |
 | libxcb | `libxcb.1.1.0.dylib` | MIT (X.org) |
 | libXau | `libXau.6.dylib` | MIT (X.org) |
+| X11 client libs (via Cairo) | `libX11.6.dylib`, `libX11-xcb.1.dylib`, `libXext.6.dylib`, `libXrender.1.dylib`, `libXdmcp.6.dylib` | MIT (X.org) |
+| fontconfig | `libfontconfig.1.dylib` | MIT-style (fontconfig license) |
+| pixman | `libpixman-1.0.dylib` | MIT |
+| PCRE2 | `libpcre2-8.0.dylib` | BSD-3-Clause |
 | zlib-ng | `libz.1.3.1.zlib-ng.dylib` | zlib license |
 | xz / liblzma | `liblzma.5.dylib` | 0BSD / public domain |
 

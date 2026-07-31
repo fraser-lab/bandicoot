@@ -9,9 +9,9 @@
 #      binary on first launch.
 #   2. Ad-hoc-codesigns the Mach-O files so Gatekeeper sees a (locally)
 #      valid signature instead of an unsigned binary.
-#   3. Checks Homebrew prerequisites and reports clearly if any are
-#      missing. (Clipper / mmdb2 / ssm / fftw2 ship inside the tarball
-#      now, so Miniconda is no longer a runtime dependency.)
+#   3. (Homebrew is no longer required at runtime: since v0.1.4.10 the whole
+#      GTK2-Quartz stack is bundled too, alongside the already-bundled
+#      clipper / mmdb2 / ssm / fftw2 / Python. No conda, no Homebrew.)
 #   4. Regenerates the gdk-pixbuf loaders.cache for the bundled image
 #      loaders so .svg icons (water-drop, etc.) render correctly.
 #   5. Installs .desktop / appdata.xml into ~/.local/share/applications/
@@ -156,29 +156,13 @@ fi
 # 3. prerequisite checks
 # ----------------------------------------------------------------------
 
-echo "$ARROW Checking Homebrew at /opt/homebrew..."
-HOMEBREW_PREFIX="/opt/homebrew"
-REQUIRED_BREWS="gtk+ gtkglext freeglut gsl cairo libpng sqlite bzip2 boost"
-if [ ! -x "$HOMEBREW_PREFIX/bin/brew" ]; then
-    echo "    $WARN Homebrew not found at $HOMEBREW_PREFIX/bin/brew" >&2
-    echo "      Install from https://brew.sh, then run:" >&2
-    echo "        brew install $REQUIRED_BREWS" >&2
-    note_problem
-else
-    MISSING_BREWS=""
-    for pkg in $REQUIRED_BREWS; do
-        if ! "$HOMEBREW_PREFIX/bin/brew" list --formula --versions "$pkg" >/dev/null 2>&1; then
-            MISSING_BREWS="$MISSING_BREWS $pkg"
-        fi
-    done
-    if [ -n "$MISSING_BREWS" ]; then
-        echo "    $WARN missing Homebrew packages:$MISSING_BREWS" >&2
-        echo "      To install:  brew install$MISSING_BREWS" >&2
-        note_problem
-    else
-        echo "    $CHECK all required Homebrew packages present"
-    fi
-fi
+# Homebrew is no longer a runtime requirement. Since v0.1.4.10 the entire
+# GTK2-Quartz stack (gtk+, glib, gobject, pango, cairo, gdk-pixbuf, atk,
+# harfbuzz, freetype, fontconfig, gsl, ...) is bundled into lib/ alongside the
+# already-bundled conda/crystallography libraries and rewritten to @rpath, so
+# the install runs on a Mac with no /opt/homebrew at all. freeglut is no longer
+# linked either (its calls have native replacements), which also removed the
+# vestigial XQuartz launch. See scripts/bundle_homebrew_deps.sh.
 
 # clipper / mmdb2 / ssm / ccp4c / fftw2 / libc++ are now bundled into
 # the install tree (lib/), so this script no longer needs to verify
@@ -197,14 +181,17 @@ fi
 
 PIXBUF_LOADERS_DIR="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 PIXBUF_CACHE="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
-QUERY_BIN="$HOMEBREW_PREFIX/bin/gdk-pixbuf-query-loaders"
+# Bundled since v0.1.4.10 (scripts/bundle_pixbuf_loaders.sh) so the cache can be
+# generated with NO Homebrew — the install is self-contained. Uses the bundled
+# gdk-pixbuf via @rpath; no /opt/homebrew dependency.
+QUERY_BIN="$INSTALL_DIR/libexec/gdk-pixbuf-query-loaders"
 
 if [ -d "$PIXBUF_LOADERS_DIR" ]; then
     echo "$ARROW Generating gdk-pixbuf loaders.cache..."
     if [ ! -x "$QUERY_BIN" ]; then
-        echo "    $WARN $QUERY_BIN not found." >&2
-        echo "      Install Homebrew's gtk+ (it pulls gdk-pixbuf):" >&2
-        echo "        brew install gtk+" >&2
+        echo "    $WARN bundled gdk-pixbuf-query-loaders missing ($QUERY_BIN)." >&2
+        echo "      SVG/PNG toolbar icons may not render. Re-extract the tarball" >&2
+        echo "      cleanly (don't move files out of libexec/ or lib/)." >&2
         note_problem
     else
         # Enumerate the bundled loaders explicitly so the cache lists

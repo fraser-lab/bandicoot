@@ -247,7 +247,14 @@ main (int argc, char *argv[]) {
       g_type_class_unref (g_type_class_ref (GTK_TYPE_IMAGE_MENU_ITEM));
       g_object_set(gtk_settings_get_default(), "gtk-menu-images", TRUE, NULL);
       // g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
+#ifndef __APPLE__
+      // On X11 builds GLUT owns the display connection. On macOS, glutInit()
+      // calls XOpenDisplay(), which pointlessly launches XQuartz at startup.
+      // Bandicoot renders through GtkGLExt-Quartz + OpenGL.framework and no
+      // longer calls any freeglut function (timers, geometry and bitmap text
+      // are provided natively), so freeglut is not initialised on Apple.
       glutInit(&argc, argv);
+#endif
 #ifdef __APPLE__
       // Pick a sensible default position for every top-level window
       // realized after this point, and raise every newly-mapped window

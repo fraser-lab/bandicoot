@@ -19,19 +19,16 @@
 #   1. UNRESOLVED  -- an @rpath/@loader_path/@executable_path (or absolute)
 #                     dependency that resolves to no file in the tree. dyld
 #                     would fail to load it at runtime. This is the _ssl class.
-#   2. HOST-LEAK   -- an absolute dependency into a BUILD-only prefix (conda,
-#                     anaconda, canvas-deps). Those exist on the build host but
-#                     never on a user's machine, so they must not ship. The
-#                     whole point of bundle_conda_deps.sh is to eliminate them.
+#   2. HOST-LEAK   -- an absolute dependency into a BUILD-only prefix (Homebrew,
+#                     conda, anaconda, canvas-deps). Those exist on the build
+#                     host but never on a user's machine, so they must not ship.
+#                     bundle_homebrew_deps.sh + bundle_conda_deps.sh exist to
+#                     eliminate them. Since v0.1.4.10 Homebrew is bundled too,
+#                     so /opt/homebrew is a hard leak like conda (Bandicoot no
+#                     longer requires Homebrew at runtime).
 #
 # NOT flagged (by design, per INSTALL.md's dependency model):
 #   * /usr/lib and /System        -- served from the dyld shared cache.
-#   * /opt/homebrew/...           -- Bandicoot's binary distribution REQUIRES
-#                                    Homebrew at /opt/homebrew with a documented
-#                                    formula set (gtk+ gtkglext freeglut gsl
-#                                    cairo libpng sqlite bzip2 boost). These are
-#                                    the sanctioned runtime prereq, not leaks.
-#                                    Reported as an INFO count only.
 #   * /DLC/... and <dir>/.dylibs/ -- delocate sentinels in vendored PyPI wheels
 #                                    (Pillow et al.); resolved relative to the
 #                                    loader at runtime.
@@ -62,16 +59,15 @@ LIBDIR="$INSTALL_DIR/lib"
 EXEDIR="$INSTALL_DIR/bin"          # @executable_path anchor (Bandicoot exe lives here)
 
 # BUILD-only prefixes that must never appear as a shipped dependency path.
-# (Homebrew /opt/homebrew is deliberately NOT here -- it's the documented
-# runtime prerequisite, see the header.)
+# Homebrew is now bundled (bundle_homebrew_deps.sh), so /opt/homebrew is a hard
+# leak like conda -- the shipped install must not depend on Homebrew at runtime.
 HOST_PREFIXES=(
-    /opt/miniconda3 /opt/anaconda3 /usr/local/Cellar
+    /opt/homebrew /opt/miniconda3 /opt/anaconda3 /usr/local/Cellar
     "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/sw/canvas-deps"
 )
 
 unresolved=0
 hostleak=0
-brewrefs=0
 scanned=0
 
 # Print the LC_RPATH search paths of a Mach-O, with @loader_path expanded to
@@ -94,7 +90,6 @@ dep_resolves() {
     d="$(cd "$(dirname "$f")" && pwd)"
     case "$dep" in
         /usr/lib/*|/System/*)            return 0 ;;                 # dyld cache
-        /opt/homebrew/*)                 return 0 ;;                 # documented prereq
         /DLC/*)                                                      # delocate sentinel
             rel="${dep##*/}"
             [ -e "$d/.dylibs/$rel" ] && return 0
@@ -134,8 +129,6 @@ while IFS= read -r f; do
         if is_host_leak "$dep"; then
             echo "  HOST-LEAK  ${f#$INSTALL_DIR/}  ->  $dep"
             hostleak=$((hostleak + 1))
-        elif case "$dep" in /opt/homebrew/*) true ;; *) false ;; esac; then
-            brewrefs=$((brewrefs + 1))          # documented prereq; count only
         elif ! dep_resolves "$dep" "$f"; then
             echo "  UNRESOLVED ${f#$INSTALL_DIR/}  ->  $dep"
             unresolved=$((unresolved + 1))
@@ -143,7 +136,7 @@ while IFS= read -r f; do
     done < <(otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}')
 done < <(find "$INSTALL_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -perm -u+x \) 2>/dev/null)
 
-echo "==> scanned $scanned Mach-O files ($brewrefs homebrew-prereq refs, not flagged)"
+echo "==> scanned $scanned Mach-O files"
 
 fail=0
 [ "$hostleak" -ne 0 ] && fail=1

@@ -27,6 +27,8 @@
 #include <mmdb2/mmdb_manager.h>
 #include "graphics-ligand-view.hh"
 
+#include "bandicoot_appkit.h"  // bandicoot_gl_bitmap_string (macOS text, replaces freeglut)
+
 #include "compat/coot-sysdep.h"
 
 #ifdef MAKE_ENHANCED_LIGAND_TOOLS
@@ -349,10 +351,16 @@ graphics_ligand_atom::make_text_item(const lig_build::atom_id_info_t &atom_id_in
 
 void
 graphics_ligand_atom::bitmap_text(const std::string &s) const {
+#ifdef __APPLE__
+   // freeglut is not linked on macOS; render at the current raster position
+   // via a native text texture instead of glutBitmapCharacter.
+   bandicoot_gl_bitmap_string(s.c_str(), 20.0);
+#else
    glPushAttrib (GL_LIST_BIT);
    for (unsigned int i = 0; i < s.length(); i++)
       glutBitmapCharacter (GLUT_BITMAP_HELVETICA_10, s[i]);
    glPopAttrib();
+#endif
 } 
 
 

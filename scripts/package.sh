@@ -76,6 +76,30 @@ if [ "${PACKAGE_SKIP_CHECKS:-0}" != "1" ]; then
         echo "            interpreter. Fix the bundling or set PACKAGE_SKIP_CHECKS=1." >&2
         exit 1
     fi
+    echo "==> pre-ship gate: splash version"
+    if ! "$SCRIPT_DIR/check_splash_version.sh" \
+             "$INSTALL/share/coot/pixmaps/bandicoot-splash.png" "$VERSION"; then
+        echo "package.sh: ERROR — the splash screen does not show release $VERSION." >&2
+        echo "            Update pixmaps/bandicoot-splash.png (and rebuild) or set" >&2
+        echo "            PACKAGE_SKIP_CHECKS=1 to override." >&2
+        exit 1
+    fi
+    echo "==> pre-ship gate: runtime assets present"
+    if ! "$SCRIPT_DIR/check_assets.sh" "$INSTALL"; then
+        echo "package.sh: ERROR — a required runtime asset is missing from the install" >&2
+        echo "            (e.g. the monomer dictionary -> refinement would fail). A" >&2
+        echo "            build-host data source was absent and its copy silently" >&2
+        echo "            skipped; see check_assets output. Set PACKAGE_SKIP_CHECKS=1" >&2
+        echo "            to override." >&2
+        exit 1
+    fi
+    echo "==> pre-ship gate: no build-host home paths"
+    if ! "$SCRIPT_DIR/check_buildhost_paths.sh" "$INSTALL"; then
+        echo "package.sh: ERROR — a shipped binary/script embeds the builder's home" >&2
+        echo "            path (/Users/<name>). Rebuild clean (BANDICOOT_RELEASE=1) or" >&2
+        echo "            set PACKAGE_SKIP_CHECKS=1 to override." >&2
+        exit 1
+    fi
 fi
 
 # Warn (don't fail) if this looks like a dev build rather than a release one.
@@ -121,15 +145,19 @@ INSTALL_BASE="$(basename "$INSTALL")"
 # copy (bsdtar -s path substitution, the macOS default). Inner symlinks (e.g.
 # bin/bcoot -> coot) are preserved because we do NOT dereference. GNU tar lacks
 # -s, so fall back to a staged copy (cp -RP preserves symlinks).
+# Exclude the build-seeded gdk-pixbuf loaders.cache: build.sh generates it with
+# THIS machine's absolute loader paths (a /Users/<builder> leak), and setup.sh
+# regenerates it with the user's paths on install anyway. Keep it in the dev
+# tree (so `bin/bcoot` shows icons here) but don't ship the build-path copy.
 if tar --version 2>&1 | grep -qi bsdtar; then
-    tar -C "$INSTALL_PARENT" --exclude '.DS_Store' \
+    tar -C "$INSTALL_PARENT" --exclude '.DS_Store' --exclude '*/loaders.cache' \
         -s "|^${INSTALL_BASE}|${NAME}|" \
         -czf "$TARBALL" "$INSTALL_BASE"
 else
     STAGE="$(mktemp -d)"
     trap 'rm -rf "$STAGE"' EXIT
     cp -RP "$INSTALL" "$STAGE/$NAME"
-    tar -C "$STAGE" --exclude '.DS_Store' -czf "$TARBALL" "$NAME"
+    tar -C "$STAGE" --exclude '.DS_Store' --exclude '*/loaders.cache' -czf "$TARBALL" "$NAME"
     rm -rf "$STAGE"
     trap - EXIT
 fi

@@ -81,7 +81,8 @@
 #include <direct.h>
 #endif // _MSC_VER
 
-#include <GL/glut.h> // needed for glutGet(GLUT_ELAPSED_TIME);
+#include <GL/glut.h> // needed for coot::elapsed_time_ms();
+#include "bandicoot-time.hh"
 
 #include "clipper/ccp4/ccp4_map_io.h"
  
@@ -1623,7 +1624,7 @@ void toggle_idle_rock_function() {
 	 gtk_timeout_add(25, // 40 fps
 			 (GtkFunction) animate_idle_rock,
 			 g.glarea);
-      g.time_holder_for_rocking = glutGet(GLUT_ELAPSED_TIME);
+      g.time_holder_for_rocking = coot::elapsed_time_ms();
 
       g.idle_function_rock_angle_previous =
 	 get_idle_function_rock_target_angle();
@@ -1677,7 +1678,7 @@ void set_flev_idle_ligand_interactions(int state) {
 	    gtk_timeout_add(100,
 			    (GtkFunction) animate_idle_ligand_interactions,
 			    NULL);
-	 g.time_holder_for_ligand_interactions = glutGet(GLUT_ELAPSED_TIME);
+	 g.time_holder_for_ligand_interactions = coot::elapsed_time_ms();
       }
    }
    g.graphics_draw();

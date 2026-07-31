@@ -96,7 +96,12 @@ install_name_tool -change "$LIBINTL_FROM" "$LIBINTL_TO" \
 # bizarre /opt/homebrew/opt/librsvg/.../libpixbufloader_svg.dylib id
 # rather than @rpath), rewrite librsvg-2.2 to @rpath, rewrite libintl.
 SVG_LOADER_DST="$DEST_LOADERS_DIR/libpixbufloader_svg.dylib"
-install_name_tool -id "$SVG_LOADER_DST" "$SVG_LOADER_DST" 2>/dev/null || true
+# Set a RELOCATABLE install-name (@rpath), not the absolute destination path:
+# this runs after make_relocatable.sh, so an absolute id would ship the builder's
+# home path (/Users/<builder>/.../libpixbufloader_svg.dylib) baked into the
+# loader. The loader is dlopened by gdk-pixbuf via the loaders.cache path, so its
+# LC_ID_DYLIB is not used for resolution -- @rpath is purely cosmetic-correct.
+install_name_tool -id "@rpath/libpixbufloader_svg.dylib" "$SVG_LOADER_DST" 2>/dev/null || true
 install_name_tool -change "@rpath/librsvg-2.2.dylib" \
                           "@rpath/librsvg-2.2.dylib" \
                           "$SVG_LOADER_DST" 2>/dev/null || true
@@ -121,5 +126,25 @@ install_name_tool -change "$LIBINTL_FROM" "$LIBINTL_TO" \
 # climb is ../../../ from @loader_path.
 install_name_tool -add_rpath "@loader_path/../../.." \
     "$SVG_LOADER_DST" 2>/dev/null || true
+
+# Bundle gdk-pixbuf-query-loaders ITSELF, so setup.sh can (re)generate
+# loaders.cache at install time with NO Homebrew present (the whole install is
+# self-contained since v0.1.4.10). The tool links only glib/gobject/gmodule/gio
+# -- all bundled -- and dlopens the loaders above, whose @rpath deps resolve via
+# this tool's own rpath. bundle_homebrew_deps.sh (which runs AFTER this) rewrites
+# its /opt/homebrew glib refs to @rpath; we add the @executable_path/../lib rpath
+# here because make_relocatable.sh already ran and won't see this late binary.
+QUERY_SRC="$BREW_PREFIX_ARG/bin/gdk-pixbuf-query-loaders"
+QUERY_DST="$PREFIX/libexec/gdk-pixbuf-query-loaders"
+if [ -x "$QUERY_SRC" ]; then
+    mkdir -p "$PREFIX/libexec"
+    cp -f "$QUERY_SRC" "$QUERY_DST"
+    chmod u+w "$QUERY_DST"
+    install_name_tool -add_rpath "@executable_path/../lib" "$QUERY_DST" 2>/dev/null || true
+    echo "==> bundled gdk-pixbuf-query-loaders into libexec/"
+else
+    echo "!! bundle_pixbuf_loaders: $QUERY_SRC not found — setup.sh will have no" >&2
+    echo "   bundled cache generator; SVG/PNG icons may not render on Homebrew-free Macs." >&2
+fi
 
 echo "==> bundle_pixbuf_loaders: done"

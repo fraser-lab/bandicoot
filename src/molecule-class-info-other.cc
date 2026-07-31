@@ -50,6 +50,8 @@
 
 #include "compat/coot-sysdep.h"
 
+#include "bandicoot-gl-primitives.hh"  // coot::gl_solid_torus (replaces freeglut)
+
 #include "clipper/core/xmap.h"
 #include "clipper/cns/cns_hkl_io.h"
 #include "clipper/minimol/minimol_io.h"
@@ -7568,7 +7570,7 @@ molecule_class_info_t::make_ball_and_stick(const std::string &atom_selection_str
             glMultMatrixf(m.get());
             glScalef(1.0, 1.0, 0.7);
 
-             glutSolidTorus(bonds_box_local.rings[ir].inner_radius,
+             coot::gl_solid_torus(bonds_box_local.rings[ir].inner_radius,
                            bonds_box_local.rings[ir].outer_radius,
                             bonds_box_local.rings[ir].n_sides,
                             bonds_box_local.rings[ir].n_rings);

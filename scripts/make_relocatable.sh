@@ -27,6 +27,19 @@ PREFIX="$(cd "$1" && pwd)"
 # an install that's already been relocated).
 LIB_PREFIX="$PREFIX/lib"
 
+# Optional 2nd arg: a GENERIC compile-time prefix the binaries were configured
+# with (build.sh's BANDICOOT_COMPILE_PREFIX, e.g. /opt/bandicoot), used so the
+# shipped binaries don't embed the builder's home. Coot's dylib install-names
+# and inter-library deps are baked with THIS prefix -- different from the real
+# install location -- so rewrite those to @rpath too, else the app can't find
+# its own libraries. Sentinel when unset so its glob never matches a real path.
+COMPILE_PREFIX="${2:-}"
+if [ -n "$COMPILE_PREFIX" ]; then
+    COMPILE_LIB_PREFIX="${COMPILE_PREFIX%/}/lib"
+else
+    COMPILE_LIB_PREFIX="__bandicoot_no_compile_prefix__"
+fi
+
 is_macho() {
     file -b "$1" 2>/dev/null | grep -q "Mach-O"
 }
@@ -38,7 +51,7 @@ process_dylib_install_name() {
     CUR="$(otool -D "$DYLIB" 2>/dev/null | tail -n +2 | head -1)"
     case "$CUR" in
         @rpath/*) ;;  # already relocatable
-        "$PREFIX"/*|*"$LIB_PREFIX"/*)
+        "$PREFIX"/*|*"$LIB_PREFIX"/*|"$COMPILE_LIB_PREFIX"/*)
             install_name_tool -id "@rpath/$(basename "$DYLIB")" "$DYLIB" 2>/dev/null || true
             ;;
     esac
@@ -50,7 +63,7 @@ rewrite_dep_loads() {
     local FILE="$1"
     otool -L "$FILE" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r DEP; do
         case "$DEP" in
-            "$LIB_PREFIX"/*)
+            "$LIB_PREFIX"/*|"$COMPILE_LIB_PREFIX"/*)
                 install_name_tool -change "$DEP" "@rpath/$(basename "$DEP")" "$FILE" 2>/dev/null || true
                 ;;
         esac
@@ -68,7 +81,7 @@ rewrite_rpaths() {
         in_rpath && /path / {print $2; in_rpath=0}
     ' | while read -r RP; do
         case "$RP" in
-            "$LIB_PREFIX"|"$LIB_PREFIX"/*)
+            "$LIB_PREFIX"|"$LIB_PREFIX"/*|"$COMPILE_LIB_PREFIX"|"$COMPILE_LIB_PREFIX"/*)
                 install_name_tool -rpath "$RP" "$NEW_RPATH" "$FILE" 2>/dev/null || true
                 ;;
         esac

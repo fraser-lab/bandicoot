@@ -40,6 +40,8 @@
 
 #include <gtk/gtk.h>  // must come after mmdb_manager on MacOS X Darwin
 #include <GL/glut.h>  // Timing
+#include "bandicoot-time.hh"
+#include "bandicoot-gl-primitives.hh"
 
 #ifdef __APPLE__
 #include "bandicoot_appkit.h"
@@ -135,14 +137,14 @@ void
 graphics_info_t::post_recentre_update_and_redraw() {
 
    //
-   // int t0 = glutGet(GLUT_ELAPSED_TIME);
+   // int t0 = coot::elapsed_time_ms();
    for (int ii=0; ii<n_molecules(); ii++) {
       molecules[ii].update_clipper_skeleton();
       molecules[ii].update_map(auto_recontour_map_flag);  // uses statics in graphics_info_t
                                                           // and redraw the screen using the new map
    }
 
-   // int t1 = glutGet(GLUT_ELAPSED_TIME);
+   // int t1 = coot::elapsed_time_ms();
    // std::cout << "Elapsed time for map contouring: " << t1-t0 << "ms" << std::endl;
 
    for (int ii=0; ii<n_molecules(); ii++) {
@@ -1300,7 +1302,7 @@ graphics_info_t::ShowFPS(){
 
    long t = 0;
 
-   t = glutGet(GLUT_ELAPSED_TIME);
+   t = coot::elapsed_time_ms();
    if (t - graphics_info_t::T0 >= 5000) {
       GLfloat seconds = (t-T0)/1000.0;
       GLfloat fps = GLfloat (Frames)/seconds;
@@ -1349,6 +1351,10 @@ graphics_info_t::set_font_size(int size) {
 
    atom_label_font_size = size;
 
+#ifndef __APPLE__
+   // atom_label_font is a GLUT bitmap-font pointer (&glutBitmap*), unused on
+   // macOS: the native text path (bandicoot_gl_bitmap_string / the texture
+   // labels) keys off atom_label_font_size, and freeglut is not linked here.
    if (size == 2) {
       atom_label_font = GLUT_BITMAP_HELVETICA_12;
    } else {
@@ -1374,6 +1380,7 @@ graphics_info_t::set_font_size(int size) {
 	}
       }
    }
+#endif
 
    // make the labels (if there are any) change now
 
@@ -3010,10 +3017,16 @@ graphics_info_t::printString_internal(const std::string &s,
    } else {
 
       glRasterPos3f(x,y,z);
+#ifdef __APPLE__
+      // freeglut is not linked on macOS; render the fixed-size bitmap label
+      // natively at the raster position instead of via glutBitmapCharacter.
+      bandicoot_gl_bitmap_string(s.c_str(), 22.0);
+#else
       glPushAttrib (GL_LIST_BIT);
       for (unsigned int i = 0; i < s.length(); i++)
 	 glutBitmapCharacter (graphics_info_t::atom_label_font, s[i]);
       glPopAttrib();
+#endif
    }
 }
 
@@ -3224,7 +3237,7 @@ graphics_info_t::graphics_object_internal_torus(const coot::Cartesian &base_poin
 #ifdef WINDOWS_MINGW
       glutWireTorus(radius_1, radius_2, 60, 90);
 #else
-      glutSolidTorus(radius_1, radius_2, 20, 32);
+      coot::gl_solid_torus(radius_1, radius_2, 20, 32);
 #endif
       glPopMatrix();
    }
@@ -5914,18 +5927,27 @@ graphics_info_t::draw_generic_text() {
       // GLfloat pink[3] =  { 1.0, 0.8, 0.8 };
       GLfloat pink[3] =  { font_colour.red, font_colour.green, font_colour.blue };
       glColor3fv(pink);
+      glDisable(GL_FOG);
+#ifdef __APPLE__
+      // freeglut is not linked on macOS; render 3D text objects natively.
+      for (unsigned int i=0; i<generic_texts_p->size(); i++) {
+	 const coot::generic_text_object_t &gto = (*generic_texts_p)[i];
+	 glRasterPos3f(gto.x, gto.y, gto.z);
+	 bandicoot_gl_bitmap_string(gto.s.c_str(), 30.0);
+      }
+#else
       glPushAttrib (GL_LIST_BIT);
       void *font = graphics_info_t::atom_label_font;
       font = GLUT_BITMAP_TIMES_ROMAN_24;
-      glDisable(GL_FOG);
       for (unsigned int i=0; i<generic_texts_p->size(); i++) {
 	 const coot::generic_text_object_t &gto = (*generic_texts_p)[i];
 	 glRasterPos3f(gto.x, gto.y, gto.z);
 	 for (unsigned int is = 0; is < gto.s.length(); is++)
 	    glutBitmapCharacter (font, gto.s[is]);
       }
-      glEnable(GL_FOG);
       glPopAttrib ();
+#endif
+      glEnable(GL_FOG);
    }
 }
 
