@@ -46,6 +46,7 @@
 
 #include <gtk/gtk.h>  // must come after mmdb_manager on MacOS X Darwin
 #include <GL/glut.h>  // for some reason...  // Eh?
+#include "bandicoot-time.hh"
 
 #include <gdk/gdkkeysyms.h> // for keyboarding (in this case nudge_active_residue) added 20091101
 
@@ -2646,11 +2647,11 @@ graphics_info_t::refine_residue_range(int imol,
 	    }
 	    if (!simple_water) { 
 	       flash_selection(imol, resno_1, ins_code_1, resno_2, ins_code_2, altconf, chain_id_1);
-	       long t0 = glutGet(GLUT_ELAPSED_TIME);
+	       long t0 = coot::elapsed_time_ms();
 	       rr = copy_mol_and_refine(imol, imol_map, resno_1, ins_code_1, resno_2, ins_code_2,
 					altconf, chain_id_1);
 	       short int istat = rr.found_restraints_flag;
-	       long t1 = glutGet(GLUT_ELAPSED_TIME);
+	       long t1 = coot::elapsed_time_ms();
 	       std::cout << "Refinement elapsed time: " << float(t1-t0)/1000.0 << std::endl;
 	       if (istat) { 
 		  graphics_draw();

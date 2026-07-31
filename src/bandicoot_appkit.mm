@@ -458,6 +458,71 @@ extern "C" void bandicoot_free_text_texture(unsigned int tex) {
     glDeleteTextures(1, &t);
 }
 
+// Draw `text` at the current GL raster position as a screen-aligned textured
+// quad. macOS replacement for glutBitmapCharacter (freeglut is no longer
+// linked). The glyph texture is drawn 1:1 in window/physical pixels via a
+// temporary pixel-space ortho projection, so labels stay a fixed on-screen
+// size regardless of zoom -- the same behaviour glutBitmapCharacter had.
+extern "C" void bandicoot_gl_bitmap_string(const char *text, double point_size) {
+    if (text == NULL || text[0] == '\0') return;
+
+    GLboolean valid = GL_FALSE;
+    glGetBooleanv(GL_CURRENT_RASTER_POSITION_VALID, &valid);
+    if (!valid) return;
+
+    GLfloat rpos[4] = { 0, 0, 0, 1 };
+    glGetFloatv(GL_CURRENT_RASTER_POSITION, rpos); // window coordinates
+    GLfloat col[4] = { 1, 1, 1, 1 };
+    glGetFloatv(GL_CURRENT_COLOR, col);
+    GLint vp[4] = { 0, 0, 0, 0 };
+    glGetIntegerv(GL_VIEWPORT, vp);
+
+    int tw = 0, th = 0;
+    unsigned int tex = bandicoot_make_text_texture(text, point_size, &tw, &th);
+    if (tex == 0 || tw <= 0 || th <= 0) {
+        if (tex) bandicoot_free_text_texture(tex);
+        return;
+    }
+
+    glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_TEXTURE_BIT |
+                 GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(vp[0], vp[0] + vp[2], vp[1], vp[1] + vp[3], -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_FOG);
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glColor4f(col[0], col[1], col[2], 1.0f);
+
+    float x0 = rpos[0], y0 = rpos[1];
+    float x1 = x0 + (float) tw, y1 = y0 + (float) th;
+    // NSBitmapImageRep rows are top-down; flip V so glyphs aren't upside down
+    // (same convention as the stroke-label texture path).
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y0);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(x1, y0);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(x1, y1);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y1);
+    glEnd();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glPopAttrib();
+
+    bandicoot_free_text_texture(tex);
+}
+
 // Rename the app so the macOS application menu (the bold first menu) reads
 // "Bandicoot" instead of the binary name "coot-bin". AppKit takes that title
 // from the application name, which for this unbundled binary defaults to the

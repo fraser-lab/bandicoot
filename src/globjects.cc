@@ -53,6 +53,7 @@
 #endif
 
 #include <GL/glut.h> // needed for wirecube and wiresphere.
+#include "bandicoot-time.hh"
 
 #ifdef __APPLE__
 #include "bandicoot_appkit.h"
@@ -535,7 +536,14 @@ float graphics_info_t::clipping_back  = 0.0;
 
 //
 int       graphics_info_t::atom_label_font_size = 2; // medium
+#ifdef __APPLE__
+// atom_label_font (a GLUT bitmap-font pointer) is unused on macOS -- the native
+// text path renders labels; initialising it to a GLUT_BITMAP_* constant would
+// pull in freeglut's glutBitmap* symbols, which are no longer linked.
+void     *graphics_info_t::atom_label_font = 0;
+#else
 void     *graphics_info_t::atom_label_font = GLUT_BITMAP_HELVETICA_12;
+#endif
 int       graphics_info_t::label_atom_on_recentre_flag = 1;
 int       graphics_info_t::symmetry_atom_labels_expanded_flag = 0;
 coot::colour_holder graphics_info_t::font_colour = coot::colour_holder(1.0, 0.8, 0.8);
@@ -3701,7 +3709,7 @@ get_idle_function_rock_target_angle() {
 
    graphics_info_t g;
 
-   long t = glutGet(GLUT_ELAPSED_TIME);
+   long t = coot::elapsed_time_ms();
    long delta_t = t - g.time_holder_for_rocking;
    double rock_sf = 0.001 * g.idle_function_rock_freq_scale_factor;
 

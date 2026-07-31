@@ -38,6 +38,7 @@
 #include <sstream>
 
 #include <GL/glut.h> // needed for GLUT_ELAPSED_TIME
+#include "bandicoot-time.hh"
 
 #include "clipper/core/ramachandran.h"
 #include "clipper/ccp4/ccp4_map_io.h"
@@ -668,7 +669,7 @@ testing_func_probabilities_refine_fragment(atom_selection_container_t atom_sel,
 
 #ifdef HAVE_GSL
 
-   long t0 = glutGet(GLUT_ELAPSED_TIME);
+   long t0 = coot::elapsed_time_ms();
    
    // now refine a bit of structure:
    std::vector<coot::atom_spec_t> fixed_atom_specs;
@@ -766,7 +767,7 @@ testing_func_probabilities_refine_fragment(atom_selection_container_t atom_sel,
    res_sel.nSelResidues = post_refine_nSelResidues;
    res_sel.SelResidues = post_refine_SelResidues;
 
-   long t1 = glutGet(GLUT_ELAPSED_TIME);
+   long t1 = coot::elapsed_time_ms();
    float seconds = float(t1-t0)/1000.0;
    std::cout << "refinement_took " << seconds << " seconds" << std::endl;
    return res_sel;

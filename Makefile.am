@@ -34,7 +34,7 @@ ACLOCAL_AMFLAGS=-I macros
 if COND_LIDIA_ONLY
    SUBDIRS = compat utils mini-mol geometry lidia-core lbg
 else
-   SUBDIRS = auxil scheme python pdb-templates macros compat utils protein_db mini-mol geometry  \
+   SUBDIRS = auxil python pdb-templates macros compat utils protein_db mini-mol geometry  \
         lidia-core coot-utils angles ccp4mg-utils db-main analysis cootaneer ideal ligand coords \
 	density-contour skeleton high-res build greg-tests \
 	python-tests tw lbg cootilus goograph pli fonts pyrogen src data \
@@ -49,28 +49,23 @@ cootrc: $(top_srcdir)/cootrc.template
 
 EXTRA_DIST = 		\
 	autogen.sh 	\
-	make-scheme-tar \
 	cootrc.template	\
 	py-compile      \
 	standard-residues.pdb \
-	BUGS		\
 	depcomp 	\
 	libtool 	\
 	config.sub 	\
 	config.guess 	\
 	install-sh 	\
 	missing 	\
-	TODO 		\
 	count-loc 	\
 	syminfo.lib	\
 	colours.def	\
 	my.supp		\
 	guile.supp	\
-	windows/syminfo.lib	\
 	fix-cif-loops.awk       \
 	ifdef-for-create-aboutdialog.awk \
 	mtrix-to-ncs-matrix.awk  \
-	RELEASE-NOTES	         \
 	copyright-disclaimer.txt \
 	intltool-extract.in      \
 	intltool-merge.in        \

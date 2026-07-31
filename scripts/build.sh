@@ -12,6 +12,13 @@ cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
+# Prefix baked into the binaries as compile-time fallback data paths
+# (-DPKGDATADIR / -DPKGPYTHONDIR etc.). Kept GENERIC so shipped binaries never
+# embed the builder's home ($HOME/sw/...). Files still install under $PREFIX
+# (via `make install prefix=$PREFIX` below); the app is relocatable at runtime
+# (the wrapper exports COOT_DATA_DIR / COOT_PYTHON_DIR from the real extract
+# location), so this compiled value is only an unused fallback.
+BANDICOOT_COMPILE_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
 CONDA_PREFIX="${CONDA_PREFIX:-/opt/miniconda3}"
 
 # FFTW2 (single-precision, legacy) is the one dependency that isn't
@@ -122,9 +129,9 @@ ${CONDA_PREFIX}/lib/pkgconfig"
 # private requires; Bandicoot doesn't actually link against any of
 # them at runtime).
 
-echo "==> ./configure --prefix=${PREFIX}"
+echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time fallback; files install to ${PREFIX})"
 ./configure \
-    --prefix="${PREFIX}" \
+    --prefix="${BANDICOOT_COMPILE_PREFIX}" \
     --with-fftw-prefix="${FFTW_PREFIX}" \
     --with-goocanvas-prefix="${HOME}/sw/canvas-deps" \
     --with-glut-prefix="${BREW_PREFIX}" \
@@ -142,16 +149,63 @@ echo "==> ./configure --prefix=${PREFIX}"
 # stays inert and pandda.inspect can't launch — see
 # [[bandicoot-coot-py-broken]] for the full backstory.
 
+# RELEASE builds recompile from clean. Compile-time -D macros (PKGDATADIR etc.)
+# are baked into each .o; changing a compile flag -- e.g. the generic
+# BANDICOOT_COMPILE_PREFIX -- does NOT retrigger compilation of unchanged
+# sources, so stale objects would keep an old prefix (this is how the builder's
+# /Users/<home> path lingered in the binaries). A clean recompile guarantees the
+# shipped binaries carry only the generic fallback path. Dev builds stay
+# incremental (fast); force a clean one anytime with BANDICOOT_CLEAN=1.
+if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_CLEAN:-}" ]; then
+    echo "==> make clean (release/clean build)"
+    make clean >/dev/null 2>&1 || true
+fi
 echo "==> make -j${JOBS}"
 make -j"${JOBS}"
 
-echo "==> make install"
-make install
+# Install to a staging DESTDIR, then relocate the tree to the real $PREFIX.
+# Using DESTDIR (rather than `make install prefix=$PREFIX`) is deliberate:
+# overriding `prefix` at install time makes make RE-COMPILE the prefix-dependent
+# objects (main.o's -DPKGDATADIR / -DPKGPYTHONDIR) with $PREFIX, which re-injects
+# the builder's home path into the binary. DESTDIR only PREPENDS to install
+# paths -- no recompile -- so the binaries keep the generic
+# ${BANDICOOT_COMPILE_PREFIX} fallback and carry no /Users/<builder> path. The
+# install is relocatable (rpaths are @executable_path/@rpath), so moving the
+# staged tree to $PREFIX is safe.
+echo "==> make install (DESTDIR staging) -> ${PREFIX}"
+_bcoot_destdir="$(mktemp -d)"
+make install DESTDIR="${_bcoot_destdir}"
+rm -rf "${PREFIX}"
+mkdir -p "$(dirname "${PREFIX}")"
+mv "${_bcoot_destdir}${BANDICOOT_COMPILE_PREFIX}" "${PREFIX}"
+rm -rf "${_bcoot_destdir}"
+
+# Bandicoot cleanup: Coot's `make install` ships build/dev artifacts an app never
+# touches at runtime -- ~287 MB of static libs (lib/*.a), libtool archives
+# (lib/*.la), and installed header copies (include/). The app links the .dylib
+# twins, so these are pure dead weight in the tarball. Prune them here (after the
+# link step, so the .a are available while building, then removed for shipping).
+# Safe: relocation/bundling/codesign/check_install all operate on Mach-O
+# .dylib/.so, never on .a/.la/headers.
+#
+# TOOLKIT MODE: set BANDICOOT_TOOLKIT=1 to KEEP them and ship a Coot-0.9-style
+# developer toolkit (static libs + .la + headers to build against libcoot-*),
+# instead of the lean end-user app bundle. Everything else is identical.
+if [ "${BANDICOOT_TOOLKIT:-0}" = "1" ]; then
+    echo "==> BANDICOOT_TOOLKIT=1: keeping static libs + .la + headers (toolkit build)"
+else
+    echo "==> pruning dev artifacts (lib/*.a, lib/*.la, include/) from the install"
+    rm -f "${PREFIX}/lib/"*.a "${PREFIX}/lib/"*.la
+    rm -rf "${PREFIX}/include"
+fi
 
 # Rewrite hard-coded Mach-O paths to @rpath / @executable_path form so
 # the install can be moved or packaged into a portable tarball.
 echo "==> make_relocatable.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/make_relocatable.sh" "${PREFIX}"
+# Pass BANDICOOT_COMPILE_PREFIX so the coot dylibs' install-names/deps (baked
+# with the generic compile prefix, not the real install path) get rewritten to
+# @rpath too -- otherwise the app can't find its own libraries.
+"${REPO_ROOT}/scripts/make_relocatable.sh" "${PREFIX}" "${BANDICOOT_COMPILE_PREFIX}"
 
 # Copy clipper / mmdb2 / ssm / ccp4c / fftw2 / libc++ out of the conda
 # prefix into the install tree so the tarball stands alone — users don't
@@ -165,6 +219,13 @@ echo "==> bundle_conda_deps.sh ${PREFIX}"
 # scripts/bundle_pixbuf_loaders.sh header.
 echo "==> bundle_pixbuf_loaders.sh ${PREFIX}"
 "${REPO_ROOT}/scripts/bundle_pixbuf_loaders.sh" "${PREFIX}" "${BREW_PREFIX}"
+
+# Bundle the Homebrew GTK2-Quartz stack (+ transitive deps) into lib/ and
+# rewrite every /opt/homebrew reference to @rpath. After this the install has
+# NO external runtime dependency -- it runs on a Mac with no Homebrew at all.
+# Runs after the pixbuf loaders so their Homebrew deps are closed over too.
+echo "==> bundle_homebrew_deps.sh ${PREFIX}"
+"${REPO_ROOT}/scripts/bundle_homebrew_deps.sh" "${PREFIX}" "${BREW_PREFIX}"
 
 # Bundle external CLI tools (currently: `probe` for Local Probe Dots).
 # Override the probe source via PROBE_SRC=<path>; default targets the
@@ -193,8 +254,50 @@ fi
 # the final basename) rather than only in the end-user setup.sh, so a
 # build.sh install runs immediately. Fails the build if anything is still
 # invalid afterwards.
+# RELEASE: strip debug symbols. Coot compiles with -g, which bakes every source
+# file's path (/Users/<builder>/.../src/*.cc and the .o paths) into the Mach-O
+# symbol table as debug-map (N_OSO) stabs -- a builder-identity leak that
+# strings(1) misses but nm(1)/grep find. `strip -S` removes the debug symbols
+# (and shrinks the binaries) while keeping the exported symbols dylibs need.
+# MUST run before codesign (stripping invalidates signatures; codesign re-signs).
+if [ -n "${BANDICOOT_RELEASE:-}" ]; then
+    echo "==> stripping debug symbols (release)"
+    _stripped=0
+    while IFS= read -r _m; do
+        file -b "$_m" 2>/dev/null | grep -q "Mach-O" || continue
+        chmod u+w "$_m" 2>/dev/null || true
+        strip -S "$_m" 2>/dev/null && _stripped=$((_stripped + 1)) || true
+    done < <(
+        find "${PREFIX}/libexec" "${PREFIX}/bin" -type f 2>/dev/null
+        find "${PREFIX}/lib" -type f \( -name '*.dylib' -o -name '*.so' \) 2>/dev/null
+    )
+    echo "    stripped ${_stripped} Mach-O files"
+fi
+
 echo "==> codesign-install.sh ${PREFIX}"
 "${REPO_ROOT}/scripts/codesign-install.sh" "${PREFIX}"
+
+# Seed the gdk-pixbuf loaders.cache so a build.sh install shows its SVG toolbar
+# icons immediately, without first running the end-user setup.sh. Uses the
+# bundled gdk-pixbuf-query-loaders (signed just above; resolves gdk-pixbuf via
+# @rpath) against the bundled loaders. The cache stores absolute loader paths,
+# so setup.sh regenerates it with the correct paths on the user's machine after
+# they extract the tarball -- this seed is just for the local build tree.
+PIXBUF_LOADERS_DIR="${PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+PIXBUF_QUERY="${PREFIX}/libexec/gdk-pixbuf-query-loaders"
+if [ -x "${PIXBUF_QUERY}" ] && [ -d "${PIXBUF_LOADERS_DIR}" ]; then
+    echo "==> seeding gdk-pixbuf loaders.cache"
+    PIXBUF_LOADER_FILES=()
+    while IFS= read -r f; do PIXBUF_LOADER_FILES+=("$f"); done \
+        < <(find "${PIXBUF_LOADERS_DIR}" -type f \( -name '*.so' -o -name '*.dylib' \) | sort)
+    if [ "${#PIXBUF_LOADER_FILES[@]}" -gt 0 ] && \
+       GDK_PIXBUF_MODULEDIR="${PIXBUF_LOADERS_DIR}" "${PIXBUF_QUERY}" \
+           "${PIXBUF_LOADER_FILES[@]}" > "${PIXBUF_LOADERS_DIR}/../loaders.cache" 2>/dev/null; then
+        echo "    wrote loaders.cache (${#PIXBUF_LOADER_FILES[@]} loaders)"
+    else
+        echo "    !! loaders.cache seed failed; setup.sh will generate it on install"
+    fi
+fi
 
 # Add the bcoot symlink (the wrapper computes its prefix from $0's
 # location, so a symlink in the same bin dir works).
@@ -209,24 +312,64 @@ if [ -f "${REPO_ROOT}/scripts/bandicoot.inspect" ]; then
     echo "==> installed ${PREFIX}/bin/bandicoot.inspect"
 fi
 
-# Asset directories: copy from FFTW_PREFIX/share/coot/ (which is the
-# Coot 0.9 install used as the dictionary / reference-structure source)
-# if they're not already in PREFIX.
+# Asset directories: the monomer dictionary (share/coot/lib/data/monomers),
+# reference structures, and the GTK theme. These do NOT live under FFTW_PREFIX
+# in general -- FFTW auto-detect can land on a conda fftw2 that carries no
+# share/coot data at all -- so DON'T source them from FFTW_PREFIX. Probe a list
+# of candidate Coot-0.9 data trees for the monomer library and copy assets from
+# the first that actually has it.
+#
+# History: sourcing these from FFTW_PREFIX silently shipped a monomer-less
+# install whenever FFTW auto-detected to /opt/miniconda3/fftw2 (no monomers
+# there; the data lives in ~/sw/coot-builds/coot-deps). Dirty-prefix builds hid
+# it by carrying the data forward; clean-prefix builds exposed it -> refinement
+# died with "No dictionary group found for residue type" for every residue.
+# Now: probe properly, and HARD-FAIL below if the monomers are still missing.
+COOT_DATA_SRC=""
+for _cand in "${COOT_DATA_SRC_OVERRIDE:-}" \
+             "${HOME}/sw/coot-builds/coot-deps" \
+             "${FFTW_PREFIX}" \
+             "${HOME}/sw/coot-deps" \
+             /opt/miniconda3/fftw2 \
+             /opt/miniconda3; do
+    [ -n "${_cand}" ] || continue
+    if [ -d "${_cand}/share/coot/lib/data/monomers" ]; then
+        COOT_DATA_SRC="${_cand}"; break
+    fi
+done
+[ -n "${COOT_DATA_SRC}" ] && echo "==> Coot data source: ${COOT_DATA_SRC}/share/coot"
+
 for d in lib/data/monomers reference-structures; do
-    if [ ! -d "${PREFIX}/share/coot/${d}" ] && \
-       [ -d "${FFTW_PREFIX}/share/coot/${d}" ]; then
-        echo "==> copying ${d} from ${FFTW_PREFIX}/share/coot/"
+    [ -d "${PREFIX}/share/coot/${d}" ] && continue        # already present
+    if [ -n "${COOT_DATA_SRC}" ] && [ -d "${COOT_DATA_SRC}/share/coot/${d}" ]; then
+        echo "==> copying ${d} from ${COOT_DATA_SRC}/share/coot/"
         mkdir -p "${PREFIX}/share/coot/${d%/*}"
-        cp -R "${FFTW_PREFIX}/share/coot/${d}" "${PREFIX}/share/coot/${d}"
+        cp -R "${COOT_DATA_SRC}/share/coot/${d}" "${PREFIX}/share/coot/${d}"
     fi
 done
 
-if [ ! -d "${PREFIX}/share/themes/Raleigh" ] && \
-   [ -d "${FFTW_PREFIX}/share/themes/Raleigh" ]; then
-    echo "==> copying Raleigh GTK theme"
-    mkdir -p "${PREFIX}/share/themes"
-    cp -R "${FFTW_PREFIX}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
+# GTK theme (Raleigh) -- same data source, with FFTW_PREFIX as a legacy fallback.
+for _themesrc in "${COOT_DATA_SRC}" "${FFTW_PREFIX}"; do
+    [ -n "${_themesrc}" ] || continue
+    if [ ! -d "${PREFIX}/share/themes/Raleigh" ] && \
+       [ -d "${_themesrc}/share/themes/Raleigh" ]; then
+        echo "==> copying Raleigh GTK theme from ${_themesrc}/share/themes/"
+        mkdir -p "${PREFIX}/share/themes"
+        cp -R "${_themesrc}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
+    fi
+done
+
+# Hard gate: refinement is dead without the monomer dictionaries -- fail the
+# build rather than ship an install that can't refine.
+if [ -z "$(find "${PREFIX}/share/coot/lib/data/monomers" -name '*.cif' -print -quit 2>/dev/null)" ]; then
+    echo "!! build.sh ERROR: monomer dictionary library MISSING from the install." >&2
+    echo "   (share/coot/lib/data/monomers/ has no .cif files -> refinement would" >&2
+    echo "    fail with 'No dictionary group found for residue type'.) No probed" >&2
+    echo "    source tree had the data. Point COOT_DATA_SRC_OVERRIDE=<dir> at a" >&2
+    echo "    Coot 0.9 install whose share/coot/lib/data/monomers/ exists." >&2
+    exit 1
 fi
+echo "==> monomer dictionary OK: $(find "${PREFIX}/share/coot/lib/data/monomers" -name '*.cif' | wc -l | tr -d ' ') cif files"
 
 # Drop the end-user setup script + install instructions at the install
 # root so the tarball ships with them. Users extract, read INSTALL.md,

@@ -54,15 +54,6 @@ Clipper, MMDB2, FFTW2, and a few others.
   `bandicoot_shift_pressed` / `bandicoot_control_pressed`) because
   GTK-Quartz on Tahoe never populates `event->state` with modifier
   bits.
-- **Click deduplication.** Button-press events arriving within 100 ms
-  of the previous one on the same button are dropped, so the
-  multi-event burst Tahoe generates for a single physical click
-  doesn't fire toggle handlers multiple times.
-- **App activation, splash screen, and identification.** On launch the
-  app calls `[NSApp activateIgnoringOtherApps:]` so its windows come
-  to the foreground; the Bandicoot splash PNG is shown for a
-  guaranteed 2.5 s before the main window appears; the title bar
-  reads `"Bandicoot (Coot 0.9.8.95, built <date>)"`.
 
 The executable on disk is called `bcoot` (a symlink to the existing
 `coot` wrapper script).

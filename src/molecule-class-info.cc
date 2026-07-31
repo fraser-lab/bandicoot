@@ -83,6 +83,7 @@
 #include "utils/coot-utils.hh"
 
 #include <GL/glut.h> // needed (only?) for wirecube
+#include "bandicoot-gl-primitives.hh"
 
 #ifndef CLIPPER_MAP_INTERP
 #include "clipper/core/map_interp.h"
@@ -737,7 +738,7 @@ molecule_class_info_t::draw_anisotropic_atoms() {
                                                          g.show_aniso_atoms_probability);
                            // note: g.show_aniso_atoms_probability is in the range
                            // 0.0 -> 100.0
-                           glutWireSphere(r, 10, 10);
+                           coot::gl_wire_sphere(r, 10, 10);
                         } else {
                            std::cout << "Bad Anistropic Us for " << atom_sel.atom_selection[i]
                                      << std::endl;

@@ -188,6 +188,15 @@ unsigned int bandicoot_make_text_texture(const char *text,
                                          int *out_height);
 void bandicoot_free_text_texture(unsigned int tex);
 
+// Draw UTF-8 `text` at the current GL raster position as a screen-aligned,
+// pixel-sized textured quad, roughly `point_size` physical pixels tall. macOS
+// replacement for the glutBitmapCharacter path (freeglut is no longer linked;
+// bitmap glyphs are what Coot used GLUT for). The glyph texture is tinted with
+// the current glColor; all touched GL state (matrices, enables, bound texture)
+// is saved and restored. No-op if the current raster position is invalid
+// (e.g. clipped). Call immediately after glRasterPos*().
+void bandicoot_gl_bitmap_string(const char *text, double point_size);
+
 // Install a native status bar as a borderless child NSWindow pinned flush to
 // the bottom edge of the main window, full content width. GTK's in-window
 // main_window_statusbar lives on the GL-owned contentView and is permanently

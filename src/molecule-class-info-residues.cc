@@ -37,6 +37,7 @@
 
 #include <string.h>
 #include <GL/glut.h>
+#include "bandicoot-time.hh"
 
 // #ifdef MAKE_ENHANCED_LIGAND_TOOLS
 // // includes order important, otherwise we get dcgettext() problems.
@@ -840,7 +841,7 @@ coot::animated_ligand_interactions_t::draw(mmdb::Manager *mol,
 	 glEnable (GL_BLEND);
 	 glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	 long now_time = glutGet(GLUT_ELAPSED_TIME);
+	 long now_time = coot::elapsed_time_ms();
 
 	 double add_fac = 1.4;
 	 double m_fac = 1/(1+add_fac) - 0.01;
