@@ -397,6 +397,79 @@ def glyco_tree_dialog_set_button_active_state(button, glyco_id, tree_type):
         if not (l == "Update for Current Residue") and not (l == "Refine Tree"):
             button.set_sensitive(l in active_button_label_ls)
 
+
+# ---------------------------------------------------------------------------
+# BANDICOOT: data-returning driver for the native "Add N-linked Glycan" dialog's
+# live glyco-tree filter (glyco GUI Stage 3). The native C dialog can't build
+# PyGTK widgets, so instead of the rotation-centre hook toggling gtk buttons, C
+# calls bandicoot_glyco_button_states(tree_type) via safe_python_command_with_
+# return and reads back which link-type buttons should be enabled for the residue
+# the user is centred on. We reuse the existing (tested) chemistry in
+# glyco_tree_dialog_set_button_active_state verbatim by driving it with a tiny
+# duck-typed proxy button -- that function only ever calls .get_label() and
+# .set_sensitive() on its button argument.
+# ---------------------------------------------------------------------------
+
+# Link-type button labels the native dialog offers. MUST stay identical to the
+# bandicoot_glyco_add_buttons[] table in bandicoot_add_nlinked_glycan_dialog
+# (src/c-interface-build-gui.cc) -- C looks up the returned dict by these labels.
+_BANDICOOT_GLYCO_BUTTON_LABELS = [
+    "Add a NAG-ASN NAG", "Add a BETA1-4 NAG", "Add a BETA1-4 BMA",
+    "Add an ALPHA1-2 MAN", "Add an ALPHA1-3 MAN", "Add an ALPHA2-3 MAN",
+    "Add an ALPHA2-3 GAL", "Add an ALPHA1-6 MAN", "Add a BETA1-2 NAG",
+    "Add a BETA1-4 GAL", "Add an ALPHA1-2 FUC", "Add an ALPHA1-3 FUC",
+    "Add an ALPHA1-6 FUC", "Add a BETA1-6 FUL", "Add an XYP-BMA XYP",
+    "Add an ALPHA2-3 SIA", "Add an ALPHA2-6 SIA",
+]
+
+
+class _BandicootGlycoProxyButton:
+    """Minimal stand-in for a gtk button so glyco_tree_dialog_set_button_active_
+    state can be reused with no PyGTK widgets."""
+    def __init__(self, label):
+        self._label = label
+        self.sensitive = True
+
+    def get_label(self):
+        return self._label
+
+    def set_sensitive(self, state):
+        self.sensitive = bool(state)
+
+
+def _bandicoot_glyco_active_glyco_id():
+    """glyco-tree id of the active residue (same derivation as the upstream
+    rotation-centre hook), or None if no glyco/ASN residue is centred."""
+    try:
+        with UsingActiveAtom(True) as [aa_imol, aa_chain_id, aa_res_no, aa_ins_code,
+                                       aa_atom_name, aa_alt_conf, aa_res_spec]:
+            glyco_id = glyco_tree_residue_id(aa_imol, aa_res_spec)
+            if not glyco_id:
+                rn = residue_name(aa_imol, aa_chain_id, aa_res_no, aa_ins_code)
+                if isinstance(rn, str) and rn == "ASN":
+                    glyco_id = [0, "unset", "ASN", "", "", aa_res_spec]
+            return glyco_id
+    except Exception:
+        return None
+
+
+def bandicoot_glyco_button_states(tree_type):
+    """Return {button_label: enabled_bool} for the native glyco dialog given the
+    selected tree_type. Called from C (bandicoot_glyco_dialog_refresh)."""
+    glyco_id = _bandicoot_glyco_active_glyco_id()
+    # No glyco context -> don't lock the user out; offer everything.
+    if not isinstance(glyco_id, list):
+        return dict((lab, True) for lab in _BANDICOOT_GLYCO_BUTTON_LABELS)
+    states = {}
+    for lab in _BANDICOOT_GLYCO_BUTTON_LABELS:
+        proxy = _BandicootGlycoProxyButton(lab)
+        try:
+            glyco_tree_dialog_set_button_active_state(proxy, glyco_id, tree_type)
+        except Exception:
+            proxy.sensitive = True
+        states[lab] = proxy.sensitive
+    return states
+
 # vbox is the vbox of the dialog box of buttons. One of the children of the vbox
 # is the table that contains the buttons
 #

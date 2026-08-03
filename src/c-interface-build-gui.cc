@@ -2764,6 +2764,229 @@ extern "C" void bandicoot_modelling_dispatch(int op_id) {
    }
 }
 
+// ---- Bandicoot native "Add N-linked Glycan" dialog (glyco GUI Stages 2-3) ----
+//
+// Native replacement for the PyGTK interactive_add_cho_dialog()
+// (gui_add_linked_cho.py): a keep-above floating window with a glycan-tree-type
+// selector, a scrolling list of "Add a <link> <sugar>" buttons (each adds that
+// sugar onto the active residue), and a Refine Tree button. The live filter
+// greys out link types that are chemically invalid for the residue you're
+// centred on, refreshing on recentre (via run_post_set_rotation_centre_hook).
+// The button-enable decisions are computed in Python
+// (bandicoot_glyco_button_states, which reuses the upstream glyco-tree chemistry)
+// and read back here -- no glycan logic lives in C.
+
+#define BANDICOOT_GLYCO_N_ADD 17
+
+// Link-type buttons. label MUST match _BANDICOOT_GLYCO_BUTTON_LABELS in
+// gui_add_linked_cho.py -- the filter dict returned by Python is keyed by these.
+static const struct { const char *label; const char *res; const char *link; }
+bandicoot_glyco_add_buttons[BANDICOOT_GLYCO_N_ADD] = {
+   { "Add a NAG-ASN NAG",   "NAG", "NAG-ASN"  },
+   { "Add a BETA1-4 NAG",   "NAG", "BETA1-4"  },
+   { "Add a BETA1-4 BMA",   "BMA", "BETA1-4"  },
+   { "Add an ALPHA1-2 MAN", "MAN", "ALPHA1-2" },
+   { "Add an ALPHA1-3 MAN", "MAN", "ALPHA1-3" },
+   { "Add an ALPHA2-3 MAN", "MAN", "ALPHA2-3" },
+   { "Add an ALPHA2-3 GAL", "GAL", "ALPHA2-3" },
+   { "Add an ALPHA1-6 MAN", "MAN", "ALPHA1-6" },
+   { "Add a BETA1-2 NAG",   "NAG", "BETA1-2"  },
+   { "Add a BETA1-4 GAL",   "GAL", "BETA1-4"  },
+   { "Add an ALPHA1-2 FUC", "FUC", "ALPHA1-2" },
+   { "Add an ALPHA1-3 FUC", "FUC", "ALPHA1-3" },
+   { "Add an ALPHA1-6 FUC", "FUC", "ALPHA1-6" },
+   { "Add a BETA1-6 FUL",   "FUL", "BETA1-6"  },
+   { "Add an XYP-BMA XYP",  "XYP", "XYP-BMA"  },
+   { "Add an ALPHA2-3 SIA", "SIA", "ALPHA2-3" },
+   { "Add an ALPHA2-6 SIA", "SIA", "ALPHA2-6" }
+};
+
+// Tree types, mapped to the strings bandicoot_glyco_button_states() expects.
+static const struct { const char *label; const char *tree_type; }
+bandicoot_glyco_tree_types[] = {
+   { "High Mannose",     "oligomannose"     },
+   { "Hybrid (Mammal)",  "hybrid-mammal"    },
+   { "Complex (Mammal)", "complex-mammal"   },
+   { "Complex (Plant)",  "complex-plant"    },
+   { "Expert User Mode", "expert-user-mode" }
+};
+
+typedef struct {
+   GtkWidget *window;
+   GtkWidget *add_button[BANDICOOT_GLYCO_N_ADD];
+   char tree_type[32];   // currently-selected tree type (drives the filter)
+} bandicoot_glyco_dialog_t;
+
+// Single dialog instance; NULL when closed. The recentre hook checks this.
+static bandicoot_glyco_dialog_t *bandicoot_glyco_dlg = NULL;
+
+// Shared "clicked" handler for the add-sugar buttons -- runs the Python
+// one-liner stashed as user_data (freed on button destroy).
+static void bandicoot_glyco_run_pycmd(GtkButton *, gpointer cmd) {
+   if (cmd) safe_python_command((const char *) cmd);
+}
+
+// Ask Python which link types are valid for the residue we're centred on (given
+// the selected tree type) and set the add-button sensitivities. No-op when the
+// dialog is closed. The chemistry is entirely in Python; we just read booleans.
+static void bandicoot_glyco_dialog_refresh() {
+   if (! bandicoot_glyco_dlg) return;
+#ifdef USE_PYTHON
+   std::string cmd = "bandicoot_glyco_button_states('";
+   cmd += bandicoot_glyco_dlg->tree_type;
+   cmd += "')";
+   PyObject *r = safe_python_command_with_return(cmd);  // manages its own GIL
+   PyGILState_STATE gstate = PyGILState_Ensure();        // for our own parsing
+   if (r && PyDict_Check(r)) {
+      for (int i = 0; i < BANDICOOT_GLYCO_N_ADD; i++) {
+         PyObject *v = PyDict_GetItemString(r, bandicoot_glyco_add_buttons[i].label); // borrowed
+         gboolean en = TRUE;
+         if (v) en = (PyObject_IsTrue(v) == 1) ? TRUE : FALSE;
+         gtk_widget_set_sensitive(bandicoot_glyco_dlg->add_button[i], en);
+      }
+   }
+   Py_XDECREF(r);
+   PyGILState_Release(gstate);
+#endif
+}
+
+// Public entry point for the recentre hook (run_post_set_rotation_centre_hook).
+extern "C" void bandicoot_glyco_dialog_refresh_if_open() {
+   bandicoot_glyco_dialog_refresh();
+}
+
+static void bandicoot_glyco_tree_type_toggled(GtkToggleButton *b, gpointer tt) {
+   if (bandicoot_glyco_dlg && gtk_toggle_button_get_active(b)) {
+      g_strlcpy(bandicoot_glyco_dlg->tree_type, (const char *) tt,
+                sizeof(bandicoot_glyco_dlg->tree_type));
+      bandicoot_glyco_dialog_refresh();
+   }
+}
+
+static void bandicoot_glyco_update_clicked(GtkButton *, gpointer) {
+   bandicoot_glyco_dialog_refresh();
+}
+
+static void bandicoot_glyco_dialog_destroyed(GtkWidget *, gpointer) {
+   if (bandicoot_glyco_dlg) { g_free(bandicoot_glyco_dlg); bandicoot_glyco_dlg = NULL; }
+}
+
+static void bandicoot_add_nlinked_glycan_dialog() {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+
+   // Single instance -- raise the existing window instead of opening a second.
+   if (bandicoot_glyco_dlg) {
+      gtk_window_present(GTK_WINDOW(bandicoot_glyco_dlg->window));
+      return;
+   }
+
+   // Install the synthetic pyranose-plane + unimodal ring-torsion restraints so
+   // added/refined sugars keep a proper chair (upstream does this on open).
+   safe_python_command("add_synthetic_pyranose_planes()");
+   safe_python_command("use_unimodal_pyranose_ring_torsions()");
+
+   bandicoot_glyco_dialog_t *dlg = g_new0(bandicoot_glyco_dialog_t, 1);
+   g_strlcpy(dlg->tree_type, "oligomannose", sizeof(dlg->tree_type)); // High Mannose default
+   bandicoot_glyco_dlg = dlg;
+
+   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+   dlg->window = window;
+   gtk_window_set_title(GTK_WINDOW(window), "Add N-linked Glycan");
+   gtk_window_set_default_size(GTK_WINDOW(window), 300, 560);
+   // keep_above (not transient_for) -- float above the GL window without gluing
+   // to its move/minimize group on GTK-Quartz (same as the results dialogs).
+   gtk_window_set_keep_above(GTK_WINDOW(window), TRUE);
+   g_signal_connect(window, "destroy", G_CALLBACK(bandicoot_glyco_dialog_destroyed), NULL);
+
+   GtkWidget *outer = gtk_vbox_new(FALSE, 2);
+   gtk_container_set_border_width(GTK_CONTAINER(outer), 4);
+   gtk_container_add(GTK_CONTAINER(window), outer);
+
+   // Glycan-tree-type selector -- drives the live filter. First radio (High
+   // Mannose) is active by default, matching dlg->tree_type above.
+   GtkWidget *frame = gtk_frame_new("Glycan tree type");
+   gtk_box_pack_start(GTK_BOX(outer), frame, FALSE, FALSE, 2);
+   GtkWidget *tt_vbox = gtk_vbox_new(FALSE, 0);
+   gtk_container_set_border_width(GTK_CONTAINER(tt_vbox), 2);
+   gtk_container_add(GTK_CONTAINER(frame), tt_vbox);
+   GtkWidget *first_radio = NULL;
+   for (unsigned int i = 0; i < G_N_ELEMENTS(bandicoot_glyco_tree_types); i++) {
+      GtkWidget *radio = gtk_radio_button_new_with_label_from_widget(
+         first_radio ? GTK_RADIO_BUTTON(first_radio) : NULL,
+         bandicoot_glyco_tree_types[i].label);
+      if (! first_radio) first_radio = radio;
+      g_signal_connect(radio, "toggled", G_CALLBACK(bandicoot_glyco_tree_type_toggled),
+                       (gpointer) bandicoot_glyco_tree_types[i].tree_type);
+      gtk_box_pack_start(GTK_BOX(tt_vbox), radio, FALSE, FALSE, 0);
+   }
+
+   // Manual "refresh the filter for where I'm centred now" button.
+   GtkWidget *update = gtk_button_new_with_label("Update for Current Residue");
+   g_signal_connect(update, "clicked", G_CALLBACK(bandicoot_glyco_update_clicked), NULL);
+   gtk_box_pack_start(GTK_BOX(outer), update, FALSE, FALSE, 1);
+
+   // Scrolling list of add-sugar buttons.
+   GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+   gtk_box_pack_start(GTK_BOX(outer), scrolled, TRUE, TRUE, 0);
+   GtkWidget *inside = gtk_vbox_new(FALSE, 0);
+   gtk_container_set_border_width(GTK_CONTAINER(inside), 4);
+   gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled), inside);
+
+   for (int i = 0; i < BANDICOOT_GLYCO_N_ADD; i++) {
+      char *cmd = g_strdup_printf(
+         "add_linked_residue_with_extra_restraints_to_active_residue(\"%s\", \"%s\")",
+         bandicoot_glyco_add_buttons[i].res, bandicoot_glyco_add_buttons[i].link);
+      GtkWidget *button = gtk_button_new_with_label(bandicoot_glyco_add_buttons[i].label);
+      g_signal_connect_data(button, "clicked", G_CALLBACK(bandicoot_glyco_run_pycmd),
+                            cmd, (GClosureNotify) g_free, (GConnectFlags) 0);
+      gtk_box_pack_start(GTK_BOX(inside), button, FALSE, FALSE, 1);
+      dlg->add_button[i] = button;
+   }
+
+   GtkWidget *refine = gtk_button_new_with_label("Refine Tree");
+   g_signal_connect_data(refine, "clicked", G_CALLBACK(bandicoot_glyco_run_pycmd),
+                         g_strdup("glyco_refine_tree()"),
+                         (GClosureNotify) g_free, (GConnectFlags) 0);
+   gtk_box_pack_start(GTK_BOX(outer), refine, FALSE, FALSE, 2);
+
+   GtkWidget *close = gtk_button_new_with_label("  Close  ");
+   g_signal_connect(close, "clicked", G_CALLBACK(bandicoot_results_close), window);
+   gtk_box_pack_start(GTK_BOX(outer), close, FALSE, FALSE, 4);
+
+   gtk_widget_show_all(window);
+   bandicoot_glyco_dialog_refresh();   // initial filter for the current residue
+}
+
+// Bandicoot: native "Glyco" (carbohydrate) menu dispatcher. Restores the
+// orphaned gui_add_linked_cho.py add_module_carbohydrate_gui() submenu (dead
+// PyGTK) as a native C menu. Every op calls a module-level Python entry point
+// defined in add_linked_cho.py (loaded by default) -- the glycan chemistry stays
+// in Python; only the menu is native. Menu built in gtk2-interface.c, op ids in
+// callbacks.h (BGLYCO_*).
+extern "C" void bandicoot_glyco_dispatch(int op_id) {
+   switch (op_id) {
+   case BGLYCO_OPEN_DIALOG:            bandicoot_add_nlinked_glycan_dialog();                   break;
+   case BGLYCO_SET_DEFAULT_B:          safe_python_command("glyco_set_default_cho_b_factor()"); break;
+   case BGLYCO_NLINK_NAG_NAG_BMA:      safe_python_command("glyco_nlink_add_nag_nag_bma()");    break;
+   case BGLYCO_ADD_HIGH_MANNOSE:       safe_python_command("glyco_add_high_mannose()");         break;
+   case BGLYCO_ADD_HYBRID_MAMMAL:      safe_python_command("glyco_add_hybrid_mammal()");        break;
+   case BGLYCO_ADD_COMPLEX_MAMMAL:     safe_python_command("glyco_add_complex_mammal()");       break;
+   case BGLYCO_ADD_COMPLEX_PLANT:      safe_python_command("glyco_add_complex_plant()");        break;
+   case BGLYCO_DELETE_ALL:             safe_python_command("glyco_delete_all()");               break;
+   case BGLYCO_TORSION_FIT:            safe_python_command("glyco_torsion_fit_this()");         break;
+   case BGLYCO_TORSION_FIT_REFINE:     safe_python_command("glyco_torsion_fit_this(True)");     break;
+   case BGLYCO_SYNTH_PYRANOSE_PLANES:  safe_python_command("glyco_add_synthetic_pyranose_planes()"); break;
+   case BGLYCO_UNIMODAL_RING_TORSIONS: safe_python_command("glyco_use_unimodal_ring_torsions()"); break;
+   case BGLYCO_DISPLAY_EXTRA_REST:     safe_python_command("glyco_display_extra_restraints()"); break;
+   case BGLYCO_UNDISPLAY_EXTRA_REST:   safe_python_command("glyco_undisplay_extra_restraints()"); break;
+   case BGLYCO_EXTRACT_TREE:           safe_python_command("glyco_extract_tree()");             break;
+   default:
+      break;
+   }
+}
+
 // ---- PanDDA Inspect panel -------------------------------------------------
 // A native panel driving python/bandicoot_pandda.py (parse pandda.analyse
 // results, navigate events, load model + aligned event/z maps). The Python

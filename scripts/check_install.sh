@@ -110,6 +110,26 @@ dep_resolves() {
     esac
 }
 
+# The dependency paths a Mach-O actually records, i.e. LC_LOAD_DYLIB and its
+# variants -- NOT the file's own LC_ID_DYLIB.
+#
+# v0.1.4.11: this replaces `otool -L | tail -n +2`. otool -L prints the
+# "<file>:" header on line 1 and, for a dylib, its own install-name on line 2,
+# so `tail -n +2` dropped the header but kept the ID and reported it as a
+# dependency. That was a latent false positive for any bundled dylib whose ID
+# basename is not itself present in lib/ -- e.g.
+# lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.dylib (id
+# @rpath/libpixbufloader_svg.dylib, but it lives in loaders/, not lib/), which
+# gets reported UNRESOLVED though dyld never looks it up. Harmless while
+# UNRESOLVED was only a warning; it would block arming the gate. Parsing the
+# load commands directly is exact.
+deps_of() {
+    otool -l "$1" 2>/dev/null | awk '
+        /^ *cmd LC_(LOAD_DYLIB|LOAD_WEAK_DYLIB|REEXPORT_DYLIB|LOAD_UPWARD_DYLIB)$/ { i = 1; next }
+        i && /^ *name / { print $2; i = 0 }
+    '
+}
+
 is_host_leak() {
     local dep="$1" p
     for p in "${HOST_PREFIXES[@]}"; do
@@ -123,7 +143,6 @@ echo "==> checking dependency closure of $INSTALL_DIR"
 while IFS= read -r f; do
     file -b "$f" 2>/dev/null | grep -q "Mach-O" || continue
     scanned=$((scanned + 1))
-    # otool -L: skip line 1 (the file's own install-id), take the dep path col.
     while IFS= read -r dep; do
         [ -n "$dep" ] || continue
         if is_host_leak "$dep"; then
@@ -133,7 +152,7 @@ while IFS= read -r f; do
             echo "  UNRESOLVED ${f#$INSTALL_DIR/}  ->  $dep"
             unresolved=$((unresolved + 1))
         fi
-    done < <(otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}')
+    done < <(deps_of "$f")
 done < <(find "$INSTALL_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -perm -u+x \) 2>/dev/null)
 
 echo "==> scanned $scanned Mach-O files"

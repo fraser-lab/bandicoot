@@ -45714,6 +45714,42 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_glyco_dispatch(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "bandicoot_glyco_dispatch" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  bandicoot_glyco_dispatch(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_glyco_dialog_refresh_if_open(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_glyco_dialog_refresh_if_open", 0, 0, 0)) SWIG_fail;
+  bandicoot_glyco_dialog_refresh_if_open();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_bandicoot_interesting_things_py(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   char *arg1 = 0 ;
@@ -54053,6 +54089,122 @@ SWIGINTERN PyObject *_wrap_preferences_internal_font_own_colour_flag(PyObject *s
   if (!SWIG_Python_UnpackTuple(args, "preferences_internal_font_own_colour_flag", 0, 0, 0)) SWIG_fail;
   result = (int)preferences_internal_font_own_colour_flag();
   resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_pick_atom_distance_cutoff(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float arg1 ;
+  float val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_float(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_pick_atom_distance_cutoff" "', argument " "1"" of type '" "float""'");
+  } 
+  arg1 = static_cast< float >(val1);
+  set_pick_atom_distance_cutoff(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_get_pick_atom_distance_cutoff(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "get_pick_atom_distance_cutoff", 0, 0, 0)) SWIG_fail;
+  result = (float)get_pick_atom_distance_cutoff();
+  resultobj = SWIG_From_float(static_cast< float >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_symmetry_pick_atom_distance_cutoff(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float arg1 ;
+  float val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_float(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_symmetry_pick_atom_distance_cutoff" "', argument " "1"" of type '" "float""'");
+  } 
+  arg1 = static_cast< float >(val1);
+  set_symmetry_pick_atom_distance_cutoff(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_intermediate_pick_distance_cutoffs(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float arg1 ;
+  float arg2 ;
+  float val1 ;
+  int ecode1 = 0 ;
+  float val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "set_intermediate_pick_distance_cutoffs", 2, 2, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_float(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_intermediate_pick_distance_cutoffs" "', argument " "1"" of type '" "float""'");
+  } 
+  arg1 = static_cast< float >(val1);
+  ecode2 = SWIG_AsVal_float(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "set_intermediate_pick_distance_cutoffs" "', argument " "2"" of type '" "float""'");
+  } 
+  arg2 = static_cast< float >(val2);
+  set_intermediate_pick_distance_cutoffs(arg1,arg2);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_save_pick_atom_radius(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_save_pick_atom_radius", 0, 0, 0)) SWIG_fail;
+  bandicoot_save_pick_atom_radius();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_load_pick_atom_radius(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_load_pick_atom_radius", 0, 0, 0)) SWIG_fail;
+  bandicoot_load_pick_atom_radius();
+  resultobj = SWIG_Py_Void();
   return resultobj;
 fail:
   return NULL;
@@ -77745,6 +77897,8 @@ static PyMethodDef SwigMethods[] = {
 	 { "add_OXT_to_residue", _wrap_add_OXT_to_residue, METH_VARARGS, NULL},
 	 { "bandicoot_make_link_interactive", _wrap_bandicoot_make_link_interactive, METH_NOARGS, NULL},
 	 { "bandicoot_modelling_dispatch", _wrap_bandicoot_modelling_dispatch, METH_O, NULL},
+	 { "bandicoot_glyco_dispatch", _wrap_bandicoot_glyco_dispatch, METH_O, NULL},
+	 { "bandicoot_glyco_dialog_refresh_if_open", _wrap_bandicoot_glyco_dialog_refresh_if_open, METH_NOARGS, NULL},
 	 { "bandicoot_interesting_things_py", _wrap_bandicoot_interesting_things_py, METH_VARARGS, NULL},
 	 { "set_draw_crosshairs", _wrap_set_draw_crosshairs, METH_O, NULL},
 	 { "draw_crosshairs_state", _wrap_draw_crosshairs_state, METH_NOARGS, NULL},
@@ -78017,6 +78171,12 @@ static PyMethodDef SwigMethods[] = {
 	 { "update_main_toolbar_icons_menu", _wrap_update_main_toolbar_icons_menu, METH_NOARGS, NULL},
 	 { "update_toolbar_icons_menu", _wrap_update_toolbar_icons_menu, METH_O, NULL},
 	 { "preferences_internal_font_own_colour_flag", _wrap_preferences_internal_font_own_colour_flag, METH_NOARGS, NULL},
+	 { "set_pick_atom_distance_cutoff", _wrap_set_pick_atom_distance_cutoff, METH_O, NULL},
+	 { "get_pick_atom_distance_cutoff", _wrap_get_pick_atom_distance_cutoff, METH_NOARGS, NULL},
+	 { "set_symmetry_pick_atom_distance_cutoff", _wrap_set_symmetry_pick_atom_distance_cutoff, METH_O, NULL},
+	 { "set_intermediate_pick_distance_cutoffs", _wrap_set_intermediate_pick_distance_cutoffs, METH_VARARGS, NULL},
+	 { "bandicoot_save_pick_atom_radius", _wrap_bandicoot_save_pick_atom_radius, METH_NOARGS, NULL},
+	 { "bandicoot_load_pick_atom_radius", _wrap_bandicoot_load_pick_atom_radius, METH_NOARGS, NULL},
 	 { "add_initial_position_restraints", _wrap_add_initial_position_restraints, METH_VARARGS, NULL},
 	 { "remove_initial_position_restraints", _wrap_remove_initial_position_restraints, METH_VARARGS, NULL},
 	 { "use_unimodal_ring_torsion_restraints", _wrap_use_unimodal_ring_torsion_restraints, METH_O, NULL},

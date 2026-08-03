@@ -982,6 +982,8 @@ create_window1 (void)
       { "Phosphorylate this Residue",               BMOD_PHOSPHORYLATE },
       { "What's this?",                             BMOD_WHATS_THIS },
       { NULL, 0 },
+      { "Glyco",                                    BMOD_GLYCO_SUBMENU },
+      { NULL, 0 },
       { "Morph Fit Chain (Averaging Radius 7)",     BMOD_MORPH_FIT_7 },
       { "Morph Fit Chain (Averaging Radius 11)",    BMOD_MORPH_FIT_11 },
       { "Morph Fit Chain by Secondary Structure",   BMOD_MORPH_FIT_SS },
@@ -1025,12 +1027,68 @@ create_window1 (void)
     GtkWidget *modelling1_menu = gtk_menu_new ();
     GtkWidget *bmod_it;
     unsigned int bmi;
+
+    /* BANDICOOT v0.1.4.x: the native "Glyco" (carbohydrate) submenu. Built here
+       as a submenu item so the modelling loop below can drop it into the
+       Modelling menu at the BMOD_GLYCO_SUBMENU marker (after "What's this?").
+       Restores the orphaned gui_add_linked_cho.py add_module_carbohydrate_gui()
+       menu (dead PyGTK gtk.Menu()) as native C -- each item routes through
+       on_bandicoot_glyco_activate keyed by its BGLYCO_* op id
+       (bandicoot_glyco_dispatch -> Python entry points in add_linked_cho.py).
+       Auto-mirrored into the macOS menu bar. */
+    GtkWidget *glyco_submenu_item = gtk_menu_item_new_with_mnemonic ("_Glyco");
+    {
+      static const struct { const char *label; int op; } bandicoot_glyco_items[] = {
+        { "N-linked Glycan Addition...",              BGLYCO_OPEN_DIALOG },
+        { NULL, 0 },
+        { "Set Default N-linked CHO Atoms B-factor",  BGLYCO_SET_DEFAULT_B },
+        { "N-link add NAG, NAG, BMA",                 BGLYCO_NLINK_NAG_NAG_BMA },
+        { NULL, 0 },
+        { "Add High Mannose",                         BGLYCO_ADD_HIGH_MANNOSE },
+        { "Add Hybrid (Mammal)",                      BGLYCO_ADD_HYBRID_MAMMAL },
+        { "Add Complex (Mammal)",                     BGLYCO_ADD_COMPLEX_MAMMAL },
+        { "Add Complex (Plant)",                      BGLYCO_ADD_COMPLEX_PLANT },
+        { NULL, 0 },
+        { "Delete All Carbohydrate",                  BGLYCO_DELETE_ALL },
+        { NULL, 0 },
+        { "Torsion Fit this residue",                 BGLYCO_TORSION_FIT },
+        { "Torsion Fit & Refine this residue",        BGLYCO_TORSION_FIT_REFINE },
+        { NULL, 0 },
+        { "Add synthetic pyranose plane restraints",  BGLYCO_SYNTH_PYRANOSE_PLANES },
+        { "Use Unimodal ring torsion restraints",     BGLYCO_UNIMODAL_RING_TORSIONS },
+        { NULL, 0 },
+        { "Display Extra Restraints",                 BGLYCO_DISPLAY_EXTRA_REST },
+        { "Undisplay Extra Restraints",               BGLYCO_UNDISPLAY_EXTRA_REST },
+        { NULL, 0 },
+        { "Extract this Tree",                        BGLYCO_EXTRACT_TREE }
+      };
+      GtkWidget *glyco_menu = gtk_menu_new ();
+      GtkWidget *bglyco_it;
+      unsigned int bgi;
+      gtk_menu_item_set_submenu (GTK_MENU_ITEM (glyco_submenu_item), glyco_menu);
+      for (bgi = 0; bgi < G_N_ELEMENTS (bandicoot_glyco_items); bgi++) {
+        if (bandicoot_glyco_items[bgi].label == NULL) {
+          bglyco_it = gtk_separator_menu_item_new ();
+        } else {
+          bglyco_it = gtk_menu_item_new_with_label (bandicoot_glyco_items[bgi].label);
+          g_signal_connect ((gpointer) bglyco_it, "activate",
+                            G_CALLBACK (on_bandicoot_glyco_activate),
+                            GINT_TO_POINTER (bandicoot_glyco_items[bgi].op));
+        }
+        gtk_widget_show (bglyco_it);
+        gtk_container_add (GTK_CONTAINER (glyco_menu), bglyco_it);
+      }
+      gtk_widget_show (glyco_submenu_item);
+    }
+
     gtk_widget_show (modelling1);
     gtk_container_add (GTK_CONTAINER (menubar1), modelling1);
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (modelling1), modelling1_menu);
     for (bmi = 0; bmi < G_N_ELEMENTS (bandicoot_modelling_items); bmi++) {
       if (bandicoot_modelling_items[bmi].label == NULL) {
         bmod_it = gtk_separator_menu_item_new ();
+      } else if (bandicoot_modelling_items[bmi].op == BMOD_GLYCO_SUBMENU) {
+        bmod_it = glyco_submenu_item;   /* pre-built native "Glyco" submenu */
       } else {
         bmod_it = gtk_menu_item_new_with_label (bandicoot_modelling_items[bmi].label);
         g_signal_connect ((gpointer) bmod_it, "activate",

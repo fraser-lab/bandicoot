@@ -1819,6 +1819,11 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
 #endif
 
 
+// Bandicoot: defined in c-interface-build-gui.cc; forward-declared here because
+// graphics-info.cc doesn't include c-interface.h. Refreshes the native "Add
+// N-linked Glycan" dialog's live glyco-tree filter (no-op if it's closed).
+extern "C" void bandicoot_glyco_dialog_refresh_if_open();
+
 void
 graphics_info_t::run_post_set_rotation_centre_hook() {
 
@@ -1830,6 +1835,9 @@ graphics_info_t::run_post_set_rotation_centre_hook() {
    run_post_set_rotation_centre_hook_py();
 #endif
 
+   // Bandicoot: keep the native glyco dialog's offered link types in sync with
+   // the residue we're now centred on.
+   bandicoot_glyco_dialog_refresh_if_open();
 }
 
 #ifdef USE_GUILE

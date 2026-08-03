@@ -57,17 +57,34 @@ fi
 # NOT catch it. Two complementary checks; set PACKAGE_SKIP_CHECKS=1 to bypass
 # (e.g. a deliberately partial install), but the default is to refuse to ship.
 #   1. check_install.sh   -- static: fails on any build-host (conda/canvas)
-#      path leak; warns on unresolved @rpath deps (some optional stdlib
-#      extensions dlopen fine via fallback, so those are a warning, not fatal).
+#      path leak AND on any unresolved @rpath dep.
+#      v0.1.4.11: this used to pass --warn-unresolved, which downgraded the
+#      UNRESOLVED class to a warning because a backlog of optional stdlib
+#      extensions "dlopen fine via fallback". That fallback IS the bug -- when
+#      an @rpath lookup fails, dyld tries DYLD_FALLBACK_LIBRARY_PATH, whose
+#      default ends in /usr/lib, so the module silently binds to whatever the
+#      host OS ships. It works on the build machine and breaks on a user's:
+#      GitHub #8 (pyexpat vs the system libexpat, all XML parsing dead on any
+#      macOS with expat < 2.7.2). The backlog is now bundled (libexpat,
+#      libmpdec, libbz2, readline+ncurses) or removed (_tkinter), so the gate
+#      is armed. Do NOT re-add --warn-unresolved to make a release go through;
+#      bundle the library instead.
 #   2. smoke_test_imports.sh -- runtime: launches the shipped interpreter and
 #      imports every module a session relies on (ssl, sqlite3, ctypes, numpy,
-#      matplotlib, coot, ...). Zero false positives; this is the authoritative
-#      "does it actually load" gate.
+#      matplotlib, coot, ...). Zero false positives.
+#      NOTE the two gates are complementary and neither subsumes the other.
+#      This one cannot see a dep that resolves via the /usr/lib fallback on the
+#      BUILD host but not on a user's: pyexpat imports fine here (macOS 26.5
+#      ships expat 2.7.4) and still broke for the #8 reporter. Only gate 1
+#      catches that class, which is why it must stay armed.
 if [ "${PACKAGE_SKIP_CHECKS:-0}" != "1" ]; then
     echo "==> pre-ship gate: static dependency closure"
-    if ! "$SCRIPT_DIR/check_install.sh" --warn-unresolved "$INSTALL"; then
-        echo "package.sh: ERROR — dependency-closure check failed (build-host leak)." >&2
-        echo "            Fix the leak or set PACKAGE_SKIP_CHECKS=1 to override." >&2
+    if ! "$SCRIPT_DIR/check_install.sh" "$INSTALL"; then
+        echo "package.sh: ERROR — dependency-closure check failed (build-host leak," >&2
+        echo "            or a shipped Mach-O names a dependency we do not ship)." >&2
+        echo "            Bundle the missing library in bundle_conda_deps.sh /" >&2
+        echo "            bundle_homebrew_deps.sh. Do not paper over it with" >&2
+        echo "            --warn-unresolved; see the note above." >&2
         exit 1
     fi
     echo "==> pre-ship gate: runtime import smoke test"

@@ -16,6 +16,18 @@
 # bundled. It also verifies the two modules whose C library needs a specific
 # build (sqlite3's load-extension symbol) by actually using them.
 #
+# v0.1.4.11 -- IMPORTING A MODULE IS NOT ENOUGH. Two of the stdlib modules
+# probed here transparently fall back to a pure-Python implementation when
+# their C extension fails to dlopen, so `import <mod>` returns success on a
+# broken bundle:
+#   * decimal    -> _pydecimal   (~100x slower; _decimal needs libmpdec)
+#   * ElementTree-> SimpleXMLTreeBuilder ("No module named expat")
+# `import decimal` therefore PASSED this gate for every release from v0.1.4.2
+# on, while _decimal had never once loaded, and nothing here looked at expat at
+# all until GitHub #8 came in from a user. So probe the ACCELERATOR module by
+# its real name (_decimal, pyexpat) and assert the fast path is the one in use,
+# rather than trusting the friendly wrapper's import.
+#
 # Exits non-zero if any CRITICAL module fails to import. Optional modules
 # (readline/curses/tkinter -- terminal/Tk, irrelevant to a GUI app) are probed
 # for information only and never fail the run.
@@ -41,8 +53,15 @@ fi
 # ones with external C-lib deps that have historically broken; zlib/bz2/lzma/
 # decimal round out the compression/precision extensions; numpy/matplotlib are
 # the bundled scientific stack; coot is the app's own Python module.
-CRITICAL="ssl hashlib zlib bz2 lzma sqlite3 ctypes decimal numpy matplotlib coot"
-# Probed but non-fatal (not needed by the GUI app).
+#
+# v0.1.4.11: _decimal and pyexpat are listed by their EXTENSION-module names on
+# purpose -- see the pure-Python-fallback note in the header. pyexpat is what
+# GitHub #8 was: XML parsing is not optional here, the PDB/wwPDB validation
+# reader (pdbe_validation_data.parse_wwpdb_validation_xml) needs it.
+CRITICAL="ssl hashlib zlib bz2 lzma sqlite3 ctypes decimal _decimal pyexpat numpy matplotlib coot"
+# Probed but non-fatal (not needed by the GUI app). _tkinter is deliberately
+# removed from the bundle by bundle_conda_deps.sh (the tkinter package is not
+# shipped), so a ModuleNotFoundError here is the expected result, not a problem.
 OPTIONAL="readline curses _tkinter"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/bandicoot-smoke.XXXXXX")"
@@ -58,9 +77,18 @@ lines = []
 def probe(m):
     try:
         mod = __import__(m)
-        # Exercise the two modules whose shared lib must be the right build.
+        # Exercise the modules whose shared lib must be the right build.
         if m == "ssl":     mod._create_unverified_context()
         if m == "sqlite3": mod.connect(":memory:").execute("create table t(x)")
+        # A module that silently degrades to pure Python must be checked for
+        # WHICH implementation it got, not just for importability.
+        if m == "decimal" and mod.__file__.endswith("_pydecimal.py"):
+            return "FAIL", "using pure-Python _pydecimal (libmpdec not bundled?)"
+        if m == "pyexpat":
+            # Prove the whole chain a caller actually uses, not just dlopen.
+            import xml.etree.ElementTree as ET
+            if ET.fromstring("<a><b/></a>")[0].tag != "b":
+                return "FAIL", "ElementTree did not parse via expat"
         return "OK", ""
     except Exception as e:
         return "FAIL", "%s: %s" % (type(e).__name__, str(e)[:80])

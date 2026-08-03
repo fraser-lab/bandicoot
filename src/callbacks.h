@@ -4956,9 +4956,40 @@ enum {
   BMOD_ADD_SOLVENT,
   BMOD_SUPERPOSE_LIGANDS,
   BMOD_ASSOC_SEQUENCE,
-  BMOD_COOTANEER
+  BMOD_COOTANEER,
+  /* Bandicoot: sentinel op -- NOT dispatchable. Marks where the native "Glyco"
+     submenu is dropped into the Modelling menu during construction
+     (gtk2-interface.c); it is intercepted there and never reaches
+     bandicoot_modelling_dispatch(). */
+  BMOD_GLYCO_SUBMENU
 };
 
 void
 on_bandicoot_modelling_activate         (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);
+
+/* Bandicoot: op ids for the native "Glyco" (carbohydrate) menu. Consumed by
+   bandicoot_glyco_dispatch() in c-interface-build-gui.cc; the menu is built in
+   gtk2-interface.c. A separate enum from BMOD_* (distinct enumerator names, so
+   the overlapping integer values are harmless -- each drives its own switch). */
+enum {
+  BGLYCO_OPEN_DIALOG = 1,       /* opens the native "Add N-linked Glycan" dialog */
+  BGLYCO_SET_DEFAULT_B,
+  BGLYCO_NLINK_NAG_NAG_BMA,
+  BGLYCO_ADD_HIGH_MANNOSE,
+  BGLYCO_ADD_HYBRID_MAMMAL,
+  BGLYCO_ADD_COMPLEX_MAMMAL,
+  BGLYCO_ADD_COMPLEX_PLANT,
+  BGLYCO_DELETE_ALL,
+  BGLYCO_TORSION_FIT,
+  BGLYCO_TORSION_FIT_REFINE,
+  BGLYCO_SYNTH_PYRANOSE_PLANES,
+  BGLYCO_UNIMODAL_RING_TORSIONS,
+  BGLYCO_DISPLAY_EXTRA_REST,
+  BGLYCO_UNDISPLAY_EXTRA_REST,
+  BGLYCO_EXTRACT_TREE
+};
+
+void
+on_bandicoot_glyco_activate             (GtkMenuItem     *menuitem,
                                         gpointer         user_data);

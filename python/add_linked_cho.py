@@ -4,8 +4,10 @@ def add_pyranose_pseudo_ring_plane_restraints(comp_id):
     import re
 
     def filter_out(plane_name_sub_string, plane_restraints):
-        return filter(lambda s: not plane_name_sub_string in s[0],
-                      plane_restraints)
+        # Py3: filter() returns an iterator, but the caller concatenates the
+        # result onto a list ([...] + filter_out(...)), which needs a real list.
+        return list(filter(lambda s: not plane_name_sub_string in s[0],
+                           plane_restraints))
 
     restraints = monomer_restraints(comp_id)
 
@@ -525,5 +527,122 @@ def delete_all_cho():
 #                                   residue_spec_to_chain_id(cho_res_spec),
 #                                   residue_spec_to_res_no(cho_res_spec), "")
                 delete_residues(aa_imol, delete_cho_ls)
+
+
+# ---------------------------------------------------------------------------
+# BANDICOOT: named entry points for the native "Glyco" menu.
+#
+# Upstream Coot built the carbohydrate menu actions as PyGTK menu-item lambdas
+# (closures) inside gui_add_linked_cho.add_module_carbohydrate_gui(). Bandicoot's
+# menubar is native C (the "Glyco" menu in src/gtk2-interface.c dispatches via
+# bandicoot_glyco_dispatch() in c-interface-build-gui.cc), which invokes these
+# module-level functions by name through safe_python_command(). The glycan
+# chemistry stays here in Python; only the menu chrome is native. Keep these
+# behaviourally in sync with the (now-inert) lambdas in
+# add_module_carbohydrate_gui().
+# ---------------------------------------------------------------------------
+
+def glyco_set_default_cho_b_factor():
+    """Menu: Set Default N-linked CHO Atoms B-factor."""
+    with UsingActiveAtom(True) as [aa_imol, aa_chain_id, aa_res_no,
+                                   aa_ins_code, aa_atom_name,
+                                   aa_alt_conf, aa_res_spec]:
+        residues = residues_near_residue(aa_imol, aa_res_spec, 10)
+        imol_region = new_molecule_by_residue_specs(aa_imol, residues)
+        m = median_temperature_factor(imol_region)
+        close_molecule(imol_region)
+        if isNumber(m):
+            new_m = m * 1.55
+            set_default_temperature_factor_for_new_atoms(new_m)
+            info_dialog("New Temperature Factor set to " + str(new_m))
+
+
+def glyco_nlink_add_nag_nag_bma():
+    """Menu: N-link add NAG, NAG, BMA."""
+    with UsingActiveAtom() as [aa_imol, aa_chain_id, aa_res_no,
+                               aa_ins_code, aa_atom_name, aa_alt_conf]:
+        multi_add_linked_residue(aa_imol,
+                                 [aa_chain_id, aa_res_no, aa_ins_code],
+                                 [["NAG", "NAG-ASN"],
+                                  ["NAG", "BETA1-4"],
+                                  ["BMA", "BETA1-4"]])
+
+
+def _glyco_add_oligo_tree(oligo_tree):
+    with UsingActiveAtom() as [aa_imol, aa_chain_id, aa_res_no,
+                               aa_ins_code, aa_atom_name, aa_alt_conf]:
+        make_backup(aa_imol)
+        add_linked_residue_tree(aa_imol,
+                                [aa_chain_id, aa_res_no, aa_ins_code],
+                                oligo_tree)
+
+
+def glyco_add_high_mannose():
+    """Menu: Add High Mannose."""
+    _glyco_add_oligo_tree(oligomannose_tree())
+
+
+def glyco_add_hybrid_mammal():
+    """Menu: Add Hybrid (Mammal)."""
+    _glyco_add_oligo_tree(hybrid_mammal_tree())
+
+
+def glyco_add_complex_mammal():
+    """Menu: Add Complex (Mammal)."""
+    _glyco_add_oligo_tree(complex_mammal_tree())
+
+
+def glyco_add_complex_plant():
+    """Menu: Add Complex (Plant)."""
+    _glyco_add_oligo_tree(complex_plant_tree())
+
+
+def glyco_delete_all():
+    """Menu: Delete All Carbohydrate."""
+    delete_all_cho()
+
+
+def glyco_torsion_fit_this(refine=False):
+    """Menu: Torsion Fit this residue (optionally + refine)."""
+    with UsingActiveAtom() as [aa_imol, aa_chain_id, aa_res_no,
+                               aa_ins_code, aa_atom_name, aa_alt_conf]:
+        centre_residue = [aa_chain_id, aa_res_no, aa_ins_code]
+        multi_residue_torsion_fit(aa_imol, [centre_residue], 30000)
+        if refine:
+            with AutoAccept():
+                refine_residues(aa_imol, [centre_residue])
+
+
+def glyco_add_synthetic_pyranose_planes():
+    """Menu: Add synthetic pyranose plane restraints."""
+    add_synthetic_pyranose_planes()
+
+
+def glyco_use_unimodal_ring_torsions():
+    """Menu: Use Unimodal ring torsion restraints."""
+    use_unimodal_pyranose_ring_torsions()
+
+
+def glyco_display_extra_restraints():
+    """Menu: Display Extra Restraints."""
+    using_active_atom(set_show_extra_restraints, "aa_imol", 1)
+
+
+def glyco_undisplay_extra_restraints():
+    """Menu: Undisplay Extra Restraints."""
+    using_active_atom(set_show_extra_restraints, "aa_imol", 0)
+
+
+def glyco_extract_tree():
+    """Menu: Extract this Tree."""
+    new_molecule_from_this_glyco_tree()
+
+
+def glyco_refine_tree():
+    """Dialog 'Refine Tree': real-space refine the whole glyco tree at the
+    active residue."""
+    with UsingActiveAtom(True) as [aa_imol, aa_chain_id, aa_res_no, aa_ins_code,
+                                   aa_atom_name, aa_alt_conf, aa_res_spec]:
+        refine_residues(aa_imol, glyco_tree_residues(aa_imol, aa_res_spec))
 
 

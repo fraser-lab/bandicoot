@@ -48,6 +48,7 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 |---|---|---|
 | FFTW 2 | `libfftw.2.dylib`, `librfftw.2.dylib` | GNU GPL v2 or later |
 | GNU Scientific Library | `libgsl.28.dylib`, `libgslcblas.0.dylib` | GNU GPL v3 |
+| GNU Readline | `libreadline.8.dylib` | GNU GPL v3 |
 
 ### 2.2 LGPL / weak-copyleft
 
@@ -103,6 +104,10 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | PCRE2 | `libpcre2-8.0.dylib` | BSD-3-Clause |
 | zlib-ng | `libz.1.3.1.zlib-ng.dylib` | zlib license |
 | xz / liblzma | `liblzma.5.dylib` | 0BSD / public domain |
+| Expat (libexpat) | `libexpat.1.dylib` | MIT |
+| mpdecimal | `libmpdec.4.dylib` | BSD-2-Clause |
+| bzip2 | `libbz2.dylib` | BSD-like (bzip2 license) |
+| ncurses | `libncursesw.6.dylib`, `libtinfow.6.dylib`, `libpanelw.6.dylib` | MIT (X11-style) |
 
 ---
 

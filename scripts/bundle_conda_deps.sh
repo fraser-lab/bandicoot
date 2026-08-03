@@ -78,6 +78,53 @@ TOPLEVEL_LIBS=(
     # conda's _sqlite3.so was built against conda's libsqlite3, which exports it,
     # so bundle that and let _sqlite3 resolve it via @rpath from our lib/.
     libsqlite3.dylib
+    # v0.1.4.11: libexpat, needed by the stdlib pyexpat extension. GitHub #8
+    # (SBGrid, bandicoot 0.1.4.10): "Symbol not found:
+    # _XML_SetAllocTrackerActivationThreshold ... Expected in:
+    # /usr/lib/libexpat.1.dylib", ending in ElementTree's "No module named
+    # expat; use SimpleXMLTreeBuilder instead" -- i.e. all XML parsing dead
+    # (parse_wwpdb_validation_xml() in pdbe_validation_data.py).
+    #
+    # This one did NOT fail loudly on the build host, which is why it shipped:
+    # pyexpat.so records @rpath/libexpat.1.dylib, lib-dynload's rpath is
+    # @loader_path/../../ = our lib/, and we shipped no libexpat there. When an
+    # @rpath lookup finds nothing, dyld falls back to DYLD_FALLBACK_LIBRARY_PATH,
+    # whose default ends in /usr/lib -- so pyexpat silently bound to whatever
+    # expat Apple happens to ship on that machine. XML_SetAllocTrackerActivation-
+    # Threshold only appeared in expat 2.7.2, and conda's expat (2.7.4) is what
+    # pyexpat.so was compiled against, so the ref is hard. macOS 26.5 ships
+    # 2.7.4 (works, hence invisible here); anything older -- including earlier
+    # Tahoe point releases, cf. Homebrew/homebrew-core#277330 -- errors out.
+    # Bundling conda's libexpat makes the @rpath lookup succeed, so the system
+    # copy is never consulted and the module no longer depends on the user's
+    # macOS version. Same reasoning as the libsqlite3 note above.
+    libexpat.1.dylib
+    # v0.1.4.11: libmpdec, needed by the stdlib _decimal extension. Missing
+    # since v0.1.4.2 and MASKED, not crashed: decimal.py does
+    # `try: from _decimal import * / except ImportError: from _pydecimal import *`,
+    # so `import decimal` kept working on the pure-Python fallback (~100x slower
+    # arithmetic) and smoke_test_imports.sh's `decimal` probe passed anyway.
+    # Unlike libexpat there is no system libmpdec to fall back to, so the C
+    # accelerator has never once loaded in a shipped build.
+    libmpdec.4.dylib
+    # v0.1.4.11: libbz2, needed by the stdlib _bz2 extension (bz2 is CRITICAL in
+    # smoke_test_imports.sh). Was resolving only via the /usr/lib dyld fallback
+    # described above; bundle it so the bundled module has a bundled dep like
+    # every other one, rather than depending on the host's bzip2.
+    libbz2.dylib
+    # v0.1.4.11: readline + its ncurses closure, needed by the stdlib readline
+    # and _curses/_curses_panel extensions. These are OPTIONAL in
+    # smoke_test_imports.sh and have never loaded in a shipped build, so nothing
+    # regresses by fixing them -- but readline is what gives `coot
+    # --no-graphics` a usable interactive Python prompt (history, line editing),
+    # and the closure is ~900 kB. NOTE conda's libncursesw records an ABSOLUTE
+    # /opt/miniconda3/lib/libtinfow.6.dylib, so libtinfow must be bundled too or
+    # check_install.sh reports a HOST-LEAK (the step-3 rewrite below only
+    # rewrites conda paths for libs listed here).
+    libreadline.8.dylib
+    libncursesw.6.dylib
+    libtinfow.6.dylib
+    libpanelw.6.dylib
 )
 
 # FFTW2 single-precision lives in a sub-prefix under conda (artefact of
@@ -203,21 +250,6 @@ for dylib in "$PREFIX"/lib/*.dylib; do
     rewrite_external_in "$dylib"
 done
 
-# v0.1.4.9: point the Python C extensions' libz refs at the system copy.
-# binascii/zlib record @rpath/libz.1.dylib; macOS ships an ABI-stable libz in
-# the dyld cache, so /usr/lib is the right target (matches how bundled png/
-# freetype are handled). This does NOT use the full rewrite set: _sqlite3's
-# @rpath/libsqlite3.dylib must be left alone so it resolves to the BUNDLED
-# conda libsqlite3 in lib/ (the system copy lacks a symbol it needs -- see the
-# libsqlite3 note in TOPLEVEL_LIBS). _ssl/_hashlib/_ctypes @rpath refs are
-# likewise left alone to resolve against the openssl/libffi we bundled.
-for so in "$PREFIX"/lib/python3.*/lib-dynload/*.so; do
-    [ -f "$so" ] || continue
-    file -b "$so" 2>/dev/null | grep -q "Mach-O" || continue
-    chmod u+w "$so" 2>/dev/null
-    install_name_tool -change "@rpath/libz.1.dylib" "/usr/lib/libz.1.dylib" "$so" 2>/dev/null || true
-done
-
 # v0.1.0.2: rewrite absolute $CANVAS_DEPS_PREFIX/lib/ refs in executables
 # and bundled dylibs to @rpath/<basename>. coot-bin links via the absolute
 # path because we built libgnomecanvas-2.0 + libart_lgpl_2 into a custom
@@ -324,6 +356,43 @@ else
     echo "    bundled $PY_VER_DIR stdlib -> $PY_STDLIB_DST (site-packages preserved)"
 fi
 unset _d PY_STDLIB_SRC PY_VER_DIR PY_STDLIB_DST
+
+# ---------------------------------------------------------------------------
+# v0.1.4.9: point the Python C extensions' libz refs at the system copy.
+# binascii/zlib record @rpath/libz.1.dylib; macOS ships an ABI-stable libz in
+# the dyld cache, so /usr/lib is the right target (matches how bundled png/
+# freetype are handled). This does NOT use the full rewrite set: _sqlite3's
+# @rpath/libsqlite3.dylib must be left alone so it resolves to the BUNDLED
+# conda libsqlite3 in lib/ (the system copy lacks a symbol it needs -- see the
+# libsqlite3 note in TOPLEVEL_LIBS). _ssl/_hashlib/_ctypes/pyexpat/_decimal
+# @rpath refs are likewise left alone to resolve against what we bundled.
+#
+# v0.1.4.11 -- ORDERING FIX: this pass used to sit ~70 lines up, BEFORE the
+# stdlib copy above created lib-dynload/ at all. The glob matched nothing, the
+# loop body never ran, and it has been dead code since v0.1.4.9 (shipped
+# 0.1.4.10's zlib/binascii still record @rpath/libz.1.dylib). It must run
+# AFTER the stdlib is in place -- keep it below the rsync.
+echo "==> retargeting Python C-extension libz refs at the system copy"
+for so in "$PREFIX"/lib/python3.*/lib-dynload/*.so; do
+    [ -f "$so" ] || continue
+    file -b "$so" 2>/dev/null | grep -q "Mach-O" || continue
+    chmod u+w "$so" 2>/dev/null
+    install_name_tool -change "@rpath/libz.1.dylib" "/usr/lib/libz.1.dylib" "$so" 2>/dev/null || true
+done
+
+# v0.1.4.11: drop _tkinter. The stdlib copy above already excludes the `tkinter`
+# package (and idlelib/turtledemo), so the extension module can never be
+# imported by anything -- but it records @rpath/libtcl8.6.dylib +
+# @rpath/libtk8.6.dylib, which would be the only unresolved deps left in the
+# tree and would keep check_install.sh's UNRESOLVED gate disarmed. Bundling
+# Tcl/Tk instead would be >10 MB for a module nothing uses (matplotlib runs on
+# a non-Tk backend here). Removing it turns a dyld ImportError into a clean
+# ModuleNotFoundError.
+for so in "$PREFIX"/lib/python3.*/lib-dynload/_tkinter*.so; do
+    [ -f "$so" ] || continue
+    rm -f "$so"
+    echo "    removed $(basename "$so") (tkinter package is not bundled)"
+done
 
 # ---------------------------------------------------------------------------
 # v0.1.4.2: bundle numpy + matplotlib (self-contained PyPI wheels).

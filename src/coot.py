@@ -3839,6 +3839,12 @@ def bandicoot_make_link_interactive():
 def bandicoot_modelling_dispatch(op_id):
     return _coot.bandicoot_modelling_dispatch(op_id)
 
+def bandicoot_glyco_dispatch(op_id):
+    return _coot.bandicoot_glyco_dispatch(op_id)
+
+def bandicoot_glyco_dialog_refresh_if_open():
+    return _coot.bandicoot_glyco_dialog_refresh_if_open()
+
 def bandicoot_interesting_things_py(title, baddie_list):
     return _coot.bandicoot_interesting_things_py(title, baddie_list)
 
@@ -4658,6 +4664,24 @@ def update_toolbar_icons_menu(toolbar_index):
 
 def preferences_internal_font_own_colour_flag():
     return _coot.preferences_internal_font_own_colour_flag()
+
+def set_pick_atom_distance_cutoff(d):
+    return _coot.set_pick_atom_distance_cutoff(d)
+
+def get_pick_atom_distance_cutoff():
+    return _coot.get_pick_atom_distance_cutoff()
+
+def set_symmetry_pick_atom_distance_cutoff(d):
+    return _coot.set_symmetry_pick_atom_distance_cutoff(d)
+
+def set_intermediate_pick_distance_cutoffs(far_lo, near_hi):
+    return _coot.set_intermediate_pick_distance_cutoffs(far_lo, near_hi)
+
+def bandicoot_save_pick_atom_radius():
+    return _coot.bandicoot_save_pick_atom_radius()
+
+def bandicoot_load_pick_atom_radius():
+    return _coot.bandicoot_load_pick_atom_radius()
 
 def add_initial_position_restraints(imol, residue_specs, weight):
     return _coot.add_initial_position_restraints(imol, residue_specs, weight)

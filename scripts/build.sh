@@ -6,6 +6,9 @@
 #   CONDA_PREFIX  miniconda root       (default: /opt/miniconda3)
 #   BREW_PREFIX   homebrew root        (default: /opt/homebrew or `brew --prefix`)
 #   JOBS          parallel make jobs   (default: number of CPUs)
+#   BUILD_SKIP_CHECKS=1  skip the closing dependency-closure gate (see the end
+#                 of this script). Default is to FAIL the build on an unresolved
+#                 or build-host dependency, dev builds included.
 set -e
 
 cd "$(dirname "$0")/.."
@@ -393,6 +396,44 @@ fi
 if [ -f "${REPO_ROOT}/KEY_SHORTCUTS.md" ]; then
     cp "${REPO_ROOT}/KEY_SHORTCUTS.md" "${PREFIX}/KEY_SHORTCUTS.md"
     echo "==> copied KEY_SHORTCUTS.md to ${PREFIX}/KEY_SHORTCUTS.md"
+fi
+
+# Hard gate: dependency closure. Same spirit as the monomer-dictionary gate
+# above -- refuse to hand over an install that is already broken.
+#
+# v0.1.4.11: added because until now this check lived ONLY in package.sh, so it
+# ran when rolling a tarball and never on a plain ./scripts/build.sh. Two
+# consequences, both real: a dev build could sit here for weeks with a Python
+# extension that cannot dlopen (that is how the missing libexpat behind GitHub
+# #8 survived -- pyexpat silently bound to the host's /usr/lib copy), and a
+# third party building from source and packaging their own way -- SBGrid lays
+# the tree out as /programs/<platform>/bandicoot/<version>/ -- never got the
+# gate at all. Running it here means anyone who builds Bandicoot gets it.
+#
+# This is as early as the check can be correct: the closure is not complete
+# until make_relocatable + all four bundle_*.sh + codesign have run, so it
+# cannot move further up. Read-only, and ~12 s on a full tree (it runs otool -l
+# over ~270 Mach-O files) -- negligible next to the compile, but noticeable on
+# an incremental no-op build.
+#
+# ARMED for dev builds too, deliberately -- an unresolved dep is a defect at
+# any stage, and the whole lesson of #8 is that this class hides until a user
+# on a different machine trips over it. Set BUILD_SKIP_CHECKS=1 for a knowingly
+# partial tree; do not make it a habit.
+if [ "${BUILD_SKIP_CHECKS:-0}" != "1" ]; then
+    echo "==> dependency-closure gate: check_install.sh ${PREFIX}"
+    if ! "${REPO_ROOT}/scripts/check_install.sh" "${PREFIX}"; then
+        echo "!! build.sh ERROR: the install has an unresolved or build-host" >&2
+        echo "   dependency (see the UNRESOLVED / HOST-LEAK lines above)." >&2
+        echo "   UNRESOLVED means a shipped Mach-O names a library we do not ship." >&2
+        echo "   It may still appear to work here: when an @rpath lookup fails," >&2
+        echo "   dyld falls back to /usr/lib, so the module silently binds to" >&2
+        echo "   whatever this Mac happens to have -- and breaks on a user's." >&2
+        echo "   Fix it by bundling the library (scripts/bundle_conda_deps.sh for" >&2
+        echo "   conda-provided ones, bundle_homebrew_deps.sh for Homebrew), not" >&2
+        echo "   by skipping this gate." >&2
+        exit 1
+    fi
 fi
 
 echo ""

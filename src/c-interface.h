@@ -5730,6 +5730,19 @@ void bandicoot_make_link_interactive();
     extensions.py "Modelling..." submenu (dead PyGTK menu path) as native C. */
 void bandicoot_modelling_dispatch(int op_id);
 
+/*! \brief Bandicoot: run one operation of the native "Glyco" (carbohydrate)
+    menu. op_id is one of the BGLYCO_* values in callbacks.h. Restores the
+    orphaned gui_add_linked_cho.py add_module_carbohydrate_gui() submenu (dead
+    PyGTK menu path) as native C; each op calls a Python entry point in
+    add_linked_cho.py via safe_python_command(). */
+void bandicoot_glyco_dispatch(int op_id);
+
+/*! \brief Bandicoot: refresh the native "Add N-linked Glycan" dialog's live
+    glyco-tree filter for the current rotation centre (no-op if that dialog is
+    closed). Called from run_post_set_rotation_centre_hook so the offered link
+    types track the residue the user is centred on. */
+void bandicoot_glyco_dialog_refresh_if_open();
+
 #ifdef __cplusplus
 #ifdef USE_PYTHON
 /*! \brief Bandicoot: native replacement for coot_gui.py interesting_things_gui().

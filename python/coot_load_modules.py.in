@@ -254,10 +254,19 @@ sys.modules.setdefault('gobject', _BandicootGobjectStub())
 
 # Globals expected by various modules
 global probe_command, reduce_command, do_coot_tips_flag
-global use_gui_qm, have_guile_gtk
+global use_gui_qm, have_guile_gtk, have_coot_python
 probe_command = 'probe'
 reduce_command = 'reduce'
 do_coot_tips_flag = False
+# Bandicoot has no PyGTK "coot_python" glue, so upstream's have_coot_python
+# (set by the C layer only when that glue initialises) is never defined -- ~15
+# modules read it to gate GTK-menubar construction (e.g. fitting.py's
+# add_module_carbohydrate). Define it False so those `if have_coot_python:`
+# blocks are clean no-ops: Bandicoot's menubar is native/C-managed and the
+# PyGTK menu path can't build against the gtk stub anyway. Scripting entry
+# points (carbohydrate glycosylation etc.) don't depend on it and work
+# regardless.
+have_coot_python = False
 
 
 def no_coot_tips():
@@ -302,9 +311,8 @@ post_list = [
     # "coot_gui.py" -- moved to pre_list (defines interesting_things_gui + many helpers)
     "gui_hole.py",
     "gui_prosmart.py",
-    "gui_add_linked_cho.py",
-    "cho_restraints_from_models.py",
-    "add_linked_cho.py",
+    # gui_add_linked_cho.py / cho_restraints_from_models.py / add_linked_cho.py
+    # moved to carbohydrate_list below (loaded by default, not env-gated).
     "gui_contact_score_isolated_ligand.py",
     "jligand_gui.py",
     "get_recent_pdbe.py",
@@ -325,9 +333,24 @@ post_list = [
 ]
 non_win_list = ["brute_lsqman.py"]
 
+# Carbohydrate / N-glycosylation modules. These load cleanly under Py3 -- their
+# GTK "Glyco" menu is only built when add_module_carbohydrate() is *called*
+# (a no-op under have_coot_python=False above), so importing them just defines
+# the residue-level scripting entry points. Those (e.g.
+# add_linked_residue_with_extra_restraints_to_active_residue) are the Bandicoot
+# analog of "glycosylate this residue" and were functional in Coot 0.9/WinCoot.
+# Loaded after pre_list so their coot_utils/coot_gui/fitting deps already exist;
+# kept separate from the env-gated post_list, which still carries unported files.
+carbohydrate_list = [
+    "gui_add_linked_cho.py",
+    "cho_restraints_from_models.py",
+    "add_linked_cho.py",
+]
+
 python_list = list(pre_list)
 if os.name != 'nt':
     python_list += non_win_list
+python_list += carbohydrate_list
 
 # Skip the GUI module list for now (pygtk2 is Py2-only; PyGObject port
 # is a separate effort). Set BANDICOOT_LOAD_GUI_MODULES=1 to attempt.

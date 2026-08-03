@@ -121,8 +121,10 @@ def add_cho_restraints_for_residue_with_id(imol, residue_spec, glyco_id):
                 print("BL WARNING: couldnt open file ", filename)
                 return False # with something?
             print("INFO:: read %s lines from file %s" %(lines, model_fn))
-            new_restraints = map(lambda line: line2extra_bond_restraint_spec(line),
-                                 lines)
+            # Py3: map() is an iterator; the C binding add_extra_bond_restraints_py
+            # needs a real list, so materialise it.
+            new_restraints = list(map(lambda line: line2extra_bond_restraint_spec(line),
+                                      lines))
             # print "BL DEBUG:: ", new_restraints
             add_extra_bond_restraints_py(imol, new_restraints)
 

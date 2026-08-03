@@ -65,7 +65,15 @@ fi
 # Reduce to bare version digits so "v0.1.4.10" / "V0.1.4.10" / spacing all match.
 # Compare PER LINE (never concatenate across lines -- that could fabricate a
 # match from two adjacent numbers).
-strip_to_version() { tr '[:lower:]' '[:upper:]' | tr -cd '0-9.'; }
+#
+# Normalise the classic OCR letter->digit look-alikes (O->0, I/L->1, S->5, B->8,
+# Z->2, G->6) BEFORE discarding non-digits. Vision reads the leading "0" of a
+# "V0.1.4.11" splash as the letter "O" (the digit sits right after the V), so
+# without this the "0" is stripped as a letter and the version never matches.
+# Only letters become digits here; existing digits are untouched, and the full
+# dotted version still has to appear, so this can't fabricate a wrong-version
+# pass.
+strip_to_version() { tr '[:lower:]' '[:upper:]' | tr 'OILSBZG' '0115826' | tr -cd '0-9.'; }
 NEEDLE="$(printf '%s' "$VERSION" | strip_to_version)"
 
 found=0
