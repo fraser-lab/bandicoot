@@ -1,5 +1,7 @@
 
 #include <string.h>
+#include <unistd.h>       // Bandicoot: mkstemps()/unlink() for the mmCIF retry below
+#include <fstream>
 #include "utils/coot-utils.hh"
 #include "atom-selection-container.hh"
 #include "read-sm-cif.hh"
@@ -55,6 +57,116 @@ atom_selection_container_t::get_previous(mmdb::Residue *residue_in) const {
 // an atom selection from a pdb_file name string is not
 // generally so useful).
 //
+// BANDICOOT (GitHub #9): mmdb2's mmCIF reader cannot read a coordinate CIF that
+// contains a _struct_ncs_oper category -- which phenix.refine writes whenever NCS
+// restraints were used. mmdb2 fails the whole read with
+//
+//     read error 23 READ: Expected data field not found.
+//            CIF ITEM: structure _cell.z_pdb data [NULL]
+//
+// The reported item is MISLEADING. _cell.Z_PDB is a PDB-specific mmCIF extension
+// that phenix never writes, and its absence is harmless on its own -- a file with
+// no _struct_ncs_oper and no Z_PDB reads fine. mmdb::NCSMatrix lives in the same
+// mmdb::Cryst container as the cell (mmdb_cryst.h), and the presence of
+// _struct_ncs_oper appears to "activate" that container, at which point mmdb2
+// starts demanding a whole SERIES of PDB-only extension items the file doesn't
+// have: supply Z_PDB and the error merely advances to
+// _struct_conf.ndb_helix_class_pdb, then on to further unnamed items. So patching
+// in the missing tags is a dead end; removing _struct_ncs_oper is the minimal
+// intervention, and it is both necessary and sufficient (verified in both
+// directions: deleting it from a failing phenix.refine file makes that file load,
+// and grafting it into a file that loads makes that file fail identically).
+//
+// Dropping it costs nothing for display: Coot derives its NCS ghosts by chain
+// matching, not from the file's operators ("NCS found from matching Chain B onto
+// Chain A" appears either way).
+//
+// Writes a copy of cif_file_name with the named category removed and returns the
+// temp file's path. Returns "" if the category was not present (so the caller does
+// not pointlessly retry) or on any I/O error. The CALLER MUST unlink() the result.
+static std::string
+bandicoot_cif_copy_without_category(const std::string &cif_file_name,
+                                    const std::string &category) {
+
+   auto trimmed_front = [] (const std::string &s) {
+                           std::string::size_type p = s.find_first_not_of(" \t");
+                           return (p == std::string::npos) ? std::string() : s.substr(p);
+                        };
+   // Is this line a data name in `category`?  e.g. "_struct_ncs_oper.id"
+   auto is_tag_of_category = [&] (const std::string &line) {
+                                std::string t = trimmed_front(line);
+                                return t.size() > category.size() &&
+                                       t.compare(0, category.size(), category) == 0 &&
+                                       t[category.size()] == '.';
+                             };
+   auto is_any_tag = [&] (const std::string &line) {
+                        std::string t = trimmed_front(line);
+                        return (! t.empty()) && t[0] == '_';
+                     };
+   auto ends_a_loop = [&] (const std::string &line) {
+                         std::string t = trimmed_front(line);
+                         return t.empty() || t == "loop_" || t[0] == '_' || t[0] == '#' ||
+                                t.compare(0, 5, "data_") == 0;
+                      };
+
+   std::ifstream in(cif_file_name.c_str());
+   if (! in) return std::string();
+
+   std::vector<std::string> lines;
+   std::string line;
+   while (std::getline(in, line)) lines.push_back(line);
+   in.close();
+
+   std::vector<std::string> kept;
+   kept.reserve(lines.size());
+   bool removed_something = false;
+
+   for (std::size_t i=0; i<lines.size(); i++) {
+      if (trimmed_front(lines[i]) == "loop_") {
+         // Look ahead at this loop's header block to see whose category it is.
+         std::size_t j = i + 1;
+         while (j < lines.size() && is_any_tag(lines[j])) j++;
+         if (j > i+1 && is_tag_of_category(lines[i+1])) {
+            // skip "loop_", its header block, and its data rows
+            while (j < lines.size() && ! ends_a_loop(lines[j])) j++;
+            i = j - 1;
+            removed_something = true;
+            continue;
+         }
+      } else if (is_tag_of_category(lines[i])) {
+         // a plain "_cat.item value" assignment, plus any ;...; text block
+         std::size_t j = i + 1;
+         while (j < lines.size() && ! lines[j].empty() && lines[j][0] == ';') j++;
+         i = j - 1;
+         removed_something = true;
+         continue;
+      }
+      kept.push_back(lines[i]);
+   }
+
+   if (! removed_something) return std::string();
+
+   // mmdb2 dispatches on the file name, so keep a .cif suffix on the temp file.
+   const char *tmpdir = getenv("TMPDIR");
+   std::string tmpl(tmpdir ? tmpdir : "/tmp");
+   if (tmpl.empty() || tmpl[tmpl.size()-1] != '/') tmpl += "/";
+   tmpl += "coot-cif-XXXXXX.cif";
+   std::vector<char> buf(tmpl.begin(), tmpl.end());
+   buf.push_back('\0');
+   int fd = mkstemps(&buf[0], 4);            // 4 == strlen(".cif")
+   if (fd < 0) return std::string();
+   close(fd);
+   std::string tmp_file_name(&buf[0]);
+
+   std::ofstream out(tmp_file_name.c_str());
+   if (! out) { unlink(tmp_file_name.c_str()); return std::string(); }
+   for (std::size_t i=0; i<kept.size(); i++) out << kept[i] << "\n";
+   out.close();
+   if (! out) { unlink(tmp_file_name.c_str()); return std::string(); }
+
+   return tmp_file_name;
+}
+
 atom_selection_container_t
 get_atom_selection(std::string pdb_name,
                    bool allow_duplseqnum,
@@ -172,21 +284,52 @@ get_atom_selection(std::string pdb_name,
 
           // For mmdb version 1.0.8 and beyond:
 
+          // Bandicoot: hoisted into a variable so the mmCIF retry below reads with
+          // exactly the same flags.
+          mmdb::word mmdb_read_flags = mmdb::MMDBF_IgnoreBlankLines |
+                                       mmdb::MMDBF_IgnoreNonCoorPDBErrors |
+                                       mmdb::MMDBF_IgnoreHash |
+                                       mmdb::MMDBF_IgnoreRemarks;
           if (allow_duplseqnum)
-             MMDBManager->SetFlag ( mmdb::MMDBF_IgnoreBlankLines |
-                                    mmdb::MMDBF_IgnoreDuplSeqNum |
-                                    mmdb::MMDBF_IgnoreNonCoorPDBErrors |
-                                    mmdb::MMDBF_IgnoreHash |
-                                    mmdb::MMDBF_IgnoreRemarks);
-          else
-             MMDBManager->SetFlag ( mmdb::MMDBF_IgnoreBlankLines |
-                                    mmdb::MMDBF_IgnoreNonCoorPDBErrors |
-                                    mmdb::MMDBF_IgnoreHash |
-                                    mmdb::MMDBF_IgnoreRemarks);
+             mmdb_read_flags |= mmdb::MMDBF_IgnoreDuplSeqNum;
+          MMDBManager->SetFlag(mmdb_read_flags);
 
           if (verbose_mode)
              std::cout << "INFO:: Reading coordinate file: " << pdb_name.c_str() << "\n";
           err = MMDBManager->ReadCoorFile(pdb_name.c_str());
+
+          if (err) {
+
+             // BANDICOOT (GitHub #9): before falling back to the small-molecule CIF
+             // reader, retry an mmCIF without _struct_ncs_oper -- see the long note
+             // on bandicoot_cif_copy_without_category() above. Tried FIRST because
+             // the small-molecule path below cannot read an mmCIF anyway and emits a
+             // misleading "ERROR:: failed to get cell" (read-sm-cif.cc) on the way
+             // out. Costs nothing for a genuine small-molecule CIF: it has no
+             // _struct_ncs_oper, so the helper returns "" and we fall straight
+             // through without a second read.
+             std::string ext = coot::util::downcase(extension);
+             if (ext == ".cif" || ext == ".mmcif" || ext == ".mcif") {
+                std::string fixed = bandicoot_cif_copy_without_category(pdb_name, "_struct_ncs_oper");
+                if (! fixed.empty()) {
+                   mmdb::Manager *retry_mol = new mmdb::Manager;
+                   retry_mol->SetFlag(mmdb_read_flags);
+                   mmdb::ERROR_CODE retry_err = retry_mol->ReadCoorFile(fixed.c_str());
+                   unlink(fixed.c_str());
+                   if (! retry_err) {
+                      std::cout << "INFO:: " << pdb_name << " was read after dropping its "
+                                << "_struct_ncs_oper records (mmdb2 cannot read them; "
+                                << "NCS ghosts are derived from chain matching anyway)."
+                                << std::endl;
+                      delete MMDBManager;
+                      MMDBManager = retry_mol;
+                      err = mmdb::ERROR_CODE(0); // success
+                   } else {
+                      delete retry_mol;
+                   }
+                }
+             }
+          }
 
           if (err) {
 
