@@ -2260,6 +2260,20 @@ public:
    // rotamer: signals.
 
    static GtkWidget *rotamer_dialog;
+   // BANDICOOT (GitHub #12): non-NULL while the Edit Backbone Torsions dialog
+   // ("Change Residue's Phi and Psi") is up. Read by glarea_motion_notify() to
+   // suppress the uniform translation-drag of the intermediate atoms, exactly as
+   // rotamer_dialog already does. That fragment carries no restraints, so without
+   // this a stray motion event drags all five atoms; the sliders then rebuild
+   // C/O/N from their setup snapshots but never the two CA atoms, so the CAs keep
+   // the offset and accept writes it into the model. Set where the dialog is
+   // created (execute_setup_backbone_torsion_edit) and cleared from its "destroy"
+   // handler via set_graphics_edit_backbone_torsions_dialog().
+   static GtkWidget *edit_backbone_torsions_dialog;
+   // BANDICOOT (GitHub #12): belt-and-braces -- re-pin the two CA atoms (the
+   // rotation axis endpoints, which nothing else ever rewrites) from the
+   // rama_points snapshots taken at setup.
+   static void bandicoot_restore_backbone_torsion_ca_positions();
 
    // And also for the difference map peaks dialog, which people want
    // to scroll through using . and ,
@@ -2992,6 +3006,10 @@ public:
    // changes moving atoms:
    //
    void change_peptide_carbonyl_by(double angle); // in degrees.
+   // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- *** DELETE WHEN #12 IS CLOSED ***):
+   // dumps the 5-atom backbone-torsion moving-atoms fragment + rotation axis under
+   // BANDICOOT_DEBUG_PHIPSI. See the definition in graphics-info-gui.cc.
+   static void bandicoot_dump_backbone_torsion_state(const char *tag, double angle);
    void change_peptide_peptide_by(double angle); // in degress
 
    // button call backs for moving backbone (this is the alternative

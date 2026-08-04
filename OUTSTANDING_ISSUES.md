@@ -11,6 +11,21 @@ worth fixing. Newest info at the top of each entry.
 
 ---
 
+## P1 — blocks a workflow
+
+### GitHub #12 — Phi/Psi edit corrupts the model
+"Change Residue's Phi and Psi" damages the structure. The preview, the slider
+dialog and the Dynarama (Ramachandran) view all activate and update correctly as
+the sliders move, but the model becomes corrupted: **the peptide bond breaks and
+some atoms are displaced far from their original positions**, leaving stretched
+bonds to neighbouring atoms that stay put. The corruption **persists after
+accepting** the new Phi/Psi values, so this is real coordinate damage, not a
+display artefact.
+- Reported 2026-08-04 by alyubimov; labels UI / bug / functionality / rendering.
+- **Not investigated yet.**
+
+---
+
 ## P2 — visible bug, workaround exists
 
 ### Hydrogen "star" duplication in Colour-by-Chain
@@ -43,10 +58,6 @@ representations.
   drop the redundant second build. (Leak only — not the star cause.)
 - **Workaround:** switch to Colour by Chain with hydrogens ON, then toggle off.
 - **Status:** diagnosed, fix ready to apply; deferred (P2).
-
-### 2D ligand-view overlay not drawing
-_(pre-existing, from the v0.1.4.11 bookmark — needs re-confirmation/detail)_
-The in-window 2D ligand-view overlay does not render.
 
 ---
 

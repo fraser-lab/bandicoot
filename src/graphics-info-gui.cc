@@ -2686,6 +2686,92 @@ graphics_info_t::on_change_current_chi_motion_notify(GtkWidget *button, GdkEvent
 // the peptide, N(n) C(n+1), O(n+1).  Note the alt conf should be the
 // same (we can have altconfed mainchain).
 //
+// BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- *** DELETE THIS WHOLE FUNCTION AND ITS
+// CALL SITES WHEN #12 IS CLOSED. *** Audit with: grep -rn "BANDICOOT_DEBUG_" src/)
+//
+// Why this exists: on accept, replace_coords showed the two CA atoms -- the FIXED
+// endpoints of the rotation axis -- displaced by an identical 9.318 A vector, while
+// C/O/N (the atoms that are supposed to move) had shifted only 0.06-0.26 A. The
+// moving CA-CA distance was still 3.86 A, i.e. the CA pair is RIGIDLY TRANSLATED
+// while the rest of the fragment stayed put: the moving-atoms molecule is internally
+// broken. The atom-name lookups are exact-match and provably correct, so the question
+// is WHEN the CAs go wrong -- already at setup, or during the drag. Print the whole
+// 5-atom fragment plus the axis at setup and on every slider motion; std::endl
+// throughout so nothing is lost to buffering if it crashes.
+// BANDICOOT (GitHub #12): re-pin the two CA atoms of the backbone-torsion fragment
+// from the rama_points snapshots taken at setup.
+//
+// The CAs are the endpoints of the rotation axis and must never move, but nothing in
+// the edit path ever rewrites them: the sliders rebuild C/O/N from snapshots on every
+// change, so those three are self-healing, while a stray uniform translation of the
+// fragment leaves the CAs permanently offset -- which accept then writes into the
+// model. Suppressing that drag (edit_backbone_torsions_dialog, see graphics-info.h) is
+// the actual fix; this makes the fragment self-healing too, so a drag arriving by some
+// other route -- or before the handle is set -- still cannot corrupt coordinates.
+//
+// "this_ca"/"next_ca" are stored by execute_setup_backbone_torsion_edit(). The two CAs
+// come from consecutive residues, so the lower sequence number is "this".
+void
+graphics_info_t::bandicoot_restore_backbone_torsion_ca_positions() {
+
+   if (! moving_atoms_asc) return;
+
+   std::pair<short int, clipper::Coord_orth> this_ca = rama_points.get("this_ca");
+   std::pair<short int, clipper::Coord_orth> next_ca = rama_points.get("next_ca");
+   if (! this_ca.first || ! next_ca.first) return;
+
+   int lo = 999999, hi = -999999, n_ca = 0;
+   for (int i=0; i<moving_atoms_asc->n_selected_atoms; i++) {
+      mmdb::Atom *at = moving_atoms_asc->atom_selection[i];
+      if (! at) continue;
+      if (std::string(at->name) == " CA ") {
+         int sn = at->GetSeqNum();
+         if (sn < lo) lo = sn;
+         if (sn > hi) hi = sn;
+         n_ca++;
+      }
+   }
+   if (n_ca != 2 || lo == hi) return;   // not the fragment we expect -- leave it alone
+
+   for (int i=0; i<moving_atoms_asc->n_selected_atoms; i++) {
+      mmdb::Atom *at = moving_atoms_asc->atom_selection[i];
+      if (! at) continue;
+      if (std::string(at->name) == " CA ") {
+         const clipper::Coord_orth &p = (at->GetSeqNum() == lo) ? this_ca.second : next_ca.second;
+         at->x = p.x();
+         at->y = p.y();
+         at->z = p.z();
+      }
+   }
+}
+
+void
+graphics_info_t::bandicoot_dump_backbone_torsion_state(const char *tag, double angle) {
+
+   if (! getenv("BANDICOOT_DEBUG_PHIPSI")) return;
+
+   std::cout << "BANDICOOT #12:: " << tag << " angle " << angle
+             << " | imol_moving_atoms " << imol_moving_atoms;
+   if (! moving_atoms_asc) {
+      std::cout << " | moving_atoms_asc is NULL" << std::endl;
+      return;
+   }
+   std::cout << " | n_selected_atoms " << moving_atoms_asc->n_selected_atoms << std::endl;
+   std::cout << "    axis ca_1 " << backbone_torsion_end_ca_1.format()
+             << "  ca_2 " << backbone_torsion_end_ca_2.format()
+             << "  |ca_2-ca_1| "
+             << clipper::Coord_orth::length(backbone_torsion_end_ca_1,
+                                            backbone_torsion_end_ca_2) << std::endl;
+   for (int iat=0; iat<moving_atoms_asc->n_selected_atoms; iat++) {
+      mmdb::Atom *at = moving_atoms_asc->atom_selection[iat];
+      if (! at) { std::cout << "    moving[" << iat << "] NULL" << std::endl; continue; }
+      std::cout << "    moving[" << iat << "] " << at->GetChainID() << "/"
+                << at->GetSeqNum() << " " << at->GetResName()
+                << " \"" << at->name << "\" altLoc \"" << at->altLoc << "\""
+                << "  (" << at->x << "," << at->y << "," << at->z << ")" << std::endl;
+   }
+}
+
 void
 graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
 
@@ -2897,6 +2983,11 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
 
 
                   // add to rama_points:
+                  // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- DELETE WHEN #12 CLOSED):
+                  // baseline immediately after the fragment + axis are built, so we
+                  // can tell whether the CAs are already wrong here or go wrong later.
+                  bandicoot_dump_backbone_torsion_state("SETUP", 0.0);
+
                   rama_points.clear();
                   rama_points.add("this_ca", backbone_torsion_end_ca_1);
                   rama_points.add("next_ca", backbone_torsion_end_ca_2);
@@ -2938,6 +3029,10 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
 
                   graphics_draw();
                   GtkWidget *widget = create_edit_backbone_torsions_dialog();
+                  // BANDICOOT (GitHub #12): record the handle so
+                  // glarea_motion_notify() can suppress the intermediate-atom
+                  // translation drag while this dialog is open. See graphics-info.h.
+                  edit_backbone_torsions_dialog = widget;
                   set_edit_backbone_adjustments(widget);
                   gtk_widget_show(widget);
         // update the graph to show both
@@ -3003,10 +3098,21 @@ graphics_info_t::edit_backbone_peptide_changed_func(GtkAdjustment *adj, GtkWidge
    std::pair<short int, clipper::Coord_orth> this_o = rama_points.get("this_o");
    std::pair<short int, clipper::Coord_orth> next_n = rama_points.get("next_n");
 
+   // BANDICOOT (GitHub #12): re-pin the CA axis endpoints before rotating.
+   bandicoot_restore_backbone_torsion_ca_positions();
+
    if (this_c.first && this_o.first && next_n.first) {
       mmdb::Atom *n_atom_p = coot::get_first_atom_with_atom_name(" N  ", *moving_atoms_asc);
       mmdb::Atom *c_atom_p = coot::get_first_atom_with_atom_name(" C  ", *moving_atoms_asc);
       mmdb::Atom *o_atom_p = coot::get_first_atom_with_atom_name(" O  ", *moving_atoms_asc);
+
+      // BANDICOOT (#12, DIAGNOSTIC ONLY -- *** DELETE WHEN #12 IS CLOSED ***): this is
+      // the handler the peptide slider ACTUALLY calls; change_peptide_peptide_by() is
+      // dead code for this dialog, which is why the earlier instrumentation there was
+      // silent. Nothing in here writes the CA atoms, yet by accept time both CAs are
+      // displaced by one common vector -- so bracket the writes (IN/OUT) to find out
+      // whether they are already wrong on entry.
+      bandicoot_dump_backbone_torsion_state("peptide-slider IN", adj->value);
 
       double rad_angle = clipper::Util::d2rad(adj->value);
       clipper::Coord_orth new_c =
@@ -3032,6 +3138,7 @@ graphics_info_t::edit_backbone_peptide_changed_func(GtkAdjustment *adj, GtkWidge
       o_atom_p->x = new_o.x();
       o_atom_p->y = new_o.y();
       o_atom_p->z = new_o.z();
+      bandicoot_dump_backbone_torsion_state("peptide-slider OUT", adj->value);
 
       std::pair<std::pair<double, double>, std::pair<double, double> > pp =
          g.phi_psi_pairs_from_moving_atoms();
@@ -3084,6 +3191,9 @@ graphics_info_t::edit_backbone_carbonyl_changed_func(GtkAdjustment *adj, GtkWidg
 
    std::pair<short int, clipper::Coord_orth> this_c = rama_points.get("this_c");
    std::pair<short int, clipper::Coord_orth> this_o = rama_points.get("this_o");
+
+   // BANDICOOT (GitHub #12): re-pin the CA axis endpoints before rotating.
+   bandicoot_restore_backbone_torsion_ca_positions();
 
    if (this_c.first && this_o.first) {
       mmdb::Atom *c_atom_p = coot::get_first_atom_with_atom_name(" C  ", *moving_atoms_asc);
@@ -3170,6 +3280,9 @@ graphics_info_t::change_peptide_carbonyl_by(double angle) {
    mmdb::Atom *n_atom_p = coot::get_first_atom_with_atom_name(" N  ", *moving_atoms_asc);
    mmdb::Atom *c_atom_p = coot::get_first_atom_with_atom_name(" C  ", *moving_atoms_asc);
    mmdb::Atom *o_atom_p = coot::get_first_atom_with_atom_name(" O  ", *moving_atoms_asc);
+
+   // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- *** DELETE WHEN #12 IS CLOSED ***)
+   bandicoot_dump_backbone_torsion_state("carbonyl-rotate", angle);
 
    clipper::Coord_orth carbonyl_n_pos(n_atom_p->x, n_atom_p->y, n_atom_p->z);
    clipper::Coord_orth carbonyl_c_pos(c_atom_p->x, c_atom_p->y, c_atom_p->z);
@@ -3301,6 +3414,9 @@ graphics_info_t::change_peptide_peptide_by(double angle) {
    mmdb::Atom *n_atom_p = coot::get_first_atom_with_atom_name(" N  ", *moving_atoms_asc);
    mmdb::Atom *c_atom_p = coot::get_first_atom_with_atom_name(" C  ", *moving_atoms_asc);
    mmdb::Atom *o_atom_p = coot::get_first_atom_with_atom_name(" O  ", *moving_atoms_asc);
+
+   // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- *** DELETE WHEN #12 IS CLOSED ***)
+   bandicoot_dump_backbone_torsion_state("peptide-rotate", angle);
 
    clipper::Coord_orth carbonyl_n_pos(n_atom_p->x, n_atom_p->y, n_atom_p->z);
    clipper::Coord_orth carbonyl_c_pos(c_atom_p->x, c_atom_p->y, c_atom_p->z);

@@ -691,6 +691,8 @@ GtkWidget *graphics_info_t::model_fit_refine_dialog = NULL;
 short int  graphics_info_t::model_fit_refine_dialog_was_sucked = 0;
 GtkWidget *graphics_info_t::residue_info_dialog = NULL;
 GtkWidget *graphics_info_t::rotamer_dialog = NULL;
+// BANDICOOT (GitHub #12): see graphics-info.h
+GtkWidget *graphics_info_t::edit_backbone_torsions_dialog = NULL;
 GtkWidget *graphics_info_t::difference_map_peaks_dialog = NULL;
 GtkWidget *graphics_info_t::checked_waters_baddies_dialog = NULL;
 
@@ -2341,7 +2343,14 @@ gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
 		     // don't allow translation drag of the
 		     // intermediate atoms when they are a rotamer:
 		     //
-		     if (! info.rotamer_dialog) {
+		     // BANDICOOT (GitHub #12): also exclude the Edit Backbone
+		     // Torsions dialog. Its 5-atom fragment has no restraints, so
+		     // it lands in this branch; a stray Quartz motion event (the
+		     // dialog is keep_above, so it pops over the GL area) would
+		     // otherwise translate the whole fragment uniformly, and the
+		     // sliders only ever rebuild C/O/N -- leaving the two CA atoms
+		     // permanently displaced and corrupting the model on accept.
+		     if (! info.rotamer_dialog && ! info.edit_backbone_torsions_dialog) {
 			// e.g. translate an added peptide fragment.
 			info.move_moving_atoms_by_simple_translation(x_as_int,
 								     y_as_int);

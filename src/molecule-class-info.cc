@@ -4633,6 +4633,17 @@ molecule_class_info_t::replace_coords(const atom_selection_container_t &asc,
    int tmp_index;
    bool debug = false;
 
+   // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY): the "Change Residue's Phi and Psi"
+   // (Edit Backbone Torsions) accept path corrupts the model even when the preview
+   // looked correct, so the mis-step must be in the moving-atom -> real-atom mapping
+   // below. Upstream already prints exactly what is needed under `debug`; just let
+   // an env var turn it on rather than adding new instrumentation.
+   //
+   // *** TEMPORARY -- DELETE WHEN #12 IS CLOSED (restore `bool debug = false;`). ***
+   // Per Art: bespoke per-issue debug vars are fine provided each is removed when
+   // its issue closes. Audit with: grep -rn "BANDICOOT_DEBUG_" src/
+   if (getenv("BANDICOOT_DEBUG_PHIPSI")) debug = true;
+
    make_backup();
 
    // debug::

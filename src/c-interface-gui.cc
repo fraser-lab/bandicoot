@@ -351,6 +351,13 @@ set_graphics_rotamer_dialog(GtkWidget *w) {
    graphics_info_t::rotamer_dialog = w;
 }
 
+// BANDICOOT (GitHub #12): mirrors the above so callbacks.c can clear the handle
+// from the dialog's "destroy" handler. See graphics-info.h.
+void
+set_graphics_edit_backbone_torsions_dialog(GtkWidget *w) {
+   graphics_info_t::edit_backbone_torsions_dialog = w;
+}
+
 
 
 // To be used to (typically) get the menu item text label from chain

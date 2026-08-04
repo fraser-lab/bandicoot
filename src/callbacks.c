@@ -4729,7 +4729,29 @@ on_edit_backbone_torsions_dialog_destroy
                                         (GtkObject       *object,
                                         gpointer         user_data)
 {
-  clear_moving_atoms_object();
+  /* BANDICOOT (GitHub #12): was clear_moving_atoms_object(), which clears only the
+     GRAPHICS -- it resets the drag-mode flags and the bonds box but leaves
+     moving_atoms_asc holding the 5-atom fragment. So neither Cancel nor OK ever tore
+     the data down (OK's accept_regularizement -> c_accept_moving_atoms also only calls
+     clear_moving_atoms_object), and the stale fragment stayed live: still grabbable,
+     and blocking the next phi/psi edit with no visible explanation until some other
+     operation happened to clear it.
+
+     clear_up_moving_atoms() is the data teardown -- the confusingly-similar name is
+     upstream's. The c-interface wrapper calls BOTH it and clear_moving_atoms_object(),
+     so this is a strict superset of what was here before. It is safe from "destroy",
+     which fires for OK, Cancel and the window close button alike: it NULLs
+     atom_selection/mol and zeroes n_selected_atoms, and its second-call branches are
+     silent no-ops, so following OK (which has already written the coordinates via
+     replace_coords by this point) it simply tears down.
+
+     Net effect, per Art: accept/reject now applies to the WHOLE phi/psi adjustment,
+     including any drag, rather than leaving a half-live fragment behind. */
+  clear_up_moving_atoms();
+  /* Drop the dialog handle so glarea_motion_notify() stops suppressing the
+     intermediate-atom translation drag. Must happen here (not only in the OK/Cancel
+     handlers) so it is cleared however the dialog goes away. */
+  set_graphics_edit_backbone_torsions_dialog(NULL);
   /* FIXME: also clear out the edib backbone ramaplot, if it exists. */
 /*   destroy_edit_backbone_rama_plot(); */
 }

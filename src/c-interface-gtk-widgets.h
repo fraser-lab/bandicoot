@@ -727,6 +727,11 @@ GtkWidget *wrapped_create_new_close_molecules_dialog();
 void
 set_graphics_rotamer_dialog(GtkWidget *w);
 
+/* BANDICOOT (GitHub #12): handle for the Edit Backbone Torsions dialog, used to
+   suppress the intermediate-atom translation drag while it is open. */
+void
+set_graphics_edit_backbone_torsions_dialog(GtkWidget *w);
+
 void setup_alt_conf_with_dialog(GtkWidget *dialog);
 
 void fill_place_atom_molecule_combobox(GtkWidget *combobox);
