@@ -10511,6 +10511,32 @@ on_model_toolbar_setting1_activate     (GtkMenuItem     *menuitem,
 }
 
 
+
+/* BANDICOOT (GitHub #10.1): the sidebar's settings menu showed "All Icons" as the
+   selected radio item while the sidebar was actually in Main Icons state.
+
+   The sync function (update_model_toolbar_icons_menu, which derives the right radio
+   item from the icons' show_hide_flag vs default_show_flag) already existed and was
+   already connected -- to model_toolbar_setting1's "activate" signal
+   (gtk2-interface.c). But that signal NEVER FIRES: in GTK+ 2 a GtkMenuItem that owns
+   a submenu does not emit "activate" when the submenu is opened -- "activate" is for
+   leaf items being chosen. So the sync never ran, and the menu kept whatever the
+   construction code had set, which is an unconditional
+   gtk_check_menu_item_set_active(model_toolbar_all_icons, TRUE) in gtk2-interface.c.
+   Hence "All Icons", always, regardless of the real state.
+
+   Fix: drive the sync from the SUBMENU's "show" signal instead, which does fire every
+   time the popup appears. Doing it per-show (rather than once at startup) also keeps
+   the menu honest after the icon set is changed from Preferences. The old "activate"
+   connection is harmless and is left in place. */
+void
+on_model_toolbar_setting1_menu_show    (GtkWidget       *menu,
+                                        gpointer         user_data)
+{
+  update_model_toolbar_icons_menu();
+}
+
+
 void
 on_model_toolbar_menutoolbutton1_show_menu
                                         (GtkMenuToolButton *menutoolbutton,

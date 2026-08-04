@@ -2728,6 +2728,14 @@ create_window1 (void)
   g_signal_connect ((gpointer) model_toolbar_setting1, "activate",
                     G_CALLBACK (on_model_toolbar_setting1_activate),
                     NULL);
+  /* BANDICOOT (GitHub #10.1): the "activate" connection above never fires -- a
+     GtkMenuItem that owns a submenu does not emit "activate" when that submenu is
+     opened -- so the radio items never got synced to the sidebar's real state and
+     the menu always showed "All Icons" (set unconditionally at line ~2212 above).
+     Sync from the submenu's "show" signal, which does fire on every popup. */
+  g_signal_connect ((gpointer) model_toolbar_setting1_menu, "show",
+                    G_CALLBACK (on_model_toolbar_setting1_menu_show),
+                    NULL);
   g_signal_connect ((gpointer) model_toolbar_icons1, "activate",
                     G_CALLBACK (on_model_toolbar_icons1_activate),
                     NULL);

@@ -2068,6 +2068,35 @@ static void bandicoot_sidebar_settings_menu_pos(GtkMenu *menu, gint *x, gint *y,
     if (tw) gdk_window_get_origin(tw, &ox, &oy);
     *x = ox + tx;
     *y = oy + ty;
+
+    // BANDICOOT (GitHub #10.2): clamp so the WHOLE menu fits on the monitor.
+    //
+    // Anchoring the menu's top to the button's top is right until the button sits
+    // near the bottom of the screen. Because push_in is FALSE (below), GTK will not
+    // shift the menu up to make it fit -- it instead shrinks it to whatever space
+    // remains below *y and switches to scroll-arrow mode. With the sidebar's
+    // Settings button at the bottom of a tall window that leaves almost nothing:
+    // measured on a 1512x982 screen, button top 917 -> 65 px of a 155 px menu,
+    // button top 947 -> 35 px, i.e. arrows and no visible contents. In every failing
+    // case the menu's height came out as exactly (screen bottom - *y).
+    // (GTK does clamp horizontally by MOVING the menu -- x 1467 -> 1384 when it
+    // would overhang the right edge -- it is only the vertical axis that shrinks.)
+    //
+    // So do the vertical clamp ourselves: slide the menu up just far enough that it
+    // fits, which keeps it beside the button (the point of this function) instead of
+    // dropping into the bottom status strip. push_in stays FALSE so GTK still does
+    // not re-anchor it under the button.
+    GtkRequisition req;
+    gtk_widget_size_request(GTK_WIDGET(menu), &req);
+    GdkScreen *screen = gtk_widget_get_screen(btn);
+    GdkRectangle mon = {0, 0, 0, 0};
+    gint mon_num = 0;
+    if (tw) mon_num = gdk_screen_get_monitor_at_window(screen, tw);
+    gdk_screen_get_monitor_geometry(screen, mon_num, &mon);
+    gint max_y = mon.y + mon.height - req.height;
+    if (*y > max_y) *y = max_y;      // slide up so the bottom is on-screen
+    if (*y < mon.y) *y = mon.y;      // ...but never above the monitor's top edge
+
     *push_in = FALSE;     // keep it to the side, don't shove it back under the button
 }
 

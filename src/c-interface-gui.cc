@@ -3124,17 +3124,30 @@ update_toolbar_icons_menu(int toolbar_index) {
     }
   }
 
+  // BANDICOOT (GitHub #10.1): set the radio items' `active` fields DIRECTLY rather
+  // than via gtk_check_menu_item_set_active(). Now that this runs every time the
+  // settings menu is shown (see on_model_toolbar_setting1_menu_show in
+  // callbacks.c), set_active() would emit "activate" on the radio item, whose
+  // handler calls show_model_toolbar_main_icons()/..._all_icons() and re-walks the
+  // whole icon list -- redundant work and visible flicker on every menu open, and
+  // those functions call set_active() again in turn. Poking ->active updates the
+  // display state only. This mirrors toolbar_popup_menu() below, which sets
+  // ->active the same way for the toolbar-position radio group; GtkCheckMenuItem
+  // renders its check mark from that field. Because this bypasses the radio
+  // group's own bookkeeping, every member must be assigned explicitly, or two
+  // items would draw as selected at once.
+  GTK_CHECK_MENU_ITEM(all_icons_button)->active    = (activate == 1);
+  GTK_CHECK_MENU_ITEM(main_icons_button)->active   = (activate == 2);
+  GTK_CHECK_MENU_ITEM(user_defined_button)->active = (activate == 0);
+
   if (activate) {
     gtk_widget_hide(user_defined_button);
-    if (activate == 1) {
-      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(all_icons_button), TRUE);
-    } else {
-      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(main_icons_button), TRUE);
-    }
   } else {
     gtk_widget_show(user_defined_button);
-    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(user_defined_button), TRUE);
   }
+  gtk_widget_queue_draw(all_icons_button);
+  gtk_widget_queue_draw(main_icons_button);
+  gtk_widget_queue_draw(user_defined_button);
 
 }
 

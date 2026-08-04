@@ -3980,6 +3980,13 @@ void
 on_model_toolbar_setting1_activate     (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
 
+/* BANDICOOT (GitHub #10.1): driven by the settings SUBMENU's "show" signal --
+   model_toolbar_setting1's "activate" never fires for an item that owns a submenu.
+   See the long note in callbacks.c. */
+void
+on_model_toolbar_setting1_menu_show    (GtkWidget       *menu,
+                                        gpointer         user_data);
+
 void
 on_toolbar_display_manager_maps_all_activate
                                         (GtkMenuItem     *menuitem,
