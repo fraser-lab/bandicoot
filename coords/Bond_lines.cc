@@ -6365,6 +6365,26 @@ Bond_lines_container::do_colour_by_dictionary_and_by_chain_bonds_carbons_only(co
       mmdb::Atom *at = asc.atom_selection[iat];
       if (at->GetUDData(udd_found_bond_handle, ic) == mmdb::UDDATA_Ok) {
          if (ic == NO_BOND) {
+
+            // BANDICOOT (GitHub #7): never star a hydrogen.
+            //
+            // This loop is for genuinely non-bonded atoms -- metals and waters, per the
+            // comment above -- and decides "non-bonded" from the "found bond" UDD. But
+            // the colour-by-chain builders never set those marks, so it reads whatever
+            // the last colour-by-ATOM build left behind. If that build had hydrogen
+            // display OFF, the H atoms were left NO_BOND, and switching to Colour by
+            // Chain then drew a grey cross for each -- stars appearing while hydrogen
+            // display is off. Turning H back on added the proper bonded sticks while the
+            // stale marks still produced crosses, hence sticks *and* stars.
+            //
+            // This loop also never consulted draw_hydrogens_flag. Guarding on the
+            // element fixes both symptoms and cannot affect the atoms this loop is
+            // actually for: waters and ions are legitimately NO_BOND rather than
+            // stale-NO_BOND. NOTE the underlying staleness of the "found bond" UDD in
+            // the chain-bond path is NOT fixed here -- only hydrogens were reported.
+            if (is_hydrogen(std::string(at->element)))
+               continue;
+
             mmdb::Residue *residue_p = at->residue;
             std::string res_name(residue_p->GetResName());
             if (res_name == "HOH") {

@@ -3006,10 +3006,6 @@ public:
    // changes moving atoms:
    //
    void change_peptide_carbonyl_by(double angle); // in degrees.
-   // BANDICOOT (GitHub #12, DIAGNOSTIC ONLY -- *** DELETE WHEN #12 IS CLOSED ***):
-   // dumps the 5-atom backbone-torsion moving-atoms fragment + rotation axis under
-   // BANDICOOT_DEBUG_PHIPSI. See the definition in graphics-info-gui.cc.
-   static void bandicoot_dump_backbone_torsion_state(const char *tag, double angle);
    void change_peptide_peptide_by(double angle); // in degress
 
    // button call backs for moving backbone (this is the alternative
