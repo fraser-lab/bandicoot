@@ -174,6 +174,38 @@ extern "C" int bandicoot_load_sequence_view_docked(void) {
    return 1;   // default: docked
 }
 
+// Persisted "Max. sequences shown" preference, in
+// ~/.coot-preferences/bandicoot-sequence-view-max-chains. Same self-contained store
+// as the dock flag above.
+//
+// Expressed in SEQUENCES (chains) rather than pixels because that is the unit the
+// sequence view is actually built from: setup_canvas() sizes the canvas as
+// 72 + 12*n_chains. It bounds how tall a docked strip may grow before the sequence
+// starts scrolling inside it, so a many-chain model cannot swallow the model view.
+// Upper bound 30 mirrors nsv.cc's n_limited_chains cap -- beyond that the canvas
+// stops growing anyway, so larger values would be silently inert.
+#define BANDICOOT_SV_MAX_CHAINS_DEFAULT 5
+#define BANDICOOT_SV_MAX_CHAINS_LIMIT   30
+
+extern "C" void bandicoot_save_sequence_view_max_chains(int n) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sequence-view-max-chains").c_str());
+   if (f) f << n << std::endl;
+}
+
+extern "C" int bandicoot_load_sequence_view_max_chains(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sequence-view-max-chains").c_str());
+      int v = 0;
+      if (f && (f >> v) && v >= 1 && v <= BANDICOOT_SV_MAX_CHAINS_LIMIT)
+         return v;
+   }
+   return BANDICOOT_SV_MAX_CHAINS_DEFAULT;
+}
+
 void set_pick_atom_distance_cutoff(float d) {
    if (d > 0.0)
       graphics_info_t::pick_atom_dist_cutoff = d;
@@ -222,6 +254,15 @@ static void bandicoot_dock_seqview_no_toggled(GtkToggleButton *b, gpointer u) {
       bandicoot_save_sequence_view_docked(0);
       bandicoot_apply_sequence_view_dock_pref(0);
    }
+}
+// "Max. sequences shown" spin button. Persist, then ask nsv.cc to re-measure and
+// re-apply. The sequences -> points conversion deliberately lives there and ONLY there:
+// it needs the real row pitch and a runtime measurement of the dialog's chrome, and an
+// earlier version that duplicated the constants here got the height wrong by ~4 rows.
+extern "C" void bandicoot_nsv_apply_max_sequences(void);
+static void bandicoot_sv_max_chains_changed(GtkSpinButton *sb, gpointer u) {
+   bandicoot_save_sequence_view_max_chains(gtk_spin_button_get_value_as_int(sb));
+   bandicoot_nsv_apply_max_sequences();
 }
 static GtkWidget *bandicoot_ancestor_frame(GtkWidget *w) {
    while (w && !GTK_IS_FRAME(w)) w = gtk_widget_get_parent(w);
@@ -760,6 +801,29 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
          gtk_box_pack_start(GTK_BOX(ar_parent), sv_frame, FALSE, FALSE, 0);
          if (idx >= 0) gtk_box_reorder_child(GTK_BOX(ar_parent), sv_frame, idx + 1);
          gtk_widget_show_all(sv_frame);
+
+         // 6. "Max. sequences shown" — how tall the DOCKED strip may grow before the
+         //    sequence scrolls inside it, in sequences (chains) because that is the
+         //    unit the view is built from. Sits directly beneath the dock Yes/No frame
+         //    it belongs with. Applies live to an open docked strip.
+         GtkWidget *mx_frame = gtk_frame_new("Max. sequences shown (docked)");
+         gtk_container_set_border_width(GTK_CONTAINER(mx_frame), 8);
+         GtkWidget *mx_box = gtk_hbox_new(FALSE, 0);
+         gtk_container_set_border_width(GTK_CONTAINER(mx_box), 5);
+         gtk_container_add(GTK_CONTAINER(mx_frame), mx_box);
+         GtkWidget *mx_spin =
+            gtk_spin_button_new_with_range(1, BANDICOOT_SV_MAX_CHAINS_LIMIT, 1);
+         gtk_spin_button_set_value(GTK_SPIN_BUTTON(mx_spin),
+                                   bandicoot_load_sequence_view_max_chains());
+         gtk_box_pack_start(GTK_BOX(mx_box), mx_spin, FALSE, FALSE, 0);
+         GtkWidget *mx_label = gtk_label_new("  sequences  ");
+         gtk_box_pack_start(GTK_BOX(mx_box), mx_label, FALSE, FALSE, 0);
+         // Value set BEFORE connecting, so loading the preference is not itself a change.
+         g_signal_connect(mx_spin, "value-changed",
+                          G_CALLBACK(bandicoot_sv_max_chains_changed), NULL);
+         gtk_box_pack_start(GTK_BOX(ar_parent), mx_frame, FALSE, FALSE, 0);
+         if (idx >= 0) gtk_box_reorder_child(GTK_BOX(ar_parent), mx_frame, idx + 2);
+         gtk_widget_show_all(mx_frame);
       }
    }
 }

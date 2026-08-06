@@ -106,6 +106,15 @@ void bandicoot_ar_bar_present(void);
 // always_show = Always show (1) vs Always hide (0). Updates bar visibility.
 void bandicoot_ar_bar_apply_prefs(int active, int always_show);
 
+// ---- Docked sequence-view height ----
+// Ceiling for the docked sequence-view strip, in points, from the "Max. sequences
+// shown" preference. nsv.cc converts sequences -> points (it owns pixels_per_chain)
+// and calls this; 0 means "no user ceiling, only the 1/3-of-content cap". Applied
+// immediately to an open docked strip.
+void bandicoot_sv_set_max_height(double points);
+// 1 when a sequence view is currently docked (drives the Dock/Undock button label).
+int bandicoot_sv_is_docked(void);
+
 // ---- HUD safe area ----
 // Height in points of the bars currently pinned over the TOP of the GL surface
 // (docked sequence view + Accept/Reject bar). They are native child windows, so GTK

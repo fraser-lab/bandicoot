@@ -2833,6 +2833,19 @@ static BOOL       bandicoot_sv_mask_saved = NO;
 // "Dock Sequence View Dialog?" preference can dock/undock it live. nsv.cc notes
 // it on open / NULL on destroy; dock and raise update it too.
 static GtkWidget *bandicoot_sv_current    = NULL;
+// BANDICOOT (GitHub #16): the height the strip WANTS, before the 1/3-of-content cap.
+// bandicoot_sv_reposition() used to clamp NSHeight(frame) -- the *current* height --
+// which is destructive: once the parent window got short enough to force a clamp, the
+// original height was gone, so growing the window again could never restore it (the
+// reported "shrinks but doesn't expand"). Keeping the uncapped height here makes the
+// cap non-destructive: each reposition recomputes min(natural, cap) from scratch.
+// 0 = not yet captured; re-captured on each dock so a shorter molecule doesn't inherit
+// a taller one's height.
+static CGFloat    bandicoot_sv_natural_h  = 0.0;
+// BANDICOOT (GitHub #16): user ceiling from the "Max. sequences shown" preference,
+// already converted to points by nsv.cc (which owns the chains->pixels formula).
+// 0 = unset, i.e. only the 1/3-of-content cap applies.
+static CGFloat    bandicoot_sv_max_h      = 0.0;
 
 static void bandicoot_sv_resolve_windows(void) {
     if (!bandicoot_sv_ns && bandicoot_sv_floater && bandicoot_sv_floater->window)
@@ -2876,9 +2889,21 @@ static void bandicoot_sv_reposition(void) {
     NSWindow *p = bandicoot_sv_parent_ns;
     NSView *cv = p.contentView;
     NSRect usable = [p convertRectToScreen:[cv convertRect:p.contentLayoutRect toView:nil]];
-    CGFloat svH = NSHeight(bandicoot_sv_ns.frame);
+    // Track the tallest height we have seen as the "natural" one. Anything taller than
+    // what we recorded is a genuinely new desired height (a fresh dock, or a molecule
+    // with more chains); the clamp below can only ever make the drawn height smaller,
+    // so it can never inflate this value by feedback.
+    CGFloat cur = NSHeight(bandicoot_sv_ns.frame);
+    if (cur > bandicoot_sv_natural_h) bandicoot_sv_natural_h = cur;
     // Never occupy more than 1/3 of the content height; a many-chain sequence
     // then scrolls inside the strip (the scrolledwindow shows a vertical bar).
+    // Clamp the NATURAL height, not the current one, so the strip grows back when the
+    // parent window is made taller again instead of staying at its shrunken size.
+    CGFloat svH = bandicoot_sv_natural_h;
+    // User ceiling ("Max. sequences shown") first, then the 1/3 safety net. The
+    // fraction is kept as a hard ceiling on top of the preference so that a generous
+    // setting cannot swallow the model view on a short window.
+    if (bandicoot_sv_max_h > 1.0 && svH > bandicoot_sv_max_h) svH = bandicoot_sv_max_h;
     CGFloat cap = NSHeight(usable) / 3.0;
     if (cap > 1.0 && svH > cap) svH = cap;
     // Span the content width, but stop at the docked sidebar's left edge.
@@ -2924,6 +2949,7 @@ extern "C" void bandicoot_dock_sequence_view(GtkWidget *sv_dialog) {
             gtk_widget_destroy(bandicoot_sv_floater);
         bandicoot_sv_floater = sv_dialog;
         bandicoot_sv_ns = nil;           // re-resolve for this (possibly new) window
+        bandicoot_sv_natural_h = 0.0;    // re-measure: this molecule's own height
         bandicoot_sv_resolve_windows();
         if (!bandicoot_sv_ns || !bandicoot_sv_parent_ns) return;
         bandicoot_sv_docked = YES;
@@ -2962,6 +2988,7 @@ extern "C" void bandicoot_undock_sequence_view(void) {
         bandicoot_sv_ns        = nil;
         bandicoot_sv_floater   = NULL;
         bandicoot_sv_mask_saved = NO;
+        bandicoot_sv_natural_h = 0.0;    // next dock re-measures from its own window
         bandicoot_ar_reposition();       // the A/R bar reclaims the top edge
     }
 }
@@ -2976,13 +3003,45 @@ extern "C" void bandicoot_note_sequence_view(GtkWidget *sv_dialog) {
 
 // Apply the dock preference to the open sequence view immediately (live toggle).
 // No-op if nothing is open, or if it is already in the requested state.
+// BANDICOOT (GitHub #16): ceiling for the docked strip, in points, from the
+// "Max. sequences shown" preference. nsv.cc owns the chains->pixels conversion (it has
+// pixels_per_chain), so it hands us the already-converted height. Re-applied
+// immediately so changing the preference moves an open strip without a reopen.
+extern "C" void bandicoot_sv_set_max_height(double points) {
+    bandicoot_sv_max_h = (points > 0.0) ? (CGFloat) points : 0.0;
+    if (bandicoot_sv_docked) {
+        bandicoot_sv_reposition();
+        bandicoot_ar_reposition();   // the A/R bar sits directly beneath the strip
+    }
+}
+
+// 1 when a sequence view is currently docked. Used by the sequence view's own
+// Dock/Undock button to pick its label.
+extern "C" int bandicoot_sv_is_docked(void) {
+    return bandicoot_sv_docked ? 1 : 0;
+}
+
+// The open sequence-view dialog (docked or floating), so nsv.cc can re-measure and
+// re-apply the "Max. sequences shown" ceiling when the preference changes.
+extern "C" GtkWidget *bandicoot_sv_get_current(void) {
+    return bandicoot_sv_current;
+}
+
+// Defined in nsv.cc: relabel that dialog's Dock/Undock button from the live state.
+extern "C" void bandicoot_nsv_refresh_dock_button(GtkWidget *sv_dialog);
+
 extern "C" void bandicoot_apply_sequence_view_dock_pref(int docked) {
     if (!bandicoot_sv_current) return;   // applies on next open instead
+    GtkWidget *sv = bandicoot_sv_current;
     if (docked) {
-        if (!bandicoot_sv_docked) bandicoot_dock_sequence_view(bandicoot_sv_current);
+        if (!bandicoot_sv_docked) bandicoot_dock_sequence_view(sv);
     } else {
         if (bandicoot_sv_docked) bandicoot_undock_sequence_view();
     }
+    // Keep the sequence view's own Dock/Undock button in step no matter who changed
+    // the state -- that button, or the Preferences radios. NB bandicoot_sv_current is
+    // cleared by undock paths in some orders, so use the value captured above.
+    bandicoot_nsv_refresh_dock_button(sv);
 }
 
 // Bring an already-open sequence view to the front. For a docked child window,

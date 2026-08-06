@@ -62,12 +62,99 @@
 // Persisted "Dock Sequence View Dialog?" preference (defined in
 // c-interface-preferences.cc): 1 = dock to the top edge, 0 = leave floating.
 extern "C" int bandicoot_load_sequence_view_docked(void);
+// "Max. sequences shown" preference (c-interface-preferences.cc): how many chains the
+// docked strip may show before the sequence scrolls inside it.
+extern "C" int bandicoot_load_sequence_view_max_chains(void);
+// Persist the dock choice made from the sequence view's own Dock/Undock button, so it
+// agrees with the "Dock Sequence View Dialog?" radios in Preferences.
+extern "C" void bandicoot_save_sequence_view_docked(int docked);
+extern "C" void bandicoot_apply_sequence_view_dock_pref(int docked);
 // One-shot idle: dock the (now-realized) top-level sequence-view window to the
 // top edge. Deferred from the nsv constructor so the GtkWidget has a realized
 // NSWindow by the time we pin it as a child of the main window.
 static gboolean nsv_dock_when_realized_idle(gpointer data) {
    bandicoot_dock_sequence_view(GTK_WIDGET(data));
    return FALSE; // one-shot
+}
+
+// BANDICOOT (GitHub #16): make the Dock/Undock button's label match reality. Docked
+// means the useful action is "Undock", and vice versa.
+static void nsv_sync_dock_button(GtkWidget *top_lev) {
+   if (! top_lev) return;
+   GtkWidget *b = GTK_WIDGET(gtk_object_get_data(GTK_OBJECT(top_lev), "nsv_dock_button"));
+   if (! b) return;
+   gtk_button_set_label(GTK_BUTTON(b),
+                        bandicoot_sv_is_docked() ? "  Undock  " : "   Dock   ");
+}
+
+// Deferred label sync: the initial dock is itself queued on an idle, so reading the
+// state synchronously at construction time would report "not docked" every time.
+static void nsv_push_max_height(GtkWidget *top_lev); // below
+
+static gboolean nsv_sync_dock_button_idle(gpointer data) {
+   nsv_sync_dock_button(GTK_WIDGET(data));
+   // Runs after the dock idle and after GTK's layout, so widget allocations are real
+   // by now -- the only point at which the chrome can be measured.
+   nsv_push_max_height(GTK_WIDGET(data));
+   return FALSE; // one-shot
+}
+
+// Called from bandicoot_apply_sequence_view_dock_pref() in the AppKit shim, i.e.
+// whenever the dock state changes from ANYWHERE -- our own button, or the
+// "Dock Sequence View Dialog?" radios in Preferences. Without this the radios would
+// dock/undock the strip while the button kept its stale label.
+extern "C" void bandicoot_nsv_refresh_dock_button(GtkWidget *sv_dialog) {
+   nsv_sync_dock_button(sv_dialog);
+}
+
+// BANDICOOT (GitHub #16): convert "Max. sequences shown" to a docked-strip height.
+//
+// This MEASURES the dialog's non-canvas chrome rather than assuming it. The first
+// attempt used 72 + 12*N + 100, where 72 was setup_canvas()'s canvas-request padding
+// (a hand-tuned fudge -- see the commented-out 5+n*50 / 65+n*20 variants) and 100 was a
+// guess at the label + action area. Together they over-reserved by ~48 px, so a setting
+// of 1 sequence showed 5.
+//
+// pixels_per_chain IS the real row pitch (rows are drawn at
+// y = -pixels_per_chain*chain_position_number - 6), so only the fixed overhead needed
+// measuring. Called from an idle, after GTK has laid the dialog out.
+static void nsv_push_max_height(GtkWidget *top_lev) {
+   if (! top_lev) return;
+   GtkWidget *sw = GTK_WIDGET(g_object_get_data(G_OBJECT(top_lev), "nsv_scrolled_window"));
+   int pitch = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(top_lev), "nsv_pixels_per_chain"));
+   if (! sw || pitch <= 0) return;
+   // Chrome is the label + action area + borders: fixed-height content, so this stays
+   // correct even when the strip has been capped small and the scrolled window squeezed.
+   int chrome = top_lev->allocation.height - sw->allocation.height;
+   if (chrome < 0) chrome = 0;
+   int n = bandicoot_load_sequence_view_max_chains();
+   // Header allowance, in row pitches: the residue-number ruler plus the whitespace gap
+   // above it. CALIBRATED, not derived -- reading the goo_canvas_rect as a 2*pitch band
+   // and allowing 3 undershot by exactly two rows (a setting of 3 showed 1, 4 showed 2,
+   // 5 showed 3), which puts the real header at 5 pitches. If the header artwork ever
+   // changes, re-derive it the same way: set N, count rows, add the difference.
+   const int header_pitches = 5;
+   bandicoot_sv_set_max_height(double(chrome) + double(pitch) * (n + header_pitches));
+}
+
+// Re-apply after the "Max. sequences shown" preference changes. Lives here, not in the
+// preferences code, so the chrome measurement and the row pitch stay in one place.
+extern "C" GtkWidget *bandicoot_sv_get_current(void);
+extern "C" void bandicoot_nsv_apply_max_sequences(void) {
+   nsv_push_max_height(bandicoot_sv_get_current());
+}
+
+static void on_nsv_dock_button_clicked(GtkButton *button, gpointer user_data) {
+   GtkWidget *top_lev = lookup_widget(GTK_WIDGET(button), "nsv_dialog");
+   if (! top_lev) return;
+   int now_docked = bandicoot_sv_is_docked();
+   // Route through the preference path rather than calling dock/undock directly, so
+   // this button and the "Dock Sequence View Dialog?" radios cannot disagree, and the
+   // choice persists the way the user would expect.
+   bandicoot_save_sequence_view_docked(now_docked ? 0 : 1);
+   bandicoot_apply_sequence_view_dock_pref(now_docked ? 0 : 1);
+   nsv_sync_dock_button(top_lev);
+   nsv_push_max_height(top_lev);   // re-assert the ceiling on a fresh dock
 }
 #endif
 
@@ -90,11 +177,28 @@ exptl::nsv::close_docked_sequence_view(GtkWidget *menu_item, GdkEventButton *eve
 
    // the scrolled window is the widget that is packed into the paned widget
 
-
    GtkWidget *scrolled_window = GTK_WIDGET(g_object_get_data(G_OBJECT(menu_item), "scrolled_window"));
-   int imol = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(scrolled_window), "imol"));
-   set_sequence_view_is_displayed(0, imol);
-   gtk_widget_destroy(scrolled_window);
+
+   // BANDICOOT (GitHub #16): destroying the scrolled window alone is only right for the
+   // paned/in-window layout. Bandicoot builds the sequence view as a TOP-LEVEL dialog
+   // (see make_top_level_dialog in nsv()), so that left the dialog itself alive and
+   // empty -- the reported "empty viewer window of the original size" -- and, because
+   // the dialog's "destroy" handler never ran, the pinned child NSWindow was never
+   // unpinned and bandicoot_note_sequence_view() still pointed at it.
+   //
+   // Destroy the dialog instead, exactly as the embedded Close button does
+   // (on_nsv_close_button_clicked), and let on_nsv_dialog_destroy() do the cleanup:
+   // bandicoot_undock_sequence_view() + bandicoot_note_sequence_view(NULL) +
+   // set_sequence_view_is_displayed(0, imol). Fall back to the old behaviour when there
+   // is no top-level dialog, i.e. the docked-in-a-paned layout this was written for.
+   GtkWidget *dialog = lookup_widget(scrolled_window, "nsv_dialog");
+   if (dialog) {
+      gtk_widget_destroy(dialog);
+   } else {
+      int imol = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(scrolled_window), "imol"));
+      set_sequence_view_is_displayed(0, imol);
+      gtk_widget_destroy(scrolled_window);
+   }
 
    return TRUE;
 };
@@ -213,6 +317,26 @@ exptl::nsv::nsv(mmdb::Manager *mol,
    if (make_top_level_dialog) {
       GtkWidget *close_button = gtk_button_new_with_label("  Close   ");
       GtkWidget *aa = GTK_DIALOG(top_lev)->action_area;
+
+#ifdef __APPLE__
+      // BANDICOOT (GitHub #16): Dock/Undock without going to Preferences. One button
+      // whose label follows the current state; the click routes through the same live
+      // path the "Dock Sequence View Dialog?" radios use. Packed before Close so Close
+      // stays the rightmost (default-looking) action.
+      {
+         GtkWidget *dock_button = gtk_button_new_with_label("  Undock  ");
+         gtk_box_pack_start(GTK_BOX(aa), dock_button, FALSE, FALSE, 2);
+         gtk_object_set_data(GTK_OBJECT(top_lev), "nsv_dock_button", dock_button);
+         gtk_signal_connect(GTK_OBJECT(dock_button), "clicked",
+                            GTK_SIGNAL_FUNC(on_nsv_dock_button_clicked), NULL);
+         gtk_widget_show(dock_button);
+         // NB the label is synced from an idle registered AFTER the initial-dock idle,
+         // at the end of this constructor -- not here. Registering it here would put it
+         // first in the (FIFO, same-priority) idle queue, so it would read the dock
+         // state before the dock had happened and label a docked strip "Dock".
+      }
+#endif
+
       gtk_box_pack_start(GTK_BOX(aa), close_button, FALSE, FALSE, 2);
 
       gtk_signal_connect(GTK_OBJECT(close_button), "clicked",
@@ -234,9 +358,28 @@ exptl::nsv::nsv(mmdb::Manager *mol,
    sequence_letter_background_colour = "white";
    int y_size_initial = setup_canvas(mol);
 
-   //  gtk_window_set_default_size(GTK_WINDOW(top_lev), 1700, y_size_initial + 100);
+   // BANDICOOT (GitHub #16): this used to be
+   //    gtk_widget_set_size_request(top_lev, 799, y_size_initial + 100);
+   // which sets a hard MINIMUM, not an opening size. y_size_initial is
+   // 72 + 12*n_chains (setup_canvas), so a ~10-chain model pinned the window at a
+   // minimum of 799 x ~292 px that the user could not shrink -- the "obscures half the
+   // model and cannot be scaled" complaint. Worse, when docked, GTK kept re-asserting
+   // that minimum against the 1/3-of-content cap in bandicoot_sv_reposition(), which is
+   // what bandicoot_sv_reposition_idle() was added to paper over.
+   //
+   // We want an OPENING size instead: same initial geometry, but the user (and the
+   // docked-height cap) can make it smaller, and the scrolled window's AUTOMATIC
+   // vertical scrollbar takes over when the sequence is taller than the strip. The
+   // genuine floor stays at the 120x70 set_size_request further up.
+   //
+   // NB gtk_window_set_default_size() is NOT usable here: top_lev has already been
+   // shown (above), and a default size only takes effect when the window is mapped, so
+   // it would silently do nothing and leave the dialog at that 120x70 floor -- a frame
+   // with a scrollbar and a Close button and no room for the canvas. gtk_window_resize()
+   // acts on an already-mapped window and, unlike set_size_request(), sets the size
+   // without also making it the minimum.
    if (top_lev)
-      gtk_widget_set_size_request(top_lev, 799, y_size_initial + 100);
+      gtk_window_resize(GTK_WINDOW(top_lev), 799, y_size_initial + 100);
 
    if (use_graphics_interface_flag) { 
       gtk_widget_show(GTK_WIDGET(canvas));
@@ -269,8 +412,17 @@ exptl::nsv::nsv(mmdb::Manager *mol,
    // window is realized first. When the preference is No it stays floating.
    if (make_top_level_dialog && top_lev) {
       bandicoot_note_sequence_view(top_lev);
+      // Stash what nsv_push_max_height() needs to measure the chrome and convert
+      // "Max. sequences shown" into a strip height. The push itself happens from the
+      // idle below, once GTK has laid the dialog out and the allocations are real.
+      g_object_set_data(G_OBJECT(top_lev), "nsv_scrolled_window", scrolled_window);
+      g_object_set_data(G_OBJECT(top_lev), "nsv_pixels_per_chain",
+                        GINT_TO_POINTER(pixels_per_chain));
       if (bandicoot_load_sequence_view_docked())
          g_idle_add(nsv_dock_when_realized_idle, top_lev);
+      // Label the Dock/Undock button once the dock above has run. Same priority, so
+      // the idle queue is FIFO and this is guaranteed to follow it.
+      g_idle_add(nsv_sync_dock_button_idle, top_lev);
    }
 #endif
 
