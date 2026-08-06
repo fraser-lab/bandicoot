@@ -963,6 +963,10 @@ short int graphics_info_t::rotate_colour_map_on_read_pdb_flag = 1; // do it.
 short int graphics_info_t::rotate_colour_map_on_read_pdb_c_only_flag = 1; // rotate Cs only by default
 float     graphics_info_t::rotate_colour_map_on_read_pdb = 21.0;  // degrees
 float     graphics_info_t::rotate_colour_map_for_map = 14.0;  // degrees
+// BANDICOOT: the two knobs of the "Colour by Alt. Conf." bond mode (degrees).
+// 20/20 reproduces the original single-step behaviour: bulk, +20, +40, ...
+float     graphics_info_t::altloc_conf_a_colour_offset = 20.0;  // degrees
+float     graphics_info_t::altloc_colour_difference    = 20.0;  // degrees
 
 // cell colour
 coot::colour_holder graphics_info_t::cell_colour =

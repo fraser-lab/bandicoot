@@ -162,6 +162,8 @@ void render_as_ca_bonds_button_select(GtkWidget *item, GtkPositionType pos);
 void render_as_ca_plus_ligands_bonds_button_select(GtkWidget *item, GtkPositionType pos);
 void render_as_bonds_colored_by_chain_button_select(GtkWidget *item, GtkPositionType mol);
 void render_as_bonds_colored_by_molecule_button_select(GtkWidget *item, GtkPositionType mol);
+/* BANDICOOT: "Colour by Alt. Conf." - bonds coloured by alt conf */
+void render_as_colour_by_altloc_button_select(GtkWidget *item, GtkPositionType mol);
 void render_as_bonds_no_waters(GtkWidget *item, GtkPositionType mol);
 void render_as_ca_plus_ligands_sec_str_bonds_button_select(GtkWidget *item, GtkPositionType pos);
 void render_as_sec_struct_bonds_button_select(GtkWidget *item, GtkPositionType pos);

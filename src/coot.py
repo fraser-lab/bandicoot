@@ -3275,6 +3275,24 @@ def graphics_to_b_factor_cas_representation(imol):
 def graphics_to_occupancy_representation(imol):
     return _coot.graphics_to_occupancy_representation(imol)
 
+def graphics_to_colour_by_altloc_representation(imol):
+    return _coot.graphics_to_colour_by_altloc_representation(imol)
+
+def redraw_altloc_coloured_molecules():
+    return _coot.redraw_altloc_coloured_molecules()
+
+def set_altloc_conf_a_colour_offset(f):
+    return _coot.set_altloc_conf_a_colour_offset(f)
+
+def get_altloc_conf_a_colour_offset():
+    return _coot.get_altloc_conf_a_colour_offset()
+
+def set_altloc_colour_difference(f):
+    return _coot.set_altloc_colour_difference(f)
+
+def get_altloc_colour_difference():
+    return _coot.get_altloc_colour_difference()
+
 def graphics_to_user_defined_atom_colours_representation(imol):
     return _coot.graphics_to_user_defined_atom_colours_representation(imol)
 

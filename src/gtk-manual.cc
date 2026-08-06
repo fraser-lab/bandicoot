@@ -630,6 +630,18 @@ void display_control_molecule_combo_box(GtkWidget *display_control_window_glade,
 		     GTK_SIGNAL_FUNC(render_as_sec_struct_bonds_button_select),
 		     GINT_TO_POINTER(n));
 
+ /* BANDICOOT: Now a button for alt-conf-coloured bonds.
+    NOTE: inserted here (menu index 4) rather than appended, so every menu index below
+    this point is one higher than it used to be -- the bond_type -> menu-index mapping
+    at the end of this function was renumbered to match. */
+
+  glade_menuitem = gtk_menu_item_new_with_label (_("Bonds (Colour by Alt. Conf.)"));
+  gtk_widget_show (glade_menuitem);
+  gtk_menu_append (GTK_MENU (render_optionmenu_1_menu), glade_menuitem);
+  gtk_signal_connect(GTK_OBJECT(glade_menuitem), "activate",
+		     GTK_SIGNAL_FUNC(render_as_colour_by_altloc_button_select),
+		     GINT_TO_POINTER(n));
+
  /* Now a button for Ca bonds: */
 
   glade_menuitem = gtk_menu_item_new_with_label (_("C-alphas/Backbone"));
@@ -758,42 +770,47 @@ void display_control_molecule_combo_box(GtkWidget *display_control_window_glade,
      menu = render_optionmenu_1_menu;
      active_item = gtk_menu_get_active(GTK_MENU(menu));
 
-     /*  The conversion between menu item order and bond type (enum) order */
+     /*  The conversion between menu item order and bond type (enum) order.
+         BANDICOOT: renumbered when "Bonds (Colour by Alt. Conf.)" was inserted at
+         index 4 -- every entry that used to be 4 or higher gained one. */
      if (bond_type == 1) { /* atom type bonds */
-       gtk_menu_set_active(GTK_MENU(menu), 0); 
+       gtk_menu_set_active(GTK_MENU(menu), 0);
      }
      if (bond_type == 2) { /* CA bonds */
-       gtk_menu_set_active(GTK_MENU(menu), 4); 
+       gtk_menu_set_active(GTK_MENU(menu), 5);
      }
      if (bond_type == 3) { /* segid-coloured bonds */
-       gtk_menu_set_active(GTK_MENU(menu), 2); 
+       gtk_menu_set_active(GTK_MENU(menu), 2);
      }
      if (bond_type == 4) { /* CA_BONDS_PLUS_LIGANDS */
-       gtk_menu_set_active(GTK_MENU(menu), 5); 
+       gtk_menu_set_active(GTK_MENU(menu), 6);
      }
      if (bond_type == 5) { /* BONDS_NO_WATERS */
-       gtk_menu_set_active(GTK_MENU(menu), 8); 
+       gtk_menu_set_active(GTK_MENU(menu), 9);
      }
      if (bond_type == 6) { /* BONDS_SEC_STRUCT_COLOUR */
-       gtk_menu_set_active(GTK_MENU(menu), 3); 
+       gtk_menu_set_active(GTK_MENU(menu), 3);
      }
      if (bond_type == 7) { /* CA_BONDS_PLUS_LIGANDS_SEC_STRUCT_COLOUR */
-       gtk_menu_set_active(GTK_MENU(menu), 6); 
+       gtk_menu_set_active(GTK_MENU(menu), 7);
      }
      if (bond_type == 8) { /* COLOUR_BY_MOLECULE_BONDS */
-       gtk_menu_set_active(GTK_MENU(menu), 1); 
+       gtk_menu_set_active(GTK_MENU(menu), 1);
      }
      if (bond_type == 9) { /* COLOUR_BY_RAINBOW_BONDS */
-       gtk_menu_set_active(GTK_MENU(menu), 7); 
+       gtk_menu_set_active(GTK_MENU(menu), 8);
      }
      if (bond_type == 10) { /* COLOUR_BY_B_FACTOR_BONDS */
-       gtk_menu_set_active(GTK_MENU(menu), 10); 
+       gtk_menu_set_active(GTK_MENU(menu), 11);
      }
      if (bond_type == 11) { /* COLOUR_BY_OCCUPANCY_BONDS */
-       gtk_menu_set_active(GTK_MENU(menu), 11); 
+       gtk_menu_set_active(GTK_MENU(menu), 12);
      }
      if (bond_type == 14) { /* CA_BONDS_PLUS_LIGANDS_B_FACTOR_COLOUR */
-       gtk_menu_set_active(GTK_MENU(menu), 9); 
+       gtk_menu_set_active(GTK_MENU(menu), 10);
+     }
+     if (bond_type == 22) { /* BANDICOOT COLOUR_BY_ALTLOC_BONDS */
+       gtk_menu_set_active(GTK_MENU(menu), 4);
      }
      /* c.f molecule-class-info.h:30 enum */
   }
@@ -945,6 +962,13 @@ void
 render_as_bonds_colored_by_molecule_button_select(GtkWidget *item, GtkPositionType mol) {
 
   set_colour_by_molecule(mol);
+}
+
+/* BANDICOOT: "Colour by Alt. Conf." - bonds coloured by alt conf. */
+void
+render_as_colour_by_altloc_button_select(GtkWidget *item, GtkPositionType mol) {
+
+  graphics_to_colour_by_altloc_representation(mol);
 }
 
 void

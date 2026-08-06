@@ -5198,6 +5198,71 @@ void graphics_to_occupancy_representation(int imol) {
    graphics_draw();
 }
 
+/* BANDICOOT: "Colour by Alt. Conf." - bonds coloured by alt conf. */
+void graphics_to_colour_by_altloc_representation(int imol) {
+
+   if (is_valid_model_molecule(imol)) {
+      graphics_info_t::molecules[imol].make_colour_by_altloc_bonds();
+      std::vector<std::string> command_strings;
+      command_strings.push_back("graphics-to-colour-by-altloc-representation");
+      command_strings.push_back(graphics_info_t::int_to_string(imol));
+      add_to_history(command_strings);
+   }
+   else
+      std::cout << "WARNING:: no such valid molecule " << imol
+		<< " in graphics_to_colour_by_altloc_representation"
+		<< std::endl;
+   graphics_draw();
+}
+
+/* BANDICOOT: redraw every molecule currently in "Colour by Alt. Conf." mode. Used by
+   the two colour-scheme setters below; molecules in any other mode are left alone. */
+void redraw_altloc_coloured_molecules() {
+
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol))
+	 if (graphics_info_t::molecules[imol].Bonds_box_type() == coot::COLOUR_BY_ALTLOC_BONDS)
+	    graphics_info_t::molecules[imol].make_colour_by_altloc_bonds();
+   graphics_draw();
+}
+
+/* BANDICOOT: hue offset (degrees) of conf A from the bulk of the molecule in "Colour
+   by Alt. Conf.". The per-molecule spacing is 21 degrees, so the default of 20 keeps a
+   molecule's alt confs roughly within their own slot on the colour wheel. Set it to 0
+   to give conf A the same colour as the bulk, so that only the additional conformers
+   are marked out. */
+void set_altloc_conf_a_colour_offset(float f) {
+
+   graphics_info_t::altloc_conf_a_colour_offset = f;
+   redraw_altloc_coloured_molecules();
+   std::vector<std::string> command_strings;
+   command_strings.push_back("set-altloc-conf-a-colour-offset");
+   command_strings.push_back(graphics_info_t::float_to_string(f));
+   add_to_history(command_strings);
+}
+
+float get_altloc_conf_a_colour_offset() {
+   return graphics_info_t::altloc_conf_a_colour_offset;
+}
+
+/* BANDICOOT: hue difference (degrees) between one alt conf and the next in "Colour by
+   Alt. Conf." -- conf A to conf B, conf B to conf C, and so on. Hue is not
+   perceptually uniform, so a shift that reads clearly around yellow is nearly
+   invisible in the blues; this is the knob for that. */
+void set_altloc_colour_difference(float f) {
+
+   graphics_info_t::altloc_colour_difference = f;
+   redraw_altloc_coloured_molecules();
+   std::vector<std::string> command_strings;
+   command_strings.push_back("set-altloc-colour-difference");
+   command_strings.push_back(graphics_info_t::float_to_string(f));
+   add_to_history(command_strings);
+}
+
+float get_altloc_colour_difference() {
+   return graphics_info_t::altloc_colour_difference;
+}
+
 /*! \brief draw molecule number imol coloured by user-defined atom colours */
 void graphics_to_user_defined_atom_colours_representation(int imol) {
 

@@ -52,6 +52,8 @@ ligand/coot-make-ligands-db
 ligand/findligand-bin
 ligand/findwaters-bin
 ligand/identify-protein-bin
+ideal/mini-rsr-bin
+ideal/coot-ligand-validation-bin
 analysis/coot-bfactan
 coot-utils/test-*
 coot-utils/mmrrcc
