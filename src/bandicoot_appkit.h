@@ -106,6 +106,13 @@ void bandicoot_ar_bar_present(void);
 // always_show = Always show (1) vs Always hide (0). Updates bar visibility.
 void bandicoot_ar_bar_apply_prefs(int active, int always_show);
 
+// ---- HUD safe area ----
+// Height in points of the bars currently pinned over the TOP of the GL surface
+// (docked sequence view + Accept/Reject bar). They are native child windows, so GTK
+// does not shrink the glarea for them and 2D overlay drawing must inset itself by
+// this much or be hidden underneath. 0 when nothing is overlaying the top.
+double bandicoot_top_overlay_height(void);
+
 // ---- Native docked Sequence View (top child window, above the A/R bar) ----
 // Dock the (top-level) nsv sequence-view dialog as a borderless child window
 // pinned to the top edge of the main window, stacked ABOVE the Accept/Reject

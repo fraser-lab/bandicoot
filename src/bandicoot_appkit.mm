@@ -2851,6 +2851,26 @@ static CGFloat bandicoot_sv_docked_height(void) {
     return NSHeight(bandicoot_sv_ns.frame);
 }
 
+// Total height (in points) of everything pinned to the TOP of the content area that
+// overlays the GL rendering surface: the docked sequence view plus the Accept/Reject
+// bar, whichever are currently on screen.
+//
+// These are native child NSWindows, so GTK never learns about them: the glarea keeps
+// its full allocation, reshape() keeps glViewport at the full size, and anything the
+// renderer draws near the top edge ends up underneath them. 2D HUD drawing asks for
+// this inset and shifts down by it. Deliberately NOT applied to the 3D projection or
+// to picking -- insetting the viewport would change the aspect ratio and make the model
+// jump whenever the bar appeared, and would silently desync unproject() in pick.cc.
+//
+// Counts the A/R bar whenever it is visible, in Always-show and Always-hide modes
+// alike: what matters is whether it is on screen right now, not which mode put it there.
+extern "C" double bandicoot_top_overlay_height(void) {
+    CGFloat h = bandicoot_sv_docked_height();
+    if (bandicoot_ar_pinned && bandicoot_ar_ns && [bandicoot_ar_ns isVisible])
+        h += NSHeight(bandicoot_ar_ns.frame);
+    return (double) h;
+}
+
 static void bandicoot_sv_reposition(void) {
     if (!bandicoot_sv_docked || !bandicoot_sv_ns || !bandicoot_sv_parent_ns) return;
     NSWindow *p = bandicoot_sv_parent_ns;

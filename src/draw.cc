@@ -9,6 +9,10 @@
 
 #include "draw.hh"
 
+#ifdef __APPLE__
+#include "bandicoot_appkit.h" // bandicoot_top_overlay_height() - HUD safe area
+#endif
+
 #ifdef WINDOWS_MINGW
 // in windows we need these for some newer openGL functions
 #include <GL/glext.h>
@@ -632,9 +636,31 @@ display_density_level_maybe() {
 	 glPushAttrib(GL_ENABLE_BIT);
 	 glDisable(GL_FOG);
 
+	 // The readout is pinned near the top edge of the GL surface (NDC spans
+	 // [-1,1], so 0.95 is 2.5% down from the top).
+	 double y_hud = 0.95;
+
+#ifdef __APPLE__
+	 // BANDICOOT (GitHub #14): the Accept/Reject bar and a docked sequence view are
+	 // native child NSWindows pinned over the top of the GL surface. GTK never sees
+	 // them, so the glarea keeps its full allocation and this string is drawn
+	 // underneath them. Shift it down past whatever is overlaying the top edge.
+	 {
+	    double overlay_pts = bandicoot_top_overlay_height();
+	    GtkWidget *gla = graphics_info_t::glarea;
+	    if (overlay_pts > 0.0 && gla && gla->allocation.height > 0) {
+	       // allocation is in points on Quartz (reshape() applies the backing scale
+	       // separately), so this ratio is unit-consistent.
+	       double frac = overlay_pts / static_cast<double>(gla->allocation.height);
+	       if (frac > 0.5) frac = 0.5; // a huge docked sequence view must not push it off-screen
+	       y_hud -= 2.0 * frac;        // NDC height is 2.0
+	    }
+	 }
+#endif
+
 	 // glRasterPos3f();
 	 graphics_info_t::printString_for_density_level(graphics_info_t::display_density_level_screen_string,
-							0.0, 0.95, -0.98);
+							0.0, y_hud, -0.98);
 
          glPopAttrib();
 	 glPopMatrix();
