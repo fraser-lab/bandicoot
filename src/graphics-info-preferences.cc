@@ -141,7 +141,19 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
        commands.push_back(state_command("set-colour-map-rotation-on-read-pdb-c-only-flag",
 					g.preferences_internal[i].ivalue1, il));
        break;
-       
+
+     // BANDICOOT: "Alt. Conf. Colour Scheme"
+     case PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET:
+       commands.push_back(state_command("set-altloc-conf-a-colour-offset",
+					g.preferences_internal[i].fvalue1, il));
+       break;
+
+     case PREFERENCES_ALTLOC_COLOUR_DIFFERENCE:
+       commands.push_back(state_command("set-altloc-colour-difference",
+					g.preferences_internal[i].fvalue1, il));
+       break;
+
+
      case PREFERENCES_MAP_RADIUS:
        commands.push_back(state_command("set-map-radius",
 					 g.preferences_internal[i].fvalue1, il));
@@ -497,7 +509,19 @@ graphics_info_t::make_preferences_internal() {
   p.preference_type = PREFERENCES_BOND_COLOUR_ROTATION_C_ONLY;
   p.ivalue1 = on;
   ret.push_back(p);
-   
+
+  // BANDICOOT: "Alt. Conf. Colour Scheme"
+  fvalue = graphics_info_t::altloc_conf_a_colour_offset;
+  p.preference_type = PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET;
+  p.fvalue1 = fvalue;
+  ret.push_back(p);
+
+  fvalue = graphics_info_t::altloc_colour_difference;
+  p.preference_type = PREFERENCES_ALTLOC_COLOUR_DIFFERENCE;
+  p.fvalue1 = fvalue;
+  ret.push_back(p);
+
+
   // Map preference settings
   // Map parameters
   fvalue = get_map_radius();

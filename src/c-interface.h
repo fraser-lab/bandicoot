@@ -4858,6 +4858,25 @@ void graphics_to_b_factor_representation(int imol);
 void graphics_to_b_factor_cas_representation(int imol);
 /*! \brief draw molecule number imol coloured by occupancy */
 void graphics_to_occupancy_representation(int imol);
+/*! \brief draw molecule number imol coloured by alt conf ("Colour by Alt. Conf.")
+
+   Carbons are shifted in hue by the alt conf they belong to; heteroatoms keep their
+   usual element colours. The shift is relative to the molecule's own bond colour, so
+   the whole family moves together when the bond-colour slider is moved. */
+void graphics_to_colour_by_altloc_representation(int imol);
+/*! \brief redraw every molecule currently in "Colour by Alt. Conf." mode */
+void redraw_altloc_coloured_molecules();
+/*! \brief set the hue offset (degrees) of conf A from the bulk of the molecule in
+    "Colour by Alt. Conf." (default 20; 0 makes conf A match the bulk, so that only the
+    additional conformers are marked out) */
+void set_altloc_conf_a_colour_offset(float f);
+/*! \brief the hue offset (degrees) of conf A from the bulk in "Colour by Alt. Conf." */
+float get_altloc_conf_a_colour_offset();
+/*! \brief set the hue difference (degrees) between one alt conf and the next in
+    "Colour by Alt. Conf." (default 20) */
+void set_altloc_colour_difference(float f);
+/*! \brief the hue difference (degrees) between successive alt confs in "Colour by Alt. Conf." */
+float get_altloc_colour_difference();
 /*! \brief draw molecule number imol in CA+Ligands mode coloured by user-defined atom colours */
 void graphics_to_user_defined_atom_colours_representation(int imol);
 /*! \brief draw molecule number imol all atoms coloured by user-defined atom colours */
@@ -4919,15 +4938,32 @@ int additional_representation_by_string(int imol,  const char *atom_selection,
 /*   representation_types: */
 /*   enum { coot::SIMPLE_LINES, coot::STICKS, coot::BALL_AND_STICK, coot::SURFACE };
 
-  bonds_box_type:
-  enum {  UNSET_TYPE = -1, NORMAL_BONDS=1, CA_BONDS=2, COLOUR_BY_CHAIN_BONDS=3,
-	  CA_BONDS_PLUS_LIGANDS=4, BONDS_NO_WATERS=5, BONDS_SEC_STRUCT_COLOUR=6,
-	  BONDS_NO_HYDROGENS=15,
-	  CA_BONDS_PLUS_LIGANDS_SEC_STRUCT_COLOUR=7,
-	  CA_BONDS_PLUS_LIGANDS_B_FACTOR_COLOUR=14,
-	  COLOUR_BY_MOLECULE_BONDS=8,
-	  COLOUR_BY_RAINBOW_BONDS=9, COLOUR_BY_B_FACTOR_BONDS=10,
-	  COLOUR_BY_OCCUPANCY_BONDS=11};
+  bonds_box_type: a copy of the anonymous enum in src/molecule-class-info.h, listed
+  here in numeric order for reference. Keep the two in step -- this copy had gone stale
+  and was missing 12, 13, 17, 21 and 22. Note that 21 (COLOUR_BY_CHAIN_GOODSELL) and 22
+  (COLOUR_BY_ALTLOC_BONDS) take their values from coot::bond_colour_t in
+  coords/Bond_lines.h rather than from the molecule-class-info.h enum; the two enums are
+  mixed in make_bonds_type_checked(), so one concept is deliberately kept on one number.
+
+  enum {  UNSET_TYPE                                = -1,
+	  NORMAL_BONDS                              =  1,
+	  CA_BONDS                                  =  2,
+	  COLOUR_BY_CHAIN_BONDS                     =  3,
+	  CA_BONDS_PLUS_LIGANDS                     =  4,
+	  BONDS_NO_WATERS                           =  5,
+	  BONDS_SEC_STRUCT_COLOUR                   =  6,
+	  CA_BONDS_PLUS_LIGANDS_SEC_STRUCT_COLOUR   =  7,
+	  COLOUR_BY_MOLECULE_BONDS                  =  8,
+	  COLOUR_BY_RAINBOW_BONDS                   =  9,
+	  COLOUR_BY_B_FACTOR_BONDS                  = 10,
+	  COLOUR_BY_OCCUPANCY_BONDS                 = 11,
+	  COLOUR_BY_USER_DEFINED_COLOURS____BONDS   = 12,
+	  COLOUR_BY_USER_DEFINED_COLOURS_CA_BONDS   = 13,
+	  CA_BONDS_PLUS_LIGANDS_B_FACTOR_COLOUR     = 14,
+	  BONDS_NO_HYDROGENS                        = 15,
+	  CA_BONDS_PLUS_LIGANDS_AND_SIDECHAINS      = 17,
+	  COLOUR_BY_CHAIN_GOODSELL                  = 21,
+	  COLOUR_BY_ALTLOC_BONDS                    = 22};
 
 */
 

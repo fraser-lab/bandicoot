@@ -38,6 +38,7 @@
 
 #include <vector>
 #include <string>
+#include <map> // BANDICOOT: altloc_colour_index_map
 
 #include "geometry/protein-geometry.hh"
 #include "Cartesian.h"
@@ -67,7 +68,22 @@ namespace coot {
 			COLOUR_BY_OCCUPANCY=6,
 			COLOUR_BY_B_FACTOR=7,
 			COLOUR_BY_USER_DEFINED_COLOURS=8,
-                        COLOUR_BY_HYDROPHOBIC_SIDE_CHAIN=9 };
+                        COLOUR_BY_HYDROPHOBIC_SIDE_CHAIN=9,
+                        // BANDICOOT: "Colour by Alt. Conf." -- carbons are shifted in hue
+                        // by their alt-conf index, heteroatoms keep their element colours
+                        // (c.f. COLOUR_BY_CHAIN_C_ONLY). 22 is deliberately the same value
+                        // as coot::COLOUR_BY_ALTLOC_BONDS in the bonds_box_type enum
+                        // (molecule-class-info.h): those two enums are already mixed in
+                        // make_bonds_type_checked() -- see COLOUR_BY_CHAIN_GOODSELL=21 --
+                        // so keeping one concept on one number makes that harmless.
+                        COLOUR_BY_ALTLOC=22 };
+
+   // BANDICOOT: colour-index base for alt-conf-shifted carbons in COLOUR_BY_ALTLOC mode.
+   // Indices 0..12 stay available for the element colours of bond_colours
+   // (mmdb-extras.h), so heteroatoms are coloured exactly as they are in every other
+   // mode; ALTLOC_COLOUR_INDEX_BASE + n means "a carbon in the n'th alt conf",
+   // with n == 0 meaning the blank altLoc (i.e. the bulk of the molecule).
+   const int ALTLOC_COLOUR_INDEX_BASE = 16;
 
    enum hydrophobic_side_chain_t {
                                   HYDROPHOBIC_TYPE_MAIN_CHAIN,
@@ -877,8 +893,17 @@ public:
    enum bond_representation_type { COLOUR_BY_REGULAR_ATOM_MODE=601,
                                    COLOUR_BY_OCCUPANCY=602,
                                    COLOUR_BY_B_FACTOR=603,
-                                   COLOUR_BY_USER_DEFINED_COLOURS=604
+                                   COLOUR_BY_USER_DEFINED_COLOURS=604,
+                                   COLOUR_BY_ALTLOC_MODE=605 // BANDICOOT
    };
+
+   // BANDICOOT: alt-conf label -> colour index, built once per bonds-box construction
+   // by set_altloc_colour_index_map(). std::map so the ordering is the sorted order of
+   // the altLoc labels rather than the order atoms happen to be traversed in -- the
+   // same file must always give the same colours. The blank altLoc is always index 0.
+   std::map<std::string, int> altloc_colour_index_map;
+   void set_altloc_colour_index_map(const atom_selection_container_t &asc);
+   int altloc_colour_index(mmdb::Atom *at) const;
 
    // getting caught out with Bond_lines_container dependencies?
    // We need:  mmdb-extras.h which needs mmdb-manager.h and <string>
@@ -952,8 +977,13 @@ public:
 
    // This is the one for user-defined, occupancy and B-factor representation
    // 
+   // BANDICOOT: draw_hydrogens_flag_in added for COLOUR_BY_ALTLOC_MODE. This
+   // constructor used to hard-code do_bonds_to_hydrogens = 1, so a mode built through
+   // it ignored the molecule's "Draw Hydrogens" setting. Defaulted to true so the
+   // pre-existing user-defined / occupancy / B-factor modes are unchanged.
    Bond_lines_container (const atom_selection_container_t &SelAtom,
-			 int imol, bond_representation_type br_type);
+			 int imol, bond_representation_type br_type,
+			 bool draw_hydrogens_flag_in = true);
 
    explicit Bond_lines_container(int col);
 

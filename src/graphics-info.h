@@ -1200,6 +1200,22 @@ public:
    static short int rotate_colour_map_on_read_pdb_flag;
    static float rotate_colour_map_on_read_pdb; // e.g. 5.0 (degrees)
    static short int rotate_colour_map_on_read_pdb_c_only_flag;
+   // BANDICOOT: the two knobs of the "Colour by Alt. Conf." bond mode, both hue shifts
+   // in degrees, both settable from Preferences > Bond Colours.
+   //
+   //   bulk (blank altLoc) : +0
+   //   conf A              : +altloc_conf_a_colour_offset
+   //   conf B              : +altloc_conf_a_colour_offset + altloc_colour_difference
+   //   conf n              : +altloc_conf_a_colour_offset + (n-1)*altloc_colour_difference
+   //
+   // So the offset decides whether alt-conf regions stand out from the bulk at all
+   // (set it to 0 and conf A is indistinguishable from the bulk, leaving only the
+   // additional conformers marked), and the difference decides how far apart the
+   // conformers are from each other. Defaults are of the same order as
+   // rotate_colour_map_on_read_pdb (the per-molecule spacing), so a molecule's alt confs
+   // read as a family rather than as separate molecules.
+   static float altloc_conf_a_colour_offset;
+   static float altloc_colour_difference;
 
    static float rotate_colour_map_for_map; // e.g. 31.0 (degrees)
 

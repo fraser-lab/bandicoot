@@ -19482,6 +19482,18 @@ create_preferences (void)
   GtkWidget *label497;
   GtkWidget *frame201;
   GtkWidget *preferences_bond_colours_checkbutton;
+  /* BANDICOOT: "Alt. Conf. Colour Scheme" frame */
+  GtkWidget *frame202_altloc;
+  GtkWidget *vbox_altloc_colours;
+  GtkWidget *hbox_altloc_conf_a_offset;
+  GtkWidget *hbox_altloc_colour_difference;
+  GtkWidget *label_altloc_conf_a_offset;
+  GtkWidget *label_altloc_colour_difference;
+  GtkWidget *label_altloc_conf_a_offset_units;
+  GtkWidget *label_altloc_colour_difference_units;
+  GtkWidget *label_altloc_frame;
+  GtkWidget *preferences_altloc_conf_a_offset_hscale;
+  GtkWidget *preferences_altloc_colour_difference_hscale;
   GtkWidget *label498;
   GtkWidget *label479;
   GtkWidget *preferences_map_parameters;
@@ -20594,6 +20606,69 @@ create_preferences (void)
   gtk_container_add (GTK_CONTAINER (frame201), preferences_bond_colours_checkbutton);
   gtk_container_set_border_width (GTK_CONTAINER (preferences_bond_colours_checkbutton), 5);
 
+  /* BANDICOOT: "Alt. Conf. Colour Scheme" -- the two knobs of the
+     "Bonds (Colour by Alt. Conf.)" display mode. Both are hue shifts in degrees.
+     The sliders top out at 180 because a shift beyond half the wheel is the same
+     visual distance coming back the other way. */
+
+  frame202_altloc = gtk_frame_new (NULL);
+  gtk_widget_show (frame202_altloc);
+  gtk_box_pack_start (GTK_BOX (vbox212), frame202_altloc, FALSE, TRUE, 0);
+  gtk_container_set_border_width (GTK_CONTAINER (frame202_altloc), 2);
+
+  vbox_altloc_colours = gtk_vbox_new (FALSE, 0);
+  gtk_widget_show (vbox_altloc_colours);
+  gtk_container_add (GTK_CONTAINER (frame202_altloc), vbox_altloc_colours);
+
+  /* Conf. A colour offset */
+
+  hbox_altloc_conf_a_offset = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox_altloc_conf_a_offset);
+  gtk_box_pack_start (GTK_BOX (vbox_altloc_colours), hbox_altloc_conf_a_offset, TRUE, TRUE, 0);
+
+  label_altloc_conf_a_offset = gtk_label_new ("  Conf. A colour offset  ");
+  gtk_widget_show (label_altloc_conf_a_offset);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_conf_a_offset), label_altloc_conf_a_offset, FALSE, FALSE, 0);
+  gtk_label_set_justify (GTK_LABEL (label_altloc_conf_a_offset), GTK_JUSTIFY_CENTER);
+  gtk_misc_set_alignment (GTK_MISC (label_altloc_conf_a_offset), 0.5, 0.95);
+
+  preferences_altloc_conf_a_offset_hscale = gtk_hscale_new (GTK_ADJUSTMENT (gtk_adjustment_new (20, 0, 190.1, 1, 10, 10.1)));
+  gtk_widget_show (preferences_altloc_conf_a_offset_hscale);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_conf_a_offset), preferences_altloc_conf_a_offset_hscale, TRUE, TRUE, 0);
+
+  label_altloc_conf_a_offset_units = gtk_label_new ("  degrees   ");
+  gtk_widget_show (label_altloc_conf_a_offset_units);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_conf_a_offset), label_altloc_conf_a_offset_units, FALSE, FALSE, 0);
+  gtk_label_set_justify (GTK_LABEL (label_altloc_conf_a_offset_units), GTK_JUSTIFY_CENTER);
+  gtk_misc_set_alignment (GTK_MISC (label_altloc_conf_a_offset_units), 0.5, 0.95);
+
+  /* Alt. Conf. colour difference */
+
+  hbox_altloc_colour_difference = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox_altloc_colour_difference);
+  gtk_box_pack_start (GTK_BOX (vbox_altloc_colours), hbox_altloc_colour_difference, TRUE, TRUE, 0);
+
+  label_altloc_colour_difference = gtk_label_new ("  Alt. Conf. colour difference  ");
+  gtk_widget_show (label_altloc_colour_difference);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_colour_difference), label_altloc_colour_difference, FALSE, FALSE, 0);
+  gtk_label_set_justify (GTK_LABEL (label_altloc_colour_difference), GTK_JUSTIFY_CENTER);
+  gtk_misc_set_alignment (GTK_MISC (label_altloc_colour_difference), 0.5, 0.95);
+
+  preferences_altloc_colour_difference_hscale = gtk_hscale_new (GTK_ADJUSTMENT (gtk_adjustment_new (20, 0, 190.1, 1, 10, 10.1)));
+  gtk_widget_show (preferences_altloc_colour_difference_hscale);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_colour_difference), preferences_altloc_colour_difference_hscale, TRUE, TRUE, 0);
+
+  label_altloc_colour_difference_units = gtk_label_new ("  degrees   ");
+  gtk_widget_show (label_altloc_colour_difference_units);
+  gtk_box_pack_start (GTK_BOX (hbox_altloc_colour_difference), label_altloc_colour_difference_units, FALSE, FALSE, 0);
+  gtk_label_set_justify (GTK_LABEL (label_altloc_colour_difference_units), GTK_JUSTIFY_CENTER);
+  gtk_misc_set_alignment (GTK_MISC (label_altloc_colour_difference_units), 0.5, 0.95);
+
+  label_altloc_frame = gtk_label_new ("Alt. Conf. Colour Scheme");
+  gtk_widget_show (label_altloc_frame);
+  gtk_frame_set_label_widget (GTK_FRAME (frame202_altloc), label_altloc_frame);
+  gtk_label_set_use_markup (GTK_LABEL (label_altloc_frame), TRUE);
+
   label498 = gtk_label_new ("Colour Map Rotation [Molecule Independent] ");
   gtk_widget_show (label498);
   gtk_frame_set_label_widget (GTK_FRAME (preferences_bond_colours), label498);
@@ -21508,6 +21583,14 @@ create_preferences (void)
   g_signal_connect ((gpointer) preferences_bond_width_combobox, "changed",
                     G_CALLBACK (on_preferences_bond_width_combobox_changed),
                     NULL);
+  /* BANDICOOT: Alt. Conf. Colour Scheme sliders */
+  g_signal_connect ((gpointer) preferences_altloc_conf_a_offset_hscale, "value_changed",
+                    G_CALLBACK (on_preferences_altloc_conf_a_offset_hscale_value_changed),
+                    NULL);
+  g_signal_connect ((gpointer) preferences_altloc_colour_difference_hscale, "value_changed",
+                    G_CALLBACK (on_preferences_altloc_colour_difference_hscale_value_changed),
+                    NULL);
+
   g_signal_connect ((gpointer) preferences_bond_colours_hscale, "value_changed",
                     G_CALLBACK (on_preferences_bond_colours_hscale_value_changed),
                     NULL);
@@ -21843,6 +21926,9 @@ create_preferences (void)
   GLADE_HOOKUP_OBJECT (preferences, hbox287, "hbox287");
   GLADE_HOOKUP_OBJECT (preferences, label496, "label496");
   GLADE_HOOKUP_OBJECT (preferences, preferences_bond_colours_hscale, "preferences_bond_colours_hscale");
+  /* BANDICOOT: looked up by c-interface-preferences.cc to show the stored values */
+  GLADE_HOOKUP_OBJECT (preferences, preferences_altloc_conf_a_offset_hscale, "preferences_altloc_conf_a_offset_hscale");
+  GLADE_HOOKUP_OBJECT (preferences, preferences_altloc_colour_difference_hscale, "preferences_altloc_colour_difference_hscale");
   GLADE_HOOKUP_OBJECT (preferences, label497, "label497");
   GLADE_HOOKUP_OBJECT (preferences, frame201, "frame201");
   GLADE_HOOKUP_OBJECT (preferences, preferences_bond_colours_checkbutton, "preferences_bond_colours_checkbutton");

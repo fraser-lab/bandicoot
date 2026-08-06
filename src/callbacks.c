@@ -6610,6 +6610,34 @@ on_preferences_bond_colours_hscale_value_changed
   set_colour_map_rotation_on_read_pdb(fvalue);
 }
 
+/* BANDICOOT: Alt. Conf. Colour Scheme - hue offset of conf A from the bulk */
+void
+on_preferences_altloc_conf_a_offset_hscale_value_changed
+                                        (GtkRange        *range,
+                                        gpointer         user_data)
+{
+  GtkAdjustment *adjustment;
+  float fvalue;
+  adjustment = gtk_range_get_adjustment(GTK_RANGE(range));
+  fvalue = gtk_adjustment_get_value(adjustment);
+  preferences_internal_change_value_float(PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET, fvalue);
+  set_altloc_conf_a_colour_offset(fvalue);
+}
+
+/* BANDICOOT: Alt. Conf. Colour Scheme - hue difference between successive alt confs */
+void
+on_preferences_altloc_colour_difference_hscale_value_changed
+                                        (GtkRange        *range,
+                                        gpointer         user_data)
+{
+  GtkAdjustment *adjustment;
+  float fvalue;
+  adjustment = gtk_range_get_adjustment(GTK_RANGE(range));
+  fvalue = gtk_adjustment_get_value(adjustment);
+  preferences_internal_change_value_float(PREFERENCES_ALTLOC_COLOUR_DIFFERENCE, fvalue);
+  set_altloc_colour_difference(fvalue);
+}
+
 void
 on_preferences_bond_colours_checkbutton_toggled
                                         (GtkToggleButton *togglebutton,

@@ -248,7 +248,8 @@ Bond_lines_container::Bond_lines_container(atom_selection_container_t asc,
 //
 Bond_lines_container::Bond_lines_container(const atom_selection_container_t &SelAtom,
 					   int imol,
-					   Bond_lines_container::bond_representation_type br_type) {
+					   Bond_lines_container::bond_representation_type br_type,
+					   bool draw_hydrogens_flag_in) {
 
    // std::cout << "Bond_lines_container() for B-factors! @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << std::endl;
 
@@ -256,7 +257,7 @@ Bond_lines_container::Bond_lines_container(const atom_selection_container_t &Sel
    verbose_reporting = 0;
    do_disulfide_bonds_flag = 1;
    udd_has_ca_handle = -1;
-   do_bonds_to_hydrogens = 1;
+   do_bonds_to_hydrogens = draw_hydrogens_flag_in ? 1 : 0; // BANDICOOT: was hard-coded 1
    b_factor_scale = 1.0;
    have_dictionary = 0;
    for_GL_solid_model_rendering = 0;
@@ -273,10 +274,59 @@ Bond_lines_container::Bond_lines_container(const atom_selection_container_t &Sel
 	 try_set_b_factor_scale(SelAtom.mol);
 	 construct_from_asc(SelAtom, imol, 0.01, max_dist, coot::COLOUR_BY_B_FACTOR, 0, model_number, do_rama_markup);
       } else {
-	 if (br_type == Bond_lines_container::COLOUR_BY_USER_DEFINED_COLOURS)
+	 if (br_type == Bond_lines_container::COLOUR_BY_USER_DEFINED_COLOURS) {
 	    construct_from_asc(SelAtom, imol, 0.01, max_dist, coot::COLOUR_BY_USER_DEFINED_COLOURS, 0, model_number, do_rama_markup);
+	 } else {
+	    if (br_type == Bond_lines_container::COLOUR_BY_ALTLOC_MODE) {
+	       // BANDICOOT: "Colour by Alt. Conf.". The altLoc -> index map has to exist
+	       // before any bond is made, because atom_colour() reads it per atom.
+	       set_altloc_colour_index_map(SelAtom);
+	       construct_from_asc(SelAtom, imol, 0.01, max_dist, coot::COLOUR_BY_ALTLOC, 0, model_number, do_rama_markup);
+	    }
+	 }
       }
    }
+}
+
+// BANDICOOT: collect every alt-conf label in the selection and give each one a colour
+// index. The blank altLoc is always 0 (it is the bulk of the molecule and keeps the
+// molecule's own carbon colour); the remaining labels are numbered 1..n in sorted
+// order, so "A" is always index 1 whatever order the atoms were traversed in.
+void
+Bond_lines_container::set_altloc_colour_index_map(const atom_selection_container_t &asc) {
+
+   altloc_colour_index_map.clear();
+   altloc_colour_index_map[""] = 0;
+
+   std::set<std::string> labels;
+   for (int i=0; i<asc.n_selected_atoms; i++) {
+      mmdb::Atom *at = asc.atom_selection[i];
+      if (at) {
+	 std::string alt_conf(at->altLoc);
+	 if (! alt_conf.empty())
+	    labels.insert(alt_conf);
+      }
+   }
+
+   int idx = 1;
+   std::set<std::string>::const_iterator it;
+   for (it=labels.begin(); it!=labels.end(); it++) { // std::set iterates in sorted order
+      altloc_colour_index_map[*it] = idx;
+      idx++;
+   }
+}
+
+// BANDICOOT: 0 (the blank-altLoc/bulk index) for anything we don't have a label for,
+// so an atom added after the map was built can never index off the end of the palette.
+int
+Bond_lines_container::altloc_colour_index(mmdb::Atom *at) const {
+
+   if (! at) return 0;
+   std::map<std::string, int>::const_iterator it =
+      altloc_colour_index_map.find(std::string(at->altLoc));
+   if (it == altloc_colour_index_map.end())
+      return 0;
+   return it->second;
 }
 
 void
@@ -5033,6 +5083,18 @@ Bond_lines_container::atom_colour(mmdb::Atom *at, int bond_colour_type,
    int col = 0;
 
    if (bond_colour_type == coot::COLOUR_BY_MOLECULE) return col; // one colour fits all
+
+   // BANDICOOT: "Colour by Alt. Conf.". Handled up here as an early return so that the
+   // (deeply nested) element/chain logic below is left exactly as it was. Carbons carry
+   // the alt-conf signal; every other element defers to the normal element colouring, so
+   // N is still blue and O is still red whichever conformer they belong to -- the same
+   // bargain COLOUR_BY_CHAIN_C_ONLY makes.
+   if (bond_colour_type == coot::COLOUR_BY_ALTLOC) {
+      std::string element(at->element);
+      if (element == " C") // PDBv3 FIXME (as elsewhere in this function)
+	 return coot::ALTLOC_COLOUR_INDEX_BASE + altloc_colour_index(at);
+      return atom_colour(at, coot::COLOUR_BY_ATOM_TYPE, atom_colour_map_p);
+   }
 
    if (bond_colour_type == coot::COLOUR_BY_CHAIN) {
 

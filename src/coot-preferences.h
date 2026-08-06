@@ -51,6 +51,9 @@
 #define PREFERENCES_FONT_OWN_COLOUR_FLAG          42 // values -1: unset
                                                      //         0: no
                                                      //         1: yes
+// BANDICOOT: "Alt. Conf. Colour Scheme" (Preferences > Bond Colours), both in degrees
+#define PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET   43
+#define PREFERENCES_ALTLOC_COLOUR_DIFFERENCE      44
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

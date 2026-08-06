@@ -158,7 +158,12 @@ namespace coot {
 	  COLOUR_BY_B_FACTOR_BONDS=10,
 	  COLOUR_BY_OCCUPANCY_BONDS=11,
 	  COLOUR_BY_USER_DEFINED_COLOURS____BONDS=12,
-	  COLOUR_BY_USER_DEFINED_COLOURS_CA_BONDS=13 };
+	  COLOUR_BY_USER_DEFINED_COLOURS_CA_BONDS=13,
+          // BANDICOOT: "Colour by Alt. Conf.". Same number as coot::COLOUR_BY_ALTLOC in
+          // the bond_colour_t enum (coords/Bond_lines.h) on purpose -- this enum and
+          // that one are already mixed in make_bonds_type_checked() (see
+          // COLOUR_BY_CHAIN_GOODSELL=21), so one concept / one number keeps that safe.
+          COLOUR_BY_ALTLOC_BONDS=22 };
 
    enum { RESIDUE_NUMBER_UNSET = -1111};
 
@@ -906,6 +911,13 @@ public:        //                      public
 					   	                    // we also set
 						                    // bond_colour_internal.
    void set_bond_colour_for_goodsell_mode(int icol, bool against_a_dark_background);
+   // BANDICOOT: draw-time colour for the "Colour by Alt. Conf." mode. Colour indices
+   // below coot::ALTLOC_COLOUR_INDEX_BASE are element colours and are handed to
+   // set_bond_colour_by_mol_no() unchanged; at or above it they are carbons in the
+   // (icol - base)'th alt conf and get the molecule's carbon colour rotated by that
+   // many hue steps.
+   coot::colour_t get_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background);
+   void set_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background);
 
    // return the colour, don't call glColor3f();
    coot::colour_t get_bond_colour_by_mol_no(int icolour, bool against_a_dark_background);
@@ -1171,6 +1183,7 @@ public:        //                      public
    void make_ca_plus_ligands_and_sidechains_bonds(coot::protein_geometry *pg);
    void make_colour_by_chain_bonds(const std::set<int> &no_bonds_to_these_atoms, bool c_only_flag, bool goodsell_mode);
    void make_colour_by_molecule_bonds();
+   void make_colour_by_altloc_bonds(); // BANDICOOT: "Colour by Alt. Conf."
    void bonds_no_waters_representation();
    void bonds_sec_struct_representation();
    void ca_plus_ligands_sec_struct_representation(coot::protein_geometry *pg);

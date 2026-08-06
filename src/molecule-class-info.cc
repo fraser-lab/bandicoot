@@ -935,6 +935,63 @@ molecule_class_info_t::set_bond_colour_by_mol_no(int colour_index, bool against_
    bond_colour_internal = {col.col[0], col.col[1], col.col[2]};
 }
 
+// BANDICOOT: "Colour by Alt. Conf." draw-time colouring.
+//
+// The base (blank-altLoc) carbons deliberately get the molecule's *own* carbon colour,
+// so this mode tracks the per-molecule bond-colour slider: move the slider and the whole
+// family -- bulk and alt confs alike -- shifts together, keeping a fixed offset between
+// its members. Each successive alt conf is one altloc_colour_hue_step further round the
+// hue wheel. Heteroatoms never reach the alt-conf branch (see atom_colour()), so N stays
+// blue and O stays red.
+coot::colour_t
+molecule_class_info_t::get_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background) {
+
+   if (icol < coot::ALTLOC_COLOUR_INDEX_BASE) // an element colour, unchanged
+      return get_bond_colour_by_mol_no(icol, against_a_dark_background);
+
+   int altloc_index = icol - coot::ALTLOC_COLOUR_INDEX_BASE;
+
+   coot::colour_t col;
+   if (bonds_rotate_colour_map_flag) {
+      col = get_bond_colour_by_mol_no(CARBON_BOND, against_a_dark_background);
+   } else {
+      // get_bond_colour_by_mol_no() returns its default grey when the rotation flag is
+      // off, which would make every carbon in this mode grey. Use the plain carbon
+      // colour instead, matching the CARBON_BOND arm of that function.
+      if (use_bespoke_grey_colour_for_carbon_atoms) {
+         col = bespoke_carbon_atoms_colour;
+      } else {
+         if (against_a_dark_background)
+            col.set(0.7, 0.7, 0.0);
+         else
+            col.set(0.5, 0.5, 0.0);
+      }
+   }
+
+   if (altloc_index > 0) {
+      // conf A sits at the offset; each conformer after it adds one difference. With the
+      // defaults (20/20) that is the plain 20-degrees-per-conformer ladder; with the
+      // offset at 0, conf A takes the bulk colour and only the extra conformers are marked.
+      float degrees = graphics_info_t::altloc_conf_a_colour_offset +
+                      static_cast<float>(altloc_index - 1) * graphics_info_t::altloc_colour_difference;
+      float rot = degrees / 360.0;
+      while (rot > 1.0) rot -= 1.0; // colour_t::rotate() only wraps once
+      while (rot < 0.0) rot += 1.0;
+      if (rot > 0.0)
+         col.rotate(rot);
+   }
+
+   return col;
+}
+
+void
+molecule_class_info_t::set_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background) {
+
+   coot::colour_t col = get_bond_colour_for_altloc_mode(icol, against_a_dark_background);
+   glColor3f(col[0], col[1], col[2]);
+   bond_colour_internal = {col[0], col[1], col[2]};
+}
+
 void
 molecule_class_info_t::set_bond_colour_for_goodsell_mode(int icol, bool against_a_dark_background) {
 
@@ -2295,7 +2352,11 @@ molecule_class_info_t::display_bonds(const graphical_bonds_container &bonds_box,
                   if (bonds_box_type == coot::COLOUR_BY_CHAIN_GOODSELL) {
                      set_bond_colour_for_goodsell_mode(icol, against_a_dark_background);
                   } else {
-                     set_bond_colour_by_mol_no(icol, against_a_dark_background); // outside inner loop
+                     if (bonds_box_type == coot::COLOUR_BY_ALTLOC_BONDS) { // BANDICOOT
+                        set_bond_colour_for_altloc_mode(icol, against_a_dark_background);
+                     } else {
+                        set_bond_colour_by_mol_no(icol, against_a_dark_background); // outside inner loop
+                     }
                   }
                }
             }
@@ -2564,7 +2625,12 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                for (int icol=0; icol<bonds_box.n_consolidated_atom_centres; icol++) {
 
                   if (bonds_box.consolidated_atom_centres[icol].num_points == 0) continue;
-                  coot::colour_t cc = get_bond_colour_by_mol_no(icol, against_a_dark_background);
+                  // BANDICOOT: the atom-centre points have to follow the same colour
+                  // rule as the bonds, or the alt-conf carbons get their dots from the
+                  // default (index*26 deg) arm of get_bond_colour_by_mol_no().
+                  coot::colour_t cc = (bonds_box_type == coot::COLOUR_BY_ALTLOC_BONDS)
+                     ? get_bond_colour_for_altloc_mode(icol, against_a_dark_background)
+                     : get_bond_colour_by_mol_no(icol, against_a_dark_background);
                   cc.brighter(1.15);
                   glColor3f(cc[0], cc[1], cc[2]);
 
@@ -3596,6 +3662,28 @@ molecule_class_info_t::make_colour_by_chain_bonds(const std::set<int> &no_bonds_
       graphics_info_t::graphics_draw();
 }
 
+// BANDICOOT: "Colour by Alt. Conf." -- bonds coloured by alt conf.
+//
+// With no _pdbx_heterogeneity_hierarchy present (the only case in the 0.1.x.x line) the
+// alt-conf label IS the state, so this colours by altLoc. When the hierarchy category is
+// read (v0.2.x), the index handed to the colour map becomes the hierarchy node rather
+// than the raw label and nothing here has to change.
+void
+molecule_class_info_t::make_colour_by_altloc_bonds() {
+
+   // the (draw_hydrogens_flag != 0) is deliberate: draw_hydrogens_flag is an int, and
+   // passing it as one makes this call ambiguous against the (asc, imol, int, int, ...)
+   // constructor. An explicit bool picks the bond_representation_type overload cleanly.
+   Bond_lines_container bonds(atom_sel, imol_no, Bond_lines_container::COLOUR_BY_ALTLOC_MODE,
+                              (draw_hydrogens_flag != 0));
+   bonds_box.clear_up();
+   bonds_box = bonds.make_graphical_bonds_no_thinning();
+   bonds_box_type = coot::COLOUR_BY_ALTLOC_BONDS;
+
+   if (graphics_info_t::glarea)
+      graphics_info_t::graphics_draw();
+}
+
 void
 molecule_class_info_t::make_colour_by_molecule_bonds() {
 
@@ -3650,6 +3738,8 @@ molecule_class_info_t::make_bonds_type_checked() {
    }
    if (bonds_box_type == coot::COLOUR_BY_MOLECULE_BONDS)
       make_colour_by_molecule_bonds();
+   if (bonds_box_type == coot::COLOUR_BY_ALTLOC_BONDS) // BANDICOOT
+      make_colour_by_altloc_bonds();
    if (bonds_box_type == coot::CA_BONDS_PLUS_LIGANDS)
       make_ca_plus_ligands_bonds(g.Geom_p());
    if (bonds_box_type == coot::CA_BONDS_PLUS_LIGANDS_AND_SIDECHAINS)

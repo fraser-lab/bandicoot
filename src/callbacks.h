@@ -2260,6 +2260,17 @@ on_preferences_bond_colours_hscale_value_changed
                                         (GtkRange        *range,
                                         gpointer         user_data);
 
+/* BANDICOOT: Alt. Conf. Colour Scheme sliders */
+void
+on_preferences_altloc_conf_a_offset_hscale_value_changed
+                                        (GtkRange        *range,
+                                        gpointer         user_data);
+
+void
+on_preferences_altloc_colour_difference_hscale_value_changed
+                                        (GtkRange        *range,
+                                        gpointer         user_data);
+
 void
 on_preferences_bond_colours_checkbutton_toggled
                                         (GtkToggleButton *togglebutton,

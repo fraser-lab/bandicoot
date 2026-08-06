@@ -40133,6 +40133,116 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_graphics_to_colour_by_altloc_representation(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "graphics_to_colour_by_altloc_representation" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  graphics_to_colour_by_altloc_representation(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_redraw_altloc_coloured_molecules(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "redraw_altloc_coloured_molecules", 0, 0, 0)) SWIG_fail;
+  redraw_altloc_coloured_molecules();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_altloc_conf_a_colour_offset(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float arg1 ;
+  float val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_float(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_altloc_conf_a_colour_offset" "', argument " "1"" of type '" "float""'");
+  } 
+  arg1 = static_cast< float >(val1);
+  set_altloc_conf_a_colour_offset(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_get_altloc_conf_a_colour_offset(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "get_altloc_conf_a_colour_offset", 0, 0, 0)) SWIG_fail;
+  result = (float)get_altloc_conf_a_colour_offset();
+  resultobj = SWIG_From_float(static_cast< float >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_altloc_colour_difference(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float arg1 ;
+  float val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_float(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_altloc_colour_difference" "', argument " "1"" of type '" "float""'");
+  } 
+  arg1 = static_cast< float >(val1);
+  set_altloc_colour_difference(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_get_altloc_colour_difference(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  float result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "get_altloc_colour_difference", 0, 0, 0)) SWIG_fail;
+  result = (float)get_altloc_colour_difference();
+  resultobj = SWIG_From_float(static_cast< float >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_graphics_to_user_defined_atom_colours_representation(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -77712,6 +77822,12 @@ static PyMethodDef SwigMethods[] = {
 	 { "graphics_to_b_factor_representation", _wrap_graphics_to_b_factor_representation, METH_O, NULL},
 	 { "graphics_to_b_factor_cas_representation", _wrap_graphics_to_b_factor_cas_representation, METH_O, NULL},
 	 { "graphics_to_occupancy_representation", _wrap_graphics_to_occupancy_representation, METH_O, NULL},
+	 { "graphics_to_colour_by_altloc_representation", _wrap_graphics_to_colour_by_altloc_representation, METH_O, NULL},
+	 { "redraw_altloc_coloured_molecules", _wrap_redraw_altloc_coloured_molecules, METH_NOARGS, NULL},
+	 { "set_altloc_conf_a_colour_offset", _wrap_set_altloc_conf_a_colour_offset, METH_O, NULL},
+	 { "get_altloc_conf_a_colour_offset", _wrap_get_altloc_conf_a_colour_offset, METH_NOARGS, NULL},
+	 { "set_altloc_colour_difference", _wrap_set_altloc_colour_difference, METH_O, NULL},
+	 { "get_altloc_colour_difference", _wrap_get_altloc_colour_difference, METH_NOARGS, NULL},
 	 { "graphics_to_user_defined_atom_colours_representation", _wrap_graphics_to_user_defined_atom_colours_representation, METH_O, NULL},
 	 { "graphics_to_user_defined_atom_colours_all_atoms_representation", _wrap_graphics_to_user_defined_atom_colours_all_atoms_representation, METH_O, NULL},
 	 { "graphics_molecule_bond_type", _wrap_graphics_molecule_bond_type, METH_O, NULL},

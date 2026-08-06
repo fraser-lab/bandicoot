@@ -1017,6 +1017,21 @@ void update_preference_gui() {
       gtk_adjustment_set_value(adjustment, fval1);
       break;
 
+    // BANDICOOT: "Alt. Conf. Colour Scheme"
+    case PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET:
+      w = lookup_widget(dialog, "preferences_altloc_conf_a_offset_hscale");
+      fval1 = g.preferences_internal[i].fvalue1;
+      adjustment = gtk_range_get_adjustment(GTK_RANGE(w));
+      gtk_adjustment_set_value(adjustment, fval1);
+      break;
+
+    case PREFERENCES_ALTLOC_COLOUR_DIFFERENCE:
+      w = lookup_widget(dialog, "preferences_altloc_colour_difference_hscale");
+      fval1 = g.preferences_internal[i].fvalue1;
+      adjustment = gtk_range_get_adjustment(GTK_RANGE(w));
+      gtk_adjustment_set_value(adjustment, fval1);
+      break;
+
     case PREFERENCES_BOND_COLOUR_ROTATION_C_ONLY:
       w = lookup_widget(dialog, "preferences_bond_colours_checkbutton");
       if (g.preferences_internal[i].ivalue1 == 1) {
