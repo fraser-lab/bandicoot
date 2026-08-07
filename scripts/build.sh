@@ -233,7 +233,7 @@ export LDFLAGS="-L${CONDA_PREFIX}/lib -L${PREFIX}/lib -L${BREW_PREFIX}/lib \
 # edits. The shim is a no-op when Python.h hasn't been pulled in.
 # See compat/python23-shim.hh for details.
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
-export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14 ${SHIM_INCLUDE}"
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++17 ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\

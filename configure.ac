@@ -84,8 +84,11 @@ AC_SUBST([OPENMP_CXXFLAGS])
 AX_CXX_COMPILE_STDCXX_11
 AX_CXX_HAVE_THREAD
 # AX_CXX_COMPILE_STDCXX_11 sets HAVE_CXX11=1 (hopefully)
+# Bandicoot v0.2: bumped c++14 -> c++17. Needed for modern RDKit (enhanced
+# ligand tools / FLEV, GitHub #11); gemmi is fine either way (it declares
+# cxx_std_14). Keep in sync with CXXFLAGS in scripts/build.sh.
 if test $HAVE_CXX11 = 1 ; then
-   CXXFLAGS="$CXXFLAGS -std=c++14"
+   CXXFLAGS="$CXXFLAGS -std=c++17"
 else
    echo we can\'t compile coot then
 fi
