@@ -217,11 +217,11 @@ void
 on_recentre_on_read_pdb_toggle_button_toggled (GtkButton       *button,
 					       gpointer         user_data);
 
-void toolbar_popup_menu(GtkToolbar *toolbar,
-		    GdkEventButton *event_button,
-		    gpointer user_data);
-
-void set_model_toolbar_docked_position_callback(GtkWidget *w, gpointer user_data);
+/* BANDICOOT (GitHub #15): toolbar_popup_menu() and
+   set_model_toolbar_docked_position_callback() removed -- the modelling toolbar's
+   right-click menu was inert (it repositioned the legacy handlebox, which no longer
+   holds the toolbar) and cast that toolbar's parent to the wrong widget type.
+   Right-click on the toolbar now does nothing. See c-interface-gui.cc. */
 
 
 /* return the dialog if it exists, else null */

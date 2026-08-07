@@ -3138,8 +3138,8 @@ update_toolbar_icons_menu(int toolbar_index) {
   // handler calls show_model_toolbar_main_icons()/..._all_icons() and re-walks the
   // whole icon list -- redundant work and visible flicker on every menu open, and
   // those functions call set_active() again in turn. Poking ->active updates the
-  // display state only. This mirrors toolbar_popup_menu() below, which sets
-  // ->active the same way for the toolbar-position radio group; GtkCheckMenuItem
+  // display state only. (The removed toolbar_popup_menu() -- see below -- set
+  // ->active the same way for its toolbar-position radio group.) GtkCheckMenuItem
   // renders its check mark from that field. Because this bypasses the radio
   // group's own bookkeeping, every member must be assigned explicitly, or two
   // items would draw as selected at once.
@@ -3181,87 +3181,23 @@ int model_toolbar_style_state() {
 }
 
 /*  ------------------------------------------------------------------------ */
-//            popup-menu for model_toolbar
+//            popup-menu for model_toolbar  -- REMOVED (BANDICOOT, GitHub #15)
 /*  ------------------------------------------------------------------------ */
 //
-
-void
-toolbar_popup_menu (GtkToolbar *toolbar,
-		    GdkEventButton *event_button,
-		    gpointer user_data)
-{
-  GtkHandleBox *hdlbox = GTK_HANDLE_BOX(GTK_WIDGET(toolbar)->parent);
-  GtkWidget *menu = gtk_menu_new ();
-  GtkWidget *item;
-
-  static struct {
-    char const *text;
-    coot::model_toolbar::toolbar_position_type pos;
-  } const pos_items[] = {
-    { N_("Display to the right"),  coot::model_toolbar::RIGHT },
-    { N_("Display to the left"),   coot::model_toolbar::LEFT },
-    { N_("Display on the top"),    coot::model_toolbar::TOP },
-    { N_("Display on the bottom"), coot::model_toolbar::BOTTOM },
-  };
-
-  if (hdlbox->child_detached) {
-    item = gtk_menu_item_new_with_label (_("Reattach to main window"));
-    gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
-    g_signal_connect (G_OBJECT (item), "activate",
-		      G_CALLBACK (reattach_modelling_toolbar),
-		      NULL);
-  } else {
-    size_t ui;
-    GSList *group = NULL;
-
-    for (ui = 0; ui < G_N_ELEMENTS (pos_items); ui++) {
-      char const *text = _(pos_items[ui].text);
-      coot::model_toolbar::toolbar_position_type pos = pos_items[ui].pos;
-
-      item = gtk_radio_menu_item_new_with_label(group, text);
-      group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM (item));
-
-      if (graphics_info_t::model_toolbar_position_state == pos) {
-	GTK_CHECK_MENU_ITEM(item)->active = 1;
-      } else {
-	GTK_CHECK_MENU_ITEM(item)->active = 0;
-      }
-
-      gtk_menu_shell_append(GTK_MENU_SHELL (menu), item);
-      g_object_set_data(G_OBJECT (item), "position", GINT_TO_POINTER (pos));
-      g_signal_connect(G_OBJECT (item), "toggled",
-		       G_CALLBACK (set_model_toolbar_docked_position_callback),
-		       item);
-    }
-
-    //    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(save_w), TRUE);
-
-  }
-
-  item = gtk_menu_item_new ();
-  gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
-  gtk_widget_set_sensitive (item, FALSE);
-
-  item = gtk_menu_item_new_with_label (_("Hide"));
-  gtk_menu_shell_append (GTK_MENU_SHELL (menu), item);
-  g_signal_connect (G_OBJECT (item), "activate",
-		    G_CALLBACK (hide_modelling_toolbar),
-		    NULL);
-
-  gtk_widget_show_all (menu);
-  gtk_menu_popup (GTK_MENU(menu), NULL, NULL, NULL, NULL, 0,
-		  (event_button != NULL) ? event_button->time
-		  : gtk_get_current_event_time());
-
-}
-
-void
-set_model_toolbar_docked_position_callback(GtkWidget *w, gpointer user_data) {
-
-  int pos = GPOINTER_TO_INT (g_object_get_data(G_OBJECT (w), "position"));
-  set_model_toolbar_docked_position(pos);
-
-}
+// toolbar_popup_menu() and set_model_toolbar_docked_position_callback() lived here.
+// They offered Display right/left/top/bottom + Hide on a right-click, and every item
+// was inert under Bandicoot: they reparent the legacy
+// "model_fit_refine_toolbar_handlebox", but the GtkToolbar is lifted out of it into the
+// native pinned sidebar (bandicoot_sidebar_install, bandicoot_appkit.mm), so the menu
+// moved an empty container between hidden frames. The popup also cast the toolbar's
+// parent to GtkHandleBox when it is in fact a GtkVBox, reading child_detached off the
+// wrong struct.
+//
+// Right-click on the toolbar now does nothing (on_model_toolbar_button_press_event).
+// set_model_toolbar_docked_position() itself is kept -- the Preferences > Refinement
+// Toolbar radios still call it, and they are dead for the SAME reason; that UI is left
+// for the wx interface work rather than being half-removed here.
+// See git history for the removed implementation.
 
 void
 reattach_modelling_toolbar() {

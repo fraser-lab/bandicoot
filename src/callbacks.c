@@ -10163,10 +10163,20 @@ on_model_toolbar_button_press_event    (GtkWidget       *widget,
                                         gpointer         user_data)
 {
 
-  if (event->type == GDK_BUTTON_PRESS && event->button == 3) {
-    toolbar_popup_menu(GTK_TOOLBAR(widget), user_data, event);
-    return TRUE;
-  }
+  /* BANDICOOT (GitHub #15): right-click on the modelling toolbar used to raise
+     toolbar_popup_menu() -- Display to the right/left/top/bottom plus Hide. Every one
+     of those items was inert here: they reparent the legacy
+     "model_fit_refine_toolbar_handlebox" between the main window's frames, but
+     Bandicoot lifts the GtkToolbar OUT of that handlebox into the native pinned
+     sidebar (gtk_widget_reparent in bandicoot_sidebar_install, bandicoot_appkit.mm),
+     so the menu moved an empty container between hidden frames.
+
+     A menu that does nothing is worse than no menu, so right-click now does nothing at
+     all and toolbar_popup_menu() has been deleted (it also cast the toolbar's parent
+     to GtkHandleBox, which since the reparent is a GtkVBox -- reading child_detached
+     off the wrong struct). Sidebar dock/undock and toolbar style remain available from
+     the sidebar's own settings popup. Repositioning is to be reconsidered as part of
+     the wx interface work; see git history for the removed implementation. */
 
   return FALSE;
 }
