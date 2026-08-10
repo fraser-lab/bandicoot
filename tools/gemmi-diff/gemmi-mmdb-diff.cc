@@ -3,10 +3,11 @@
 //
 // Loads each file TWICE and diffs the resulting mmdb models:
 //
-//   path A  Bandicoot's reader: get_atom_selection() -- the real one, linked
-//           from libcoot-coord-utils, so the four post-read fix-ups and the
-//           #9 _struct_ncs_oper retry are all in play.
-//   path B  gemmi::read_structure_file -> gemmi::copy_to_mmdb.
+//   path A  the RAW mmdb reader (ReadCoorFile + PDBCleanup). Deliberately not
+//           get_atom_selection(): since Phase 2 that routes mmCIF through gemmi,
+//           so using it would compare gemmi against gemmi.
+//   path B  the PRODUCTION gemmi reader, coot::read_coords_with_gemmi() -- the
+//           same function the application uses, not a copy of it.
 //
 // The comparison is between two in-memory mmdb::Manager models, not between
 // two files: everything downstream of get_atom_selection() sees only that
@@ -28,6 +29,7 @@
 #include <mmdb2/mmdb_manager.h>
 
 #include "coot-utils/atom-selection-container.hh"
+#include "coot-utils/gemmi-coords.hh"   // the production gemmi read path
 
 #include <cmath>
 #include <cstdio>
@@ -254,70 +256,59 @@ static bool g_dump_chains = false;
 
 static ModelSummary load_path_a(const std::string &path) {
    ModelSummary s;
-   // Same arguments the GUI load uses (src/c-interface.cc:961), except verbose
-   // off to keep the report readable: allow_duplseqnum=true,
-   // convert_to_v2_name_flag=false.
-   atom_selection_container_t asc = get_atom_selection(path, true, false, false);
-   if (!asc.read_success || !asc.mol) {
-      s.error = "get_atom_selection failed: " + asc.read_error_message;
+   // Path A is the RAW MMDB READER, deliberately not get_atom_selection().
+   //
+   // Since Phase 2, get_atom_selection() routes mmCIF through gemmi -- so using
+   // it here would compare gemmi against gemmi and the diff would be
+   // meaningless. Reading with mmdb directly keeps this tool answering the
+   // question it exists to answer.
+   //
+   // Flags are the ones get_atom_selection uses. The post-read fix-ups it also
+   // applies are NOT replicated: atom_name_fix_ups() is file-static and
+   // unreachable, and Phase 1 established that the fix-ups change nothing that
+   // this comparison measures (gemmi with none of them equalled mmdb with all
+   // of them across the corpus). PDBCleanup is kept because it assigns elements.
+   mmdb::Manager *mol = new mmdb::Manager;
+   mol->SetFlag(mmdb::MMDBF_IgnoreBlankLines | mmdb::MMDBF_IgnoreNonCoorPDBErrors |
+                mmdb::MMDBF_IgnoreHash | mmdb::MMDBF_IgnoreRemarks |
+                mmdb::MMDBF_IgnoreDuplSeqNum);
+   if (mol->ReadCoorFile(path.c_str()) != 0) {
+      s.error = "mmdb ReadCoorFile failed";
+      delete mol;
       return s;
    }
-   if (g_dump_chains) dump_chains("A (mmdb reader)", asc.mol);
-   harvest(asc.mol, s);
+   mol->PDBCleanup(mmdb::PDBCLEAN_ELEMENT);
+   if (g_dump_chains) dump_chains("A (raw mmdb reader)", mol);
+   harvest(mol, s);
+   delete mol;
    return s;
 }
 
 static ModelSummary load_path_b(const std::string &path, bool setup_entities,
                                 bool merge_chains, bool drop_hydrog_links) {
    ModelSummary s;
-   mmdb::Manager *mol = nullptr;
-   try {
-      gemmi::Structure st = gemmi::read_structure_file(path);
-      if (setup_entities) gemmi::setup_entities(st);
 
-      // copy_to_mmdb() does CreateChain() per gemmi::Chain and never merges, so
-      // a file where one author chain holds polymer + ligands + waters becomes
-      // several mmdb chains sharing an id -- and mmdb's GetChain(id) finds only
-      // the first, hiding the rest from every by-name lookup (12% of the atoms
-      // in 3nyd). Merging the parts first is gemmi's own remedy: with the
-      // default min_sep=0 it concatenates residues WITHOUT renumbering
-      // (model.hpp:1080), and copy_from_mmdb already applies it in the reverse
-      // direction (mmdb.hpp:460). Must run AFTER setup_entities, which is what
-      // creates the split in the first place.
-      if (merge_chains) st.merge_chain_parts();
+   // Path B calls the PRODUCTION reader, coot::read_coords_with_gemmi(), rather
+   // than re-implementing it. That is the point: the tool then tests the shipped
+   // code, and the five adjustments (chain merge, Hydrog filter, spacegroup
+   // normalisation, no fabricated cell, zero-atom fallback) cannot drift between
+   // tool and application.
+   //
+   // Consequence: --no-setup-entities / --no-merge-chains / --keep-hydrog-links
+   // can no longer be honoured, because those choices now live inside the
+   // production function. They are accepted and reported as ignored rather than
+   // silently doing nothing.
+   if (!setup_entities || !merge_chains || !drop_hydrog_links)
+      printf("    note: --no-setup-entities/--no-merge-chains/--keep-hydrog-links are\n"
+             "          ignored now that path B calls the production reader\n");
 
-      // struct_conn policy (Art, 2026-08-10): transfer real covalent
-      // connectivity into mmdb's LINK table, but NOT hydrogen bonds.
-      // gemmi's transfer_links_to_mmdb (mmdb.hpp:71) copies every connection
-      // and ignores con.type, and Coot's fill_links()
-      // (ideal/link-restraints.cc:39) then hands every LINK to the refinement
-      // with no filtering of its own. A phenix-refined file can carry hundreds
-      // of Hydrog connections (660 in SC1_2_refine_036.cif), and an H-bond at
-      // ~2.9 A must not become a link restraint pulling toward ~1.4 A.
-      // Bandicoot's RSR deliberately does not restrain H-bonds: helix/sheet
-      // networks are covered by secondary-structure restraints, and a user who
-      // wants a specific one can add it with "Make Link".
-      // Fidelity is not lost by this: Phase 3's verbatim passthrough preserves
-      // the whole struct_conn category, Hydrog rows included, on write.
-      if (drop_hydrog_links) {
-         size_t before = st.connections.size();
-         std::vector<gemmi::Connection> keep;
-         keep.reserve(before);
-         for (const gemmi::Connection &con : st.connections)
-            if (con.type != gemmi::Connection::Hydrog)
-               keep.push_back(con);
-         s.n_hydrog_dropped = before - keep.size();
-         st.connections = std::move(keep);
-      }
-
-      mol = new mmdb::Manager();
-      gemmi::copy_to_mmdb(st, mol);
-   } catch (const std::exception &e) {
-      s.error = std::string("gemmi threw: ") + e.what();
-      delete mol;
+   std::string message;
+   mmdb::Manager *mol = coot::read_coords_with_gemmi(path, &message);
+   if (!mol) {
+      s.error = "read_coords_with_gemmi: " + message;
       return s;
-    }
-   if (g_dump_chains) dump_chains("B (gemmi->copy_to_mmdb)", mol);
+   }
+   if (g_dump_chains) dump_chains("B (production gemmi reader)", mol);
    harvest(mol, s);
    delete mol;
    return s;
@@ -524,7 +515,34 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
    return clean;
 }
 
+// mmdb can only set a model's space group if it can find syminfo.lib: it checks
+// $SYMINFO and otherwise looks in the CURRENT DIRECTORY. The installed launcher
+// exports SYMINFO (bin/bcoot), but this tool runs outside it, so without help
+// its spacegroup comparison silently degrades to null-vs-null and would hide a
+// real regression. Point SYMINFO at the install's copy unless already set.
+static void ensure_syminfo() {
+   if (getenv("SYMINFO")) {
+      printf("SYMINFO (inherited): %s\n", getenv("SYMINFO"));
+      return;
+   }
+#ifdef BANDICOOT_SYMINFO_DEFAULT
+   const char *cand = BANDICOOT_SYMINFO_DEFAULT;
+   if (FILE *f = fopen(cand, "r")) {
+      fclose(f);
+      setenv("SYMINFO", cand, 0);
+      printf("SYMINFO (from install): %s\n", cand);
+      return;
+   }
+   printf("SYMINFO: NOT FOUND at %s -- spacegroups will not be set, and the\n"
+          "         spacegroup comparison below is therefore meaningless.\n", cand);
+#else
+   printf("SYMINFO: unset and no compiled-in default -- spacegroup comparison\n"
+          "         is only meaningful from a directory containing syminfo.lib.\n");
+#endif
+}
+
 int main(int argc, char **argv) {
+   ensure_syminfo();
    bool setup_entities = true;
    bool merge_chains = true;
    bool drop_hydrog_links = true;

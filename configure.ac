@@ -169,6 +169,11 @@ esac
 dnl Check for MMDB.
 AM_PATH_MMDB2(, [echo Error locating necessary mmdb; exit 1],,)
 
+dnl Bandicoot v0.2: gemmi is the mmCIF I/O layer (mmdb remains the model).
+dnl MUST come after AM_PATH_MMDB2 -- gemmi/mmdb.hpp includes mmdb2 headers, so
+dnl the test needs MMDB_CXXFLAGS in scope. See macros/gemmi.m4.
+AM_PATH_GEMMI
+
 AM_WITH_SSM
 AM_WITH_CCP4SRS
 

@@ -5,6 +5,7 @@
 #include "utils/coot-utils.hh"
 #include "atom-selection-container.hh"
 #include "read-sm-cif.hh"
+#include "gemmi-coords.hh"   // Bandicoot v0.2: the gemmi mmCIF read path
 #include "coot-shelx.hh"
 #include "geometry/residue-and-atom-specs.hh"
 #include "lidia-core/lig-build.hh"
@@ -267,6 +268,10 @@ get_atom_selection(std::string pdb_name,
 
     } else {
 
+       // Set when the model came from gemmi rather than the mmdb reader. Declared
+       // out here because it also gates the post-read fix-ups further down.
+       bool read_from_gemmi = false;
+
        if (coot::util::extension_is_for_shelx_coords(extension)) {
 
           coot::ShelxIns s;
@@ -279,6 +284,38 @@ get_atom_selection(std::string pdb_name,
              asc.read_success = 1;  // a good idea?
 
        } else {
+
+          // BANDICOOT v0.2 (Phase 2): mmCIF is read by gemmi. One call; all the
+          // logic lives in coot-utils/gemmi-coords.cc so nothing accretes here.
+          // nullptr means "could not read it as a macromolecular structure" --
+          // including the zero-atom case, since gemmi accepts a small-molecule
+          // CIF and returns an empty Structure without throwing. On nullptr we
+          // fall through to exactly the reader that ran before, so an mmCIF gemmi
+          // cannot handle still reaches the mmdb path and the small-molecule
+          // fallback below it.
+          //
+          // The four post-read fix-ups further down are SKIPPED for a
+          // gemmi-read model: tools/gemmi-diff established that gemmi + no
+          // fix-ups produces the same model as mmdb + all four, across the
+          // corpus, so running them here would test something other than what
+          // was validated.
+          if (coot::gemmi_handles_extension(extension)) {
+             std::string gemmi_message;
+             mmdb::Manager *gemmi_mol = coot::read_coords_with_gemmi(pdb_name, &gemmi_message);
+             if (gemmi_mol) {
+                MMDBManager = gemmi_mol;
+                read_from_gemmi = true;
+                err = mmdb::ERROR_CODE(0);
+                if (verbose_mode)
+                   std::cout << "INFO:: " << pdb_name << " read by gemmi" << std::endl;
+             } else {
+                std::cout << "INFO:: gemmi did not read " << pdb_name << " ("
+                          << gemmi_message << "); trying the mmdb reader"
+                          << std::endl;
+             }
+          }
+
+          if (! read_from_gemmi) {
 
           MMDBManager = new mmdb::Manager;
 
@@ -383,6 +420,13 @@ get_atom_selection(std::string pdb_name,
              // atom_selection_container.read_error_message = NULL; // its a string
              asc.mol = MMDBManager;
           }
+
+          } else {
+             // gemmi already produced the model, and deliberately without the
+             // mmdb-era fix-ups (see the note where read_from_gemmi is set).
+             asc.read_success = 1;
+             asc.mol = MMDBManager;
+          }
        }
 
        char *str = MMDBManager->GetSpaceGroup();
@@ -420,12 +464,20 @@ get_atom_selection(std::string pdb_name,
              }
           }
 
-          fix_element_name_lengths(asc.mol); // should not be needed with new mmdb
+          // These four exist partly to paper over mmdb reader quirks. A
+          // gemmi-read model does not need them: tools/gemmi-diff showed that
+          // gemmi with NONE of them produces the same model as the mmdb reader
+          // with all of them, over the whole corpus (identical elements, atom
+          // names, residue names, occupancies, B, altLocs). Running them anyway
+          // would mean shipping something other than what was measured.
+          if (! read_from_gemmi) {
+             fix_element_name_lengths(asc.mol); // should not be needed with new mmdb
 
-          if (convert_to_v2_name_flag)
-             fix_nucleic_acid_residue_names(asc);
-          fix_away_atoms(asc);
-          fix_wrapped_names(asc);
+             if (convert_to_v2_name_flag)
+                fix_nucleic_acid_residue_names(asc);
+             fix_away_atoms(asc);
+             fix_wrapped_names(asc);
+          }
        }
     }
 

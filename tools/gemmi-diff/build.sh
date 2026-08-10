@@ -32,6 +32,7 @@ fi
 set -x
 clang++ -std=c++17 -g -O1 -Wall -Wno-unused \
     -o "$HERE/gemmi-mmdb-diff" "$HERE/gemmi-mmdb-diff.cc" \
+    -DBANDICOOT_SYMINFO_DEFAULT="\"$PREFIX/share/coot/syminfo.lib\"" \
     -I"$REPO" \
     -I"$CONDA_PREFIX/include" \
     -I"$BREW_PREFIX/include" \

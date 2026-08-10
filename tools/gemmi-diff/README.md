@@ -23,6 +23,20 @@ after any gemmi upgrade** and the diff says immediately whether the new version 
 the model handed to the rest of Coot. That is a question no unit test in the tree
 currently answers, and one that is very easy to get wrong silently.
 
+## `syminfo.lib` — why the tool sets `SYMINFO` for you
+
+mmdb can only attach a space group to a model if it can find `syminfo.lib`: it checks
+`$SYMINFO` and otherwise looks in the **current working directory**. The installed
+launcher exports `SYMINFO` (`bin/bcoot`), but this tool runs outside it — so without help
+its spacegroup comparison quietly degrades to null-vs-null and would hide a real
+regression after a gemmi upgrade.
+
+`build.sh` therefore bakes in the install's copy as a default, and the tool sets `SYMINFO`
+itself when the environment does not, printing which file it used. If you see
+`SYMINFO: NOT FOUND`, treat every spacegroup result in that run as meaningless.
+
+A null `GetSpaceGroup()` is usually this, not a reader bug.
+
 ## Building
 
 Not part of the autotools build — it links against an already-installed Bandicoot, and
