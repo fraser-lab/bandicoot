@@ -79,8 +79,7 @@ cootrc
 src/bandicoot-build-id.h
 
 # Standalone diagnostics under tools/ -- built by their own build.sh, not by
-# make, so nothing else ignores their binaries. The sources live on the
-# v0.2-gemmi branch; only the build products can survive a switch to main.
+# make, so nothing else ignores their binaries.
 tools/gemmi-diff/gemmi-mmdb-diff
 
 # Debug-symbol bundles left by any -g build on macOS
