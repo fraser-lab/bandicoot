@@ -286,7 +286,18 @@ molecule_class_info_t::handle_read_draw_molecule(int imol_no_in,
       return 1;
 
    } else {
-      std::cout << "There was a coordinates read error\n";
+      // BANDICOOT v0.2: a read failure used to be a single stdout line, which
+      // is easy to miss even when you are watching for it -- the molecule
+      // simply never appears. Say so in a dialog as well. info_dialog() is a
+      // no-op when there is no graphics interface, so scripted/headless use is
+      // unaffected.
+      std::string m = "Failed to read coordinates from\n";
+      m += filename;
+      if (! atom_sel.read_error_message.empty() &&
+          atom_sel.read_error_message != "No error")
+         m += "\n\n" + atom_sel.read_error_message;
+      std::cout << "WARNING:: " << m << std::endl;
+      graphics_info_t::info_dialog(m);
       return -1;
    }
 }
