@@ -45,6 +45,7 @@ PREFIX=$HOME/sw/bandicoot-install ./tools/gemmi-diff/build.sh
 | `--dump-chains` | print each chain's id, residue count, atom count and composition, for both paths |
 | `--examples N` | show up to N example differences and distinct value-shapes per field (default 3) |
 | `--no-setup-entities` | skip `gemmi::setup_entities()` on path B |
+| `--no-merge-chains` | skip `Structure::merge_chain_parts()` on path B — reproduces the raw `copy_to_mmdb` behaviour, chain duplicates and all |
 
 Exit status is 0 only if every file compared identical.
 
@@ -65,13 +66,29 @@ Two lines are worth understanding:
 - `N distinct shape(s)` under a field difference — 60 differences all of one shape is a
   systematic rule; 60 differences of 40 shapes is something else entirely.
 
-## Known baseline (2026-08-10, gemmi 0.7.5)
+## Why path B calls `merge_chain_parts()`
+
+`copy_to_mmdb` does `CreateChain()` per `gemmi::Chain` and never merges, so a file where
+one author chain holds polymer + ligands + waters becomes several mmdb chains sharing an
+id — and `GetChain(id)` finds only the first. That hid 778 of 6,443 atoms (12%) in
+`pdb3nyd.ent`. `Structure::merge_chain_parts()` is gemmi's own remedy: with the default
+`min_sep=0` it concatenates residues **without renumbering**, and `copy_from_mmdb`
+already applies it in the reverse direction. Path B therefore calls it, and this is the
+behaviour Phase 2's read path is expected to adopt. `--no-merge-chains` reproduces the
+unfixed behaviour for comparison.
+
+## Known baseline (2026-08-10, gemmi 0.7.5, merge on)
 
 Per-atom data was identical across ~250,000 atoms: no differences in coordinates,
 occupancy, B, element, altLoc, segID, het flag, residue name, residue number or
-insertion code. The differences that *did* show up were all at the container level —
-chain splitting by subchain, atom-name padding of 3-character hydrogens read from
-mmCIF, `struct_conn` links, and cell handling on multi-model mmCIF.
+insertion code. `pdb3k0n.ent` and `pdb1aon.ent` compare **fully identical**. The
+differences that remain are all at the container level:
+
+- **atom-name padding** of 3-character hydrogens read from mmCIF (`"HH2 "` vs `" HH2"`) —
+  gemmi is the one following the PDB convention here;
+- **`struct_conn` links**, which mmdb does not read from mmCIF at all;
+- **cell** absent from a multi-model mmCIF where mmdb synthesises one (2RSF);
+- **chain ordering** on 1ffk (same ids, same contents, different order) — cosmetic.
 
 Full write-up: `~/sw/bandicoot-project/notes/v0.2-gemmi-notes/`.
 

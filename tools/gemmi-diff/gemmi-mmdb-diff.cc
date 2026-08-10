@@ -197,6 +197,15 @@ static void harvest(mmdb::Manager *mol, ModelSummary &s) {
          }
       }
    }
+   // A reader that returns an empty model has not succeeded in any useful
+   // sense, and treating it as success is actively misleading: gemmi's
+   // mmCIF reader accepts a small-molecule CIF and yields ZERO atoms without
+   // throwing, which would otherwise show up here as a clean pass.
+   if (s.n_real == 0) {
+      s.ok = false;
+      s.error = "read returned a model with 0 atoms";
+      return;
+   }
    s.ok = true;
 }
 
@@ -254,12 +263,25 @@ static ModelSummary load_path_a(const std::string &path) {
    return s;
 }
 
-static ModelSummary load_path_b(const std::string &path, bool setup_entities) {
+static ModelSummary load_path_b(const std::string &path, bool setup_entities,
+                                bool merge_chains) {
    ModelSummary s;
    mmdb::Manager *mol = nullptr;
    try {
       gemmi::Structure st = gemmi::read_structure_file(path);
       if (setup_entities) gemmi::setup_entities(st);
+
+      // copy_to_mmdb() does CreateChain() per gemmi::Chain and never merges, so
+      // a file where one author chain holds polymer + ligands + waters becomes
+      // several mmdb chains sharing an id -- and mmdb's GetChain(id) finds only
+      // the first, hiding the rest from every by-name lookup (12% of the atoms
+      // in 3nyd). Merging the parts first is gemmi's own remedy: with the
+      // default min_sep=0 it concatenates residues WITHOUT renumbering
+      // (model.hpp:1080), and copy_from_mmdb already applies it in the reverse
+      // direction (mmdb.hpp:460). Must run AFTER setup_entities, which is what
+      // creates the split in the first place.
+      if (merge_chains) st.merge_chain_parts();
+
       mol = new mmdb::Manager();
       gemmi::copy_to_mmdb(st, mol);
    } catch (const std::exception &e) {
@@ -473,27 +495,32 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
 
 int main(int argc, char **argv) {
    bool setup_entities = true;
+   bool merge_chains = true;
    std::vector<std::string> files;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
+      else if (a == "--no-merge-chains") merge_chains = false;
       else if (a == "--dump-chains") g_dump_chains = true;
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
    }
    if (files.empty()) {
-      fprintf(stderr, "usage: diff_harness [--no-setup-entities] <coord-file> ...\n");
+      fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
+                      "                      [--no-setup-entities] [--no-merge-chains]\n"
+                      "                      <coord-file> ...\n");
       return 2;
    }
 
    printf("read-side diff: mmdb reader (A) vs gemmi->copy_to_mmdb (B)\n");
-   printf("gemmi::setup_entities: %s\n\n", setup_entities ? "on" : "off");
+   printf("path B: setup_entities %s, merge_chain_parts %s\n\n",
+          setup_entities ? "on" : "off", merge_chains ? "on" : "off");
 
    int n_clean = 0, n_dirty = 0, n_failed = 0;
    for (const std::string &f : files) {
       printf("=== %s\n", f.c_str());
       ModelSummary A = load_path_a(f);
-      ModelSummary B = load_path_b(f, setup_entities);
+      ModelSummary B = load_path_b(f, setup_entities, merge_chains);
       if (!A.ok || !B.ok) {
          n_failed++;
          if (!A.ok) printf("    path A FAILED: %s\n", A.error.c_str());
