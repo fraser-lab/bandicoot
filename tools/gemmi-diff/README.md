@@ -46,6 +46,7 @@ PREFIX=$HOME/sw/bandicoot-install ./tools/gemmi-diff/build.sh
 | `--examples N` | show up to N example differences and distinct value-shapes per field (default 3) |
 | `--no-setup-entities` | skip `gemmi::setup_entities()` on path B |
 | `--no-merge-chains` | skip `Structure::merge_chain_parts()` on path B — reproduces the raw `copy_to_mmdb` behaviour, chain duplicates and all |
+| `--keep-hydrog-links` | keep `Hydrog` connections in path B's LINK table — reproduces the unfiltered `transfer_links_to_mmdb` behaviour |
 
 Exit status is 0 only if every file compared identical.
 
@@ -77,6 +78,21 @@ already applies it in the reverse direction. Path B therefore calls it, and this
 behaviour Phase 2's read path is expected to adopt. `--no-merge-chains` reproduces the
 unfixed behaviour for comparison.
 
+## Why path B drops `Hydrog` connections
+
+`gemmi::transfer_links_to_mmdb` copies every `struct_conn` row and ignores `con.type`,
+and Coot's `fill_links()` (`ideal/link-restraints.cc:39`) then pushes every mmdb LINK
+into the refinement's link vector with no filtering of its own. A phenix-refined file can
+carry hundreds of hydrogen bonds that way — 660 in `SC1_2_refine_036.cif` — and an H-bond
+at ~2.9 Å must not become a link restraint pulling toward ~1.4 Å. Bandicoot's RSR
+deliberately does not restrain H-bonds: helix and sheet networks are already covered by
+the secondary-structure restraints, and a user who wants a particular one can add it with
+**Make Link**.
+
+Nothing is lost by this. Phase 3's verbatim passthrough preserves the whole `struct_conn`
+category on write, `hydrog` rows included; the filter applies only to the LINK table that
+feeds refinement. `disulf`, `covale` and `metalc` are transferred.
+
 ## Known baseline (2026-08-10, gemmi 0.7.5, merge on)
 
 Per-atom data was identical across ~250,000 atoms: no differences in coordinates,
@@ -86,7 +102,9 @@ differences that remain are all at the container level:
 
 - **atom-name padding** of 3-character hydrogens read from mmCIF (`"HH2 "` vs `" HH2"`) —
   gemmi is the one following the PDB convention here;
-- **`struct_conn` links**, which mmdb does not read from mmCIF at all;
+- **covalent `struct_conn` links**, which mmdb does not read from mmCIF at all — so a
+  remaining link-count difference is now a deliberate *gain*, not a defect (`5E1N.cif`:
+  45 `covale` + 85 `metalc` where mmdb reads none);
 - **cell** absent from a multi-model mmCIF where mmdb synthesises one (2RSF);
 - **chain ordering** on 1ffk (same ids, same contents, different order) — cosmetic.
 

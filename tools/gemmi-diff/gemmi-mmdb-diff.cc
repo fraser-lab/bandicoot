@@ -95,6 +95,7 @@ struct ModelSummary {
    // first, so this falls below n_real and the shortfall is the number of
    // atoms invisible to any by-name chain lookup.
    long n_reachable_by_id = 0;
+   size_t n_hydrog_dropped = 0;   // Hydrog connections kept out of the LINK table
 };
 
 // Key deliberately uses the TRIMMED atom name and altloc: mmdb and gemmi are
@@ -264,7 +265,7 @@ static ModelSummary load_path_a(const std::string &path) {
 }
 
 static ModelSummary load_path_b(const std::string &path, bool setup_entities,
-                                bool merge_chains) {
+                                bool merge_chains, bool drop_hydrog_links) {
    ModelSummary s;
    mmdb::Manager *mol = nullptr;
    try {
@@ -281,6 +282,30 @@ static ModelSummary load_path_b(const std::string &path, bool setup_entities,
       // direction (mmdb.hpp:460). Must run AFTER setup_entities, which is what
       // creates the split in the first place.
       if (merge_chains) st.merge_chain_parts();
+
+      // struct_conn policy (Art, 2026-08-10): transfer real covalent
+      // connectivity into mmdb's LINK table, but NOT hydrogen bonds.
+      // gemmi's transfer_links_to_mmdb (mmdb.hpp:71) copies every connection
+      // and ignores con.type, and Coot's fill_links()
+      // (ideal/link-restraints.cc:39) then hands every LINK to the refinement
+      // with no filtering of its own. A phenix-refined file can carry hundreds
+      // of Hydrog connections (660 in SC1_2_refine_036.cif), and an H-bond at
+      // ~2.9 A must not become a link restraint pulling toward ~1.4 A.
+      // Bandicoot's RSR deliberately does not restrain H-bonds: helix/sheet
+      // networks are covered by secondary-structure restraints, and a user who
+      // wants a specific one can add it with "Make Link".
+      // Fidelity is not lost by this: Phase 3's verbatim passthrough preserves
+      // the whole struct_conn category, Hydrog rows included, on write.
+      if (drop_hydrog_links) {
+         size_t before = st.connections.size();
+         std::vector<gemmi::Connection> keep;
+         keep.reserve(before);
+         for (const gemmi::Connection &con : st.connections)
+            if (con.type != gemmi::Connection::Hydrog)
+               keep.push_back(con);
+         s.n_hydrog_dropped = before - keep.size();
+         st.connections = std::move(keep);
+      }
 
       mol = new mmdb::Manager();
       gemmi::copy_to_mmdb(st, mol);
@@ -481,6 +506,9 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
    for (const auto &kv : B.atoms)
       if (!A.atoms.count(kv.first)) only_b.push_back(kv.first);
 
+   if (B.n_hydrog_dropped)
+      printf("    dropped %zu Hydrog connection(s) from B's LINK table (preserved on write)\n",
+             B.n_hydrog_dropped);
    printf("    matched   %ld atoms\n", matched);
    if (!only_a.empty()) { clean = false; print_sample_keys("only in A", only_a); }
    if (!only_b.empty()) { clean = false; print_sample_keys("only in B", only_b); }
@@ -496,11 +524,13 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
 int main(int argc, char **argv) {
    bool setup_entities = true;
    bool merge_chains = true;
+   bool drop_hydrog_links = true;
    std::vector<std::string> files;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
       else if (a == "--no-merge-chains") merge_chains = false;
+      else if (a == "--keep-hydrog-links") drop_hydrog_links = false;
       else if (a == "--dump-chains") g_dump_chains = true;
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
@@ -508,19 +538,21 @@ int main(int argc, char **argv) {
    if (files.empty()) {
       fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
                       "                      [--no-setup-entities] [--no-merge-chains]\n"
+                      "                      [--keep-hydrog-links]\n"
                       "                      <coord-file> ...\n");
       return 2;
    }
 
    printf("read-side diff: mmdb reader (A) vs gemmi->copy_to_mmdb (B)\n");
-   printf("path B: setup_entities %s, merge_chain_parts %s\n\n",
-          setup_entities ? "on" : "off", merge_chains ? "on" : "off");
+   printf("path B: setup_entities %s, merge_chain_parts %s, drop Hydrog links %s\n\n",
+          setup_entities ? "on" : "off", merge_chains ? "on" : "off",
+          drop_hydrog_links ? "on" : "off");
 
    int n_clean = 0, n_dirty = 0, n_failed = 0;
    for (const std::string &f : files) {
       printf("=== %s\n", f.c_str());
       ModelSummary A = load_path_a(f);
-      ModelSummary B = load_path_b(f, setup_entities, merge_chains);
+      ModelSummary B = load_path_b(f, setup_entities, merge_chains, drop_hydrog_links);
       if (!A.ok || !B.ok) {
          n_failed++;
          if (!A.ok) printf("    path A FAILED: %s\n", A.error.c_str());
