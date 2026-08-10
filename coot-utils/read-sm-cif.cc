@@ -402,24 +402,40 @@ coot::smcif::read_sm_cif(const std::string &file_name) const {
          std::cout << "INFO:: got cell from cif: " << cell.format() << std::endl;
 
          std::vector<std::string> symm_strings;
-         const char *loopTag1[2] = { "_symmetry_equiv_pos_as_xyz",
-                                     ""};
 
-         mmdb::mmcif::PLoop loop = data->FindLoop(loopTag1);
+         // BANDICOOT v0.2: accept BOTH spellings of the symmetry-operator loop.
+         // "_symmetry_equiv_pos_as_xyz" is the CIF 1.0 name; the CIF core
+         // dictionary superseded it with "_space_group_symop_operation_xyz",
+         // which is what SHELXL, Olex2 and COD have emitted for years. Knowing
+         // only the deprecated name meant Bandicoot could not open ANY modern
+         // small-molecule CIF -- and because the atom reading below sits INSIDE
+         // this branch, such a file failed to load entirely (the cell was parsed
+         // and then thrown away) rather than merely losing its symmetry.
+         const char *sym_tag_candidates[2] = { "_symmetry_equiv_pos_as_xyz",
+                                               "_space_group_symop_operation_xyz" };
+         const char *sym_tag = NULL;
+         mmdb::mmcif::PLoop loop = NULL;
+         for (int i_tag=0; i_tag<2 && !loop; i_tag++) {
+            const char *loopTag1[2] = { sym_tag_candidates[i_tag], "" };
+            loop = data->FindLoop(loopTag1);
+            if (loop)
+               sym_tag = sym_tag_candidates[i_tag];
+         }
+
          if (loop) {
             int ll = loop->GetLoopLength();
-            if (ll > 0) { 
+            if (ll > 0) {
                for (int il=0; il<ll; il++) {
 
-                  S = loop->GetString(loopTag1[0], il, ierr);
+                  S = loop->GetString(sym_tag, il, ierr);
                   if (! ierr) {
                      // std::cout << "symmetry: " << S << std::endl;
                      symm_strings.push_back(S);
                   } else {
-                     std::cout << "error symmetry-equiv-pos-as-xyz string.\n";
-                  } 
+                     std::cout << "error reading " << sym_tag << " string.\n";
+                  }
                }
-            } 
+            }
             if (symm_strings.size()) {
                try { 
                   std::pair<bool, clipper::Spacegroup> spg_pair = get_space_group(symm_strings);
@@ -460,7 +476,8 @@ coot::smcif::read_sm_cif(const std::string &file_name) const {
                std::cout << "ERROR:: no symm strings" << std::endl;
             } 
          } else {
-            std::cout << "No symmetry loop" << std::endl;
+            std::cout << "No symmetry loop (looked for _symmetry_equiv_pos_as_xyz "
+                      << "and _space_group_symop_operation_xyz)" << std::endl;
          }
          
       }
