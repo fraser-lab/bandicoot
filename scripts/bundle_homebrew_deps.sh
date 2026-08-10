@@ -85,10 +85,47 @@ for dp, _, fs in os.walk(os.path.join(prefix, 'lib')):
     files += [os.path.join(dp, fn) for fn in fs
               if fn.endswith('.dylib') or fn.endswith('.so')]
 
+def rpath_dep_basenames(f):
+    """Dependencies recorded as @rpath/<name>, or as a bare <name>.
+
+    These are INVISIBLE to the /opt/homebrew scan above, and that matters:
+    build.sh puts -L$PREFIX/lib ahead of -L$BREW_PREFIX/lib, so once a Homebrew
+    library has been bundled once, the next build links against the BUNDLED
+    copy -- whose install_name this script already rewrote to @rpath/<name>.
+    The Homebrew origin then disappears from the recorded dependency, the
+    closure misses it, and the install step (which replaces lib/) drops it. The
+    first build succeeds and every later one ships a broken tree, which is
+    exactly what the check_install gate caught for libgemmi_cpp.
+    """
+    try:
+        out = subprocess.check_output(['otool', '-L', f],
+                                      stderr=subprocess.DEVNULL).decode()
+    except Exception:
+        return []
+    res = []
+    for ln in out.splitlines()[1:]:
+        p = ln.strip().split(' ')[0]
+        if p.startswith('@rpath/'):
+            res.append(os.path.basename(p))
+        elif '/' not in p:
+            res.append(p)
+    return res
+
 seen = set()
 queue = []
 for f in files:
     queue += deps(f)
+
+# Seed the closure with any @rpath/bare dependency we do NOT already ship but
+# Homebrew does provide. Anything already present under lib/ (all the coot
+# libraries, and whatever bundle_conda_deps.sh placed) is correctly skipped.
+for f in files:
+    for base in rpath_dep_basenames(f):
+        if os.path.exists(os.path.join(prefix, 'lib', base)):
+            continue
+        cand = os.path.join(brew, 'lib', base)
+        if os.path.exists(cand):
+            queue.append(cand)
 while queue:
     lib = queue.pop()
     if lib in seen:
