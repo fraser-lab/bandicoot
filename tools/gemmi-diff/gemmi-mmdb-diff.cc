@@ -120,7 +120,10 @@ static void harvest(mmdb::Manager *mol, ModelSummary &s) {
 
    mmdb::realtype cell_a, cell_b, cell_c, al, be, ga, vol;
    int ncode = 0;
-   if (mol->GetCell(cell_a, cell_b, cell_c, al, be, ga, vol, ncode) == 0) {
+   // NOTE the return convention: mmdb's GetCell returns 1 when a cell IS set and
+   // 0 when it is not -- the opposite of the usual 0-is-success. Getting this
+   // backwards reports every cell-less file as having a cell and vice versa.
+   if (mol->GetCell(cell_a, cell_b, cell_c, al, be, ga, vol, ncode) != 0) {
       s.have_cell = true;
       s.a = cell_a; s.b = cell_b; s.c = cell_c;
       s.alpha = al; s.beta = be; s.gamma = ga;
