@@ -1449,6 +1449,14 @@ namespace coot {
       // remove 1555 links between atoms that are more than dist_min
       void remove_long_links(mmdb::Manager *mol, mmdb::realtype dist_min);
 
+      // Bandicoot v0.2: rewrite all-blank insCode/altLoc fields in the LINK and
+      // LINKR records to "". mmdb's own mmCIF writer emits a quoted single space
+      // for a null single-character field and its reader hands that back
+      // literally, while the residues and atoms it builds carry "" -- so every
+      // consumer that compares those fields with an exact std::string == fails.
+      // Call after any mmdb coordinate read. See the comment at the definition.
+      void normalise_link_blank_fields(mmdb::Manager *mol);
+
       // LINKs now have distances - let's make sure that they are correct
       //
       void correct_link_distances(mmdb::Manager *mol);

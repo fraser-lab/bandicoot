@@ -5,6 +5,7 @@
 #include "atom-selection-container.hh"
 #include "read-sm-cif.hh"
 #include "gemmi-coords.hh"   // Bandicoot v0.2: the gemmi mmCIF read path
+#include "coot-coord-utils.hh"   // Bandicoot v0.2: normalise_link_blank_fields()
 #include "coot-shelx.hh"
 #include "geometry/residue-and-atom-specs.hh"
 #include "lidia-core/lig-build.hh"
@@ -275,6 +276,16 @@ get_atom_selection(std::string pdb_name,
              // debug_atom_names(MMDBManager);
 
              atom_name_fix_ups(MMDBManager);
+
+             // Bandicoot v0.2: mmdb's mmCIF writer emits a quoted single space
+             // for a null insCode/altLoc and its reader returns that space
+             // literally, so a link read back from an mmdb-written mmCIF matches
+             // nothing in the model it describes -- no link bonds drawn, no
+             // metal-coordination restraints generated. Undo re-reads a backup,
+             // which is exactly that round trip. Not needed on the gemmi path:
+             // normalise_link_atom_names() there already takes each field from
+             // the found atom's own spelling, and gemmi normalises icode itself.
+             coot::util::normalise_link_blank_fields(MMDBManager);
 
              MMDBManager->PDBCleanup(mmdb::PDBCLEAN_ELEMENT);
 

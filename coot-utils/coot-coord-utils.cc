@@ -7438,9 +7438,72 @@ coot::util::remove_long_links(mmdb::Manager *mol, mmdb::realtype dist_max) {
    }
 }
 
+// Bandicoot v0.2: normalise all-blank insCode / altLoc fields in the LINK and
+// LINKR records to "".
+//
+// mmdb's mmCIF WRITER emits a quoted single space for a null single-character
+// field -- pdbx_ptnr1_PDB_ins_code and pdbx_ptnr1_auth_alt_id come out as " "
+// rather than mmCIF's "?" or "." -- and its mmCIF READER hands that back
+// literally as a one-character string. But the residues and atoms mmdb builds
+// carry "" for the same fields, so a link that is perfectly valid never matches
+// the model it refers to. Every consumer comparing with an exact
+// std::string == silently fails:
+//
+//   - Bond_lines_container::add_link_bond_templ (coords/Bond_lines.cc) compares
+//     insCode and altLoc directly, so NO link bond is drawn;
+//   - restraints_container_t::make_header_metal_links_ng (ideal/ng.cc) builds an
+//     atom_spec_t straight from link.insCode1/link.aloc1, so metal-coordination
+//     restraints never resolve and a sphere refine relaxes to the unrestrained
+//     ~3 A instead of the correct ~2.4 A.
+//
+// Measured on 5E1N: 0 of 130 links resolved through an mmdb mmCIF round trip;
+// 130 of 130 after this normalisation, matching the PDB path exactly. A PDB file
+// is immune because its fixed-column reader already normalises blanks to "".
+//
+// Only fields consisting ENTIRELY of spaces are rewritten, so a genuine
+// insertion code or altLoc is never touched. Atom names are deliberately left
+// alone: those are legitimately space-padded (" C  ") and both sides agree.
+void
+coot::util::normalise_link_blank_fields(mmdb::Manager *mol) {
+
+   if (! mol) return;
+
+   auto blank_to_empty = [] (char *field) {
+                            if (! field) return;
+                            for (char *p = field; *p; p++)
+                               if (*p != ' ') return;   // has real content
+                            field[0] = '\0';
+                         };
+
+   for (int imod = 1; imod <= mol->GetNumberOfModels(); imod++) {
+      mmdb::Model *model_p = mol->GetModel(imod);
+      if (! model_p) continue;
+
+      int n_links = model_p->GetNumberOfLinks();
+      for (int ilink = 1; ilink <= n_links; ilink++) {
+         mmdb::Link *link = model_p->GetLink(ilink);
+         if (! link) continue;
+         blank_to_empty(link->insCode1);
+         blank_to_empty(link->insCode2);
+         blank_to_empty(link->aloc1);
+         blank_to_empty(link->aloc2);
+      }
+
+      int n_linkrs = model_p->GetNumberOfLinkRs();
+      for (int ilink = 1; ilink <= n_linkrs; ilink++) {
+         mmdb::LinkR *linkr = model_p->GetLinkR(ilink);
+         if (! linkr) continue;
+         blank_to_empty(linkr->insCode1);
+         blank_to_empty(linkr->insCode2);
+         blank_to_empty(linkr->aloc1);
+         blank_to_empty(linkr->aloc2);
+      }
+   }
+}
+
 // return the number of changed links
 unsigned int
-coot::util::change_chain_in_links(mmdb::Model *model_p, 
+coot::util::change_chain_in_links(mmdb::Model *model_p,
                                   const std::string &from_chain_id,
                                   const std::string &to_chain_id) {
    unsigned int n_changed = 0;

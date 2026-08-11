@@ -30,6 +30,7 @@
 
 #include "coot-utils/atom-selection-container.hh"
 #include "coot-utils/gemmi-coords.hh"   // the production gemmi read path
+#include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
 
 #include <cmath>
 #include <cstdio>
@@ -98,6 +99,13 @@ struct ModelSummary {
    // atoms invisible to any by-name chain lookup.
    long n_reachable_by_id = 0;
    size_t n_hydrog_dropped = 0;   // Hydrog connections kept out of the LINK table
+   // LINK records whose BOTH partners resolve to a real atom using the matcher
+   // Coot's bond drawing actually uses. A link that sits in the table but
+   // resolves to nothing is silently inert: no bond drawn, no restraint made.
+   // Counting links is not enough -- two separate bugs (unpadded atom names from
+   // gemmi, blank-as-space insCode/altLoc from mmdb's CIF writer) both left the
+   // count at 130 and the resolved count at 0.
+   int n_links_resolved = 0;
 };
 
 // Key deliberately uses the TRIMMED atom name and altloc: mmdb and gemmi are
@@ -112,6 +120,35 @@ static std::string atom_key(const AtomRec &r, int occurrence) {
      << trim(r.name_raw) << "/" << trim(r.altloc_raw);
    if (occurrence) o << "#" << occurrence;
    return o.str();
+}
+
+// Replicates Bond_lines_container::add_link_bond_templ (coords/Bond_lines.cc)
+// EXACTLY, including its exact std::string == comparisons on insCode, atom name
+// and altLoc. That strictness is the point: mmdb's own Residue::GetAtom() pads
+// and trims internally and is tolerant, so checking with it reports links as
+// fine when Coot cannot use them. Verify with the CONSUMER's matcher.
+static bool link_partner_resolves(mmdb::Model *model_p, const char *chainID,
+                                  int seqNum, const char *insCode,
+                                  const char *atName, const char *aloc) {
+   for (int ich = 0; ich < model_p->GetNumberOfChains(); ich++) {
+      mmdb::Chain *chain_p = model_p->GetChain(ich);
+      if (!chain_p) continue;
+      if (std::string(chain_p->GetChainID()) != std::string(chainID)) continue;
+      for (int ir = 0; ir < chain_p->GetNumberOfResidues(); ir++) {
+         mmdb::Residue *res_p = chain_p->GetResidue(ir);
+         if (!res_p) continue;
+         if (res_p->GetSeqNum() != seqNum) continue;
+         if (std::string(res_p->GetInsCode()) != std::string(insCode)) continue;
+         for (int iat = 0; iat < res_p->GetNumberOfAtoms(); iat++) {
+            mmdb::Atom *at = res_p->GetAtom(iat);
+            if (!at || at->isTer()) continue;
+            if (std::string(at->name) != std::string(atName)) continue;
+            if (std::string(at->altLoc) != std::string(aloc)) continue;
+            return true;
+         }
+      }
+   }
+   return false;
 }
 
 static void harvest(mmdb::Manager *mol, ModelSummary &s) {
@@ -136,7 +173,17 @@ static void harvest(mmdb::Manager *mol, ModelSummary &s) {
    for (int imod = 1; imod <= s.n_models; imod++) {
       mmdb::Model *model = mol->GetModel(imod);
       if (!model) continue;           // mmdb permits gaps in model numbering
-      s.n_links += model->GetNumberOfLinks();
+      int n_links_here = model->GetNumberOfLinks();
+      s.n_links += n_links_here;
+      for (int ilink = 1; ilink <= n_links_here; ilink++) {
+         mmdb::Link *link = model->GetLink(ilink);
+         if (!link) continue;
+         if (link_partner_resolves(model, link->chainID1, link->seqNum1,
+                                   link->insCode1, link->atName1, link->aloc1) &&
+             link_partner_resolves(model, link->chainID2, link->seqNum2,
+                                   link->insCode2, link->atName2, link->aloc2))
+            s.n_links_resolved++;
+      }
 
       int nchains = model->GetNumberOfChains();
       for (int ich = 0; ich < nchains; ich++) {
@@ -278,6 +325,15 @@ static ModelSummary load_path_a(const std::string &path) {
       return s;
    }
    mol->PDBCleanup(mmdb::PDBCLEAN_ELEMENT);
+
+   // ...with ONE exception to "no fix-ups": normalise_link_blank_fields() IS
+   // reachable (unlike file-static atom_name_fix_ups) and IS part of the
+   // production mmdb path, and it is the difference between every LINK record
+   // resolving and none of them resolving on an mmdb-written mmCIF. Leaving it
+   // out would make the link post-condition below report an already-fixed bug as
+   // broken on every such file -- a false alarm is worse than no check.
+   coot::util::normalise_link_blank_fields(mol);
+
    if (g_dump_chains) dump_chains("A (raw mmdb reader)", mol);
    harvest(mol, s);
    delete mol;
@@ -372,10 +428,14 @@ static void print_sample_keys(const char *label,
 static bool compare(const ModelSummary &A, const ModelSummary &B) {
    bool clean = true;
 
-   printf("    counts    A: %ld atoms (+%ld TER), %d model(s), %zu chain(s), %d link(s)\n",
-          A.n_real, A.n_ter, A.n_models, A.chains.size(), A.n_links);
-   printf("              B: %ld atoms (+%ld TER), %d model(s), %zu chain(s), %d link(s)\n",
-          B.n_real, B.n_ter, B.n_models, B.chains.size(), B.n_links);
+   printf("    counts    A: %ld atoms (+%ld TER), %d model(s), %zu chain(s), "
+          "%d link(s) (%d resolved)\n",
+          A.n_real, A.n_ter, A.n_models, A.chains.size(), A.n_links,
+          A.n_links_resolved);
+   printf("              B: %ld atoms (+%ld TER), %d model(s), %zu chain(s), "
+          "%d link(s) (%d resolved)\n",
+          B.n_real, B.n_ter, B.n_models, B.chains.size(), B.n_links,
+          B.n_links_resolved);
 
    if (A.n_reachable_by_id != A.n_real || B.n_reachable_by_id != B.n_real)
       printf("    reachable via GetChain(id)  A: %ld/%ld   B: %ld/%ld  <-- shortfall = "
@@ -385,6 +445,24 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
    if (A.n_real != B.n_real)   { clean = false; printf("    DIFF atom count\n"); }
    if (A.n_models != B.n_models) { clean = false; printf("    DIFF model count\n"); }
    if (A.n_links != B.n_links) { clean = false; printf("    DIFF link count\n"); }
+
+   // POST-CONDITION, not a diff. A link whose partners do not resolve is inert:
+   // no bond is drawn and no restraint is generated, however healthy the count
+   // looks and however well the two paths agree with each other. Both of the link
+   // bugs this project has hit were invisible to a count comparison -- gemmi's
+   // unpadded LINK atom names (0 of 130 on 5E1N.cif) and mmdb's CIF writer
+   // emitting a blank insCode/altLoc as " " (0 of 130 through a backup round
+   // trip). Fail on either path independently.
+   if (A.n_links > 0 && A.n_links_resolved != A.n_links) {
+      clean = false;
+      printf("    UNRESOLVED LINKS in A: only %d of %d resolve to atoms\n",
+             A.n_links_resolved, A.n_links);
+   }
+   if (B.n_links > 0 && B.n_links_resolved != B.n_links) {
+      clean = false;
+      printf("    UNRESOLVED LINKS in B: only %d of %d resolve to atoms\n",
+             B.n_links_resolved, B.n_links);
+   }
 
    // Chain comparison, split into the three questions that have different
    // consequences: is the SET of ids the same (a missing chain is fatal), does
