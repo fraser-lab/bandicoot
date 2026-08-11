@@ -82,3 +82,17 @@ src/bandicoot-build-id.h
 __pycache__/
 *.pyc
 *.pyo
+
+# Dependency trees built by scripts/build_canvas_deps.sh (not source)
+/deps/
+
+# Maintainer dev-build marker: enables the -uN version suffix (never shipped)
+.bandicoot-dev
+
+# Autoconf dependency-style probe scratch. configure creates and removes these
+# itself, so they only survive an interrupted configure (Ctrl-C mid-build).
+confmf
+/sub/
+
+# Per-machine build overrides sourced by scripts/build.sh (never shipped)
+.bandicoot-local

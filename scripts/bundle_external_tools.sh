@@ -27,10 +27,41 @@ PREFIX="$(cd "$PREFIX" && pwd)"
 
 [ -d "$PREFIX/bin" ] || { echo "error: $PREFIX/bin missing" >&2; exit 1; }
 
-CCP4_BIN_DEFAULT="/programs/i386-mac/ccp4/9.0.014_arm/ccp4-9/bin"
-PROBE_SRC="${2:-${PROBE_SRC:-${CCP4_BIN_DEFAULT}/probe}}"
-REDUCE_SRC="${REDUCE_SRC:-${CCP4_BIN_DEFAULT}/reduce}"
-REDUCE_HET_SRC="${REDUCE_HET_SRC:-/programs/i386-mac/ccp4/9.0.014_arm/ccp4-9/Frameworks/Python.framework/Versions/3.9/lib/python3.9/site-packages/reduce/reduce_wwPDB_het_dict.txt}"
+# v0.1.4.13: locate CCP4 rather than hard-coding one machine's install path.
+# The previous default was literally
+# /programs/i386-mac/ccp4/9.0.014_arm/ccp4-9 -- an SBGrid layout on the
+# maintainer's Mac -- so every other builder silently got the "source not at
+# ..." warning and an install with no probe/reduce. Probe $CCP4 first (set by
+# CCP4's own setup script), then the common install roots; all three paths stay
+# overridable. Missing tools remain a WARNING, not an error: Local Probe Dots
+# degrades to a PATH lookup, everything else works.
+if [ -z "${CCP4_ROOT:-}" ]; then
+    for _c in "${CCP4:-}" \
+              /opt/ccp4/ccp4-9 /usr/local/ccp4/ccp4-9 \
+              /Applications/ccp4-9 \
+              /programs/i386-mac/ccp4/*/ccp4-9 \
+              /programs/*/ccp4/*/ccp4-9; do
+        [ -n "${_c}" ] || continue
+        if [ -x "${_c}/bin/probe" ] || [ -x "${_c}/bin/reduce" ]; then
+            CCP4_ROOT="${_c}"; break
+        fi
+    done
+fi
+if [ -n "${CCP4_ROOT:-}" ]; then
+    echo "    CCP4 root: ${CCP4_ROOT}"
+else
+    echo "    CCP4 root: not found (set CCP4_ROOT, PROBE_SRC, REDUCE_SRC to override)"
+fi
+
+PROBE_SRC="${2:-${PROBE_SRC:-${CCP4_ROOT:-/nonexistent}/bin/probe}}"
+REDUCE_SRC="${REDUCE_SRC:-${CCP4_ROOT:-/nonexistent}/bin/reduce}"
+if [ -z "${REDUCE_HET_SRC:-}" ] && [ -n "${CCP4_ROOT:-}" ]; then
+    # The dictionary sits under CCP4's bundled Python, whose version moves
+    # between CCP4 releases -- glob for it instead of pinning 3.9.
+    REDUCE_HET_SRC="$(find "${CCP4_ROOT}" -name reduce_wwPDB_het_dict.txt \
+                          -type f -print -quit 2>/dev/null || true)"
+fi
+REDUCE_HET_SRC="${REDUCE_HET_SRC:-/nonexistent}"
 
 echo "==> bundling external tools into $PREFIX/bin/"
 

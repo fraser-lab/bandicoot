@@ -5,6 +5,13 @@
 #   FFTW_PREFIX   FFTW2 install        (default: auto-detected; see below)
 #   CONDA_PREFIX  miniconda root       (default: /opt/miniconda3)
 #   BREW_PREFIX   homebrew root        (default: /opt/homebrew or `brew --prefix`)
+#   CANVAS_PREFIX libart/libgnomecanvas/goocanvas tree, as produced by
+#                 ./scripts/build_canvas_deps.sh   (default: <repo>/deps/canvas)
+#   COOT_DATA_SRC monomer dictionary + reference structures
+#                 (default: <repo>/data/coot-data, checked in)
+#   PROBE_SRC / REDUCE_SRC / REDUCE_HET_SRC
+#                 MolProbity binaries + dictionary; auto-probed from a CCP4
+#                 install, and merely warned about if absent
 #   JOBS          parallel make jobs   (default: number of CPUs)
 #   BUILD_SKIP_CHECKS=1  skip the closing dependency-closure gate (see the end
 #                 of this script). Default is to FAIL the build on an unresolved
@@ -13,6 +20,21 @@ set -e
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
+
+# Per-machine overrides: <repo>/.bandicoot-local, gitignored, sourced before any
+# default is applied. This is how a developer whose dependency trees predate (or
+# differ from) the in-repo defaults avoids retyping variables on every build --
+# the same reasoning as the .bandicoot-dev marker: a setting you must remember to
+# pass is a setting you will eventually forget. Never shipped, never committed,
+# so it cannot affect anyone building from a clean checkout.
+#
+# Use the ":=" form so a variable given on the command line still wins:
+#     : "${CANVAS_PREFIX:=$HOME/sw/canvas-deps}"
+if [ -f "${REPO_ROOT}/.bandicoot-local" ]; then
+    echo "==> sourcing local overrides: .bandicoot-local"
+    # shellcheck source=/dev/null
+    . "${REPO_ROOT}/.bandicoot-local"
+fi
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
 # Prefix baked into the binaries as compile-time fallback data paths
@@ -23,18 +45,33 @@ PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
 # location), so this compiled value is only an unused fallback.
 BANDICOOT_COMPILE_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
 CONDA_PREFIX="${CONDA_PREFIX:-/opt/miniconda3}"
+BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
+JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
+
+# v0.1.4.13: NO dependency location may default to anything under $HOME.
+#
+# Until now three prefixes defaulted into the maintainer's home directory
+# ($HOME/sw/canvas-deps, $HOME/sw/coot-builds/coot-deps, $HOME/sw/coot-deps).
+# Those trees were hand-built and exist on exactly one machine, so this script
+# could not work for anyone else -- the substance of GitHub #4 ("hard
+# dependencies on brew and its location"). Every external location is now an
+# explicit variable that either resolves to something installed by a package
+# manager, to a tree produced by a script in THIS repo, or to data checked into
+# THIS repo. Anything unresolved fails below with the variable name and the
+# command that produces it, rather than silently building a broken install.
+
+# Canvas stack (libart / libgnomecanvas / goocanvas): not in Homebrew, built by
+# scripts/build_canvas_deps.sh into <repo>/deps/canvas by default.
+CANVAS_PREFIX="${CANVAS_PREFIX:-${REPO_ROOT}/deps/canvas}"
 
 # FFTW2 (single-precision, legacy) is the one dependency that isn't
-# pkg-config-discoverable, so we locate it by probing known install roots.
-# Override with FFTW_PREFIX=... if yours lives elsewhere. The old default
-# ($HOME/sw/coot-deps) never actually contained FFTW2, so a plain
-# ./scripts/build.sh used to fail configure with "single-precision FFTW 2
-# library not found" unless the caller happened to know the magic prefix.
+# pkg-config-discoverable, so we locate it by probing plausible install roots.
+# Override with FFTW_PREFIX=... if yours lives elsewhere.
 if [ -z "${FFTW_PREFIX:-}" ]; then
     for cand in \
+        "${REPO_ROOT}/deps/fftw2" \
         "${CONDA_PREFIX}/fftw2" \
-        "$HOME/sw/coot-builds/coot-deps" \
-        "$HOME/sw/coot-deps"; do
+        "${BREW_PREFIX}/opt/fftw2"; do
         if [ -f "${cand}/include/fftw.h" ] || [ -f "${cand}/include/sfftw.h" ]; then
             FFTW_PREFIX="${cand}"
             break
@@ -43,8 +80,48 @@ if [ -z "${FFTW_PREFIX:-}" ]; then
     FFTW_PREFIX="${FFTW_PREFIX:-${CONDA_PREFIX}/fftw2}"
     echo "==> FFTW_PREFIX auto-detected: ${FFTW_PREFIX}"
 fi
-BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
-JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
+
+# Runtime data (monomer dictionary + reference structures) is checked into the
+# repo as of v0.1.4.13 -- see data/coot-data/README.md. No external source.
+COOT_DATA_SRC="${COOT_DATA_SRC:-${REPO_ROOT}/data/coot-data}"
+
+# ---------------------------------------------------------------------------
+# Preflight: fail early, name the variable, name the fix.
+# ---------------------------------------------------------------------------
+_preflight_fail=0
+_preflight() {   # <test-path> <VARNAME> <current-value> <how-to-fix>
+    if [ ! -e "$1" ]; then
+        echo "!! build.sh: $2 does not resolve to a usable tree." >&2
+        echo "   $2=$3" >&2
+        echo "   missing: $1" >&2
+        echo "   fix: $4" >&2
+        echo "" >&2
+        _preflight_fail=1
+    fi
+}
+
+_preflight "${BREW_PREFIX}/lib/pkgconfig/gtk+-2.0.pc" BREW_PREFIX "${BREW_PREFIX}" \
+    "brew install gtk+ gtkglext freeglut gsl boost cairo libpng sqlite bzip2"
+_preflight "${CONDA_PREFIX}/bin/python3-config" CONDA_PREFIX "${CONDA_PREFIX}" \
+    "install Miniconda, then see BUILD.md section 1 for the conda package list"
+_preflight "${CANVAS_PREFIX}/lib/pkgconfig/goocanvas.pc" CANVAS_PREFIX "${CANVAS_PREFIX}" \
+    "./scripts/build_canvas_deps.sh    (builds libart/libgnomecanvas/goocanvas)"
+_preflight "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" COOT_DATA_SRC "${COOT_DATA_SRC}" \
+    "this data is checked in -- restore it with: git checkout -- data/coot-data"
+
+if [ ! -f "${FFTW_PREFIX}/include/fftw.h" ] && [ ! -f "${FFTW_PREFIX}/include/sfftw.h" ]; then
+    echo "!! build.sh: FFTW_PREFIX does not contain single-precision FFTW 2." >&2
+    echo "   FFTW_PREFIX=${FFTW_PREFIX}" >&2
+    echo "   missing: include/fftw.h (or include/sfftw.h)" >&2
+    echo "   fix: build FFTW 2.1.5 with --enable-float (see BUILD.md section 1)" >&2
+    echo "" >&2
+    _preflight_fail=1
+fi
+
+if [ "${_preflight_fail}" != "0" ]; then
+    echo "!! build.sh: unmet build dependencies (see above). Nothing was built." >&2
+    exit 1
+fi
 
 # Homebrew on macOS supplies version-specific pkg-config dirs to fill in
 # entries that the system SDK provides (e.g. bzip2.pc lives under
@@ -58,17 +135,48 @@ if [ ! -x ./configure ]; then
 fi
 
 # v0.1.0.3: per-build unreleased-version counter. Each call to build.sh
-# increments .build-counter and regenerates src/bandicoot-build-id.h so
-# the title bar carries an unambiguous "-u<N>" suffix during dev iteration.
+# increments .build-counter and regenerates src/bandicoot-build-id.h so the
+# title bar carries an unambiguous "-u<N>" suffix during dev iteration.
 # Counter resets when src/bandicoot-version.h's BANDICOOT_VERSION bumps.
-# Release builds suppress the suffix:  BANDICOOT_RELEASE=1 ./scripts/build.sh
+#
+# v0.1.4.13: THE SUFFIX IS NOW OFF BY DEFAULT. It is a maintainer-iteration
+# marker -- "-u7" is machine-local counter state that means nothing on anyone
+# else's machine -- so somebody building from source should get a clean
+# "0.1.4.13", not a number that looks like a build identity but isn't.
+#
+# It is enabled by the presence of a gitignored marker file, <repo>/.bandicoot-dev,
+# NOT by an environment variable. That is deliberate: an env var has to be
+# remembered on every invocation, and the one time it is forgotten the build
+# silently claims to be a clean release -- which is the exact confusion the
+# counter exists to prevent. A marker file is set once per clone and then
+# always right. It can never reach a source builder because it is gitignored,
+# and it cannot drift out of sync with a second copy of this script because
+# there is only one script.
+#
+#   enable  (once, per working copy):   touch .bandicoot-dev
+#   disable (once):                     rm .bandicoot-dev
+#   one-off override, either way:       BANDICOOT_DEV=1 ./scripts/build.sh
+#                                       BANDICOOT_DEV=0 ./scripts/build.sh
+#   release build (always suppresses):  BANDICOOT_RELEASE=1 ./scripts/build.sh
 BANDICOOT_VERSION_STR="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' \
                              src/bandicoot-version.h)"
 COUNTER_FILE=".build-counter"
-if [ -n "$BANDICOOT_RELEASE" ]; then
-    BUILD_SUFFIX=""
-    echo "==> release build (BANDICOOT_RELEASE=1): suppressing -uN suffix"
+DEV_MARKER="${REPO_ROOT}/.bandicoot-dev"
+
+if [ -n "${BANDICOOT_DEV:-}" ]; then
+    _dev_build="${BANDICOOT_DEV}"          # explicit override wins
+    _dev_why="BANDICOOT_DEV=${BANDICOOT_DEV}"
+elif [ -f "${DEV_MARKER}" ]; then
+    _dev_build=1
+    _dev_why=".bandicoot-dev present"
 else
+    _dev_build=0
+    _dev_why="no .bandicoot-dev marker"
+fi
+# A release build is never a dev build, whatever the marker says.
+[ -n "${BANDICOOT_RELEASE:-}" ] && _dev_build=0
+
+if [ "${_dev_build}" = "1" ]; then
     if [ -f "$COUNTER_FILE" ]; then
         stored_ver=$(awk '{print $1}' "$COUNTER_FILE")
         stored_n=$(awk '{print $2}'   "$COUNTER_FILE")
@@ -82,12 +190,24 @@ else
     fi
     echo "$BANDICOOT_VERSION_STR $n" > "$COUNTER_FILE"
     BUILD_SUFFIX="-u$n"
-    echo "==> build-counter: ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX}"
+    echo "==> dev build (${_dev_why}): ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX}"
+else
+    BUILD_SUFFIX=""
+    if [ -n "${BANDICOOT_RELEASE:-}" ]; then
+        echo "==> release build (BANDICOOT_RELEASE=1): version ${BANDICOOT_VERSION_STR}"
+    else
+        # Deliberately says nothing about .bandicoot-dev: the marker is a
+        # maintainer-only affordance and mentioning it here would just raise a
+        # question a source builder has no reason to care about.
+        echo "==> building version ${BANDICOOT_VERSION_STR}"
+    fi
 fi
 cat > src/bandicoot-build-id.h <<EOF
 // Generated by scripts/build.sh on each invocation. Do not edit; do not
-// commit. The "-u<N>" suffix tags unreleased dev builds so the title bar
-// distinguishes them from one another and from the released tarball.
+// commit. The "-u<N>" suffix tags maintainer iteration builds so the title bar
+// distinguishes them from one another and from the released tarball. It is
+// empty unless <repo>/.bandicoot-dev exists (or BANDICOOT_DEV=1 is set), so a
+// build from source reports a clean version number.
 #ifndef BANDICOOT_BUILD_ID_H
 #define BANDICOOT_BUILD_ID_H
 #define BANDICOOT_BUILD_SUFFIX "${BUILD_SUFFIX}"
@@ -115,28 +235,32 @@ export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14 ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\
-${HOME}/sw/canvas-deps/lib/pkgconfig:\
+${CANVAS_PREFIX}/lib/pkgconfig:\
 ${BREW_PREFIX}/lib/pkgconfig:\
 ${BREW_PREFIX}/share/pkgconfig:\
 ${BREW_PC_OSDIR}:\
 ${PREFIX}/lib/pkgconfig:\
 ${CONDA_PREFIX}/lib/pkgconfig"
 
-# v0.1.0.2: libgnomecanvas-2.0 is now built from source into
-# ${HOME}/sw/canvas-deps (PKG_CONFIG_PATH above picks it up). This
-# enables HAVE_GNOME_CANVAS at compile time, which unlocks Sequence
-# View (Draw menu), the 2D ligand editor, and the geometry graphs
-# (Ramachandran etc.). canvas-deps/lib/pkgconfig also ships shim
-# .pc files for bzip2 and x11/xcb/xext/xrender (those don't exist
-# under Homebrew on macOS but are referenced via cairo/freetype2's
-# private requires; Bandicoot doesn't actually link against any of
-# them at runtime).
+# v0.1.0.2: libgnomecanvas-2.0 is built from source into ${CANVAS_PREFIX}
+# (PKG_CONFIG_PATH above picks it up). This enables HAVE_GNOME_CANVAS at
+# compile time, which unlocks Sequence View (Draw menu), the 2D ligand editor,
+# and the geometry graphs (Ramachandran etc.). ${CANVAS_PREFIX}/lib/pkgconfig
+# also ships shim .pc files for bzip2 and x11/xcb/xext/xrender (those don't
+# exist under Homebrew on macOS but are referenced via cairo/freetype2's
+# private requires; Bandicoot doesn't actually link against any of them at
+# runtime).
+#
+# v0.1.4.13: that tree is produced by ./scripts/build_canvas_deps.sh rather than
+# by hand, and defaults to <repo>/deps/canvas. The preflight above fails the
+# build if it is absent, naming the script -- previously a missing canvas tree
+# just silently dropped Sequence View and the ligand editor from the build.
 
 echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time fallback; files install to ${PREFIX})"
 ./configure \
     --prefix="${BANDICOOT_COMPILE_PREFIX}" \
     --with-fftw-prefix="${FFTW_PREFIX}" \
-    --with-goocanvas-prefix="${HOME}/sw/canvas-deps" \
+    --with-goocanvas-prefix="${CANVAS_PREFIX}" \
     --with-glut-prefix="${BREW_PREFIX}" \
     --with-boost="${BREW_PREFIX}" \
     --with-python="${CONDA_PREFIX}" \
@@ -315,52 +439,60 @@ if [ -f "${REPO_ROOT}/scripts/bandicoot.inspect" ]; then
     echo "==> installed ${PREFIX}/bin/bandicoot.inspect"
 fi
 
-# Asset directories: the monomer dictionary (share/coot/lib/data/monomers),
-# reference structures, and the GTK theme. These do NOT live under FFTW_PREFIX
-# in general -- FFTW auto-detect can land on a conda fftw2 that carries no
-# share/coot data at all -- so DON'T source them from FFTW_PREFIX. Probe a list
-# of candidate Coot-0.9 data trees for the monomer library and copy assets from
-# the first that actually has it.
+# Asset directories: the monomer dictionary (share/coot/lib/data/monomers) and
+# the reference structures (share/coot/reference-structures).
 #
-# History: sourcing these from FFTW_PREFIX silently shipped a monomer-less
-# install whenever FFTW auto-detected to /opt/miniconda3/fftw2 (no monomers
-# there; the data lives in ~/sw/coot-builds/coot-deps). Dirty-prefix builds hid
-# it by carrying the data forward; clean-prefix builds exposed it -> refinement
-# died with "No dictionary group found for residue type" for every residue.
-# Now: probe properly, and HARD-FAIL below if the monomers are still missing.
-COOT_DATA_SRC=""
-for _cand in "${COOT_DATA_SRC_OVERRIDE:-}" \
-             "${HOME}/sw/coot-builds/coot-deps" \
-             "${FFTW_PREFIX}" \
-             "${HOME}/sw/coot-deps" \
-             /opt/miniconda3/fftw2 \
-             /opt/miniconda3; do
-    [ -n "${_cand}" ] || continue
-    if [ -d "${_cand}/share/coot/lib/data/monomers" ]; then
-        COOT_DATA_SRC="${_cand}"; break
-    fi
-done
-[ -n "${COOT_DATA_SRC}" ] && echo "==> Coot data source: ${COOT_DATA_SRC}/share/coot"
+# v0.1.4.13: BOTH now come from data/coot-data/ INSIDE THIS REPO -- see that
+# directory's README.md for provenance and the exact monomer list. Previously
+# they were probed for across a list of candidate trees whose only real entry
+# was ~/sw/coot-builds/coot-deps, a hand-assembled tree on one machine; every
+# other candidate in the list (FFTW_PREFIX, /opt/miniconda3) carries no
+# share/coot data at all, so on any other machine the probe found nothing and
+# the build died at the hard gate below. Checking the data in removes the probe,
+# the failure mode, and the machine dependency together.
+echo "==> Coot data source: ${COOT_DATA_SRC} (checked into the repo)"
 
-for d in lib/data/monomers reference-structures; do
-    [ -d "${PREFIX}/share/coot/${d}" ] && continue        # already present
-    if [ -n "${COOT_DATA_SRC}" ] && [ -d "${COOT_DATA_SRC}/share/coot/${d}" ]; then
-        echo "==> copying ${d} from ${COOT_DATA_SRC}/share/coot/"
-        mkdir -p "${PREFIX}/share/coot/${d%/*}"
-        cp -R "${COOT_DATA_SRC}/share/coot/${d}" "${PREFIX}/share/coot/${d}"
+# NOTE ON THE COPY (bug fixed in v0.1.4.13): the old loop did
+#     mkdir -p "${PREFIX}/share/coot/${d%/*}"
+#     cp -R "${COOT_DATA_SRC}/share/coot/${d}" "${PREFIX}/share/coot/${d}"
+# For d=lib/data/monomers, ${d%/*} strips to lib/data and this is correct. For
+# d=reference-structures there is NO slash, so ${d%/*} leaves the string
+# unchanged, mkdir created the DESTINATION, and `cp -R src dst` then copied
+# INTO it -- every install since has shipped
+# share/coot/reference-structures/reference-structures/*.pdb, one level too
+# deep, where nothing looks for it. Copying the directory CONTENTS (src/.) into
+# an explicitly pre-created destination is correct for both cases.
+_copy_tree() {   # <src-dir> <dst-dir> <label>
+    local src="$1" dst="$2" label="$3"
+    if [ ! -d "${src}" ]; then
+        echo "!! build.sh ERROR: ${label} source missing: ${src}" >&2
+        exit 1
     fi
-done
+    # Re-copy even if present: a stale or half-populated destination from an
+    # earlier build is exactly how the nested-directory bug survived unnoticed.
+    rm -rf "${dst}"
+    mkdir -p "${dst}"
+    cp -R "${src}/." "${dst}/"
+    echo "==> installed ${label} -> ${dst}"
+}
 
-# GTK theme (Raleigh) -- same data source, with FFTW_PREFIX as a legacy fallback.
-for _themesrc in "${COOT_DATA_SRC}" "${FFTW_PREFIX}"; do
-    [ -n "${_themesrc}" ] || continue
-    if [ ! -d "${PREFIX}/share/themes/Raleigh" ] && \
-       [ -d "${_themesrc}/share/themes/Raleigh" ]; then
-        echo "==> copying Raleigh GTK theme from ${_themesrc}/share/themes/"
+_copy_tree "${COOT_DATA_SRC}/monomers" \
+           "${PREFIX}/share/coot/lib/data/monomers" "monomer dictionary"
+_copy_tree "${COOT_DATA_SRC}/reference-structures" \
+           "${PREFIX}/share/coot/reference-structures" "reference structures"
+
+# GTK theme (Raleigh) ships with Homebrew's gtk+2 itself
+# ($BREW_PREFIX/share/themes/Raleigh) -- no hand-staged tree needed.
+if [ ! -d "${PREFIX}/share/themes/Raleigh" ]; then
+    if [ -d "${BREW_PREFIX}/share/themes/Raleigh" ]; then
+        echo "==> copying Raleigh GTK theme from ${BREW_PREFIX}/share/themes/"
         mkdir -p "${PREFIX}/share/themes"
-        cp -R "${_themesrc}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
+        cp -R "${BREW_PREFIX}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
+    else
+        echo "    !! warning: Raleigh theme not found under ${BREW_PREFIX}/share/themes;" >&2
+        echo "       widgets will fall back to the GTK default theme." >&2
     fi
-done
+fi
 
 # Hard gate: refinement is dead without the monomer dictionaries -- fail the
 # build rather than ship an install that can't refine.

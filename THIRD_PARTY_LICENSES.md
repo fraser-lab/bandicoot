@@ -148,6 +148,21 @@ file (`*.dist-info/LICENSE*`), that file is authoritative.
 
 ---
 
+## 4a. Bundled crystallographic data
+
+Checked into the repository under `data/coot-data/` (see its `README.md` for
+provenance and the exact monomer list) and installed to `share/coot/`. These files
+have been redistributed in every Bandicoot tarball since v0.1.0.0; as of v0.1.4.13
+they live in the source tree as well, so a clean checkout builds without staging
+data from elsewhere.
+
+| Data | Version | Source | Notes |
+|---|---|---|---|
+| CCP4 / REFMAC monomer library (curated 115-file subset) | `mon_lib` 5.60, update 16/02/22 | CCP4 | Installed to `share/coot/lib/data/monomers`. The full library is ~35,600 files / 677 MB; only the common-residue subset is shipped. |
+| Coot reference structures | Coot 0.9.8.95 | Coot | Installed to `share/coot/reference-structures`. Also shipped by CCP4 9.x under `coot_py3/share/coot/`. |
+
+---
+
 ## 5. Bundled fonts
 
 | Font | Location | License |

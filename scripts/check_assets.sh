@@ -59,7 +59,12 @@ require "libcoot-*.dylib (>10)"                   has_glob "$I/lib/libcoot-*.dyl
 require "monomer dict ALA.cif"                    has_find "$I/share/coot/lib/data/monomers" "ALA.cif"
 require "monomer dict GLY.cif"                     has_find "$I/share/coot/lib/data/monomers" "GLY.cif"
 require "monomer dict TYR.cif"                     has_find "$I/share/coot/lib/data/monomers" "TYR.cif"
-require "reference-structures/"                    has_dir  "$I/share/coot/reference-structures"
+# Check for actual CONTENT, not just the directory. Until v0.1.4.13 build.sh's
+# copy nested the tree one level deep
+# (share/coot/reference-structures/reference-structures/*.pdb) and a bare
+# has_dir passed anyway -- which is precisely how that shipped unnoticed. The
+# depth-1 glob fails if the contents are nested again.
+require "reference-structures/*.pdb"               has_glob "$I/share/coot/reference-structures/*.pdb"
 require "syminfo.lib"                              has_file "$I/share/coot/syminfo.lib"
 require "standard-residues.pdb"                    has_file "$I/share/coot/standard-residues.pdb"
 require "reduce het dictionary"                    has_file "$I/share/coot/reduce_wwPDB_het_dict.txt"
@@ -86,8 +91,9 @@ require "codesign-install.sh"                      has_file "$I/codesign-install
 
 if [ "$missing" -ne 0 ]; then
     echo "!! check_assets: FAIL — $missing required asset(s) missing ($ok present)." >&2
-    echo "   A build-host data source was absent and its copy step silently skipped." >&2
-    echo "   (e.g. monomers live at ~/sw/coot-builds/coot-deps; set COOT_DATA_SRC_OVERRIDE)." >&2
+    echo "   A copy step in build.sh was skipped or wrote to the wrong path." >&2
+    echo "   Crystallography data is checked in at data/coot-data/ (override with" >&2
+    echo "   COOT_DATA_SRC); probe/reduce come from a CCP4 install (CCP4_ROOT)." >&2
     exit 1
 fi
 echo "ok  check_assets: all $ok required runtime assets present"
