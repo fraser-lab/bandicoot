@@ -164,6 +164,39 @@ if [ $systype = Darwin ] ; then
    GDK_PIXBUF_MODULE_FILE=$COOT_PREFIX/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
    export GDK_PIXBUF_MODULEDIR
    export GDK_PIXBUF_MODULE_FILE
+
+   # Point GTK and GIO at the BUNDLED plugin trees.
+   #
+   # The GTK2 stack we ship is Homebrew's build, so its compiled-in module
+   # directory is /opt/homebrew/Cellar/gtk+/<ver>/lib and libgio's is
+   # $BREW/lib/gio/modules. Left alone, the bundled libgtk dlopens Homebrew's
+   # im-quartz.so from that path -- and that module links Homebrew's
+   # libgtk/libgdk/libgio by ABSOLUTE path, so the process ends up with two
+   # copies of each and macOS prints:
+   #
+   #   objc[...]: Class GdkQuartzView is implemented in both
+   #   /opt/homebrew/.../libgdk-quartz-2.0.0.dylib and <install>/lib/...
+   #   This may cause spurious casting failures and mysterious crashes.
+   #
+   # Only reproducible on a machine that HAS Homebrew's gtk+2 (developers); on
+   # a user's Mac the dlopen just fails and GTK uses its built-in simple input
+   # method. Setting these three keeps the app isolated either way.
+   # The immodules and the query tool are bundled by
+   # scripts/bundle_gtk_immodules.sh; gtk.immodules is written by setup.sh.
+   GTK_PATH=$COOT_PREFIX/lib/gtk-2.0
+   GTK_IM_MODULE_FILE=$COOT_PREFIX/lib/gtk-2.0/2.10.0/gtk.immodules
+   GTK_EXE_PREFIX=$COOT_PREFIX
+   GTK_DATA_PREFIX=$COOT_PREFIX
+   export GTK_PATH
+   export GTK_IM_MODULE_FILE
+   export GTK_EXE_PREFIX
+   export GTK_DATA_PREFIX
+
+   # GIO scans $BREW/lib/gio/modules for extensions (glib-networking, dconf).
+   # Usually empty, but populated on plenty of dev machines -- and any module
+   # found there drags in a second libgio the same way.
+   GIO_MODULE_DIR=$COOT_PREFIX/lib/gio/modules
+   export GIO_MODULE_DIR
 fi
 if [ $systype = IRIX ] ; then 
    if [ -z "$LD_LIBRARYN32_PATH" ] ;  then

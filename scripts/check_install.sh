@@ -61,9 +61,25 @@ EXEDIR="$INSTALL_DIR/bin"          # @executable_path anchor (Bandicoot exe live
 # BUILD-only prefixes that must never appear as a shipped dependency path.
 # Homebrew is now bundled (bundle_homebrew_deps.sh), so /opt/homebrew is a hard
 # leak like conda -- the shipped install must not depend on Homebrew at runtime.
+#
+# NOTE: this list is a fast path for naming the usual suspects in the output. It
+# is NOT the actual test -- see is_host_leak below. A hard-coded list goes stale
+# the moment a dependency tree moves: it named "$HOME/sw/canvas-deps" while the
+# canvas stack lived there, and when that tree moved to <repo>/deps/canvas in
+# v0.1.4.13 the checker went blind to precisely the path that had just been
+# introduced. Five binaries shipped pointing at the build tree, loading a second
+# complete GTK stack, and this script reported "no build-host leaks".
 HOST_PREFIXES=(
     /opt/homebrew /opt/miniconda3 /opt/anaconda3 /usr/local/Cellar
     "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/sw/canvas-deps"
+)
+
+# Absolute paths a shipped Mach-O is ALLOWED to name. Anything else absolute is
+# a leak by definition: a self-contained install may reference only the OS and
+# itself. This is an allowlist precisely so that a new build-tree location is
+# caught by default rather than needing to be added to a denylist first.
+ALLOWED_ABS_PREFIXES=(
+    /usr/lib /System /Library/Apple
 )
 
 unresolved=0
@@ -132,10 +148,25 @@ deps_of() {
 
 is_host_leak() {
     local dep="$1" p
+
+    # Named suspects first, so the message can be specific.
     for p in "${HOST_PREFIXES[@]}"; do
         case "$dep" in "$p"/*) return 0 ;; esac
     done
-    return 1
+
+    # Relative / dyld-relative forms are fine -- they are what we want.
+    case "$dep" in
+        @*|"") return 1 ;;
+        /*)    ;;
+        *)     return 1 ;;
+    esac
+
+    # Absolute: allowed only if it is the OS, or the install itself.
+    case "$dep" in "$INSTALL_DIR"/*) return 1 ;; esac
+    for p in "${ALLOWED_ABS_PREFIXES[@]}"; do
+        case "$dep" in "$p"/*) return 1 ;; esac
+    done
+    return 0
 }
 
 echo "==> checking dependency closure of $INSTALL_DIR"
@@ -153,6 +184,21 @@ while IFS= read -r f; do
             unresolved=$((unresolved + 1))
         fi
     done < <(deps_of "$f")
+
+    # v0.1.4.13: ALSO flag LC_RPATH entries pointing into a build-only prefix.
+    # Until now only dependencies were checked, so a shipped Mach-O could carry
+    # e.g. an LC_RPATH of /opt/homebrew/Cellar/jpeg-turbo/<ver>/lib and pass
+    # cleanly. That is a real leak: it makes dyld search the builder's Homebrew
+    # first for any @rpath dependency, so on a machine that happens to have a
+    # different version there the app silently binds to it -- the same class of
+    # failure as GitHub #8, arriving by a different route.
+    while IFS= read -r rp; do
+        [ -n "$rp" ] || continue
+        if is_host_leak "$rp"; then
+            echo "  HOST-RPATH ${f#$INSTALL_DIR/}  ->  $rp"
+            hostleak=$((hostleak + 1))
+        fi
+    done < <(rpaths_of "$f")
 done < <(find "$INSTALL_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -perm -u+x \) 2>/dev/null)
 
 echo "==> scanned $scanned Mach-O files"

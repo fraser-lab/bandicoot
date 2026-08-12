@@ -220,6 +220,45 @@ if [ -d "$PIXBUF_LOADERS_DIR" ]; then
 fi
 
 # ----------------------------------------------------------------------
+# 4b. regenerate gtk.immodules for the bundled GTK2 input-method modules
+# ----------------------------------------------------------------------
+# Same shape as the loaders.cache above, and same reason: the cache records
+# absolute module paths, so it can only be written where the tree finally lives.
+#
+# It matters even though input methods are niche. Without this file GTK falls
+# back to scanning its COMPILED-IN module directory -- which is Homebrew's, since
+# the bundled GTK is Homebrew's build. On a machine that has Homebrew's gtk+2
+# that loads a second copy of gtk/gdk/gio into the process ("Class GdkQuartzView
+# is implemented in both ..."). coot.in exports GTK_IM_MODULE_FILE at this path.
+IM_MODULES_DIR="$INSTALL_DIR/lib/gtk-2.0/2.10.0/immodules"
+IM_CACHE="$INSTALL_DIR/lib/gtk-2.0/2.10.0/gtk.immodules"
+IM_QUERY_BIN="$INSTALL_DIR/libexec/gtk-query-immodules-2.0"
+
+if [ -d "$IM_MODULES_DIR" ]; then
+    echo "$ARROW Generating gtk.immodules..."
+    if [ ! -x "$IM_QUERY_BIN" ]; then
+        echo "    $WARN bundled gtk-query-immodules-2.0 missing ($IM_QUERY_BIN)." >&2
+        note_problem
+    else
+        IM_FILES=()
+        while IFS= read -r f; do
+            IM_FILES+=("$f")
+        done < <(find "$IM_MODULES_DIR" -type f -name '*.so' | sort)
+        if [ "${#IM_FILES[@]}" -eq 0 ]; then
+            echo "    $WARN no immodules found under $IM_MODULES_DIR" >&2
+            note_problem
+        elif "$IM_QUERY_BIN" "${IM_FILES[@]}" > "$IM_CACHE.tmp" 2>/dev/null; then
+            mv "$IM_CACHE.tmp" "$IM_CACHE"
+            echo "    $CHECK wrote $IM_CACHE (${#IM_FILES[@]} modules)"
+        else
+            rm -f "$IM_CACHE.tmp"
+            echo "    $WARN gtk-query-immodules-2.0 failed" >&2
+            note_problem
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------------
 # 5. .desktop + appdata.xml in user-local applications dir
 # ----------------------------------------------------------------------
 
