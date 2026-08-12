@@ -33,8 +33,17 @@
 #endif // HAVE_STRING
 
 #include <deque>
+#include <memory>
 
 #include "compat/coot-sysdep.h"
+
+namespace coot {
+   // BANDICOOT v0.2 (Phase 3 / D3): forward declaration ONLY. The definition
+   // lives in coot-utils/mmcif-document.hh, which includes gemmi; this header
+   // is included by 36 files and deliberately does not. See the mmcif_doc
+   // member below.
+   struct mmcif_document_t;
+}
 
 enum {CONTOUR_UP, CONTOUR_DOWN};
 
@@ -411,6 +420,24 @@ class molecule_class_info_t {
 						  int shelx_occ_fvar_number);
 
    bool input_molecule_was_in_mmcif;
+
+   // BANDICOOT v0.2 (Phase 3 / D3): the mmCIF document this molecule was read
+   // from, with _atom_site stripped, kept alive so the write path can preserve
+   // every category Bandicoot does not itself regenerate. Null for a molecule
+   // that did not come from an mmCIF file (PDB, SHELX, built de novo), in which
+   // case the writer synthesizes a fresh document.
+   //
+   // Only a FORWARD DECLARATION of the type is visible here -- the definition
+   // is in coot-utils/mmcif-document.hh, the one header that includes gemmi.
+   // This header is included by 36 files and must not pull gemmi into them.
+   //
+   // shared_ptr, not unique_ptr, and that is forced rather than stylistic:
+   // molecules live in a std::vector<molecule_class_info_t> (graphics-info.h),
+   // so the member has to be copyable, AND ~molecule_class_info_t() is defined
+   // inline below, where unique_ptr to an incomplete type will not compile.
+   // shared_ptr type-erases its deleter at construction -- which happens in
+   // gemmi-coords.cc, where the type is complete -- so it is fine here.
+   std::shared_ptr<coot::mmcif_document_t> mmcif_doc;
    // public acces to this is below
 
    void unalt_conf_residue_atoms(mmdb::Residue *residue_p);

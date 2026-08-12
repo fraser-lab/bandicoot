@@ -51,11 +51,28 @@ PREFIX=$HOME/sw/bandicoot-install ./tools/gemmi-diff/build.sh
 ## Running
 
 ```sh
+./tools/gemmi-diff/gemmi-mmdb-diff                      # the whole corpus
 ./tools/gemmi-diff/gemmi-mmdb-diff [options] <coord-file> ...
 ```
 
+**With no files named it runs the entire corpus** — every `.cif`, `.ent` and `.pdb` in
+the corpus directory, in sorted order. The directory is `--corpus DIR` if given, else
+`$BANDICOOT_SAMPLES`, else the path baked in at build time
+(`$REPO/../samples`, overridable with `SAMPLES=... ./build.sh`).
+
+The corpus lives **outside the repository** on purpose: those files would bloat git
+history permanently and have no place in a shipped release. The accepted consequence is
+that a machine without that folder gets a "NO coordinate files" notice instead of a run.
+It is not a build input, and it is reconstructible — see `TRAPS.md`, where most entries
+are re-fetchable by PDB ID.
+
+Naming files explicitly still works exactly as before and ignores the corpus entirely.
+`.mtz` maps are skipped, and so is the SHELX `.ins` — gemmi cannot read it at all, so
+including it would put a permanent "failed to load" line in every run (see `TRAPS.md` A6).
+
 | option | effect |
 |---|---|
+| `--corpus DIR` | run every coordinate file in `DIR` instead of the compiled-in default |
 | `--dump-chains` | print each chain's id, residue count, atom count and composition, for both paths |
 | `--examples N` | show up to N example differences and distinct value-shapes per field (default 3) |
 | `--no-setup-entities` | skip `gemmi::setup_entities()` on path B |
@@ -63,6 +80,13 @@ PREFIX=$HOME/sw/bandicoot-install ./tools/gemmi-diff/build.sh
 | `--keep-hydrog-links` | keep `Hydrog` connections in path B's LINK table — reproduces the unfiltered `transfer_links_to_mmdb` behaviour |
 
 Exit status is 0 only if every file compared identical.
+
+**So the exit status is NOT the gate for a corpus run**, and should not be wired into one.
+Several corpus differences are permanent and deliberate — gemmi reading `struct_conn`
+links mmdb never reads, gemmi declining to invent a chain mmdb invents — so a full run
+always exits non-zero. **The gate is the summary line and the attribution of every
+difference to a catalogue entry in `TRAPS.md`.** A new, unexplained line is the signal;
+a non-zero exit on its own means nothing here.
 
 ## Reading the output
 
@@ -107,7 +131,20 @@ Nothing is lost by this. Phase 3's verbatim passthrough preserves the whole `str
 category on write, `hydrog` rows included; the filter applies only to the LINK table that
 feeds refinement. `disulf`, `covale` and `metalc` are transferred.
 
+## The trap catalogue
+
+`TRAPS.md`, beside this file, is the catalogue of coordinate-file properties and API
+behaviours that look ordinary and are not — each with the corpus file that exhibits it,
+**whether an assertion actually checks it**, and what breaks if it regresses. It also
+records the current full-corpus baseline to compare a run against.
+
+Read it before adding a check here, and **run the corpus at the close of every phase**.
+
 ## Known baseline (2026-08-10, gemmi 0.7.5, merge on)
+
+> Superseded as a *run* baseline by the dated summary line in `TRAPS.md` (the corpus has
+> grown since — `1AON.cif`, `1FFK.cif` and the PDB siblings were not in this pass). The
+> per-category reasoning below is still accurate.
 
 Per-atom data was identical across ~250,000 atoms: no differences in coordinates,
 occupancy, B, element, altLoc, segID, het flag, residue name, residue number or

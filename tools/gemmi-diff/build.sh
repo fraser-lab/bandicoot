@@ -20,6 +20,18 @@ PREFIX="${PREFIX:-$HOME/sw/bandicoot-0.2-install}"
 CONDA_PREFIX="${CONDA_PREFIX:-/opt/miniconda3}"
 BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
 
+# The test corpus. It lives OUTSIDE the repository, one level up beside it, and
+# that is deliberate (Art, 2026-08-12): these files would bloat git history
+# permanently and have no business in a shipped release. Baked in here so that
+# running the catalogue is `gemmi-mmdb-diff` with no arguments rather than a
+# remembered list of filenames -- the list going stale is exactly how the wrong
+# directory got used for a whole verification pass.
+#
+# Accepted consequence: on a machine without this folder the default run finds
+# nothing and says so. The corpus is reconstructible from the records in
+# TRAPS.md (most entries are re-fetchable by PDB ID); it is not a build input.
+SAMPLES="${SAMPLES:-$(cd "$REPO/.." 2>/dev/null && pwd)/samples}"
+
 if [ ! -d "$PREFIX/lib" ]; then
     echo "build.sh: '$PREFIX' does not look like a Bandicoot install." >&2
     echo "          Build and install first, or set PREFIX." >&2
@@ -33,6 +45,7 @@ set -x
 clang++ -std=c++17 -g -O1 -Wall -Wno-unused \
     -o "$HERE/gemmi-mmdb-diff" "$HERE/gemmi-mmdb-diff.cc" \
     -DBANDICOOT_SYMINFO_DEFAULT="\"$PREFIX/share/coot/syminfo.lib\"" \
+    -DBANDICOOT_SAMPLES_DEFAULT="\"$SAMPLES\"" \
     -I"$REPO" \
     -I"$CONDA_PREFIX/include" \
     -I"$BREW_PREFIX/include" \

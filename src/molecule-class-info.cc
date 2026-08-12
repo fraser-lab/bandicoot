@@ -163,7 +163,16 @@ molecule_class_info_t::handle_read_draw_molecule(int imol_no_in,
    if (coot::is_mmcif_filename(filename))
       input_molecule_was_in_mmcif = true;
 
-   atom_sel = get_atom_selection(filename, allow_duplseqnum, verbose, convert_to_v2_atom_names_flag);
+   // BANDICOOT v0.2 (Phase 3 / D3): &mmcif_doc catches the retained mmCIF
+   // document when this file was read by gemmi. It stays null for PDB, SHELX
+   // and anything gemmi declined, and the writer synthesizes a document in
+   // that case. This is the ONLY place a molecule acquires one -- there is no
+   // registry keyed on mmdb::Manager*, deliberately: undo deletes and
+   // reallocates Managers, so a recycled address could attribute one
+   // molecule's document to another, and that failure mode is silent data
+   // corruption rather than a crash.
+   atom_sel = get_atom_selection(filename, allow_duplseqnum, verbose, convert_to_v2_atom_names_flag,
+                                 &mmcif_doc);
 
    if (atom_sel.read_success == 1) {
 

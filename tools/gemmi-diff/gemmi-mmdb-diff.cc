@@ -32,6 +32,10 @@
 #include "coot-utils/gemmi-coords.hh"   // the production gemmi read path
 #include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
 
+#include <dirent.h>            // corpus enumeration (--corpus / the default run)
+
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -619,26 +623,80 @@ static void ensure_syminfo() {
 #endif
 }
 
+// Enumerate the coordinate files of a corpus directory, in a DETERMINISTIC
+// order so two runs are comparable line by line.
+//
+// Only .cif / .ent / .pdb. The maps (.mtz) are not coordinate files, and the
+// SHELX .ins is left out ON PURPOSE: gemmi cannot read it at all (it throws
+// "Unknown format"), so including it would add a permanent "failed to load"
+// line to every run and push the baseline further from "all lines explained".
+// See TRAPS.md A6 -- that trap wants its own check, not a noisy default.
+static std::vector<std::string> corpus_files(const std::string &dir) {
+   std::vector<std::string> out;
+   DIR *d = opendir(dir.c_str());
+   if (! d) return out;
+   while (struct dirent *e = readdir(d)) {
+      std::string n = e->d_name;
+      if (n.empty() || n[0] == '.') continue;      // skips .DS_Store too
+      size_t dot = n.rfind('.');
+      if (dot == std::string::npos) continue;
+      std::string ext = n.substr(dot);
+      for (char &c : ext) c = std::tolower(static_cast<unsigned char>(c));
+      if (ext == ".cif" || ext == ".ent" || ext == ".pdb")
+         out.push_back(dir + "/" + n);
+   }
+   closedir(d);
+   std::sort(out.begin(), out.end());
+   return out;
+}
+
 int main(int argc, char **argv) {
    ensure_syminfo();
    bool setup_entities = true;
    bool merge_chains = true;
    bool drop_hydrog_links = true;
    std::vector<std::string> files;
+   std::string corpus;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
       else if (a == "--no-merge-chains") merge_chains = false;
       else if (a == "--keep-hydrog-links") drop_hydrog_links = false;
       else if (a == "--dump-chains") g_dump_chains = true;
+      else if (a == "--corpus" && i + 1 < argc) corpus = argv[++i];
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
    }
+
+   // With no files named, run the whole corpus. Precedence: an explicit
+   // --corpus wins, then $BANDICOOT_SAMPLES, then the path baked in at build
+   // time. Naming files explicitly still works and ignores all of it.
+   if (files.empty()) {
+      if (corpus.empty()) {
+         if (const char *env = getenv("BANDICOOT_SAMPLES")) corpus = env;
+#ifdef BANDICOOT_SAMPLES_DEFAULT
+         else corpus = BANDICOOT_SAMPLES_DEFAULT;
+#endif
+      }
+      if (! corpus.empty()) {
+         files = corpus_files(corpus);
+         if (files.empty())
+            printf("corpus: NO coordinate files in %s\n"
+                   "        The corpus lives outside the repo and is not a build input;\n"
+                   "        see TRAPS.md for what it should contain.\n", corpus.c_str());
+         else
+            printf("corpus: %zu files from %s\n", files.size(), corpus.c_str());
+      }
+   }
+
    if (files.empty()) {
       fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
                       "                      [--no-setup-entities] [--no-merge-chains]\n"
-                      "                      [--keep-hydrog-links]\n"
-                      "                      <coord-file> ...\n");
+                      "                      [--keep-hydrog-links] [--corpus DIR]\n"
+                      "                      [<coord-file> ...]\n"
+                      "\n"
+                      "With no files, runs every .cif/.ent/.pdb in the corpus directory\n"
+                      "(--corpus, else $BANDICOOT_SAMPLES, else the compiled-in default).\n");
       return 2;
    }
 
@@ -666,5 +724,16 @@ int main(int argc, char **argv) {
 
    printf("summary: %d identical, %d with differences, %d failed to load\n",
           n_clean, n_dirty, n_failed);
+
+   // On a full-corpus run, differences and failures are the EXPECTED state --
+   // several are deliberate improvements over the mmdb reader and several are
+   // mmdb bugs the gemmi path fixes. So the exit status below cannot be the
+   // gate here; the gate is "does this summary still match the baseline, and
+   // is every line still attributable to a catalogue entry?"
+   if (! corpus.empty())
+      printf("\nNOTE: differences are EXPECTED on a corpus run -- compare the summary\n"
+             "      above against the recorded baseline in TRAPS.md, and treat any NEW\n"
+             "      unexplained line as the signal.\n");
+
    return n_dirty || n_failed ? 1 : 0;
 }

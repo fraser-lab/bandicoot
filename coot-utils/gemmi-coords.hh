@@ -21,10 +21,15 @@
 #ifndef GEMMI_COORDS_HH
 #define GEMMI_COORDS_HH
 
+#include <memory>
 #include <string>
 #include <mmdb2/mmdb_manager.h>
 
 namespace coot {
+
+   // Forward declaration only. The definition lives in mmcif-document.hh,
+   // which is the one header allowed to include gemmi -- see the note there.
+   struct mmcif_document_t;
 
    //! Is this a file extension we route through gemmi?
    //
@@ -45,8 +50,14 @@ namespace coot {
    //! Structure without complaint, so "no atoms" is a fall-back condition, not
    //! a success -- otherwise opening a small-molecule CIF would produce an
    //! empty molecule with no error at all.
+   //! \param doc_out when non-null and the file was mmCIF, receives the parsed
+   //!        document with _atom_site stripped, to be kept alive for the
+   //!        molecule's lifetime and handed back to the writer (Phase 3). Left
+   //!        null for PDB input, which has no document. Passing nullptr skips
+   //!        the retention entirely, which is what the diff harness wants.
    mmdb::Manager *read_coords_with_gemmi(const std::string &file_name,
-                                         std::string *message = nullptr);
+                                         std::string *message = nullptr,
+                                         std::shared_ptr<mmcif_document_t> *doc_out = nullptr);
 }
 
 #endif // GEMMI_COORDS_HH

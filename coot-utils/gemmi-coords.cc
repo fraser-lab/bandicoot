@@ -14,13 +14,15 @@
  */
 
 #include "gemmi-coords.hh"
+#include "mmcif-document.hh"   // coot::mmcif_document_t (the only gemmi-aware header)
 
-#include <gemmi/mmread.hpp>    // read_structure_file
+#include <gemmi/mmread.hpp>    // read_structure, BasicInput
 #include <gemmi/mmdb.hpp>      // copy_to_mmdb
 #include <gemmi/polyheur.hpp>  // setup_entities
 #include <gemmi/symmetry.hpp>  // find_spacegroup
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -92,12 +94,27 @@ coot::gemmi_handles_extension(const std::string &extension) {
 
 
 mmdb::Manager *
-coot::read_coords_with_gemmi(const std::string &file_name, std::string *message) {
+coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
+                             std::shared_ptr<coot::mmcif_document_t> *doc_out) {
 
    mmdb::Manager *mol = nullptr;
 
    try {
-      gemmi::Structure st = gemmi::read_structure_file(file_name);
+      // Read, optionally keeping the parsed document (Phase 3 / D3).
+      //
+      // This is gemmi::read_structure_file() with one extra argument -- that
+      // function is a two-line wrapper around read_structure() which simply
+      // does not forward save_doc. Going one level down costs nothing and
+      // means NO branching on format here: read_structure() clears save_doc up
+      // front and fills it only on the mmCIF/mmjson/chemcomp paths, so a PDB
+      // file leaves it empty and everything below just works. (An earlier plan
+      // for this step assumed we would have to call read_cif_gz() ourselves
+      // and branch, which would have broken this function for the PDB files
+      // tools/gemmi-diff feeds it. Not needed.)
+      gemmi::cif::Document saved_doc;
+      gemmi::Structure st = gemmi::read_structure(gemmi::BasicInput(file_name),
+                                                  gemmi::CoorFormat::Unknown,
+                                                  doc_out ? &saved_doc : nullptr);
 
       // gemmi accepts a small-molecule CIF and hands back a Structure with no
       // atoms rather than throwing, so this is the fall-back trigger. Checked
@@ -190,6 +207,60 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message)
             cryst->a = cryst->b = cryst->c = 0.0;
             cryst->alpha = cryst->beta = cryst->gamma = 0.0;
          }
+      }
+
+      // (6) Carry the resolution across.
+      //
+      // copy_to_mmdb takes nothing at all out of st.meta, so a gemmi-read
+      // mmCIF has no resolution and model_resolution() returns -2 where the
+      // mmdb reader used to give the real number. Unlike the rest of the
+      // header (secondary structure, title, compound, ...), which mmdb never
+      // managed to read from a modern mmCIF anyway because its readers are
+      // keyed to obsolete ndb_* tags, this ONE field is a genuine regression:
+      // mmdb's tags for it (_refine.ls_d_res_high) are still current.
+      // Measured on 5E1N.cif: model_resolution 1.0 before v0.2, -2.0 after.
+      //
+      // There is no setter -- Title::resolution is protected and mmdb exposes
+      // only GetResolution(). But GetResolution() falls back to scanning the
+      // REMARK container for remark number 2, so the standard REMARK 2 line
+      // gets the value in through a public API. Two things make the placement
+      // matter: GetResolution() CACHES its answer (and records -1.0 on a
+      // failed scan), so this has to happen before anything asks; and its scan
+      // gives up at the first remark numbered > 2, so REMARK 2 has to be added
+      // before any higher-numbered one. Nothing else has been added here --
+      // gemmi fills st.raw_remarks only from PDB input, so for mmCIF the
+      // container copy_to_mmdb left behind is empty.
+      if (st.resolution > 0.0) {
+         char line[81];
+         snprintf(line, sizeof(line), "REMARK   2 RESOLUTION. %7.2f ANGSTROMS.",
+                  st.resolution);
+         mol->PutPDBString(line);
+      }
+
+      // (7) Retain the mmCIF document, minus its coordinates (Phase 3 / D3).
+      //
+      // See mmcif-document.hh for why this exists and why _atom_site is
+      // dropped. Note this runs LAST: everything above may still decide to
+      // fail the read, and a document must never outlive a read that did not
+      // produce a molecule.
+      //
+      // saved_doc is empty for PDB input (read_structure only fills it on the
+      // CIF paths), so *doc_out is simply left null there and the writer will
+      // fall back to synthesizing a fresh document.
+      if (doc_out && ! saved_doc.blocks.empty()) {
+
+         // Only blocks[0] holds coordinates -- make_structure() enforces that
+         // -- so this is the only block to strip. Later blocks (restraints in
+         // a deposition file) are kept whole.
+         gemmi::cif::Block &block = saved_doc.blocks[0];
+         for (const char *cat : { "_atom_site", "_atom_site_anisotrop" }) {
+            gemmi::cif::Table tab = block.find_mmcif_category(cat);
+            if (tab.ok())
+               tab.erase();
+         }
+
+         *doc_out = std::make_shared<coot::mmcif_document_t>(std::move(saved_doc),
+                                                             file_name);
       }
 
       if (message)

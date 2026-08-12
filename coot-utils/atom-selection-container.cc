@@ -62,7 +62,8 @@ atom_selection_container_t
 get_atom_selection(std::string pdb_name,
                    bool allow_duplseqnum,
                    bool verbose_mode,
-                   bool convert_to_v2_name_flag) {
+                   bool convert_to_v2_name_flag,
+                   std::shared_ptr<coot::mmcif_document_t> *mmcif_doc_out) {
 
    auto atom_name_fix_ups = [] (mmdb::Manager *mol) {
 
@@ -200,7 +201,8 @@ get_atom_selection(std::string pdb_name,
           // doing right and that deserves a look.
           if (coot::gemmi_handles_extension(extension)) {
              std::string gemmi_message;
-             mmdb::Manager *gemmi_mol = coot::read_coords_with_gemmi(pdb_name, &gemmi_message);
+             mmdb::Manager *gemmi_mol = coot::read_coords_with_gemmi(pdb_name, &gemmi_message,
+                                                                     mmcif_doc_out);
              if (gemmi_mol) {
                 MMDBManager = gemmi_mol;
                 read_from_gemmi = true;
