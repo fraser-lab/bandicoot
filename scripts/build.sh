@@ -6,7 +6,7 @@
 #   CONDA_PREFIX  miniconda root       (default: /opt/miniconda3)
 #   BREW_PREFIX   homebrew root        (default: /opt/homebrew or `brew --prefix`)
 #   CANVAS_PREFIX libart/libgnomecanvas/goocanvas tree, as produced by
-#                 ./scripts/build_canvas_deps.sh   (default: <repo>/deps/canvas)
+#                 ./scripts/build_deps.sh          (default: <repo>/deps/canvas)
 #   COOT_DATA_SRC monomer dictionary + reference structures
 #                 (default: <repo>/data/coot-data, checked in)
 #   PROBE_SRC / REDUCE_SRC / REDUCE_HET_SRC
@@ -60,13 +60,15 @@ JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 # THIS repo. Anything unresolved fails below with the variable name and the
 # command that produces it, rather than silently building a broken install.
 
-# Canvas stack (libart / libgnomecanvas / goocanvas): not in Homebrew, built by
-# scripts/build_canvas_deps.sh into <repo>/deps/canvas by default.
+# The two trees produced by scripts/build_deps.sh from the vendored sources in
+# third_party/. Neither libart/libgnomecanvas/goocanvas nor single-precision
+# FFTW 2 exists in any package manager, so they are built from source into
+# <repo>/deps rather than searched for on the system.
 CANVAS_PREFIX="${CANVAS_PREFIX:-${REPO_ROOT}/deps/canvas}"
 
-# FFTW2 (single-precision, legacy) is the one dependency that isn't
-# pkg-config-discoverable, so we locate it by probing plausible install roots.
-# Override with FFTW_PREFIX=... if yours lives elsewhere.
+# FFTW2 has no pkg-config file, so it is located by path. Prefer the in-repo
+# build; still probe a couple of legacy locations so an existing hand-built tree
+# keeps working, and let FFTW_PREFIX override outright.
 if [ -z "${FFTW_PREFIX:-}" ]; then
     for cand in \
         "${REPO_ROOT}/deps/fftw2" \
@@ -77,7 +79,7 @@ if [ -z "${FFTW_PREFIX:-}" ]; then
             break
         fi
     done
-    FFTW_PREFIX="${FFTW_PREFIX:-${CONDA_PREFIX}/fftw2}"
+    FFTW_PREFIX="${FFTW_PREFIX:-${REPO_ROOT}/deps/fftw2}"
     echo "==> FFTW_PREFIX auto-detected: ${FFTW_PREFIX}"
 fi
 
@@ -105,7 +107,7 @@ _preflight "${BREW_PREFIX}/lib/pkgconfig/gtk+-2.0.pc" BREW_PREFIX "${BREW_PREFIX
 _preflight "${CONDA_PREFIX}/bin/python3-config" CONDA_PREFIX "${CONDA_PREFIX}" \
     "install Miniconda, then see BUILD.md section 1 for the conda package list"
 _preflight "${CANVAS_PREFIX}/lib/pkgconfig/goocanvas.pc" CANVAS_PREFIX "${CANVAS_PREFIX}" \
-    "./scripts/build_canvas_deps.sh    (builds libart/libgnomecanvas/goocanvas)"
+    "./scripts/build_deps.sh    (builds libart/libgnomecanvas/goocanvas + FFTW 2)"
 _preflight "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" COOT_DATA_SRC "${COOT_DATA_SRC}" \
     "this data is checked in -- restore it with: git checkout -- data/coot-data"
 
@@ -113,7 +115,7 @@ if [ ! -f "${FFTW_PREFIX}/include/fftw.h" ] && [ ! -f "${FFTW_PREFIX}/include/sf
     echo "!! build.sh: FFTW_PREFIX does not contain single-precision FFTW 2." >&2
     echo "   FFTW_PREFIX=${FFTW_PREFIX}" >&2
     echo "   missing: include/fftw.h (or include/sfftw.h)" >&2
-    echo "   fix: build FFTW 2.1.5 with --enable-float (see BUILD.md section 1)" >&2
+    echo "   fix: ./scripts/build_deps.sh    (builds FFTW 2.1.5 from third_party/)" >&2
     echo "" >&2
     _preflight_fail=1
 fi
@@ -251,10 +253,11 @@ ${CONDA_PREFIX}/lib/pkgconfig"
 # private requires; Bandicoot doesn't actually link against any of them at
 # runtime).
 #
-# v0.1.4.13: that tree is produced by ./scripts/build_canvas_deps.sh rather than
-# by hand, and defaults to <repo>/deps/canvas. The preflight above fails the
-# build if it is absent, naming the script -- previously a missing canvas tree
-# just silently dropped Sequence View and the ligand editor from the build.
+# v0.1.4.13: that tree is produced by ./scripts/build_deps.sh from the sources
+# vendored in third_party/, rather than by hand, and defaults to
+# <repo>/deps/canvas. The preflight above fails the build if it is absent,
+# naming the script -- previously a missing canvas tree just silently dropped
+# Sequence View and the ligand editor from the build.
 
 echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time fallback; files install to ${PREFIX})"
 ./configure \
