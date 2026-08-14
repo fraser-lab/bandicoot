@@ -113,10 +113,20 @@ error at all — the exact bug that was fixed once already.
 `foo.cif.gz` has extension `.gz`, `gemmi_handles_extension` is false, and **mmdb reads
 it** — gemmi never sees it. Every compressed backup in `coot-backup/` is therefore
 invisible to the gemmi path, and `backup_compress_files_flag` defaults to **1**.
-**Assertion:** UNCHECKED.
-**Breaks:** already broken. An I/O detail silently selects a parser. Slated for D2, where
-`gemmi::read_structure_gz(path, format, save_doc)` and `coor_format_from_ext_gz()`
-(`mmread_gz.hpp`) are the natural fix.
+**Assertion:** UNCHECKED, but **✅ THE DEFECT IS FIXED (2026-08-12).**
+`coot::gemmi_handles_file()` looks beneath a trailing `.gz`, and the read path uses
+`gemmi::read_structure_gz()`. Note `gemmi_handles_extension()` could NOT be fixed in
+place: `file_name_extension()` returns only `.gz`, so the `.cif` never reaches it —
+the decision has to be made from the filename.
+**Why it stopped being cosmetic:** the Phase 3 writer preserves `_struct_ncs_oper`,
+which **mmdb2 cannot read** (B8). Backups are `*.cif.gz` and Undo re-reads them, so
+while `.gz` routed to mmdb, **preserving faithfully BROKE UNDO** for every
+NCS-containing mmCIF. mmdb could read its own backups only because its writer threw
+those categories away. Measured on `SC1_2_refine_036`: preserved backup carries
+`_struct_ncs_oper` ×15, `mmdb ReadCoorFile` fails.
+**⚠ THE WRITE-SIDE TWIN IS STILL OPEN:** `coot::is_mmcif_filename()` uses the same
+`find_last_of(".")`, so `save_coordinates(imol, "x.cif.gz")` writes a **PDB file**.
+Pre-existing; not caused by the Phase 3 work.
 
 ---
 
@@ -333,7 +343,21 @@ defeated for mmCIF.
 **Corpus:** every `*_hierarchy.cif`, `3K0N`, `5E1N`, `6DMH`, both `SC1_2_refine_*` have
 anisotropic records. `1AON`, `1FFK`, `2RSF` do not — a useful negative control.
 
-### E4. The mmCIF branch ignores three write options
+### E6. The writer preset reformats passthrough categories
+**Property:** any category stored as a **single-row loop**.
+**Exhibited by:** `_citation`, `_software`, `_em_software`, `_struct_conf_type`,
+`_struct_ncs_ens` and — most pointedly — **`_pdbx_state_coexistence`** in
+`3NYD_hierarchy.cif`.
+**Rule:** gemmi's `cif::Style::Pdbx` sets `prefer_pairs`, which rewrites single-row loops
+as pairs on output. No data is lost, but categories we promised to pass through untouched
+come back reshaped. Bandicoot therefore uses an explicit `WriteOptions`
+(`misuse_hash = true`, `prefer_pairs = false`), not the preset.
+**Assertion:** CHECKED by the round-trip category/row check.
+**Note the general point this settles:** the gate is **tag-and-value identity, not literal
+bytes** — gemmi regenerates loop text with its own column spacing, so alignment and
+trailing whitespace are normalised regardless.
+
+### E4. The mmCIF branch ignores three write options — ✅ FIXED 2026-08-12
 `write_atom_selection_file` takes `write_hydrogens`, `write_aniso_records` and
 `write_conect_records`; **the mmCIF branch ignores all three.** The first two are user-facing
 checkboxes. Ticking "no hydrogens" and saving as mmCIF writes the hydrogens anyway.
@@ -347,6 +371,21 @@ both its `delete link;` statements are commented out.
 
 ---
 
+### E7. `update_mmcif_block` skips a category it has no data for — it does not clear it
+**Measured 2026-08-12**, and it corrects an assumption in the plan.
+Setting `groups.ncs = true` (EDIT) does **not** delete `_struct_ncs_oper`, even though
+`copy_from_mmdb` never populates `st.ncs`: the category came through intact, 15 tags in
+and 15 out, on both `SC1_2_refine_036.cif` and `1AON.cif`. The plan's stated reason for
+`ncs` = PASS — "EDIT would DELETE `_struct_ncs_oper`" — is therefore **not** what would
+happen.
+**The PASS disposition still stands**, on the sounder ground that a category must not be
+rewritten from a source that does not hold it. But do not rely on the flags alone as a
+safety net: for these categories the toggle turns out to be nearly inert, so a mistaken
+flip would fail silently rather than loudly.
+**Consequence for testing:** flipping a policy flag is NOT a valid way to prove the
+write-side gate works, because for such a category nothing changes. Prove it by deleting
+a category outright (see below).
+
 ## Assertion scoreboard
 
 | group | checked | unchecked |
@@ -355,7 +394,12 @@ both its `delete link;` statements are commented out.
 | B. model content | 9 | 1 |
 | C. cross-format | 2 | 3 |
 | D. environment/API | n/a — documentation, not assertions | |
-| E. write side | 0 | 5 |
+| E. write side | 3 | 4 |
+
+Section E moved from 0-checked once `--write-check` landed (2026-08-12): E1's category-level
+half, E2 (cell-less files round-trip without gaining `_cell`), E6 and E7 are now covered by
+the gate. Still unchecked: E1's extension-COLUMN half (Phase 4's concern), E3
+(`_atom_site_anisotrop` emission), E4's knock-on effects, E5 (dangling records).
 
 **The two highest-value gaps to close next:** B9 (non-canonical space groups — the clipper
 failure is silent and yields wrong maps) and the whole of section E, which the Phase 3

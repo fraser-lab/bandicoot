@@ -20,9 +20,15 @@
 #include <gemmi/mmdb.hpp>      // copy_to_mmdb
 #include <gemmi/polyheur.hpp>  // setup_entities
 #include <gemmi/symmetry.hpp>  // find_spacegroup
+#include <gemmi/mmread_gz.hpp> // read_structure_gz (compressed mmCIF)
+
+#include "utils/coot-utils.hh"  // file_name_extension
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <set>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -93,6 +99,32 @@ coot::gemmi_handles_extension(const std::string &extension) {
 }
 
 
+bool
+coot::gemmi_handles_file(const std::string &file_name) {
+
+   // Decide from the NAME, not from the extension, because
+   // coot::util::file_name_extension() returns everything after the LAST dot:
+   // "foo.cif.gz" has extension ".gz", so testing the extension alone sent
+   // every compressed mmCIF to the mmdb reader instead of gemmi. An I/O detail
+   // must not choose a parser.
+   //
+   // That was cosmetic until the Phase 3 writer landed, and then it was not.
+   // Backups are named from backup_compress_files_flag, which DEFAULTS TO 1,
+   // so a backup is "*.cif.gz" -- and the writer now PRESERVES every category,
+   // including _struct_ncs_oper, which mmdb2 cannot read at all (GitHub #9).
+   // Measured: a preserved backup of SC1_2_refine_036 carries
+   // _struct_ncs_oper x15 and mmdb fails to load it. Undo re-reads the backup,
+   // so without this the fidelity work would have BROKEN UNDO for every
+   // NCS-containing mmCIF. mmdb could read its own backups only because its
+   // writer threw the troublesome categories away.
+   std::string name = file_name;
+   if (name.size() > 3 && name.compare(name.size() - 3, 3, ".gz") == 0)
+      name.erase(name.size() - 3);
+
+   return gemmi_handles_extension(coot::util::file_name_extension(name));
+}
+
+
 mmdb::Manager *
 coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
                              std::shared_ptr<coot::mmcif_document_t> *doc_out) {
@@ -112,9 +144,68 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
       // and branch, which would have broken this function for the PDB files
       // tools/gemmi-diff feeds it. Not needed.)
       gemmi::cif::Document saved_doc;
-      gemmi::Structure st = gemmi::read_structure(gemmi::BasicInput(file_name),
-                                                  gemmi::CoorFormat::Unknown,
-                                                  doc_out ? &saved_doc : nullptr);
+      // read_structure_gz rather than read_structure: it transparently
+      // decompresses, which the read path now needs because compressed mmCIF
+      // (every backup) is routed here rather than to mmdb. Same save_doc
+      // contract -- filled only on the CIF paths, left empty for PDB.
+      gemmi::Structure st = gemmi::read_structure_gz(file_name,
+                                                     gemmi::CoorFormat::Unknown,
+                                                     doc_out ? &saved_doc : nullptr);
+
+      // (8) Harvest the label_* identities BEFORE anything touches st.
+      //
+      // mmCIF gives a residue two identities; mmdb models only the author one
+      // (see mmcif-document.hh). So label_asym_id / label_entity_id /
+      // label_seq_id have to be carried across in a side table or they are
+      // gone the moment copy_to_mmdb runs, and the written file gets nulls --
+      // which is what Art found in GUI testing on 2026-08-12.
+      //
+      // Done here, before setup_entities() and merge_chain_parts(), so what is
+      // captured is unambiguously the FILE's own values. (setup_entities calls
+      // assign_subchains with force=false, so it would not overwrite them --
+      // but depending on that is a needless hostage to a gemmi change.)
+      // TEMPORARY BISECT SWITCH (2026-08-14) -- REMOVE once the RSR-poisoning
+      // regression is found. Setting BANDICOOT_NO_HARVEST=1 skips every
+      // read-side harvest added in builds u24-u30 (label_*, non-standard
+      // _atom_site columns, anisotrop and cis tag lists) while leaving the rest
+      // of the read path untouched. One binary, two behaviours, so the question
+      // "is it the harvesting at all?" costs one GUI session instead of a
+      // rebuild per hypothesis.
+      const bool skip_harvest = (getenv("BANDICOOT_NO_HARVEST") != nullptr);
+      if (skip_harvest)
+         std::cout << "INFO:: BANDICOOT_NO_HARVEST set - skipping read-side harvests"
+                   << std::endl;
+
+      std::map<std::string, coot::residue_labels_t> harvested_labels;
+      std::map<std::string, std::map<std::string, std::string> > extra_columns;
+      std::vector<std::string> anisotrop_tags;
+      std::vector<std::string> cis_tags;
+      if (doc_out && ! skip_harvest) {
+         for (const gemmi::Model &model : st.models) {
+            int model_num = model.num;
+            for (const gemmi::Chain &chain : model.chains) {
+               for (const gemmi::Residue &res : chain.residues) {
+                  if (res.subchain.empty() && !res.label_seq.has_value())
+                     continue;             // nothing worth carrying
+                  coot::residue_labels_t rl;
+                  rl.label_asym_id = res.subchain;
+                  rl.has_label_seq = res.label_seq.has_value();
+                  if (rl.has_label_seq) rl.label_seq = *res.label_seq;
+                  // entity id: whichever Entity claims this subchain
+                  for (const gemmi::Entity &ent : st.entities)
+                     if (std::find(ent.subchains.begin(), ent.subchains.end(),
+                                   res.subchain) != ent.subchains.end()) {
+                        rl.entity_id = ent.name;
+                        break;
+                     }
+                  std::string icode(1, res.seqid.icode);
+                  if (res.seqid.icode == ' ' || res.seqid.icode == '\0') icode.clear();
+                  harvested_labels[coot::mmcif_document_t::residue_label_key(
+                                      model_num, chain.name, res.seqid.num.value, icode)] = rl;
+               }
+            }
+         }
+      }
 
       // gemmi accepts a small-molecule CIF and hands back a Structure with no
       // atoms rather than throwing, so this is the fall-back trigger. Checked
@@ -253,6 +344,79 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
          // -- so this is the only block to strip. Later blocks (restraints in
          // a deposition file) are kept whole.
          gemmi::cif::Block &block = saved_doc.blocks[0];
+
+         // Harvest any NON-STANDARD _atom_site column before the category is
+         // stripped. gemmi regenerates _atom_site from the model on write and
+         // emits only the columns it models, so an extension column -- most
+         // importantly pdbx_heterogeneity_id -- would simply vanish.
+         //
+         // Deliberately keyed off a list of what gemmi DOES write, so anything
+         // unrecognised is carried rather than requiring code per column. Over-
+         // harvesting is harmless: the write side only re-adds a column that is
+         // actually missing from the regenerated loop.
+         {
+            static const std::set<std::string> gemmi_writes = {
+               "group_PDB", "id", "type_symbol", "label_atom_id", "label_alt_id",
+               "label_comp_id", "label_asym_id", "label_entity_id", "label_seq_id",
+               "pdbx_PDB_ins_code", "Cartn_x", "Cartn_y", "Cartn_z", "occupancy",
+               "B_iso_or_equiv", "pdbx_formal_charge", "auth_seq_id", "auth_comp_id",
+               "auth_asym_id", "auth_atom_id", "pdbx_PDB_model_num",
+               "Cartn_x_esd", "Cartn_y_esd", "Cartn_z_esd", "occupancy_esd",
+               "B_iso_or_equiv_esd", "segment_id", "calc_flag" };
+
+            gemmi::cif::Table at = block.find_mmcif_category("_atom_site");
+            if (at.ok() && at.loop_item && ! skip_harvest) {
+               const gemmi::cif::Loop &loop = at.loop_item->loop;
+               int c_model = loop.find_tag("_atom_site.pdbx_PDB_model_num");
+               int c_chain = loop.find_tag("_atom_site.auth_asym_id");
+               int c_seq   = loop.find_tag("_atom_site.auth_seq_id");
+               int c_ic    = loop.find_tag("_atom_site.pdbx_PDB_ins_code");
+               int c_name  = loop.find_tag("_atom_site.label_atom_id");
+               int c_alt   = loop.find_tag("_atom_site.label_alt_id");
+               if (c_chain >= 0 && c_seq >= 0 && c_name >= 0) {
+                  for (size_t col = 0; col < loop.tags.size(); col++) {
+                     std::string tag = loop.tags[col];
+                     std::string short_name = tag.substr(tag.find('.') + 1);
+                     if (gemmi_writes.count(short_name)) continue;
+                     std::map<std::string, std::string> &dest =
+                        extra_columns[short_name];
+                     for (size_t r = 0; r < loop.length(); r++) {
+                        std::string key = coot::mmcif_document_t::atom_extra_key(
+                           c_model >= 0 ? gemmi::cif::as_string(loop.val(r, c_model)) : "1",
+                           gemmi::cif::as_string(loop.val(r, c_chain)),
+                           gemmi::cif::as_string(loop.val(r, c_seq)),
+                           c_ic  >= 0 ? gemmi::cif::as_string(loop.val(r, c_ic))  : "",
+                           gemmi::cif::as_string(loop.val(r, c_name)),
+                           c_alt >= 0 ? gemmi::cif::as_string(loop.val(r, c_alt)) : "");
+                        // Store the RAW token, NOT as_string(): as_string
+                        // turns the CIF null "." into an empty string, and
+                        // writing that back emits ZERO characters -- one token
+                        // short, so every value after it on the row shifts by
+                        // one and the file no longer parses. That is exactly
+                        // how the first water row of a renumbered file broke
+                        // (gemmi: "loop _atom_site.id row 3039 data O").
+                        // Keys are still built with as_string, which is right:
+                        // identity comparison wants the unquoted value.
+                        dest[key] = loop.val(r, col);
+                     }
+                     std::cout << "INFO:: carrying non-standard _atom_site column "
+                               << short_name << " (" << dest.size() << " atoms)"
+                               << std::endl;
+                  }
+               }
+            }
+         }
+
+         {  // remember which anisotrop columns the file had, before stripping
+            gemmi::cif::Table an = block.find_mmcif_category("_atom_site_anisotrop");
+            if (an.ok() && an.loop_item && ! skip_harvest)
+               anisotrop_tags = an.loop_item->loop.tags;
+            // and the cis-peptide columns, which gemmi also regenerates narrower
+            gemmi::cif::Table ci = block.find_mmcif_category("_struct_mon_prot_cis");
+            if (ci.ok() && ci.loop_item && ! skip_harvest)
+               cis_tags = ci.loop_item->loop.tags;
+         }
+
          for (const char *cat : { "_atom_site", "_atom_site_anisotrop" }) {
             gemmi::cif::Table tab = block.find_mmcif_category(cat);
             if (tab.ok())
@@ -261,6 +425,10 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
 
          *doc_out = std::make_shared<coot::mmcif_document_t>(std::move(saved_doc),
                                                              file_name);
+         (*doc_out)->residue_labels   = std::move(harvested_labels);
+         (*doc_out)->atom_extra_columns = std::move(extra_columns);
+         (*doc_out)->anisotrop_tags     = std::move(anisotrop_tags);
+         (*doc_out)->cis_tags           = std::move(cis_tags);
       }
 
       if (message)

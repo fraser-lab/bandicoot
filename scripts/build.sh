@@ -312,17 +312,28 @@ echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time
 # stays inert and pandda.inspect can't launch — see
 # [[bandicoot-coot-py-broken]] for the full backstory.
 
-# RELEASE builds recompile from clean. Compile-time -D macros (PKGDATADIR etc.)
-# are baked into each .o; changing a compile flag -- e.g. the generic
-# BANDICOOT_COMPILE_PREFIX -- does NOT retrigger compilation of unchanged
-# sources, so stale objects would keep an old prefix (this is how the builder's
-# /Users/<home> path lingered in the binaries). A clean recompile guarantees the
-# shipped binaries carry only the generic fallback path. Dev builds stay
-# incremental (fast); force a clean one anytime with BANDICOOT_CLEAN=1.
-if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_NIGHTLY:-}" ] \
-   || [ -n "${BANDICOOT_CLEAN:-}" ]; then
-    echo "==> make clean (release/nightly/clean build)"
+# EVERY BUILD RECOMPILES FROM CLEAN (Art, 2026-08-14). Slower is fine; a build
+# that might be part-stale is not.
+#
+# Two ways this has already cost real time:
+#   - Compile-time -D macros (PKGDATADIR, BANDICOOT_COMPILE_PREFIX, ...) are
+#     baked into each .o, and changing a FLAG does not retrigger compilation of
+#     unchanged sources -- so stale objects kept an old prefix, which is how the
+#     builder's /Users/<home> path lingered in shipped binaries.
+#   - After the C++14 -> C++17 flip, make rebuilt only 144 of 676 objects and
+#     exited 0: 532 stale C++14 objects were linked in, so a "successful" build
+#     validated almost nothing and mixed two standards in one binary.
+# A third came up on 2026-08-13: adding FIELDS to a class held across
+# translation-unit boundaries makes a stale object file a memory-corruption bug
+# rather than a compile error -- the sort of thing that costs a day to chase.
+#
+# BANDICOOT_INCREMENTAL=1 opts out for a quick edit-compile loop. It is
+# deliberately opt-IN: the fast path should be the one you have to ask for.
+if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
+    echo "==> make clean (every build is a clean build; BANDICOOT_INCREMENTAL=1 to opt out)"
     make clean >/dev/null 2>&1 || true
+else
+    echo "==> INCREMENTAL build requested (BANDICOOT_INCREMENTAL=1) - objects may be stale"
 fi
 echo "==> make -j${JOBS}"
 make -j"${JOBS}"

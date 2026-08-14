@@ -131,6 +131,46 @@ Nothing is lost by this. Phase 3's verbatim passthrough preserves the whole `str
 category on write, `hydrog` rows included; the filter applies only to the LINK table that
 feeds refinement. `disulf`, `covale` and `metalc` are transferred.
 
+## `--write-check` — the Phase 3 write-side gate
+
+```sh
+./tools/gemmi-diff/gemmi-mmdb-diff --write-check        # whole corpus
+```
+
+Reads each mmCIF through the production reader, writes it straight back out through the
+production writer **with no edits in between**, and diffs the categories of the input
+against the output. Output files are left in `$TMPDIR/bandicoot-write-check/` for
+inspection.
+
+This is the axis the read-side diff structurally cannot see — the Phase 1 gate passed with
+"~250,000 atoms, zero differences" while measuring only atoms, and the metadata losses it
+was blind to surfaced a day later in discussion rather than at the gate.
+
+**"Identical" here means tag-and-value identity, not literal bytes.** gemmi regenerates
+loop text with its own column spacing, so alignment and trailing whitespace are normalised
+on every write. That is not data loss, and chasing byte-identity would mean
+re-implementing gemmi's writer.
+
+**Unlike the read-side mode, this exit status IS a gate.** Losing a category is never
+expected or deliberate, so non-zero means a real regression. Read declines (a
+small-molecule CIF legitimately yielding zero atoms) are counted separately and do *not*
+fail it — otherwise the gate would be permanently red and therefore useless. Non-mmCIF
+inputs are skipped: a PDB file has no document to preserve, so "categories in vs out" is
+not a question that means anything.
+
+Baseline as of 2026-08-12 (`0.2.0.0-u17`):
+
+```
+write-side summary: 12 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
+```
+
+The only reported differences are `_cell` 7→8 and `_symmetry` 3→4 on the two
+`SC1_2_refine_*` files — gemmi adding `_cell.entry_id` / `_symmetry.entry_id`, which are
+EDIT categories written from its standard tag set. Additions, not losses.
+
+**Verified to actually fail:** deliberately erasing `_struct_conf` before the write makes
+it report `LOST : _struct_conf (279 rows)` and exit 1.
+
 ## The trap catalogue
 
 `TRAPS.md`, beside this file, is the catalogue of coordinate-file properties and API

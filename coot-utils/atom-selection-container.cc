@@ -199,7 +199,7 @@ get_atom_selection(std::string pdb_name,
           // than left as a silent fallback: if gemmi ever fails on such a file
           // we want the read error, because it points at something gemmi is not
           // doing right and that deserves a look.
-          if (coot::gemmi_handles_extension(extension)) {
+          if (coot::gemmi_handles_file(pdb_name)) {
              std::string gemmi_message;
              mmdb::Manager *gemmi_mol = coot::read_coords_with_gemmi(pdb_name, &gemmi_message,
                                                                      mmcif_doc_out);

@@ -34,13 +34,24 @@ centre_of_molecule(atom_selection_container_t SelAtom);
 
 
 
+namespace coot {
+   // BANDICOOT v0.2 (Phase 3): forward declaration only -- the definition is
+   // in coot-utils/mmcif-document.hh, the one header that includes gemmi.
+   struct mmcif_document_t;
+}
+
+//! \param mmcif_doc the document this molecule was read from, when it came
+//!        from an mmCIF file. Supplying it is what lets the mmCIF branch
+//!        preserve every category Bandicoot does not regenerate; without it
+//!        the writer synthesises a thinner document. Ignored for PDB output.
 int write_atom_selection_file(atom_selection_container_t asc,
 			      const std::string &filename,
 			      bool write_as_cif_flag,
 			      mmdb::byte gz,
 			      bool write_hydrogens = 1,  // optional arg
 			      bool write_aniso_records = 1,  // optional arg
-			      bool write_conect_records = 0);  // optional arg
+			      bool write_conect_records = 0,  // optional arg
+			      coot::mmcif_document_t *mmcif_doc = nullptr);
 
 class access_mol : public mmdb::Manager {
  public:

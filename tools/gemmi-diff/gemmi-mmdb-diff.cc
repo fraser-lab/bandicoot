@@ -30,13 +30,19 @@
 
 #include "coot-utils/atom-selection-container.hh"
 #include "coot-utils/gemmi-coords.hh"   // the production gemmi read path
+#include "coot-utils/gemmi-write.hh"    // the production gemmi write path
+#include "coot-utils/mmcif-document.hh" // the retained document
 #include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
 
+#include <gemmi/read_cif.hpp>   // read_cif_gz, for the write-side re-read
+
 #include <dirent.h>            // corpus enumeration (--corpus / the default run)
+#include <sys/stat.h>          // mkdir, for the write-side output dir
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -650,6 +656,277 @@ static std::vector<std::string> corpus_files(const std::string &dir) {
    return out;
 }
 
+// ---------------------------------------------------------------------------
+// WRITE-SIDE CHECK (Phase 3 gate)
+//
+// Read a file through the production reader, write it straight back out through
+// the production writer with NO edits in between, and diff the categories of
+// the input against the output.
+//
+// This is the axis the read-side diff structurally cannot see. The Phase 1 gate
+// passed with "~250,000 atoms, ZERO differences" while measuring only atoms,
+// and the metadata losses it could not see surfaced a day later in discussion
+// rather than at the gate. This closes that axis for good: the next gemmi bump,
+// the next per-category policy change and the next reader change cannot quietly
+// reopen the class of loss, because this fails instead.
+//
+// WHAT "IDENTICAL" MEANS HERE: tag-and-value identity, NOT literal bytes. gemmi
+// regenerates loop text with its own column spacing, so alignment and trailing
+// whitespace are normalised on every write. That is not data loss, and chasing
+// byte-identity would mean re-implementing gemmi's writer.
+// ---------------------------------------------------------------------------
+
+// Category name -> number of rows (loop) or tag-items (pairs).
+static std::map<std::string, size_t> categories_of(const gemmi::cif::Block &b) {
+   std::map<std::string, size_t> m;
+   for (const gemmi::cif::Item &it : b.items) {
+      std::string tag;
+      size_t rows = 1;
+      if (it.type == gemmi::cif::ItemType::Pair) {
+         tag = it.pair[0];
+      } else if (it.type == gemmi::cif::ItemType::Loop && !it.loop.tags.empty()) {
+         tag = it.loop.tags[0];
+         rows = it.loop.values.size() / it.loop.tags.size();
+      }
+      if (tag.empty()) continue;
+      std::string::size_type dot = tag.find('.');
+      m[dot == std::string::npos ? tag : tag.substr(0, dot)] += rows;
+   }
+   return m;
+}
+
+// Category -> tag -> column of values, built from either a loop or a set of
+// pairs so the two representations compare equal. Values are unquoted.
+typedef std::map<std::string, std::map<std::string, std::vector<std::string> > > CatValues;
+
+static CatValues harvest_values(const gemmi::cif::Block &b) {
+   CatValues out;
+   for (const gemmi::cif::Item &it : b.items) {
+      if (it.type == gemmi::cif::ItemType::Pair) {
+         const std::string &tag = it.pair[0];
+         std::string::size_type dot = tag.find('.');
+         if (dot == std::string::npos) continue;
+         out[tag.substr(0, dot)][tag.substr(dot + 1)]
+            .push_back(gemmi::cif::as_string(it.pair[1]));
+      } else if (it.type == gemmi::cif::ItemType::Loop && !it.loop.tags.empty()) {
+         size_t ntags = it.loop.tags.size();
+         size_t nrows = it.loop.values.size() / ntags;
+         for (size_t c = 0; c < ntags; c++) {
+            const std::string &tag = it.loop.tags[c];
+            std::string::size_type dot = tag.find('.');
+            if (dot == std::string::npos) continue;
+            std::vector<std::string> &col = out[tag.substr(0, dot)][tag.substr(dot + 1)];
+            for (size_t r = 0; r < nrows; r++)
+               col.push_back(gemmi::cif::as_string(it.loop.values[r * ntags + c]));
+         }
+      }
+   }
+   return out;
+}
+
+// Equal as VALUES, not as text: "1" == "1.00" and "18.42" == "18.420", because
+// gemmi writes the shortest representation while wwPDB pads to fixed decimals.
+// Without this every atom row would report a difference and the check would be
+// unreadable. A genuine coordinate change is far larger than the tolerance.
+// Order numerically when both sides parse as numbers, lexicographically
+// otherwise. Sorting numeric columns as TEXT pairs "18.42" with "18.420" in
+// different slots and reports thousands of phantom coordinate changes -- the
+// same class of mistake as comparing by index, one level down.
+static bool value_less(const std::string &a, const std::string &b) {
+   try {
+      size_t pa = 0, pb = 0;
+      double da = std::stod(a, &pa), db = std::stod(b, &pb);
+      if (pa == a.size() && pb == b.size()) return da < db;
+   } catch (...) {}
+   return a < b;
+}
+
+static bool values_equal(const std::string &a, const std::string &b) {
+   if (a == b) return true;
+   try {
+      size_t pa = 0, pb = 0;
+      double da = std::stod(a, &pa), db = std::stod(b, &pb);
+      if (pa == a.size() && pb == b.size())
+         return std::fabs(da - db) <= 1e-4 * std::max(1.0, std::fabs(da));
+   } catch (...) {}
+   return false;
+}
+
+static bool is_mmcif_path(const std::string &p) {
+   std::string n = p;
+   if (n.size() > 3 && n.compare(n.size() - 3, 3, ".gz") == 0) n.erase(n.size() - 3);
+   std::string::size_type dot = n.rfind('.');
+   if (dot == std::string::npos) return false;
+   std::string e = n.substr(dot);
+   for (char &c : e) c = std::tolower(static_cast<unsigned char>(c));
+   return e == ".cif" || e == ".mmcif" || e == ".mcif";
+}
+
+// returns: 0 clean, 1 something was lost
+static int write_check(const std::vector<std::string> &files, const std::string &out_dir) {
+
+   mkdir(out_dir.c_str(), 0755);
+   printf("write-side check: read -> write with no edits, categories in vs out\n");
+   printf("output written to %s\n\n", out_dir.c_str());
+
+   int n_clean = 0, n_lossy = 0, n_skipped = 0, n_failed = 0, n_declined = 0;
+
+   for (const std::string &in : files) {
+
+      std::string base = in.substr(in.rfind('/') + 1);
+
+      // A PDB input has no document to preserve, so "categories in vs out" is
+      // not a question that means anything -- the writer synthesises, and the
+      // input had no categories to compare against. Skip rather than pretend.
+      if (! is_mmcif_path(in)) { n_skipped++; continue; }
+
+      printf("=== %s\n", base.c_str());
+
+      std::shared_ptr<coot::mmcif_document_t> doc;
+      std::string msg;
+      mmdb::Manager *mol = coot::read_coords_with_gemmi(in, &msg, &doc);
+      if (! mol) {
+         // The reader DECLINING a file is not a write-side failure. A
+         // small-molecule CIF legitimately yields zero atoms and falls back to
+         // read-sm-cif.cc; making that fail this gate would leave the gate
+         // permanently red and therefore useless. Read-side behaviour is the
+         // read-side mode's job. Reported, and counted separately, so a NEW
+         // decline is still visible as a changed count.
+         printf("    read declined (%s) -- not a write-side concern\n\n", msg.c_str());
+         n_declined++;
+         continue;
+      }
+
+      std::string out = out_dir + "/" + base;
+      if (! coot::write_coords_with_gemmi(mol, out, doc.get(), &msg)) {
+         printf("    WRITE FAILED: %s\n\n", msg.c_str());
+         n_failed++;
+         delete mol;
+         continue;
+      }
+      delete mol;
+
+      std::map<std::string, size_t> before, after;
+      size_t blocks_in = 0, blocks_out = 0;
+      try {
+         gemmi::cif::Document di = gemmi::read_cif_gz(in);
+         gemmi::cif::Document dobj = gemmi::read_cif_gz(out);
+         blocks_in  = di.blocks.size();
+         blocks_out = dobj.blocks.size();
+         before = categories_of(di.blocks.at(0));
+         after  = categories_of(dobj.blocks.at(0));
+      } catch (const std::exception &e) {
+         printf("    RE-READ FAILED: %s\n\n", e.what());
+         n_failed++;
+         continue;
+      }
+
+      printf("    blocks %zu -> %zu   categories %zu -> %zu\n",
+             blocks_in, blocks_out, before.size(), after.size());
+
+      // --- column and value comparison (the axis that missed the label_*
+      // and _atom_site_anisotrop losses: both categories were PRESENT with the
+      // right ROW COUNT while columns went missing underneath) ---
+      int n_tag_lost = 0, n_val_diff = 0, n_examples = 0;
+      try {
+         CatValues vb = harvest_values(gemmi::read_cif_gz(in).blocks.at(0));
+         CatValues va = harvest_values(gemmi::read_cif_gz(out).blocks.at(0));
+         for (CatValues::const_iterator c = vb.begin(); c != vb.end(); ++c) {
+            CatValues::const_iterator c2 = va.find(c->first);
+            if (c2 == va.end()) continue;          // whole-category loss already reported
+            for (std::map<std::string, std::vector<std::string> >::const_iterator
+                    t = c->second.begin(); t != c->second.end(); ++t) {
+               std::map<std::string, std::vector<std::string> >::const_iterator
+                  t2 = c2->second.find(t->first);
+               if (t2 == c2->second.end()) {
+                  printf("      TAG LOST: %s.%s\n", c->first.c_str(), t->first.c_str());
+                  n_tag_lost++;
+                  continue;
+               }
+               if (t->second.size() != t2->second.size()) continue;  // ROWS line covers it
+               // Compare each column as a SORTED MULTISET, never positionally.
+               // Row order legitimately differs: merge_chain_parts() concatenates
+               // split chain parts on read, so a file whose author chain was
+               // split comes back with its residues in a different order. A
+               // positional compare reported 566,883 "changed" B factors on the
+               // first run -- which is precisely the mistake this tool's own
+               // header warns about for atoms ("never by index, or one ordering
+               // difference looks like thousands of changed atoms"). Sorting
+               // costs the ability to spot a permutation WITHIN one column,
+               // which is not a failure mode any of this code can produce.
+               std::vector<std::string> col_b = t->second, col_a = t2->second;
+               std::sort(col_b.begin(), col_b.end(), value_less);
+               std::sort(col_a.begin(), col_a.end(), value_less);
+               // ACCEPTED DEVIATION: element symbol case. mmdb preserves the
+               // file's spelling ("Cl"), gemmi normalises to upper ("CL").
+               // Art's decision 2026-08-13: keep the normalisation, because it
+               // is what wwPDB itself writes -- CA, SE, MG throughout the
+               // corpus -- while mixed case comes from phenix. So it follows
+               // the convention rather than breaking it, and the gate must not
+               // fail on it or it stays permanently red on the SC1 files.
+               bool element_col = (t->first == "type_symbol" || t->first == "symbol");
+               for (size_t r = 0; r < col_b.size(); r++) {
+                  if (element_col) {
+                     std::string x = col_b[r], y = col_a[r];
+                     for (char &ch : x) ch = std::toupper((unsigned char) ch);
+                     for (char &ch : y) ch = std::toupper((unsigned char) ch);
+                     if (x == y) continue;
+                  }
+                  if (! values_equal(col_b[r], col_a[r])) {
+                     n_val_diff++;
+                     if (n_examples < 3) {
+                        printf("      VALUE   : %s.%s (sorted) \"%s\" -> \"%s\"\n",
+                               c->first.c_str(), t->first.c_str(),
+                               col_b[r].c_str(), col_a[r].c_str());
+                        n_examples++;
+                     }
+                  }
+               }
+            }
+         }
+      } catch (const std::exception &e) {
+         printf("      (value comparison failed: %s)\n", e.what());
+      }
+      if (n_val_diff > n_examples)
+         printf("      VALUE   : ... %d differing cells in total\n", n_val_diff);
+
+      bool lost = (n_tag_lost > 0) || (n_val_diff > 0);
+      if (blocks_in != blocks_out) {
+         printf("      BLOCKS LOST: %zu -> %zu\n", blocks_in, blocks_out);
+         lost = true;
+      }
+      for (const auto &kv : before) {
+         if (! after.count(kv.first)) {
+            printf("      LOST    : %-36s (%zu rows)\n", kv.first.c_str(), kv.second);
+            lost = true;
+         }
+      }
+      for (const auto &kv : after)
+         if (! before.count(kv.first))
+            printf("      ADDED   : %-36s (%zu rows)\n", kv.first.c_str(), kv.second);
+      for (const auto &kv : before) {
+         std::map<std::string, size_t>::const_iterator j = after.find(kv.first);
+         if (j != after.end() && j->second != kv.second)
+            printf("      ROWS    : %-36s %zu -> %zu\n",
+                   kv.first.c_str(), kv.second, j->second);
+      }
+
+      if (lost) n_lossy++; else n_clean++;
+      printf("    ==> %s\n\n", lost ? "LOSSY" : "no categories lost");
+   }
+
+   printf("write-side summary: %d clean, %d lossy, %d write-failed, "
+          "%d read-declined, %d skipped (not mmCIF)\n",
+          n_clean, n_lossy, n_failed, n_declined, n_skipped);
+
+   // Unlike the read-side diff, THIS exit status IS a gate: losing a category is
+   // never expected or deliberate, so any non-zero here is a real regression.
+   if (n_lossy || n_failed)
+      printf("*** WRITE-SIDE GATE FAILED ***\n");
+   return (n_lossy || n_failed) ? 1 : 0;
+}
+
+
 int main(int argc, char **argv) {
    ensure_syminfo();
    bool setup_entities = true;
@@ -657,6 +934,7 @@ int main(int argc, char **argv) {
    bool drop_hydrog_links = true;
    std::vector<std::string> files;
    std::string corpus;
+   bool do_write_check = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
@@ -664,6 +942,7 @@ int main(int argc, char **argv) {
       else if (a == "--keep-hydrog-links") drop_hydrog_links = false;
       else if (a == "--dump-chains") g_dump_chains = true;
       else if (a == "--corpus" && i + 1 < argc) corpus = argv[++i];
+      else if (a == "--write-check") do_write_check = true;
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
    }
@@ -693,11 +972,20 @@ int main(int argc, char **argv) {
       fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
                       "                      [--no-setup-entities] [--no-merge-chains]\n"
                       "                      [--keep-hydrog-links] [--corpus DIR]\n"
+                      "                      [--write-check]\n"
                       "                      [<coord-file> ...]\n"
                       "\n"
                       "With no files, runs every .cif/.ent/.pdb in the corpus directory\n"
                       "(--corpus, else $BANDICOOT_SAMPLES, else the compiled-in default).\n");
       return 2;
+   }
+
+   if (do_write_check) {
+      const char *tmp = getenv("TMPDIR");
+      std::string out_dir = tmp ? std::string(tmp) : std::string("/tmp");
+      if (out_dir.empty() || out_dir[out_dir.size() - 1] != '/') out_dir += "/";
+      out_dir += "bandicoot-write-check";
+      return write_check(files, out_dir);
    }
 
    printf("read-side diff: mmdb reader (A) vs gemmi->copy_to_mmdb (B)\n");

@@ -6801,9 +6801,13 @@ molecule_class_info_t::save_coordinates(const std::string filename,
       if (coot::is_mmcif_filename(filename))
          write_as_cif = true;
 
+      // BANDICOOT v0.2 (Phase 3): pass the retained mmCIF document so the
+      // written file keeps every category Bandicoot does not regenerate.
+      // Null for a molecule that did not come from mmCIF; the writer then
+      // synthesises one.
       ierr = write_atom_selection_file(atom_sel, filename, write_as_cif, bz,
                                        save_hydrogens, save_aniso_records,
-                                       save_conect_records);
+                                       save_conect_records, mmcif_doc.get());
    }
 
    if (ierr) {
@@ -7251,7 +7255,12 @@ molecule_class_info_t::make_backup() { // changes history details
                if (coot::is_mmcif_filename(name_))
                   write_as_cif = true;
 
-               istat = write_atom_selection_file(atom_sel, backup_file_name, write_as_cif, gz);
+               // BANDICOOT v0.2 (Phase 3): the backup goes through the same
+               // preserving writer. This matters more than the save path does:
+               // Undo re-reads the backup, so anything the backup drops is
+               // lost from the live session, not just from a file on disk.
+               istat = write_atom_selection_file(atom_sel, backup_file_name, write_as_cif, gz,
+                                                 1, 1, 0, mmcif_doc.get());
 
                // WriteMMDBF returns 0 on success, else mmdb:Error_CantOpenFile (15)
                if (istat) {
@@ -8855,35 +8864,37 @@ molecule_class_info_t::stripped_save_name_suggestion() {
    // so we have got rid of the pathname.
    // now lets get rid of the extension
    //
-   std::string::size_type ibrk   = stripped_name1.rfind(".brk");
-   std::string::size_type ibrkgz = stripped_name1.rfind(".brk.gz");
-   std::string::size_type ipdb   = stripped_name1.rfind(".pdb");
-   std::string::size_type ires   = stripped_name1.rfind(".res");
-   std::string::size_type ipdbgz = stripped_name1.rfind(".pdb.gz");
    std::string::size_type icoot  = stripped_name1.rfind("-coot-");
 
    std::string stripped_name2;
    if (icoot == std::string::npos) {
-      if (ibrk == std::string::npos) {
-         if (ibrkgz == std::string::npos) {
-            if (ipdb == std::string::npos) {
-               if (ires == std::string::npos) {
-                  if (ipdbgz == std::string::npos) {
-                     stripped_name2 = stripped_name1;
-                  } else {
-                     stripped_name2 = stripped_name1.substr(0, ipdbgz);
-                  }
-               } else {
-                  stripped_name2 = stripped_name1.substr(0, ires);
-               }
-            } else {
-               stripped_name2 = stripped_name1.substr(0, ipdb);
-            }
-         } else {
-            stripped_name2 = stripped_name1.substr(0, ibrkgz);
+
+      // BANDICOOT v0.2: strip a known coordinate extension from the END.
+      //
+      // This was a nested-if ladder over .brk/.brk.gz/.pdb/.res/.pdb.gz with
+      // two gaps. mmCIF was never in it, so an mmCIF molecule was offered
+      // "3K0N_hierarchy.cif-coot-0.cif" -- the old extension buried inside the
+      // new name. Neither was ".ent", which is what every file fetched from
+      // the PDB is called, so those had the same problem.
+      //
+      // Longest first, so ".pdb.gz" wins over ".pdb". Anchored to the end of
+      // the string rather than using a bare rfind(), which would truncate a
+      // file called "notes.pdb.txt" at the ".pdb".
+      static const char *coord_extensions[] = {
+         ".mmcif.gz", ".pdb.gz", ".brk.gz", ".ent.gz", ".cif.gz", ".mcif.gz",
+         ".mmcif", ".pdb", ".brk", ".ent", ".res", ".ins", ".cif", ".mcif" };
+
+      stripped_name2 = stripped_name1;
+      for (unsigned int i = 0; i < sizeof(coord_extensions)/sizeof(coord_extensions[0]); i++) {
+         std::string ext(coord_extensions[i]);
+         if (stripped_name2.length() <= ext.length()) continue;
+         std::string tail = stripped_name2.substr(stripped_name2.length() - ext.length());
+         for (unsigned int j = 0; j < tail.length(); j++)
+            tail[j] = std::tolower(static_cast<unsigned char>(tail[j]));
+         if (tail == ext) {
+            stripped_name2 = stripped_name2.substr(0, stripped_name2.length() - ext.length());
+            break;
          }
-      } else {
-         stripped_name2 = stripped_name1.substr(0, ibrk);
       }
    } else {
       set_coot_save_index(stripped_name1.substr(icoot));

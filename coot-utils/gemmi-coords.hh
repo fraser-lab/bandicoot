@@ -38,6 +38,13 @@ namespace coot {
    //! all.
    bool gemmi_handles_extension(const std::string &extension);
 
+   //! Is this a FILE we route through gemmi?
+   //
+   //! Prefer this to gemmi_handles_extension(): it looks beneath a trailing
+   //! ".gz", so a compressed mmCIF is recognised. Compression must not decide
+   //! which parser runs -- see the note in the .cc.
+   bool gemmi_handles_file(const std::string &file_name);
+
    //! Read a coordinate file with gemmi and convert it to an mmdb::Manager.
    //
    //! Returns a newly-allocated Manager the caller owns, or nullptr if the file

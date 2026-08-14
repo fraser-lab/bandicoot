@@ -46,6 +46,7 @@
 #include "coot-utils/coot-shelx.hh"
 
 #include "coot-utils/read-sm-cif.hh"
+#include "coot-utils/gemmi-write.hh"   // Bandicoot v0.2: the gemmi mmCIF write path
 
 
 
@@ -121,43 +122,78 @@ write_atom_selection_file(atom_selection_container_t asc,
 			  mmdb::byte gz,
 			  bool write_hydrogens,     // optional arg
 			  bool write_aniso_records, // optional arg
-			  bool write_conect_records // optional arg
+			  bool write_conect_records, // optional arg
+			  coot::mmcif_document_t *mmcif_doc // optional arg
 			  ) {
 
-   int ierr = 0; 
+   int ierr = 0;
    coot::util::remove_wrong_cis_peptides(asc.mol);
    mmdb::Manager *mol = asc.mol;
    bool mol_needs_deleting = false; // unless mol is reassigned...
 
+   // BANDICOOT v0.2 (Phase 3): the three write options below used to apply to
+   // the PDB branch ONLY -- the mmCIF branch ignored all of them. Two of them
+   // are user-facing checkboxes in the write-file dialog, so ticking "no
+   // hydrogens" and saving as mmCIF silently wrote the hydrogens anyway.
+   // Predates the gemmi work; fixed here by hoisting the stripping out of the
+   // PDB branch so both formats honour it.
+   if (! write_hydrogens) {
+      mmdb::Manager *n = new mmdb::Manager;
+      n->Copy(mol, mmdb::MMDBFCM_All);
+      coot::delete_hydrogens_from_mol(n);
+      if (mol_needs_deleting) delete mol;
+      mol = n;
+      mol_needs_deleting = true;
+   }
+
+   if (! write_aniso_records) {
+      mmdb::Manager *n = new mmdb::Manager;
+      n->Copy(mol, mmdb::MMDBFCM_All);
+      coot::delete_aniso_records_from_atoms(n);
+      if (mol_needs_deleting) delete mol;
+      mol = n;
+      mol_needs_deleting = true;
+   }
+
    if (write_as_cif_flag) {
 
-      // WriteCIFASCII() seems to duplicate the atoms (maybe related to aniso?)
-      // So let's copy the molecule and throw away the copy, that way we don't
-      // duplicate teh atoms in the original molecule.
+      // BANDICOOT v0.2 (Phase 3): mmCIF is written by gemmi.
+      //
+      // copy_from_mmdb -> update_mmcif_block -> write. The retained document
+      // is updated IN PLACE, so every category Bandicoot does not regenerate
+      // reaches the file exactly as it was read. mmdb's own WriteCIFASCII
+      // re-synthesised from a hard-coded tag list and turned 65 categories
+      // into 15; that is what this replaces.
+      //
+      // Note write_conect_records is deliberately NOT honoured here: CONECT is
+      // a PDB record type with no mmCIF equivalent (connectivity lives in
+      // struct_conn, which is passed through), so there is nothing to strip.
+      //
+      // On failure we fall back to the old writer rather than leave the user
+      // with no file at all -- a save that silently does nothing is far worse
+      // than a save in a poorer format.
+      std::string gemmi_message;
+      if (coot::write_coords_with_gemmi(mol, filename, mmcif_doc, &gemmi_message)) {
+         ierr = 0;
+      } else {
+         std::cout << "WARNING:: gemmi could not write " << filename << " ("
+                   << gemmi_message << "); falling back to the mmdb writer"
+                   << std::endl;
 
-      mmdb::Manager *mol_copy  = new mmdb::Manager;
-      mol_copy->Copy(mol, mmdb::MMDBFCM_All);
-      ierr = mol_copy->WriteCIFASCII(filename.c_str());
-      delete mol_copy;
+         // WriteCIFASCII() seems to duplicate the atoms (maybe related to aniso?)
+         // So let's copy the molecule and throw away the copy, that way we don't
+         // duplicate teh atoms in the original molecule.
+         mmdb::Manager *mol_copy  = new mmdb::Manager;
+         mol_copy->Copy(mol, mmdb::MMDBFCM_All);
+         ierr = mol_copy->WriteCIFASCII(filename.c_str());
+         delete mol_copy;
+      }
 
    } else {
 
-      if (! write_hydrogens) {
-	 mmdb::Manager *n = new mmdb::Manager;
-	 n->Copy(mol, mmdb::MMDBFCM_All);
-	 coot::delete_hydrogens_from_mol(n);
-	 mol = n;
-	 mol_needs_deleting = true;
-      }
-
-      if (! write_aniso_records) {
-	 mmdb::Manager *n = new mmdb::Manager;
-	 n->Copy(mol, mmdb::MMDBFCM_All);
-	 coot::delete_aniso_records_from_atoms(n);
-	 mol = n;
-	 mol_needs_deleting = true;
-      }
-
+      // write_hydrogens and write_aniso_records are handled above, before the
+      // format branch, so that mmCIF honours them too. write_conect_records is
+      // PDB-only: CONECT has no mmCIF equivalent.
       if (! write_conect_records) {
 	 mmdb::Manager *n = new mmdb::Manager;
 	 n->Copy(mol, mmdb::MMDBFCM_All);
