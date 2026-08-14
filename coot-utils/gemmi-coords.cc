@@ -164,23 +164,12 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
       // captured is unambiguously the FILE's own values. (setup_entities calls
       // assign_subchains with force=false, so it would not overwrite them --
       // but depending on that is a needless hostage to a gemmi change.)
-      // TEMPORARY BISECT SWITCH (2026-08-14) -- REMOVE once the RSR-poisoning
-      // regression is found. Setting BANDICOOT_NO_HARVEST=1 skips every
-      // read-side harvest added in builds u24-u30 (label_*, non-standard
-      // _atom_site columns, anisotrop and cis tag lists) while leaving the rest
-      // of the read path untouched. One binary, two behaviours, so the question
-      // "is it the harvesting at all?" costs one GUI session instead of a
-      // rebuild per hypothesis.
-      const bool skip_harvest = (getenv("BANDICOOT_NO_HARVEST") != nullptr);
-      if (skip_harvest)
-         std::cout << "INFO:: BANDICOOT_NO_HARVEST set - skipping read-side harvests"
-                   << std::endl;
-
       std::map<std::string, coot::residue_labels_t> harvested_labels;
       std::map<std::string, std::map<std::string, std::string> > extra_columns;
       std::vector<std::string> anisotrop_tags;
       std::vector<std::string> cis_tags;
-      if (doc_out && ! skip_harvest) {
+      int atom_site_index = -1;
+      if (doc_out) {
          for (const gemmi::Model &model : st.models) {
             int model_num = model.num;
             for (const gemmi::Chain &chain : model.chains) {
@@ -365,7 +354,7 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
                "B_iso_or_equiv_esd", "segment_id", "calc_flag" };
 
             gemmi::cif::Table at = block.find_mmcif_category("_atom_site");
-            if (at.ok() && at.loop_item && ! skip_harvest) {
+            if (at.ok() && at.loop_item) {
                const gemmi::cif::Loop &loop = at.loop_item->loop;
                int c_model = loop.find_tag("_atom_site.pdbx_PDB_model_num");
                int c_chain = loop.find_tag("_atom_site.auth_asym_id");
@@ -409,12 +398,18 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
 
          {  // remember which anisotrop columns the file had, before stripping
             gemmi::cif::Table an = block.find_mmcif_category("_atom_site_anisotrop");
-            if (an.ok() && an.loop_item && ! skip_harvest)
+            if (an.ok() && an.loop_item)
                anisotrop_tags = an.loop_item->loop.tags;
             // and the cis-peptide columns, which gemmi also regenerates narrower
             gemmi::cif::Table ci = block.find_mmcif_category("_struct_mon_prot_cis");
-            if (ci.ok() && ci.loop_item && ! skip_harvest)
+            if (ci.ok() && ci.loop_item)
                cis_tags = ci.loop_item->loop.tags;
+         }
+
+         {  // remember where _atom_site sat, so the writer can put it back
+            gemmi::cif::Table at2 = block.find_mmcif_category("_atom_site");
+            if (at2.ok() && at2.loop_item)
+               atom_site_index = static_cast<int>(at2.loop_item - block.items.data());
          }
 
          for (const char *cat : { "_atom_site", "_atom_site_anisotrop" }) {
@@ -429,6 +424,7 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
          (*doc_out)->atom_extra_columns = std::move(extra_columns);
          (*doc_out)->anisotrop_tags     = std::move(anisotrop_tags);
          (*doc_out)->cis_tags           = std::move(cis_tags);
+         (*doc_out)->atom_site_item_index = atom_site_index;
       }
 
       if (message)

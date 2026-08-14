@@ -158,15 +158,17 @@ fail it — otherwise the gate would be permanently red and therefore useless. N
 inputs are skipped: a PDB file has no document to preserve, so "categories in vs out" is
 not a question that means anything.
 
-Baseline as of 2026-08-12 (`0.2.0.0-u17`):
+It compares category presence, row counts, **column sets and values** — the last two added
+2026-08-13 after the category-only version passed a file that had lost ten columns. Values are
+compared per column as a multiset sorted NUMERICALLY, never row-by-row: `merge_chain_parts`
+legitimately reorders residues on read, and a positional compare reports hundreds of thousands
+of phantom differences.
+
+Baseline (see `TRAPS.md` for the full picture):
 
 ```
-write-side summary: 12 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
+write-side summary: 15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
 ```
-
-The only reported differences are `_cell` 7→8 and `_symmetry` 3→4 on the two
-`SC1_2_refine_*` files — gemmi adding `_cell.entry_id` / `_symmetry.entry_id`, which are
-EDIT categories written from its standard tag set. Additions, not losses.
 
 **Verified to actually fail:** deliberately erasing `_struct_conf` before the write makes
 it report `LOST : _struct_conf (279 rows)` and exit 1.

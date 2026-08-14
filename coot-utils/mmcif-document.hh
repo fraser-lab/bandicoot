@@ -153,6 +153,17 @@ namespace coot {
       //! the ones the file actually had should be re-added, hence this list.
       std::vector<std::string> anisotrop_tags;
 
+      //! Where _atom_site sat among the block's items in the input file.
+      //
+      //! _atom_site is stripped at read time, so update_mmcif_block() re-adds it
+      //! at the END of the block -- and every category that followed the
+      //! coordinates in the original (in 3K0N: _pdbx_poly_seq_scheme,
+      //! _pdbx_struct_assembly*, _pdbx_audit_revision_* and nine more) ends up
+      //! ahead of them instead. Category order carries no meaning in CIF, but
+      //! it is a gratuitous difference from the input, and this is a fidelity
+      //! project. -1 when there was no _atom_site.
+      int atom_site_item_index = -1;
+
       //! The _struct_mon_prot_cis columns the input file carried.
       std::vector<std::string> cis_tags;
 

@@ -107,7 +107,7 @@ error at all — the exact bug that was fixed once already.
 **Assertion:** UNCHECKED.
 **Breaks if regressed:** the SHELX branch is bypassed and the file fails to open.
 
-### A7. Compression decides which reader runs — A KNOWN DEFECT, NOT YET FIXED
+### A7. Compression decides which reader runs — FIXED 2026-08-13
 **Property:** a `.cif.gz` file.
 **Rule:** `coot::util::file_name_extension` returns everything after the **last** dot, so
 `foo.cif.gz` has extension `.gz`, `gemmi_handles_extension` is false, and **mmdb reads
@@ -390,33 +390,62 @@ a category outright (see below).
 
 | group | checked | unchecked |
 |---|---|---|
-| A. file shape | 3 | 4 |
-| B. model content | 9 | 1 |
+| A. file shape | 4 | 3 |
+| B. model content | 10 | 0 |
 | C. cross-format | 2 | 3 |
 | D. environment/API | n/a — documentation, not assertions | |
-| E. write side | 3 | 4 |
+| E. write side | 5 | 2 |
 
-Section E moved from 0-checked once `--write-check` landed (2026-08-12): E1's category-level
-half, E2 (cell-less files round-trip without gaining `_cell`), E6 and E7 are now covered by
-the gate. Still unchecked: E1's extension-COLUMN half (Phase 4's concern), E3
-(`_atom_site_anisotrop` emission), E4's knock-on effects, E5 (dangling records).
+Section E moved from 0-checked when `--write-check` landed (2026-08-12) and again when it
+learned to compare COLUMNS and VALUES (2026-08-13). Still unchecked there: E5 (dangling
+records after deletion) and A4's write-side half (a 20-model ensemble through the writer).
 
-**The two highest-value gaps to close next:** B9 (non-canonical space groups — the clipper
-failure is silent and yields wrong maps) and the whole of section E, which the Phase 3
-byte-identity gate is meant to cover.
+## Baselines — compare a run against these
 
-## Baseline: the full-corpus verdict as of 2026-08-12 (build `0.2.0.0-u12`)
+**Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u34`:
+```
+summary: 3 identical, 16 with differences, 4 failed to load
+```
+Every line is attributable to an entry above; a NEW unexplained line is the signal. The
+exit status is NOT a gate here — several differences are permanent and deliberate.
 
-`3 identical, 15 with differences, 4 failed to load` over all 22 coordinate files. **Every
-one of those is accounted for by an entry above**, which is the property that makes the run
-usable as a regression gate — a NEW unexplained line is the signal.
+**Write side** (`gemmi-mmdb-diff --write-check`), after the column/value work:
+```
+write-side summary: 15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
+```
+**Here the exit status IS a gate** — losing a category, a column or a value is never
+deliberate. Read declines (a small-molecule CIF yielding zero atoms) do not fail it, or the
+gate would be permanently red and stop being read.
 
-- **4 path-A failures:** `1AON.cif`, `SC1_2_refine_031.cif`, `SC1_2_refine_036.cif` (B8), and
-  `4517425.cif` — which fails on BOTH paths, path B with
-  `no atoms - not a macromolecular coordinate file`, exactly as A5 specifies.
-- **3 identical:** `pdb1aon.ent`, `pdb3k0n.ent`, `5E1N.pdb`.
-- **Differences** are B1/B2/B3/B5 (link counts), C4 (1ffk chain order), C5 (phantom empty-id
-  chain), A3 (2RSF.pdb space group) and B10 (element case).
+**Proven to fail when it should:** deliberately erasing `_struct_conf` before the write gives
+`LOST : _struct_conf (279 rows)` and exit 1.
 
-**Re-run this after any gemmi bump, any mmdb bump, and at the close of every phase.** Compare
-against the line above before reading anything else.
+## What the column/value pass caught (2026-08-13)
+
+Going from "categories and row counts" to "columns and values" took the corpus from a falsely
+reassuring *12 clean, 0 lossy* to an honest *5 clean, 9 lossy*. Four real losses, all now fixed:
+
+| loss | cause | fix |
+|---|---|---|
+| `_atom_site.pdbx_heterogeneity_id` (4 files) | `_atom_site` is EDIT, so gemmi rebuilds it from the model and emits only the columns it knows | general extension-column carrier — harvest ANY non-standard column, restore on write |
+| `_atom_site_anisotrop` 10 identity columns (9 files) | same | rebuilt by joining on atom `id` |
+| `_atom_type` 13 `scat_*` columns (2 files) | `atom_type` was wrongly EDIT; mmdb has no scattering factors | EDIT -> PASS, plus augmentation so a NEW element still gets listed |
+| `_struct_mon_prot_cis` 2 auth names | gemmi's column set is narrower than the input's | rebuilt from their label siblings |
+
+**Two false alarms in the checker itself, both the header lesson one level down:** comparing
+rows POSITIONALLY reported 566,883 phantom B-factor changes (`merge_chain_parts` legitimately
+reorders residues on read); then sorting those columns as STRINGS put `"18.42"` and `"18.420"`
+in different slots and reported thousands of phantom coordinate changes. Now: per-column
+multiset, sorted NUMERICALLY when both sides parse.
+
+**Accepted deviations the gate is taught to allow** — element-symbol case (`Cl` -> `CL`; wwPDB
+itself writes `CA`/`SE`/`MG` uppercase, only phenix writes mixed) and read declines.
+
+## ⚠ The gate's remaining blind spot
+
+**It compares OUR OUTPUT against the ORIGINAL INPUT, and never re-reads our output AS an
+input.** A round trip of a round trip is unmeasured — which is exactly where the
+2026-08-13 backup-corruption bug lived: a harvested value stored via `as_string()` emitted
+ZERO characters for a CIF null, so the row came out one token short and every later value
+shifted by one. It took a specific recipe to surface (renumber waters, save, read that file
+back) and the corpus gate was green throughout.

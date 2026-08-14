@@ -387,6 +387,45 @@ static void restore_duplicated_columns(gemmi::cif::Block &block,
 }
 
 
+// Put the coordinate categories back where the input had them.
+//
+// _atom_site is stripped from the retained document at read time, so
+// update_mmcif_block() re-adds it at the END of the block. Everything that
+// followed the coordinates in the original file then precedes them -- twelve
+// categories in 3K0N, including _pdbx_poly_seq_scheme and the whole
+// _pdbx_audit_revision_* group. Category order means nothing to a CIF parser,
+// but it is a difference from the input that nobody asked for.
+//
+// Moves _atom_site to its recorded index and _atom_site_anisotrop directly
+// after it. std::rotate rather than erase+insert because cif::Item is movable
+// but not copyable.
+static void restore_category_order(const coot::mmcif_document_t *doc,
+                                   gemmi::cif::Block &block) {
+
+   if (! doc || doc->atom_site_item_index < 0) return;
+
+   const char *cats[] = { "_atom_site", "_atom_site_anisotrop" };
+   size_t target = static_cast<size_t>(doc->atom_site_item_index);
+
+   for (const char *cat : cats) {
+      if (target >= block.items.size()) return;
+      gemmi::cif::Table tab = block.find_mmcif_category(cat);
+      if (! tab.ok() || ! tab.loop_item) continue;
+      size_t from = static_cast<size_t>(tab.loop_item - block.items.data());
+      if (from == target) { target++; continue; }
+      if (from > target)
+         std::rotate(block.items.begin() + target,
+                     block.items.begin() + from,
+                     block.items.begin() + from + 1);
+      else
+         std::rotate(block.items.begin() + from,
+                     block.items.begin() + from + 1,
+                     block.items.begin() + target + 1);
+      target++;
+   }
+}
+
+
 // Write the document, compressing when the name says to.
 //
 // THIS IS NOT OPTIONAL, and it is the one thing the writer swap could not
@@ -585,6 +624,7 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
             restore_duplicated_columns(*block, "_struct_mon_prot_cis",
                                        doc->cis_tags, cis_dups);
          }
+         restore_category_order(doc, *block);
 
          if (! write_doc(doc->doc, file_name, message))
             return false;
