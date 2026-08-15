@@ -85,6 +85,7 @@
 #include "guile-fixups.h"
 
 
+#include "coot-utils/gemmi-coords.hh"   // classify_cif_file()
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
 #include "cc-interface.hh"
@@ -5347,6 +5348,40 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 				       short int new_molecule_from_dictionary_cif_checkbutton_state) {
 
    graphics_info_t g;
+
+   // BANDICOOT v0.2: refuse a file that is not actually a dictionary.
+   //
+   // Reading a COORDINATE mmCIF as a dictionary is catastrophic and silent:
+   // every wwPDB coordinate file carries a _chem_comp loop naming its
+   // components, so parsing one deletes the monomer-library entry for ALA,
+   // GLY, VAL... and replaces it from the file's _chem_comp_bond -- which is
+   // connectivity only, with no value_dist. Every bond restraint then throws
+   // "unset target distance", real-space refinement makes ZERO restraints, and
+   // because these are registered at IMOL_ENC_ANY it happens for every molecule
+   // in the session until Bandicoot is restarted. Nothing is reported.
+   //
+   // The user asked for a dictionary here, so the honest answer is to say the
+   // file is not one, rather than half-read it and break refinement.
+   {
+      std::string fn = coot::util::intelligent_debackslash(filename);
+      if (coot::gemmi_handles_file(fn)) {   // .cif / .mmcif / .mcif, maybe .gz
+	 coot::cif_flavour_t flav = coot::classify_cif_file(fn);
+	 if (flav != coot::cif_flavour_t::restraints &&
+	     flav != coot::cif_flavour_t::unknown) {
+	    std::string m = fn;
+	    m += " is not a mmCIF dictionary!";
+	    if (flav == coot::cif_flavour_t::coordinates)
+	       m += "\n\nIt contains coordinates. Use Open Coordinates to read it.";
+	    else
+	       m += "\n\nIt contains structure factors, not restraints.";
+	    std::cout << "WARNING:: " << m << std::endl;
+	    if (graphics_info_t::use_graphics_interface_flag)
+	       info_dialog(m.c_str());
+	    return -1;
+	 }
+      }
+   }
+
    short int show_dialog_flag = 0;
    if (graphics_info_t::use_graphics_interface_flag)
       show_dialog_flag = 1;

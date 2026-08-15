@@ -21,6 +21,7 @@
 #include <gemmi/polyheur.hpp>  // setup_entities
 #include <gemmi/symmetry.hpp>  // find_spacegroup
 #include <gemmi/mmread_gz.hpp> // read_structure_gz (compressed mmCIF)
+#include <gemmi/read_cif.hpp>  // read_cif_gz (classify_cif_file)
 
 #include "utils/coot-utils.hh"  // file_name_extension
 
@@ -85,6 +86,105 @@ static void normalise_link_atom_names(mmdb::Manager *mol) {
          }
       }
    }
+}
+
+
+// Classify a CIF by the categories it actually contains.
+//
+// The alternative -- trusting the ".cif" extension and trying interpretations
+// in order -- is what caused the drag-and-drop dictionary bug: a coordinate
+// mmCIF was read as restraints, its distance-less _chem_comp_bond overwrote the
+// monomer library, and RSR silently stopped making restraints for every
+// molecule in the session. See src/drag-and-drop.cc.
+//
+// Order matters: _atom_site wins. A file can legitimately hold BOTH coordinates
+// and restraints -- phenix.refine writes the ligand dictionary into a second
+// data block -- and such a file is coordinates that happen to carry restraints,
+// not an ambiguous case.
+coot::cif_flavour_t
+coot::classify_cif_file(const std::string &file_name) {
+
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      bool has_atom_site = false, has_chem_comp_atom = false, has_refln = false;
+      for (const gemmi::cif::Block &block : doc.blocks) {
+         for (const gemmi::cif::Item &it : block.items) {
+            std::string tag;
+            if (it.type == gemmi::cif::ItemType::Pair) tag = it.pair[0];
+            else if (it.type == gemmi::cif::ItemType::Loop && !it.loop.tags.empty())
+               tag = it.loop.tags[0];
+            if (tag.empty()) continue;
+            if (tag.compare(0, 11, "_atom_site.") == 0)      has_atom_site = true;
+            else if (tag.compare(0, 16, "_chem_comp_atom.") == 0) has_chem_comp_atom = true;
+            else if (tag.compare(0, 7,  "_refln.") == 0)     has_refln = true;
+         }
+      }
+      if (has_atom_site)      return cif_flavour_t::coordinates;
+      if (has_chem_comp_atom) return cif_flavour_t::restraints;
+      if (has_refln)          return cif_flavour_t::structure_factors;
+   } catch (const std::exception &e) {
+      std::cout << "INFO:: classify_cif_file(): " << file_name << ": " << e.what()
+                << std::endl;
+   }
+   return cif_flavour_t::unknown;
+}
+
+
+// Phases decide WHICH structure-factor reader to call, never whether to read.
+// Deposited SF files usually carry F_meas/I_meas and no phases at all; phasing
+// them from a loaded model is the ordinary workflow.
+bool
+coot::cif_structure_factors_have_phases(const std::string &file_name) {
+
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      for (const gemmi::cif::Block &block : doc.blocks)
+         for (const gemmi::cif::Item &it : block.items)
+            if (it.type == gemmi::cif::ItemType::Loop)
+               for (const std::string &tag : it.loop.tags) {
+                  std::string t = gemmi::to_lower(tag);
+                  if (t.find("phase") != std::string::npos) return true;
+               }
+   } catch (const std::exception &) {
+   }
+   return false;
+}
+
+
+// Does this structure-factor file carry amplitudes, or only intensities?
+//
+// Coot imports through clipper::CIFfile into HKL_data<F_sigF>. Given a file
+// with only _refln.intensity_meas it finds nothing usable, and the resulting
+// map is all zeros -- rendered without complaint. 3K0N-sf.cif straight from the
+// PDB is exactly this case: 41,086 reflections, all intensities, and Coot
+// reports "myfsigf has 2 data" then a map with mean 0 and sigma 0.
+bool
+coot::cif_structure_factors_have_amplitudes(const std::string &file_name) {
+
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      for (const gemmi::cif::Block &block : doc.blocks)
+         for (const gemmi::cif::Item &it : block.items)
+            if (it.type == gemmi::cif::ItemType::Loop)
+               for (const std::string &tag : it.loop.tags) {
+                  std::string t = gemmi::to_lower(tag);
+                  if (t.compare(0, 7, "_refln.") != 0) continue;
+                  // Two vocabularies for the same quantity, and a converter may
+                  // emit either:
+                  //   PDBx/mmCIF : _refln.F_meas, F_meas_au, F_calc, pdbx_F_plus
+                  //   CIF core   : _refln.amplitude_meas, F_squared_meas
+                  // Missing the second set made a correctly converted file
+                  // (gemmi output carrying amplitude_meas + amplitude_sigma)
+                  // get reported as "intensities only".
+                  if (t.find("f_meas") != std::string::npos)         return true;
+                  if (t.find("f_calc") != std::string::npos)         return true;
+                  if (t.find("f_squared_meas") != std::string::npos) return true;
+                  if (t.find("amplitude_meas") != std::string::npos) return true;
+                  if (t.find("amplitude_calc") != std::string::npos) return true;
+               }
+   } catch (const std::exception &) {
+   }
+   return false;
 }
 
 

@@ -38,6 +38,42 @@ namespace coot {
    //! all.
    bool gemmi_handles_extension(const std::string &extension);
 
+   //! What flavour of thing is this CIF?
+   //
+   //! One extension, several unrelated formats. Deciding between them by
+   //! extension is what made a dropped mmCIF overwrite the monomer library:
+   //! every wwPDB coordinate file carries a _chem_comp_bond connectivity loop,
+   //! so "does it parse as restraints?" answers YES for a coordinate file.
+   //! Ask what categories it actually holds instead.
+   enum class cif_flavour_t {
+      unknown,            //!< nothing recognised - ask the user
+      coordinates,        //!< has _atom_site
+      restraints,         //!< has _chem_comp_atom and no _atom_site
+      structure_factors   //!< has _refln
+   };
+
+   //! Classify a CIF by CONTENT. Handles .gz. Never throws.
+   cif_flavour_t classify_cif_file(const std::string &file_name);
+
+   //! Do the structure factors in \a file_name carry phases?
+   //
+   //! Decides WHICH reader to use, not whether to read: deposited SF files
+   //! usually have no phases, and phasing them from a model is the normal
+   //! workflow. Only meaningful when classify_cif_file() said
+   //! structure_factors.
+   bool cif_structure_factors_have_phases(const std::string &file_name);
+
+   //! Do the structure factors carry AMPLITUDES (F), as opposed to only
+   //! intensities (I)?
+   //
+   //! Coot imports reflections through clipper::CIFfile into an
+   //! HKL_data<F_sigF>, i.e. it asks for amplitudes. A deposited file carrying
+   //! only _refln.intensity_meas yields NO usable data and Coot then renders a
+   //! map of zeros with no error -- Coot 0.9 has no I->F (French-Wilson)
+   //! conversion for CIF. Depositing I rather than F is common, so this must be
+   //! reported rather than silently producing a blank map.
+   bool cif_structure_factors_have_amplitudes(const std::string &file_name);
+
    //! Is this a FILE we route through gemmi?
    //
    //! Prefer this to gemmi_handles_extension(): it looks beneath a trailing

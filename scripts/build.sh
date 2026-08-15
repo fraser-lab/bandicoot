@@ -452,8 +452,22 @@ fi
 # strings(1) misses but nm(1)/grep find. `strip -S` removes the debug symbols
 # (and shrinks the binaries) while keeping the exported symbols dylibs need.
 # MUST run before codesign (stripping invalidates signatures; codesign re-signs).
-if [ -n "${BANDICOOT_RELEASE:-}" ]; then
-    echo "==> stripping debug symbols (release)"
+#
+# NIGHTLIES ARE STRIPPED TOO (Art, 2026-08-14). A nightly is a user-facing
+# artifact, so it must not carry the builder's home path -- measured on an
+# unstripped 0.2 install: 46 of 271 Mach-O files held /Users/<builder>, 487
+# N_OSO stabs in total. Note strings(1) reports ZERO on those same files; only
+# nm(1) sees them, so never certify an artifact clean with strings alone.
+#
+# THE COST, ACCEPTED DELIBERATELY: a crash report from a nightly will not
+# symbolicate beyond exported symbols. The alternative -- run dsymutil before
+# stripping and keep the .dSYM bundles locally, matching a report by its LC_UUID
+# -- was considered and declined: it costs a few hundred MB per nightly to
+# archive, and no bug report so far has needed a symbolicated trace. Substituting
+# paths in a report does NOT recover symbol names; once the debug map is gone the
+# trace is library + offset whatever the paths say.
+if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    echo "==> stripping debug symbols (release/nightly)"
     _stripped=0
     while IFS= read -r _m; do
         file -b "$_m" 2>/dev/null | grep -q "Mach-O" || continue
