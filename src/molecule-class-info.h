@@ -3073,6 +3073,13 @@ public:        //                      public
       return input_molecule_was_in_mmcif;
    }
 
+   //! The retained mmCIF document, or null for a molecule that did not come
+   //! from an mmCIF file. Read-only, and a raw pointer deliberately: the
+   //! molecule owns it, and a caller that could extend its lifetime past a
+   //! close or a re-read would be holding a document for a molecule that no
+   //! longer exists. The header browser is the one consumer outside this class.
+   const coot::mmcif_document_t *get_mmcif_document() const { return mmcif_doc.get(); }
+
 
    // -------- simply print it (at the moment) --------------
    void print_secondary_structure_info();

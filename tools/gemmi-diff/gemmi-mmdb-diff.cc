@@ -33,6 +33,7 @@
 #include "coot-utils/gemmi-write.hh"    // the production gemmi write path
 #include "coot-utils/mmcif-document.hh" // the retained document
 #include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
+#include "coords/mmdb.h"       // write_atom_selection_file -- the PRODUCTION writer
 
 #include <gemmi/read_cif.hpp>   // read_cif_gz, for the write-side re-read
 
@@ -927,6 +928,264 @@ static int write_check(const std::vector<std::string> &files, const std::string 
 }
 
 
+// ============================ ROUND-TRIP MODE ============================
+//
+// Three chains, each read -> write -> read, run over the corpus:
+//
+//   A. PDB   in -> mmCIF out -> mmCIF in
+//   B. mmCIF in -> mmCIF out -> mmCIF in
+//   C. mmCIF in -> PDB   out -> PDB   in
+//
+// WHY THIS EXISTS SEPARATELY FROM --write-check. That mode compares OUR OUTPUT
+// against the ORIGINAL INPUT and stops there, so a defect that is stable across
+// one hop but compounds over two -- or one that only appears when our own
+// output is fed back in as an input -- is invisible to it. Chain B closes that
+// gap: it re-reads what we wrote and writes it again, and the two outputs must
+// be byte-identical.
+//
+// Chains A and C measure the cross-format directions, which is where the
+// remaining known losses live. They are REPORTED but do NOT set the exit
+// status, because several of their differences are permanent and deliberate
+// (PDB cannot express a hydrogen-bond connection at all, and a PDB file has no
+// categories to compare). Only chain B is a gate. Stating which is which is the
+// same discipline the read-side mode needed: an exit status that is always
+// non-zero stops being read.
+//
+// Deliberately NOT part of a default run: it writes six files per corpus entry
+// and takes appreciably longer. Run it after a substantial change.
+
+struct RoundTripLoad {
+   mmdb::Manager *mol = nullptr;
+   std::shared_ptr<coot::mmcif_document_t> doc;
+   std::string error;
+};
+
+// Read by the same route the application would: mmCIF through the production
+// gemmi reader (keeping the document, which the writer needs), PDB through
+// mmdb with get_atom_selection's flags.
+static RoundTripLoad rt_read(const std::string &path) {
+
+   RoundTripLoad r;
+
+   if (is_mmcif_path(path)) {
+      std::string msg;
+      r.mol = coot::read_coords_with_gemmi(path, &msg, &r.doc);
+      if (! r.mol) r.error = msg.empty() ? "read failed" : msg;
+      return r;
+   }
+
+   mmdb::Manager *mol = new mmdb::Manager;
+   mol->SetFlag(mmdb::MMDBF_IgnoreBlankLines | mmdb::MMDBF_IgnoreNonCoorPDBErrors |
+                mmdb::MMDBF_IgnoreHash | mmdb::MMDBF_IgnoreRemarks |
+                mmdb::MMDBF_IgnoreDuplSeqNum);
+   if (mol->ReadCoorFile(path.c_str()) != 0) {
+      r.error = "mmdb ReadCoorFile failed";
+      delete mol;
+      return r;
+   }
+   mol->PDBCleanup(mmdb::PDBCLEAN_ELEMENT);
+   coot::util::normalise_link_blank_fields(mol);
+   r.mol = mol;
+   return r;
+}
+
+// Write through write_atom_selection_file(), NOT straight to
+// coot::write_coords_with_gemmi(). That is the whole point of a round-trip
+// test: it must exercise what Save Coordinates and make_backup() actually call,
+// including remove_wrong_cis_peptides() and the hydrogens/aniso options.
+static bool rt_write(RoundTripLoad &in, const std::string &path, bool as_cif) {
+
+   atom_selection_container_t asc = make_asc(in.mol);
+   int status = write_atom_selection_file(asc, path, as_cif, mmdb::io::GZM_NONE,
+                                          1 /* hydrogens */, 1 /* aniso */,
+                                          0 /* conect */, in.doc.get());
+   return status == 0;
+}
+
+static bool files_are_identical(const std::string &a, const std::string &b) {
+   FILE *fa = fopen(a.c_str(), "rb");
+   FILE *fb = fopen(b.c_str(), "rb");
+   if (! fa || ! fb) { if (fa) fclose(fa); if (fb) fclose(fb); return false; }
+   bool same = true;
+   char ba[65536], bb[65536];
+   for (;;) {
+      size_t na = fread(ba, 1, sizeof(ba), fa);
+      size_t nb = fread(bb, 1, sizeof(bb), fb);
+      if (na != nb || memcmp(ba, bb, na) != 0) { same = false; break; }
+      if (na == 0) break;
+   }
+   fclose(fa);
+   fclose(fb);
+   return same;
+}
+
+static size_t category_count(const std::string &path) {
+   try {
+      gemmi::cif::Document d = gemmi::read_cif_gz(path);
+      if (d.blocks.empty()) return 0;
+      return categories_of(d.blocks.at(0)).size();
+   } catch (const std::exception &) {
+      return 0;
+   }
+}
+
+// Compare the categories of two mmCIF files, reporting losses only.
+// Returns the number of categories lost.
+static int lost_categories(const std::string &before_path, const std::string &after_path) {
+   try {
+      gemmi::cif::Document db = gemmi::read_cif_gz(before_path);
+      gemmi::cif::Document da = gemmi::read_cif_gz(after_path);
+      if (db.blocks.empty() || da.blocks.empty()) return 0;
+      std::map<std::string, size_t> b = categories_of(db.blocks.at(0));
+      std::map<std::string, size_t> a = categories_of(da.blocks.at(0));
+      int lost = 0;
+      for (const auto &kv : b)
+         if (! a.count(kv.first)) {
+            printf("        LOST CATEGORY : %s (%zu rows)\n", kv.first.c_str(), kv.second);
+            lost++;
+         }
+      return lost;
+   } catch (const std::exception &e) {
+      printf("        (category comparison failed: %s)\n", e.what());
+      return 0;
+   }
+}
+
+// returns 0 if chain B held everywhere, 1 otherwise
+static int round_trip(const std::vector<std::string> &files, const std::string &out_dir) {
+
+   mkdir(out_dir.c_str(), 0755);
+   printf("round-trip check: read -> write -> read, three chains\n");
+   printf("  A  PDB   -> mmCIF -> mmCIF     (reported, not a gate)\n");
+   printf("  B  mmCIF -> mmCIF -> mmCIF     (THE GATE)\n");
+   printf("  C  mmCIF -> PDB   -> PDB       (reported, not a gate)\n");
+   printf("output written to %s\n\n", out_dir.c_str());
+
+   int a_ok = 0, a_diff = 0, b_ok = 0, b_bad = 0, c_ok = 0, c_diff = 0, n_failed = 0;
+
+   for (const std::string &in : files) {
+
+      std::string base = in.substr(in.rfind('/') + 1);
+      printf("=== %s\n", base.c_str());
+
+      RoundTripLoad first = rt_read(in);
+      if (! first.mol) {
+         printf("    read failed (%s) -- skipped\n\n", first.error.c_str());
+         continue;
+      }
+      ModelSummary m0;
+      harvest(first.mol, m0);
+
+      if (! is_mmcif_path(in)) {
+
+         // ---- chain A: PDB in -> mmCIF out -> mmCIF in ----
+         std::string hop1 = out_dir + "/" + base + ".A1.cif";
+         if (! rt_write(first, hop1, true)) {
+            printf("  A  WRITE FAILED\n\n");
+            n_failed++;
+            delete first.mol;
+            continue;
+         }
+         RoundTripLoad back = rt_read(hop1);
+         if (! back.mol) {
+            printf("  A  RE-READ FAILED (%s)\n\n", back.error.c_str());
+            n_failed++;
+            delete first.mol;
+            continue;
+         }
+         ModelSummary m2;
+         harvest(back.mol, m2);
+         printf("  A  PDB -> mmCIF -> mmCIF   (%zu categories written)\n",
+                category_count(hop1));
+         bool clean = compare(m0, m2);
+         printf("     ==> %s\n", clean ? "model preserved" : "MODEL DIFFERS");
+         if (clean) a_ok++; else a_diff++;
+         delete back.mol;
+
+      } else {
+
+         // ---- chain B: mmCIF in -> mmCIF out -> mmCIF in -> mmCIF out ----
+         std::string hop1 = out_dir + "/" + base + ".B1.cif";
+         std::string hop2 = out_dir + "/" + base + ".B2.cif";
+         bool bad = false;
+         if (! rt_write(first, hop1, true)) {
+            printf("  B  WRITE FAILED\n");
+            bad = true;
+         } else {
+            RoundTripLoad second = rt_read(hop1);
+            if (! second.mol) {
+               printf("  B  RE-READ FAILED (%s)\n", second.error.c_str());
+               bad = true;
+            } else {
+               ModelSummary m1;
+               harvest(second.mol, m1);
+               if (! rt_write(second, hop2, true)) {
+                  printf("  B  SECOND WRITE FAILED\n");
+                  bad = true;
+               } else {
+                  printf("  B  mmCIF -> mmCIF -> mmCIF   (%zu -> %zu -> %zu categories)\n",
+                         category_count(in), category_count(hop1), category_count(hop2));
+                  if (lost_categories(in, hop1) > 0)   bad = true;
+                  if (lost_categories(hop1, hop2) > 0) bad = true;
+                  // THE point of this chain: our own output, read back and
+                  // written again, must reproduce itself exactly. Anything that
+                  // drifts per hop shows up here and nowhere else.
+                  if (! files_are_identical(hop1, hop2)) {
+                     printf("        HOP 1 AND HOP 2 DIFFER -- the round trip is not stable\n");
+                     bad = true;
+                  }
+                  if (! compare(m0, m1)) {
+                     printf("        MODEL DIFFERS between the input and our own output\n");
+                     bad = true;
+                  }
+               }
+               delete second.mol;
+            }
+         }
+         printf("     ==> %s\n", bad ? "*** NOT STABLE ***" : "stable and lossless");
+         if (bad) b_bad++; else b_ok++;
+
+         // ---- chain C: mmCIF in -> PDB out -> PDB in ----
+         std::string cpdb = out_dir + "/" + base + ".C1.pdb";
+         if (! rt_write(first, cpdb, false)) {
+            printf("  C  WRITE FAILED\n");
+            n_failed++;
+         } else {
+            RoundTripLoad back = rt_read(cpdb);
+            if (! back.mol) {
+               printf("  C  RE-READ FAILED (%s)\n", back.error.c_str());
+               n_failed++;
+            } else {
+               ModelSummary mc;
+               harvest(back.mol, mc);
+               printf("  C  mmCIF -> PDB -> PDB\n");
+               bool clean = compare(m0, mc);
+               printf("     ==> %s\n", clean ? "model preserved"
+                      : "model differs (expected for some files -- PDB cannot "
+                        "express everything mmCIF can)");
+               if (clean) c_ok++; else c_diff++;
+               delete back.mol;
+            }
+         }
+      }
+
+      printf("\n");
+      delete first.mol;
+   }
+
+   printf("round-trip summary:\n");
+   printf("  A  PDB->mmCIF->mmCIF : %d model preserved, %d differ\n", a_ok, a_diff);
+   printf("  B  mmCIF round trip  : %d stable, %d NOT stable   <-- the gate\n", b_ok, b_bad);
+   printf("  C  mmCIF->PDB->PDB   : %d model preserved, %d differ\n", c_ok, c_diff);
+   if (n_failed)
+      printf("  %d write/read failure(s)\n", n_failed);
+
+   if (b_bad || n_failed)
+      printf("*** ROUND-TRIP GATE FAILED (chain B) ***\n");
+   return (b_bad || n_failed) ? 1 : 0;
+}
+
+
 int main(int argc, char **argv) {
    ensure_syminfo();
    bool setup_entities = true;
@@ -935,6 +1194,7 @@ int main(int argc, char **argv) {
    std::vector<std::string> files;
    std::string corpus;
    bool do_write_check = false;
+   bool do_round_trip = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
@@ -943,6 +1203,7 @@ int main(int argc, char **argv) {
       else if (a == "--dump-chains") g_dump_chains = true;
       else if (a == "--corpus" && i + 1 < argc) corpus = argv[++i];
       else if (a == "--write-check") do_write_check = true;
+      else if (a == "--round-trip") do_round_trip = true;
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
    }
@@ -972,12 +1233,18 @@ int main(int argc, char **argv) {
       fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
                       "                      [--no-setup-entities] [--no-merge-chains]\n"
                       "                      [--keep-hydrog-links] [--corpus DIR]\n"
-                      "                      [--write-check]\n"
+                      "                      [--write-check] [--round-trip]\n"
                       "                      [<coord-file> ...]\n"
                       "\n"
                       "With no files, runs every .cif/.ent/.pdb in the corpus directory\n"
                       "(--corpus, else $BANDICOOT_SAMPLES, else the compiled-in default).\n");
       return 2;
+   }
+
+   if (do_round_trip) {
+      const char *tmp = getenv("TMPDIR");
+      std::string out_dir = std::string(tmp ? tmp : "/tmp") + "/bandicoot-round-trip";
+      return round_trip(files, out_dir);
    }
 
    if (do_write_check) {

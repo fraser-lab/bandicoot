@@ -167,11 +167,67 @@ of phantom differences.
 Baseline (see `TRAPS.md` for the full picture):
 
 ```
-write-side summary: 15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
+write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 11 skipped (not mmCIF)
 ```
 
 **Verified to actually fail:** deliberately erasing `_struct_conf` before the write makes
 it report `LOST : _struct_conf (279 rows)` and exit 1.
+
+## `--round-trip` — read, write, read again, in all three directions
+
+```sh
+./tools/gemmi-diff/gemmi-mmdb-diff --round-trip         # whole corpus
+```
+
+Three chains, chosen so that each format conversion is exercised in both directions:
+
+| chain | what it does | is it a gate? |
+|---|---|---|
+| **A** | PDB in -> mmCIF out -> mmCIF in | reported |
+| **B** | mmCIF in -> mmCIF out -> mmCIF in -> mmCIF out | **yes** |
+| **C** | mmCIF in -> PDB out -> PDB in | reported |
+
+**Why this is not covered by `--write-check`.** That mode compares our output against the
+original input and stops. It never re-reads its own output, so a defect that is stable
+across one hop but compounds over two — or one that only appears when our output becomes
+an input — is invisible to it. Chain B closes that: it writes, re-reads, writes again, and
+**the two outputs must be byte-identical**.
+
+Chains A and C are reported but do **not** set the exit status. Several of their
+differences are permanent and deliberate: PDB cannot express a hydrogen-bond connection at
+all, and a PDB input has no categories to compare. An exit status that is always non-zero
+stops being read — the same reason the read-side mode's status is not a gate either.
+
+Writes go through **`write_atom_selection_file()`**, the function Save Coordinates and
+`make_backup()` actually call, not straight to the gemmi writer. A round-trip test that
+skipped the real save path would not be testing the thing that can regress. This is why
+`build.sh` links `-lcoot-coords`.
+
+Deliberately **not** part of a default run: it writes several files per corpus entry and
+takes appreciably longer. Run it after a substantial change.
+
+Baseline:
+
+```
+  A  PDB->mmCIF->mmCIF : 8 model preserved, 3 differ
+  B  mmCIF round trip  : 14 stable, 0 NOT stable   <-- the gate
+  C  mmCIF->PDB->PDB   : 12 model preserved, 2 differ
+```
+
+Every difference is attributable, which is what makes the numbers usable: chain A's three
+are `2RSF.pdb`, whose `CRYST1 1.000 1.000 1.000 90 90 90 P 1` placeholder mmdb rejects and
+gemmi accepts (trap A3), and the two `SC1_2_refine_*.pdb`, which carry five `Cl` atoms that
+gemmi normalises to `CL` (trap B10). Chain C's two are the same SC1 pair, whose 660
+hydrogen-bond connections PDB cannot carry (trap C2). **A new unattributed line is the
+signal.**
+
+**It earned its place on the first run:** chain A reported 27 links of which 0 resolved on
+`pdb1aon.ent`, which turned out to be a real defect in our own writer — adjustment (W1)
+trimmed mmdb's atom-name padding on the model but not on the LINK records pointing at it,
+so gemmi wrote `_struct_conn` with no atom names and no distances. Converting a PDB with
+LINK records to mmCIF produced a file whose connections were silently inert. Fixed in
+`gemmi-write.cc`; only the synthesis path could show it, because with a retained document
+`struct_conn` is PASS and never rewritten.
 
 ## The trap catalogue
 

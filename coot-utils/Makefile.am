@@ -42,7 +42,7 @@ pkginclude_HEADERS = peak-search.hh coot-trim.hh \
 	sfcalc-genmap.hh cablam-markup.hh slurp-map.hh merge-molecules.hh exp-fit.hh \
 	coot_shiftfield.h shiftfield.h fib-sphere.hh pepflip-using-difference-map.hh polar-atoms.hh \
 	fragment-container.hh map-index.hh atom-tree.hh jed-flip.hh atom-vertex.hh merge-C-and-N-terminii.hh \
-	coot-package-paths.hh gemmi-coords.hh mmcif-document.hh gemmi-write.hh
+	coot-package-paths.hh gemmi-coords.hh mmcif-document.hh gemmi-write.hh gemmi-header.hh mmcif-header-view.hh
 
 
 pkgincludedir = $(includedir)/coot/coot-utils
@@ -74,7 +74,7 @@ libcoot_coord_utils_la_SOURCES = coot-coord-utils.cc \
 	contacts-by-bricks.cc stack-and-pair.cc fast-eigens.cc strand-fragments.cc sfcalc-genmap.cc \
 	cablam-markup.cc coot_shiftfield.cpp shiftfield.cpp slurp-map.cc fib-sphere.cc polar-atoms.cc \
 	merge-molecules.cc fragment-container.cc mutate.cc merge-C-and-N-terminii.cc \
-	gemmi-coords.cc gemmi-write.cc
+	gemmi-coords.cc gemmi-write.cc gemmi-header.cc mmcif-header-view.cc
 
 
 #    $(top_builddir)/mini-mol/libcoot-mini-mol.la

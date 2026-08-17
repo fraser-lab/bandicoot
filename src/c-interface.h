@@ -421,6 +421,11 @@ void sort_residues(int imol);
 /*! \brief a gui dialog showing remarks header info (for a model molecule). */
 void remarks_dialog(int imol);
 
+/*! \brief the header browser for an mmCIF molecule: every category the file
+    actually contains, rather than a fixed set of panels. Called by
+    remarks_dialog() when the molecule has a retained mmCIF document. */
+void mmcif_header_dialog(int imol);
+
 /*! \brief simply print secondary structure info to the
   terminal/console.  In future, this could/should return the info.  */
 void print_header_secondary_structure_info(int imol);

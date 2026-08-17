@@ -143,9 +143,12 @@ the first. Adjustment (1) calls `st.merge_chain_parts()` (after `setup_entities`
 **Breaks if regressed:** 12% of a structure becomes invisible to every by-name lookup,
 with no error anywhere.
 
-### B2. Atom-name padding for 3-character hydrogens
-**Property:** a 3-character atom name whose element is H (`HH1`, `HH2`, any `H??`).
-**Exhibited by:** `3K0N.cif` (1 atom), `6DMH.cif` (6), `2RSF.cif` (60).
+### B2. Atom-name padding for short hydrogen names
+**Property:** a SHORT atom name whose element is H. Originally recorded as "3-character"
+(`HH1`, `HH2`, any `H??`); **`2GEW.cif` widened it 2026-08-17 -- the 2-character `HH` is
+affected too** (`"HH  "` -> `" HH "`, 14 atoms), alongside 10 of `"HH2 "` -> `" HH2"`. So
+the rule is about the element being hydrogen, not about a particular length.
+**Exhibited by:** `3K0N.cif` (1 atom), `6DMH.cif` (6), `2RSF.cif` (60), `2GEW.cif` (24).
 **Rule:** mmdb yields `"HH2 "`, gemmi yields `" HH2"`. **gemmi is right** — the PDB file's
 own columns say `" HH2"`, and both readers agree when reading PDB. Today's mmdb path
 names the same atom differently depending on input format.
@@ -234,6 +237,35 @@ branch and gemmi's normalisation makes it HIT. gemmi is also the standard-confor
 answer: the PDB spec calls for right-justified uppercase symbols.
 **Residual risk to watch:** any *new* comparison written against a mixed-case literal will
 silently never match on the gemmi path.
+
+### B11. Secondary structure written in `label_*` ids only is invisible to gemmi
+**Property:** a `_struct_conf` / `_struct_sheet_range` loop that carries
+`beg_label_asym_id` + `beg_label_seq_id` but **no `beg_auth_*` / `end_auth_*` columns**.
+Both spellings are legal PDBx; wwPDB depositions carry the auth columns, **phenix.refine
+does not**.
+**Exhibited by:** `SC1_2_refine_031.cif` / `_036.cif` (35 `HELX_P` rows, 31 sheet ranges,
+zero auth columns). Their PDB siblings carry 35 HELIX / 31 SHEET, so the same refinement
+run says it in one format and loses it in the other.
+**Measured, minimally:** one synthetic file with a single helix. `label_*` only →
+`st.helices` is **0**; add the auth columns, change nothing else → **1**. So gemmi's readers
+key on the auth columns and return **nothing at all** for the label-only spelling — silently,
+with no warning on either side.
+**Consequence before the fix:** every phenix-refined mmCIF reached Coot with no secondary
+structure whatever, while its PDB sibling had it all. Invisible until v0.2 started using the
+header (display, sequence view and ribbons all compute SS themselves; SSM's header transfer
+and morph-by-SSE are the consumers that notice).
+**Handled:** `coot-utils/gemmi-header.cc` falls back to resolving `label_asym_id` +
+`label_seq_id` through `_atom_site` when gemmi returns nothing. The mapping is in the file
+itself, so this is a resolution, not a guess. It has to run **before** the read path strips
+`_atom_site` from the retained document, which is why the header records are synthesized at
+read time rather than on demand.
+**Known and deliberate residue:** a helix whose END residue has no observed atoms cannot be
+mapped and is dropped — 3 of 35 in the SC1 files, which is why they give 32 helices where the
+PDB sibling gives 35. mmdb accepts all 35 from the PDB only because a PDB reader never
+validates the record against the model. **The count is printed to the console rather than
+silently absorbed**, so a difference from the PDB sibling does not read as a bug.
+**Assertion:** UNCHECKED. Worth adding: a post-condition that a file whose `_struct_conf`
+has rows ends up with helices in the model.
 
 ### B9. Non-canonical space-group spellings
 **Property:** `P212121`, `C2`, lower case — legal in hand-edited files.
@@ -386,15 +418,34 @@ flip would fail silently rather than loudly.
 write-side gate works, because for such a category nothing changes. Prove it by deleting
 a category outright (see below).
 
+### E8. Trimming atom names on the model does not trim the LINK records pointing at them
+**Property:** mmdb stores atom names in PDB's fixed columns (`" O2A"`). Adjustment (W1) in
+`gemmi-write.cc` trims them before writing, so the mmCIF says `O2A` rather than `' O2A'` --
+but `st.connections`, filled by `transfer_links_from_mmdb`, holds the SAME padded spelling
+and was not trimmed with them.
+**Exhibited by:** any PDB file with LINK records saved as mmCIF -- `pdb1aon.ent` (27),
+`pdb1ffk.ent` (18), `5E1N.pdb` (130).
+**Measured:** gemmi's `struct_conn` writer resolves each partner against the model to emit
+`label_atom_id`, finds nothing once the two spellings disagree, and writes `?` for **both
+atom ids and the reported distance**. Reading that file back gives 27 links of which **0
+resolve** -- no link bonds drawn, no metal restraints. Silently inert, the third instance
+of exactly this failure mode (B2, B3, B4 are the others).
+**Only the synthesis path can show it:** with a retained document `struct_conn` is PASS and
+is never rewritten, so mmCIF -> mmCIF was unaffected and only PDB -> mmCIF broke.
+**Fixed 2026-08-17** -- (W1) now trims the connection partners too.
+**Assertion:** CHECKED, by `--round-trip` chain A, which is what found it. The link
+post-condition (`n_links_resolved`) was already in the tool; what was missing was a mode
+that fed our own output back in.
+
 ## Assertion scoreboard
 
 | group | checked | unchecked |
 |---|---|---|
 | A. file shape | 4 | 3 |
-| B. model content | 10 | 0 |
+| B. model content | 10 | 1 |
 | C. cross-format | 2 | 3 |
 | D. environment/API | n/a — documentation, not assertions | |
-| E. write side | 5 | 2 |
+| E. write side | 6 | 2 |
 
 Section E moved from 0-checked when `--write-check` landed (2026-08-12) and again when it
 learned to compare COLUMNS and VALUES (2026-08-13). Still unchecked there: E5 (dangling
@@ -402,17 +453,37 @@ records after deletion) and A4's write-side half (a 20-model ensemble through th
 
 ## Baselines — compare a run against these
 
-**Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u34`:
+**Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u49`:
 ```
-summary: 3 identical, 16 with differences, 4 failed to load
+summary: 5 identical, 17 with differences, 6 failed to load
 ```
+Was `3 identical, 16 with differences, 4 failed to load` at `u34`. Every change since is a
+corpus addition, and each was checked individually rather than assumed:
+`3K0N.pdb` and `2GEW.pdb` compare IDENTICAL; `3K0N-sf.cif` and `2GEW-sf.cif` are
+structure-factor files that both paths correctly refuse (zero atoms); `2GEW.cif` differs
+only by B2 atom-name padding. **Before reading a changed baseline as a regression, check
+whether the corpus grew** -- `ls ~/sw/bandicoot-project/samples` -- because it has three
+times now.
 Every line is attributable to an entry above; a NEW unexplained line is the signal. The
 exit status is NOT a gate here — several differences are permanent and deliberate.
 
-**Write side** (`gemmi-mmdb-diff --write-check`), after the column/value work:
+**Write side** (`gemmi-mmdb-diff --write-check`), `0.2.0.0-u49`:
 ```
-write-side summary: 15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped (not mmCIF)
+write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 11 skipped (not mmCIF)
 ```
+Was `15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped` when the column/value
+work landed; the moves since are corpus additions (`3K0N.pdb`, `2GEW.pdb` skipped as not
+mmCIF; `3K0N-sf.cif`, `2GEW-sf.cif` declined for having no atoms). **The number that matters,
+`0 lossy`, has never moved.**
+
+**Round trip** (`gemmi-mmdb-diff --round-trip`), `0.2.0.0-u49`:
+```
+  A  PDB->mmCIF->mmCIF : 8 model preserved, 3 differ
+  B  mmCIF round trip  : 14 stable, 0 NOT stable   <-- the gate
+  C  mmCIF->PDB->PDB   : 12 model preserved, 2 differ
+```
+Chain B is the gate. Chain A's three differences are `2RSF.pdb` (A3) and the two
+`SC1_2_refine_*.pdb` (B10); chain C's two are the same SC1 pair (C2).
 **Here the exit status IS a gate** — losing a category, a column or a value is never
 deliberate. Read declines (a small-molecule CIF yielding zero atoms) do not fail it, or the
 gate would be permanently red and stop being read.

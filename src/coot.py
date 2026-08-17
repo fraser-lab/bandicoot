@@ -708,6 +708,9 @@ def sort_residues(imol):
 def remarks_dialog(imol):
     return _coot.remarks_dialog(imol)
 
+def mmcif_header_dialog(imol):
+    return _coot.mmcif_header_dialog(imol)
+
 def print_header_secondary_structure_info(imol):
     return _coot.print_header_secondary_structure_info(imol)
 

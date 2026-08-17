@@ -15,6 +15,7 @@
 
 #include "gemmi-coords.hh"
 #include "mmcif-document.hh"   // coot::mmcif_document_t (the only gemmi-aware header)
+#include "gemmi-header.hh"     // pdb_header_records_from_mmcif (adjustment 9)
 
 #include <gemmi/mmread.hpp>    // read_structure, BasicInput
 #include <gemmi/mmdb.hpp>      // copy_to_mmdb
@@ -310,6 +311,19 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
          return nullptr;
       }
 
+      // (9) Synthesize the PDB header records this mmCIF implies.
+      //
+      // Done HERE, before anything mutates st and while the document still
+      // holds _atom_site: the label-only secondary-structure fallback in
+      // gemmi-header.cc resolves label_asym_id/label_seq_id through the
+      // coordinate loop, which adjustment (7) strips further down. Only the
+      // records are kept; they are handed to mmdb after copy_to_mmdb, since
+      // HELIX and SHEET need model 1 to exist.
+      std::vector<std::string> header_records;
+      if (doc_out && ! saved_doc.blocks.empty())
+         header_records = coot::pdb_header_records_from_mmcif(st,
+                                                              &saved_doc.blocks[0]);
+
       gemmi::setup_entities(st);
 
       // (1) Merge chains that share a name.
@@ -416,6 +430,20 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
                   st.resolution);
          mol->PutPDBString(line);
       }
+
+      // (9) continued -- the rest of the header section.
+      //
+      // AFTER the resolution line, and that ordering is load-bearing: mmdb's
+      // GetResolution() scans the REMARK container and gives up at the first
+      // remark numbered above 2, so a REMARK 3 arriving first would hide the
+      // REMARK 2 that adjustment (6) exists to provide.
+      //
+      // See gemmi-header.hh for why this is a back-fill of a capability
+      // rather than a repair: mmdb's own mmCIF header readers are keyed to
+      // NDB-era tag names and have returned nothing from a modern PDBx file
+      // for years.
+      for (const std::string &record : header_records)
+         mol->PutPDBString(record.c_str());
 
       // (7) Retain the mmCIF document, minus its coordinates (Phase 3 / D3).
       //

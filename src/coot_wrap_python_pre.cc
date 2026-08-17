@@ -16083,6 +16083,29 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_mmcif_header_dialog(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "mmcif_header_dialog" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  mmcif_header_dialog(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_print_header_secondary_structure_info(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -76964,6 +76987,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "sort_chains", _wrap_sort_chains, METH_O, NULL},
 	 { "sort_residues", _wrap_sort_residues, METH_O, NULL},
 	 { "remarks_dialog", _wrap_remarks_dialog, METH_O, NULL},
+	 { "mmcif_header_dialog", _wrap_mmcif_header_dialog, METH_O, NULL},
 	 { "print_header_secondary_structure_info", _wrap_print_header_secondary_structure_info, METH_O, NULL},
 	 { "add_header_secondary_structure_info", _wrap_add_header_secondary_structure_info, METH_O, NULL},
 	 { "write_header_secondary_structure_info", _wrap_write_header_secondary_structure_info, METH_VARARGS, NULL},

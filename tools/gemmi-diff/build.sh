@@ -38,6 +38,11 @@ if [ ! -d "$PREFIX/lib" ]; then
     exit 1
 fi
 
+# -lcoot-coords is needed only by --round-trip, which writes through the
+# PRODUCTION write_atom_selection_file() (coords/mmdb.cc) rather than calling
+# the gemmi writer directly -- a round-trip test that skipped the real save
+# path would not be testing the thing that can regress.
+#
 # -std=c++17 to match the tree (configure.ac). The include order matters only in
 # that $REPO must come first, so "coot-utils/..." resolves against the source
 # tree rather than anything installed.
@@ -50,5 +55,5 @@ clang++ -std=c++17 -g -O1 -Wall -Wno-unused \
     -I"$CONDA_PREFIX/include" \
     -I"$BREW_PREFIX/include" \
     -L"$PREFIX/lib" -L"$CONDA_PREFIX/lib" -L"$BREW_PREFIX/lib" \
-    -lcoot-coord-utils -lcoot-utils -lmmdb2 -lgemmi_cpp \
+    -lcoot-coords -lcoot-coord-utils -lcoot-utils -lmmdb2 -lgemmi_cpp \
     -Wl,-rpath,"$PREFIX/lib" -Wl,-rpath,"$CONDA_PREFIX/lib" -Wl,-rpath,"$BREW_PREFIX/lib"

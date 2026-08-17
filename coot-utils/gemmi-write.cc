@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <cctype>
 #include <set>
 #include <vector>
 #include <iostream>
@@ -195,12 +196,24 @@ static void augment_atom_type(const gemmi::Structure &st, gemmi::cif::Block &blo
    int sym_col = loop.find_tag("_atom_type.symbol");
    if (sym_col < 0) return;
 
+   // Compared CASE-INSENSITIVELY, which is not fussiness. gemmi normalises
+   // element symbols to upper case on read (TRAPS B10), so a file writing "Cl"
+   // reaches us as "CL" and a literal comparison declares it missing -- adding
+   // a SECOND chlorine row, with nulls for all 13 scattering columns, beside
+   // the file's own complete one. Measured on SC1_2_refine_036: `C Cl H N O S`
+   // came back as `C Cl H N O S CL`. The file is then wrong in a way nothing
+   // downstream would question, so the case decision must not leak this far.
+   auto upper = [](std::string s) {
+      for (char &c : s) c = std::toupper(static_cast<unsigned char>(c));
+      return s;
+   };
+
    std::set<std::string> listed;
    for (size_t r = 0; r < loop.length(); r++)
-      listed.insert(gemmi::cif::as_string(loop.val(r, (size_t) sym_col)));
+      listed.insert(upper(gemmi::cif::as_string(loop.val(r, (size_t) sym_col))));
 
    for (const std::string &e : in_model) {
-      if (listed.count(e)) continue;
+      if (listed.count(upper(e))) continue;
       std::vector<std::string> row(loop.width(), "?");
       row[sym_col] = e;
       loop.values.insert(loop.values.end(), row.begin(), row.end());
@@ -509,15 +522,38 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
       // where the input said  N. Legal CIF, but a name of literally " N  " is
       // not what any downstream tool expects, and it is not what was read in.
       // Found by Art in GUI testing 2026-08-12, on a save after undo.
+      auto trim_name = [](std::string &s) {
+         size_t b = s.find_first_not_of(' ');
+         size_t e = s.find_last_not_of(' ');
+         s = (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
+      };
+
       for (gemmi::Model &model : st.models)
          for (gemmi::Chain &chain : model.chains)
             for (gemmi::Residue &res : chain.residues)
-               for (gemmi::Atom &atom : res.atoms) {
-                  size_t b = atom.name.find_first_not_of(' ');
-                  size_t e = atom.name.find_last_not_of(' ');
-                  atom.name = (b == std::string::npos) ? std::string()
-                                                       : atom.name.substr(b, e - b + 1);
-               }
+               for (gemmi::Atom &atom : res.atoms)
+                  trim_name(atom.name);
+
+      // AND THE LINK RECORDS THAT POINT AT THEM. Trimming the model alone left
+      // st.connections holding mmdb's padded spelling (" O2A") while the atoms
+      // it refers to had become "O2A", so gemmi's struct_conn writer -- which
+      // resolves each partner against the model to emit label_atom_id -- found
+      // nothing and wrote "?" for BOTH atom ids and the distance.
+      //
+      // Consequence, found by the round-trip check on pdb1aon.ent: converting a
+      // PDB with LINK records to mmCIF produced a _struct_conn with no atom
+      // names, so reading that file back gave 27 links of which 0 resolved --
+      // no link bonds drawn, no metal restraints. Silently inert, exactly like
+      // the two read-side link bugs before it (unpadded names from gemmi,
+      // blank-as-a-space fields from mmdb's writer).
+      //
+      // Only the synthesis path could show this: with a retained document
+      // struct_conn is PASS and is never rewritten, which is why mmCIF -> mmCIF
+      // was unaffected and only the PDB -> mmCIF direction broke.
+      for (gemmi::Connection &con : st.connections) {
+         trim_name(con.partner1.atom_name);
+         trim_name(con.partner2.atom_name);
+      }
 
       // (W2) Put the label_* identities back.
       //
@@ -598,35 +634,56 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
 
       if (doc && ! doc->empty()) {
 
-         // The whole point: update the retained document IN PLACE. Categories
-         // not named in `groups` are not touched, so they reach the file
-         // exactly as they were read.
+         // Update a COPY of the retained document, never the document itself.
          //
+         // This used to work in place, and that was a real defect rather than
+         // an inefficiency: update_mmcif_block() writes _atom_site (and the
+         // anisotrop rebuild writes _atom_site_anisotrop) into the block, so
+         // after the first save -- or the first make_backup(), which happens on
+         // every edit, from 106 call sites -- the molecule's retained document
+         // carried the whole coordinate loop again. Measured on 5E1N: 476 items
+         // after the read, 478 with _atom_site and _atom_site_anisotrop PRESENT
+         // after one write.
+         //
+         // Two things that undid:
+         //   - the memory saving stripping exists for (1FFK ~41 MB -> ~10 MB per
+         //     open molecule) was given back permanently on the first edit; and
+         //   - D3's reasoning was that not holding a second _atom_site makes
+         //     "wrote the stale copy" an unwritable bug. In-place editing put
+         //     the stale copy back, a snapshot from the previous write.
+         // Found by Art in GUI testing 2026-08-17: the header browser showed the
+         // coordinates, which is what a second copy looks like from outside.
+         //
+         // The copy is cheap precisely because of the strip: the retained
+         // document is 0.06-1.23 MB of text across the corpus.
+         gemmi::cif::Document out = doc->doc;
+
          // Target blocks[0] EXPLICITLY. A coordinate mmCIF may legitimately
          // carry further blocks -- phenix.refine appends the ligand restraint
          // dictionary as data_comp_XX, and deposition files put restraints in
          // later blocks. gemmi guarantees only the first block has _atom_site.
          // Writing into "the" block would corrupt a restraint dictionary.
-         gemmi::cif::Block *block = doc->coordinate_block();
-         if (! block) {
+         if (out.blocks.empty()) {
             if (message) *message = "retained document has no blocks";
             return false;
          }
-         gemmi::update_mmcif_block(st, *block, groups);
-         augment_atom_type(st, *block);
-         restore_atom_extra_columns(doc, *block);
-         restore_anisotrop_columns(doc, *block);
+         gemmi::cif::Block &block = out.blocks[0];
+
+         gemmi::update_mmcif_block(st, block, groups);
+         augment_atom_type(st, block);
+         restore_atom_extra_columns(doc, block);
+         restore_anisotrop_columns(doc, block);
          {  // _struct_mon_prot_cis: gemmi omits the auth_ residue names, which
             // for a residue are the same string as the label_ ones.
             static const std::map<std::string, std::string> cis_dups = {
                { "auth_comp_id",         "label_comp_id" },
                { "pdbx_auth_comp_id_2",  "pdbx_label_comp_id_2" } };
-            restore_duplicated_columns(*block, "_struct_mon_prot_cis",
+            restore_duplicated_columns(block, "_struct_mon_prot_cis",
                                        doc->cis_tags, cis_dups);
          }
-         restore_category_order(doc, *block);
+         restore_category_order(doc, block);
 
-         if (! write_doc(doc->doc, file_name, message))
+         if (! write_doc(out, file_name, message))
             return false;
          if (message) *message = "written by gemmi (document preserved)";
 
