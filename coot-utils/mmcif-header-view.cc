@@ -56,6 +56,18 @@ namespace {
    // nobody has heard of counts as header and appears. The GUI offers "show
    // all" so this is a default, not a censor.
    //
+   // ⚠ A BY-NAME LIST IS THE WEAK PART OF THIS DESIGN, and there is a
+   // promising rule hiding in it (Art, 2026-08-17: "a solid idea and worth
+   // revisiting when we touch header browser again"). Nearly every category
+   // below has a row count that SCALES WITH THE MODEL -- per atom, per
+   // residue, per shell, per revision -- while nearly everything shown has a
+   // fixed handful of rows. That is detectable without naming anything, so it
+   // would degrade sensibly on files annotated in ways nobody here has seen,
+   // which is exactly where a name list fails. Not adopted yet: it needs
+   // measuring against files where it might misfire (a 2-residue peptide, a
+   // structure with one revision, a hierarchy table that is legitimately long).
+   // Revisit when this window is next opened up.
+   //
    // _atom_site and _atom_site_anisotrop are not listed because they never
    // arrive: the read path strips them from the retained document.
    const char *body_categories[] = {
@@ -104,7 +116,6 @@ namespace {
       "_entry",
       "_audit_conform",
       "_pdbx_database_status",
-      "_pdbx_database_remark",
       "_pdbx_audit_revision_history",
       "_pdbx_audit_revision_details",
       "_pdbx_audit_revision_group",
@@ -251,6 +262,12 @@ namespace {
       { "_chem_comp_atom",              "Component atoms" },
       { "_chem_comp_bond",              "Component bonds" },
       { "_database_2",                  "Database references" },
+      // wwPDB's holding category for PDB REMARK text that has no typed mmCIF
+      // home. Shown, not hidden (Art, 2026-08-17): it is where the PDB -> mmCIF
+      // conversion parks REMARK 3, 200, 280 and the rest, and hiding it would
+      // preserve them in the file while making them invisible in the one window
+      // anyone would look for them.
+      { "_pdbx_database_remark",        "PDB REMARK records" },
       { "_audit_conform",               "Dictionary conformance" },
       { "_struct_ref",                  "Sequence database references" },
       { "_struct_ref_seq",              "Sequence database alignment" },

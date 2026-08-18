@@ -300,7 +300,14 @@ coot::delete_aniso_records_from_atoms(mmdb::Manager *mol) {
 	    int n_atoms = residue_p->GetNumberOfAtoms();
 	    for (int iat=0; iat<n_atoms; iat++) {
 	       at = residue_p->GetAtom(iat);
+	       // BOTH flags, not just ASET_Anis_tFac. gemmi's copy_to_mmdb marks
+	       // anisotropic atoms with ASET_Anis_tFSigma (see adjustment 10 in
+	       // gemmi-coords.cc), and copy_from_mmdb reads that flag back when
+	       // writing mmCIF -- so clearing only tFac would strip ANISOU from a
+	       // PDB save while still emitting _atom_site_anisotrop on an mmCIF
+	       // save, from the same "no anisotropic records" checkbox.
 	       at->WhatIsSet &=  ~mmdb::ASET_Anis_tFac;
+	       at->WhatIsSet &=  ~mmdb::ASET_Anis_tFSigma;
 	    }
 	 }
       }

@@ -24,10 +24,35 @@
  * mmdb's containers are protected and it offers no setters, but
  * Root::PutPDBString() feeds one PDB record through Title::ConvertPDBString()
  * and then Model::ConvertPDBString() -- which between them accept HEADER,
- * TITLE, COMPND, KEYWDS, EXPDTA, AUTHOR, JRNL, REMARK, HELIX and SHEET. So the
- * whole back-fill is "synthesize the PDB records this mmCIF implies, and hand
- * them to mmdb the way a PDB file would have". No new access to mmdb
- * internals, and the same public route the resolution fix already proved out.
+ * OBSLTE, TITLE, CAVEAT, COMPND, SOURCE, KEYWDS, EXPDTA, MDLTYPE, AUTHOR,
+ * REVDAT, SPRSDE, JRNL, REMARK, DBREF, SEQADV, SEQRES, MODRES, HET, HETNAM,
+ * HETSYN, FORMUL, HELIX, SHEET, TURN, LINK and CISPEP. So the whole back-fill
+ * is "synthesize the PDB records this mmCIF implies, and hand them to mmdb the
+ * way a PDB file would have". No new access to mmdb internals, and the same
+ * public route the resolution fix already proved out.
+ *
+ * What is synthesized, and from where:
+ *
+ *   HEADER  _struct_keywords.pdbx_keywords, _pdbx_database_status, _entry.id
+ *   TITLE   _struct.title
+ *   COMPND  _entity (+ _entity_name_com), one MOL_ID per polymer entity
+ *   SOURCE  _entity_src_nat / _entity_src_gen / _pdbx_entity_src_syn
+ *   KEYWDS  _struct_keywords.text
+ *   EXPDTA  _exptl.method
+ *   AUTHOR  _audit_author
+ *   REVDAT  _pdbx_audit_revision_history
+ *   JRNL    _citation + _citation_author (the "primary" row)
+ *   REMARK  _refine + _software, as a summary (REMARK 3)
+ *   DBREF   _struct_ref + _struct_ref_seq
+ *   HETNAM  _chem_comp.name
+ *   FORMUL  _chem_comp.formula + the residue counts in model 1
+ *   HELIX   _struct_conf     (st.helices, or the label_* fallback)
+ *   SHEET   _struct_sheet_*  (st.sheets,  or the label_* fallback)
+ *
+ * Deliberately NOT synthesized: HETSYN (_chem_comp.pdbx_synonyms), HET and
+ * SEQADV, and the prose REMARK sections (200/280/350/465/500). The REMARKs are
+ * the reason: they are wwPDB's rendering of typed categories, so composing them
+ * is reconstruction rather than translation and the wording would not match.
  *
  * The synthesis is a pure function of (Structure, Block) so it can be checked
  * by printing it, and so a harvester can lift it without dragging mmdb along.
@@ -51,7 +76,36 @@ namespace gemmi {
    namespace cif { struct Block; }
 }
 
+namespace mmdb { class Manager; }
+
 namespace coot {
+
+   //! THE OTHER DIRECTION: carry mmdb's PDB header into a gemmi Structure and
+   //! an mmCIF block, for a molecule read from PDB and saved as mmCIF.
+   //
+   //! Needed for the same reason as its opposite, one layer down:
+   //! `gemmi::copy_from_mmdb()` carries the cell, Z, space group, models,
+   //! cis-peptides and links -- and nothing else. So converting a PDB wrote a
+   //! file with eight categories and no title, authors, citation, keywords,
+   //! method or secondary structure, all of which the input plainly had. That
+   //! is NOT the accepted cross-format lossiness (an mmCIF missing what a PDB
+   //! never carried); it is dropping what was in front of us.
+   //!
+   //! Split in two because gemmi does half the work if asked properly:
+   //!
+   //!  -  transfer_pdb_header_to_gemmi fills `st.info` and
+   //!    `st.helices`/`st.sheets`, which gemmi's writer then emits as
+   //!    `_struct`, `_struct_keywords`, `_exptl`, `_entry`,
+   //!    `_pdbx_database_status`, `_struct_conf` and `_struct_sheet*`.
+   //!  -  add_pdb_header_categories writes the categories gemmi has no model
+   //!    for at all: `gemmi::Metadata` has no author and no citation field
+   //!    anywhere, and no home for free REMARK text.
+   void transfer_pdb_header_to_gemmi(mmdb::Manager *mol, gemmi::Structure &st);
+
+   //! Add `_audit_author`, `_citation`, `_citation_author`,
+   //! `_pdbx_database_remark` and `_entity.pdbx_description` to a synthesized
+   //! block, from mmdb's AUTHOR / JRNL / REMARK / COMPND records.
+   void add_pdb_header_categories(mmdb::Manager *mol, gemmi::cif::Block &block);
 
    //! Synthesize the PDB header records implied by an mmCIF.
    //

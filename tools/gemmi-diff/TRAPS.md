@@ -279,6 +279,53 @@ because the clipper failure mode is silent and produces wrong maps.
 **Suggested corpus addition:** a hand-edited copy of `3K0N.cif` with `'P212121'`, kept
 deliberately.
 
+### B12. mmdb writes `FORMUL`'s component number at columns 9-10 and reads it at 10-11
+**Property:** an upstream mmdb asymmetry, not a file property. The writer does
+`sprintf("FORMUL  %2i  %3s    ", compNum, hetID)` — columns 9-10, matching wwPDB — but
+`HetCompounds::ConvertFORMUL` reads it with `GetInteger(&S[9], 2)`, which is columns **10-11**.
+**Consequence:** mmdb misreads its own output, and every real two-digit `FORMUL`.
+`pdb1aon.ent`'s `FORMUL  22   MG` is stored as component **2**. One-digit numbers are unaffected,
+which is why it survives unnoticed — most entries never reach ten components.
+**Handled:** the synthesized record in `coot-utils/gemmi-header.cc` targets the READER
+(right-justified in 10-11), because that line is only ever fed to `PutPDBString` and never
+written to a file; mmdb's writer then puts the value back at 9-10. Verified end to end on
+`3NYD_hierarchy.cif`: `FORMUL  11  HOH   *670(H2 O)`, matching the deposition.
+**Do not "fix" it to match the format description** — that puts the number where mmdb cannot
+read it, and the loss is silent.
+
+### B13. mmdb writes a continuation number on every `REVDAT` after the first
+**Property:** another upstream writer bug. `ClassContainer::PDBASCIIDump` hands each record its
+index in the container as the continuation number `N`, and `RevData::PDBASCIIDump` renders
+`N > 0` into columns 11-12. That is right for TITLE/COMPND, where every line after the first
+genuinely IS a continuation, and wrong for REVDAT, where each line is a separate revision.
+**Exhibited by:** any entry with more than one revision. Output reads `REVDAT   2 2 19-JUN-13`.
+**Not ours:** reading the *deposited* `3K0N.pdb` and writing it straight back reproduces it
+exactly, so it predates the mmCIF header work and is reachable through PDB -> PDB alone.
+**Not fixable from here** — mmdb is an external dependency, not vendored. mmdb's own reader
+ignores columns 11-12 so it round-trips; a stricter parser might not.
+
+### B14. `FORMUL`'s component number is the SUBCHAIN ordinal, not the entity id
+**Property:** the number in a `FORMUL` record is the 1-based position of the component's first
+`label_asym_id` in `_struct_asym` — **not** `_entity.id`, which is the obvious reading and is
+wrong on every file where the two can differ.
+**Measured against three depositions:**
+
+| | deposited | entity id | subchain ordinal |
+|---|---|---|---|
+| 5E1N | MSE 1, MPD 2, CA 4, HOH 9 | 1, 2, 3, 4 ✗ | 1, 2, 4, 9 ✓ |
+| 3NYD | 3NY 3, ACT 4, SO4 7, HOH 11 | 2, 3, 4, 5 ✗ | 3, 4, 7, 11 ✓ |
+| 3K0N | HOH 2 | 2 ✓ by luck | 2 ✓ |
+
+**Why:** a component with several copies gets several subchains — 5E1N's five calciums are
+`_struct_asym` D-H — so the next component's number jumps. `_struct_asym` is authoritative rather
+than first-appearance order in `_atom_site` because it also lists subchains with no observed
+atoms, and wwPDB counts those.
+**Also:** a component can belong to a POLYMER entity (5E1N's 8 selenomethionines are subchain A,
+`FORMUL   1  MSE`), so the comp -> subchain map has to come from `_atom_site`, not from
+`_pdbx_entity_nonpoly`.
+**The general lesson, for the third time in this file:** 3K0N alone would have confirmed the
+wrong rule.
+
 ---
 
 ## C. Cross-format traps
@@ -453,10 +500,14 @@ records after deletion) and A4's write-side half (a 20-model ensemble through th
 
 ## Baselines — compare a run against these
 
-**Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u49`:
+**Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u63`:
 ```
-summary: 5 identical, 17 with differences, 6 failed to load
+summary: 6 identical, 17 with differences, 6 failed to load
 ```
+Was `5 identical, ...` at `u49`. The one move is a corpus addition, not a code change:
+`samples/` gained `3K0N-CIF2PDB.pdb` (Art's mmCIF->PDB comparison artifact), and it reads
+IDENTICAL. The six identical files are `2GEW.pdb`, `3K0N-CIF2PDB.pdb`, `3K0N.pdb`, `5E1N.pdb`,
+`pdb1aon.ent`, `pdb3k0n.ent`.
 Was `3 identical, 16 with differences, 4 failed to load` at `u34`. Every change since is a
 corpus addition, and each was checked individually rather than assumed:
 `3K0N.pdb` and `2GEW.pdb` compare IDENTICAL; `3K0N-sf.cif` and `2GEW-sf.cif` are
@@ -467,21 +518,24 @@ times now.
 Every line is attributable to an entry above; a NEW unexplained line is the signal. The
 exit status is NOT a gate here — several differences are permanent and deliberate.
 
-**Write side** (`gemmi-mmdb-diff --write-check`), `0.2.0.0-u49`:
+**Write side** (`gemmi-mmdb-diff --write-check`), `0.2.0.0-u63`:
 ```
-write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 11 skipped (not mmCIF)
+write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 12 skipped (not mmCIF)
 ```
+`skipped` moved 11 -> 12 for the same corpus addition as above (`3K0N-CIF2PDB.pdb`, not mmCIF).
 Was `15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped` when the column/value
 work landed; the moves since are corpus additions (`3K0N.pdb`, `2GEW.pdb` skipped as not
 mmCIF; `3K0N-sf.cif`, `2GEW-sf.cif` declined for having no atoms). **The number that matters,
 `0 lossy`, has never moved.**
 
-**Round trip** (`gemmi-mmdb-diff --round-trip`), `0.2.0.0-u49`:
+**Round trip** (`gemmi-mmdb-diff --round-trip`), `0.2.0.0-u63`:
 ```
-  A  PDB->mmCIF->mmCIF : 8 model preserved, 3 differ
+  A  PDB->mmCIF->mmCIF : 9 model preserved, 3 differ
   B  mmCIF round trip  : 14 stable, 0 NOT stable   <-- the gate
   C  mmCIF->PDB->PDB   : 12 model preserved, 2 differ
 ```
+Chain A was `8 preserved` at `u49`; the extra one is `3K0N-CIF2PDB.pdb`, the same corpus
+addition as above. Chains B and C have not moved.
 Chain B is the gate. Chain A's three differences are `2RSF.pdb` (A3) and the two
 `SC1_2_refine_*.pdb` (B10); chain C's two are the same SC1 pair (C2).
 **Here the exit status IS a gate** — losing a category, a column or a value is never

@@ -10,6 +10,7 @@
 
 #include "gemmi-write.hh"
 #include "mmcif-document.hh"
+#include "gemmi-header.hh"   // the PDB-header -> mmCIF carry-over
 
 #include <gemmi/mmdb.hpp>       // copy_from_mmdb
 #include <gemmi/to_mmcif.hpp>   // update_mmcif_block, make_mmcif_document
@@ -511,7 +512,43 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
    }
 
    try {
+      // gemmi's bridge marks an anisotropic atom with ASET_Anis_tFSigma, where
+      // mmdb's own convention -- and every consumer in mmdb and Coot -- is
+      // ASET_Anis_tFac. The read path translates gemmi's flag into mmdb's
+      // (adjustment 10); this is the other end of that translation, putting the
+      // flag gemmi looks for back just long enough to be read, and only on
+      // atoms that did not already have it. Without this, copy_from_mmdb sees
+      // no anisotropy at all and _atom_site_anisotrop would be dropped from
+      // every mmCIF we write.
+      std::vector<mmdb::Atom *> retagged;
+      for (int imod = 1; imod <= mol->GetNumberOfModels(); imod++) {
+         mmdb::Model *model = mol->GetModel(imod);
+         if (! model) continue;
+         for (int ich = 0; ich < model->GetNumberOfChains(); ich++) {
+            mmdb::Chain *chain = model->GetChain(ich);
+            if (! chain) continue;
+            for (int ires = 0; ires < chain->GetNumberOfResidues(); ires++) {
+               mmdb::Residue *res = chain->GetResidue(ires);
+               if (! res) continue;
+               for (int iat = 0; iat < res->GetNumberOfAtoms(); iat++) {
+                  mmdb::Atom *at = res->GetAtom(iat);
+                  if (! at || at->isTer()) continue;
+                  if ((at->WhatIsSet & mmdb::ASET_Anis_tFac) &&
+                      ! (at->WhatIsSet & mmdb::ASET_Anis_tFSigma)) {
+                     at->WhatIsSet |= mmdb::ASET_Anis_tFSigma;
+                     retagged.push_back(at);
+                  }
+               }
+            }
+         }
+      }
+
       gemmi::Structure st = gemmi::copy_from_mmdb(mol);
+
+      // Put the model back exactly as it was: an atom left carrying the sigma
+      // flag would gain a SIGUIJ record on the next PDB save.
+      for (mmdb::Atom *at : retagged)
+         at->WhatIsSet &= ~mmdb::ASET_Anis_tFSigma;
 
       // (W1) Trim mmdb's atom-name padding.
       //
@@ -700,7 +737,21 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
          // preserve, "PASS" would mean "write nothing", which would produce a
          // file missing categories gemmi could perfectly well have derived
          // from the model.
+         // Carry across what mmdb DOES hold of the PDB header first --
+         // copy_from_mmdb() takes none of it, so without this the conversion
+         // writes eight categories and drops the title, authors, citation,
+         // keywords, method, secondary structure and every REMARK the input
+         // had. See gemmi-header.hh; this is the mirror of adjustment (9) on
+         // the read side.
+         coot::transfer_pdb_header_to_gemmi(mol, st);
+
          gemmi::cif::Document out = gemmi::make_mmcif_document(st);
+
+         // ... then the categories gemmi has no model for: it has no author
+         // field and no citation field anywhere in Metadata, and nowhere to
+         // put free REMARK text.
+         if (! out.blocks.empty())
+            coot::add_pdb_header_categories(mol, out.blocks[0]);
 
          if (! write_doc(out, file_name, message))
             return false;

@@ -403,6 +403,57 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
          }
       }
 
+      // (10) Tell mmdb that the anisotropic ADPs are ADPs.
+      //
+      // copy_to_mmdb() copies u11..u23 across correctly and then sets
+      // ASET_Anis_tFSigma -- the flag for anisotropic SIGMAS -- where mmdb's
+      // own convention is ASET_Anis_tFac for the tensor itself. gemmi is
+      // self-consistent about it (copy_from_mmdb reads the same flag back), so
+      // the mmCIF write path never noticed; but EVERY mmdb and Coot consumer
+      // tests ASET_Anis_tFac, so as far as they were concerned the ADPs were
+      // not there.
+      //
+      // Measured on 3K0N.cif: 1518 atoms with non-zero U (matching the file's
+      // 1518 _atom_site_anisotrop rows), 1518 with ASET_Anis_tFSigma, and ZERO
+      // with ASET_Anis_tFac. Consequence, found by Art comparing a converted
+      // file against the deposition: mmCIF -> PDB wrote 0 ANISOU records where
+      // the deposited PDB has 1518.
+      //
+      // The gemmi flag is CLEARED rather than left alongside: mmdb takes
+      // ASET_Anis_tFSigma at its word and writes a SIGUIJ record for every
+      // atom that has it, so keeping both produced 1518 SIGUIJ records that
+      // the deposited PDB does not have (and whose values are not sigmas).
+      // gemmi's own reverse bridge wants the flag back -- so it is restored
+      // for the duration of copy_from_mmdb in gemmi-write.cc, which is the
+      // other end of the same translation.
+      {
+         int n_aniso = 0;
+         for (int imod = 1; imod <= mol->GetNumberOfModels(); imod++) {
+            mmdb::Model *model = mol->GetModel(imod);
+            if (! model) continue;
+            for (int ich = 0; ich < model->GetNumberOfChains(); ich++) {
+               mmdb::Chain *chain = model->GetChain(ich);
+               if (! chain) continue;
+               for (int ires = 0; ires < chain->GetNumberOfResidues(); ires++) {
+                  mmdb::Residue *res = chain->GetResidue(ires);
+                  if (! res) continue;
+                  for (int iat = 0; iat < res->GetNumberOfAtoms(); iat++) {
+                     mmdb::Atom *at = res->GetAtom(iat);
+                     if (! at || at->isTer()) continue;
+                     if (at->WhatIsSet & mmdb::ASET_Anis_tFSigma) {
+                        at->WhatIsSet |= mmdb::ASET_Anis_tFac;
+                        at->WhatIsSet &= ~mmdb::ASET_Anis_tFSigma;
+                        n_aniso++;
+                     }
+                  }
+               }
+            }
+         }
+         if (n_aniso > 0)
+            std::cout << "INFO:: " << n_aniso
+                      << " atoms carry anisotropic ADPs" << std::endl;
+      }
+
       // (6) Carry the resolution across.
       //
       // copy_to_mmdb takes nothing at all out of st.meta, so a gemmi-read
