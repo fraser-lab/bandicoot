@@ -234,7 +234,7 @@ namespace {
    // water. So _entity is read once, here, and the record builders share it.
    struct entity_t {
       std::string id, type, src_method, description, ec, mutation, fragment;
-      std::string synonym;
+      std::string synonym, details;
       std::vector<std::string> chains;   // author chain ids, taken from the model
       int mol_id;                        // COMPND / SOURCE MOL_ID; polymers only
       entity_t() : mol_id(0) {}
@@ -253,7 +253,8 @@ namespace {
 
       for (auto row : b->find("_entity.", {"id", "?type", "?pdbx_description",
                                            "?src_method", "?pdbx_ec",
-                                           "?pdbx_mutation", "?pdbx_fragment"})) {
+                                           "?pdbx_mutation", "?pdbx_fragment",
+                                           "?details"})) {
          entity_t e;
          e.id = row.str(0);
          if (row.has(1) && ! is_null_value(row.str(1))) e.type        = row.str(1);
@@ -262,6 +263,7 @@ namespace {
          if (row.has(4) && ! is_null_value(row.str(4))) e.ec          = row.str(4);
          if (row.has(5) && ! is_null_value(row.str(5))) e.mutation    = row.str(5);
          if (row.has(6) && ! is_null_value(row.str(6))) e.fragment    = row.str(6);
+         if (row.has(7) && ! is_null_value(row.str(7))) e.details     = row.str(7);
          entities.push_back(e);
       }
       if (entities.empty()) return entities;
@@ -349,6 +351,9 @@ namespace {
          // is exactly what ENGINEERED reports; nat and syn are not.
          if (e.src_method == "man")  lines.push_back("ENGINEERED: YES;");
          if (! e.mutation.empty())   lines.push_back("MUTATION: YES;");
+         // OTHER_DETAILS last, as in pdb2gew.ent ("FAD COFACTOR
+         // NON-COVALENTLY BOUND TO THE ENZYME").
+         if (! e.details.empty())    lines.push_back("OTHER_DETAILS: " + e.details + ";");
       }
       emit_specifications(out, "COMPND", lines);
    }
@@ -865,10 +870,26 @@ namespace {
          // 5E1N, which name MSE, MPD and CA but never HOH), and "HOH WATER"
          // tells a reader nothing it did not know.
          if (! name.empty() && ! water) {
-            pdb_line_t l("HETNAM");
-            l.put_right(12, 14, comp.substr(0, 3));
-            l.put(16, name);
-            out.push_back(l.str());
+            // WRAPPED, because a chemical name routinely exceeds one line and
+            // pdb_line_t silently clips at column 80. 6DMH's MER came out as
+            // "...pyrrolidin-3-yl]sulfanyl" and the rest of the name was LOST;
+            // wwPDB wraps the same name over three lines. Found 2026-08-20 by
+            // --header-check against the deposition.
+            //
+            // Continuation number in 9-10, hetID repeated in 12-14, text from
+            // column 16 (17 on continuations, which is what wwPDB does and what
+            // gives the concatenated fragments a separating space, since
+            // mmdb's ConvertHETNAM appends them). wrap_text hard-splits a token
+            // longer than the field, which is exactly what a chemical name with
+            // no spaces in it needs.
+            std::vector<std::string> lines = wrap_text(name, 55, 54);
+            for (size_t il = 0; il < lines.size(); il++) {
+               pdb_line_t l("HETNAM");
+               if (il > 0) l.put_int(9, 10, static_cast<int>(il) + 1);
+               l.put_right(12, 14, comp.substr(0, 3));
+               l.put(il == 0 ? 16 : 17, lines[il]);
+               out.push_back(l.str());
+            }
          }
          if (! formula.empty()) {
             pdb_line_t l("FORMUL");
@@ -876,7 +897,13 @@ namespace {
             l.put_right(13, 15, comp.substr(0, 3));
             // The asterisk means water, and only water.
             if (water) l.put(19, "*");
-            l.put(20, std::to_string(c->second) + "(" + pdb_formula(formula) + ")");
+            // A single molecule of the component is written BARE, with no
+            // count and no parentheses: wwPDB writes "FORMUL      FAD    C27
+            // H33 N9 O15 P2", not "1(C27 ...)". Found 2026-08-20 by
+            // --header-check against pdb1aon.ent.
+            std::string f = pdb_formula(formula);
+            l.put(20, c->second == 1 ? f
+                                     : std::to_string(c->second) + "(" + f + ")");
             out.push_back(l.str());
          }
       }
@@ -1006,36 +1033,105 @@ namespace {
    // the records are synthesized at read time, not at first use).
    typedef std::map<std::pair<std::string, std::string>, ss_res_t> label_map_t;
 
-   label_map_t build_label_map(const gemmi::cif::Block *block) {
+   // Two indices over _atom_site: one keyed on (label_asym_id, label_seq_id),
+   // one on (auth_asym_id, auth_seq_id). Both are needed because a file that
+   // offers only the beg_label_*/end_label_* columns does not necessarily put
+   // LABEL ids in them: phenix.refine writes AUTHOR numbering under the label
+   // tag names. Measured on SC1_2_refine_031.cif -- _struct_sheet_range says
+   // "VAL B 71", and in _atom_site auth B 71 is VAL while label B 71 is ALA.
+   // Taking the tag name at its word slides every strand of chains B/C/D by
+   // four residues, so which index to believe is settled by a vote over the
+   // endpoint residue names -- see score_ss_columns() below.
+   struct ss_index_t {
+      label_map_t by_label;
+      label_map_t by_auth;
+      bool prefer_auth = false;   // set by the vote below
+      bool empty() const { return by_label.empty() && by_auth.empty(); }
+   };
 
-      label_map_t m;
-      if (! block) return m;
+   // The vote: score each reading of the label_* columns by how many endpoint
+   // residue names it gets right, over every _struct_conf and
+   // _struct_sheet_range row in the file, and then use the winner for ALL of
+   // them. Deciding per row would split a strand whose two endpoints happen to
+   // agree under both readings -- "VAL B 71 THR B 79" came out as "VAL B 71
+   // THR B 83" that way, because THR sits at label 79 AND at auth 83.
+   void score_ss_columns(gemmi::cif::Block *b, const char *cat,
+                         const ss_index_t &idx, int *n_label, int *n_auth) {
+
+      const char *pre[2] = { "beg", "end" };
+      for (int k = 0; k < 2; k++) {
+         std::vector<std::string> tags;
+         tags.push_back(std::string(pre[k]) + "_label_asym_id");
+         tags.push_back(std::string(pre[k]) + "_label_seq_id");
+         tags.push_back(std::string("?") + pre[k] + "_label_comp_id");
+         for (auto row : b->find(cat, tags)) {
+            if (! row.has(2)) continue;
+            std::string comp = row.str(2);
+            if (is_null_value(comp)) continue;
+            std::pair<std::string, std::string> key(row.str(0), row.str(1));
+            auto il = idx.by_label.find(key);
+            if (il != idx.by_label.end() && il->second.comp == comp) (*n_label)++;
+            auto ia = idx.by_auth.find(key);
+            if (ia != idx.by_auth.end() && ia->second.comp == comp) (*n_auth)++;
+         }
+      }
+   }
+
+   ss_index_t build_ss_index(const gemmi::cif::Block *block) {
+
+      ss_index_t idx;
+      if (! block) return idx;
       gemmi::cif::Block *b = const_cast<gemmi::cif::Block *>(block);
 
       for (auto row : b->find("_atom_site.", {"label_asym_id", "label_seq_id",
                                               "auth_asym_id", "auth_seq_id",
                                               "?pdbx_PDB_ins_code",
                                               "?auth_comp_id", "?label_comp_id"})) {
-         std::string label_seq = row.str(1);
-         if (is_null_value(label_seq)) continue;
-         std::pair<std::string, std::string> key(row.str(0), label_seq);
-         if (m.find(key) != m.end()) continue;      // first atom of the residue
          ss_res_t r;
          r.chain = row.str(2);
          r.seq   = row.str(3);
          if (row.has(4) && ! is_null_value(row.str(4))) r.icode = row.str(4);
          if (row.has(5) && ! is_null_value(row.str(5)))      r.comp = row.str(5);
          else if (row.has(6) && ! is_null_value(row.str(6))) r.comp = row.str(6);
-         m[key] = r;
+
+         std::string label_seq = row.str(1);
+         if (! is_null_value(label_seq)) {
+            std::pair<std::string, std::string> key(row.str(0), label_seq);
+            // first atom of the residue wins
+            if (idx.by_label.find(key) == idx.by_label.end()) idx.by_label[key] = r;
+         }
+         std::pair<std::string, std::string> akey(r.chain, r.seq);
+         if (idx.by_auth.find(akey) == idx.by_auth.end()) idx.by_auth[akey] = r;
       }
-      return m;
+
+      int n_label = 0, n_auth = 0;
+      score_ss_columns(b, "_struct_conf.",        idx, &n_label, &n_auth);
+      score_ss_columns(b, "_struct_sheet_range.", idx, &n_label, &n_auth);
+      idx.prefer_auth = (n_auth > n_label);
+      if (idx.prefer_auth)
+         std::cout << "INFO:: secondary structure label_* columns hold AUTHOR "
+                   << "numbering (" << n_auth << " residue names matched vs "
+                   << n_label << " read as label ids)" << std::endl;
+      return idx;
    }
 
-   ss_res_t lookup_label(const label_map_t &m, const std::string &asym,
-                         const std::string &seq, const std::string &comp) {
+   ss_res_t resolve_ss_res(const ss_index_t &idx, const std::string &asym,
+                           const std::string &seq, const std::string &comp) {
+
+      const label_map_t &first  = idx.prefer_auth ? idx.by_auth  : idx.by_label;
+      const label_map_t &second = idx.prefer_auth ? idx.by_label : idx.by_auth;
+
+      std::pair<std::string, std::string> key(asym, seq);
+      const ss_res_t *hit = nullptr;
+      auto it = first.find(key);
+      if (it != first.end()) hit = &it->second;
+      else {
+         auto it2 = second.find(key);
+         if (it2 != second.end()) hit = &it2->second;
+      }
+
       ss_res_t r;
-      auto it = m.find(std::make_pair(asym, seq));
-      if (it != m.end()) r = it->second;
+      if (hit) r = *hit;
       if (r.comp.empty() && ! is_null_value(comp)) r.comp = comp;
       return r;
    }
@@ -1097,15 +1193,15 @@ namespace {
 
       // The label-only fallback.
       if (ids.empty()) return helices;
-      label_map_t m = build_label_map(block);
-      if (m.empty()) return helices;
+      ss_index_t idx = build_ss_index(block);
+      if (idx.empty()) return helices;
       size_t n_unmappable = 0;
       for (size_t i = 0; i < ids.size(); i++) {
          helix_rec_t rec;
-         rec.start = lookup_label(m, label_rows_asym1[i], label_rows_seq1[i],
-                                  label_rows_comp1[i]);
-         rec.end   = lookup_label(m, label_rows_asym2[i], label_rows_seq2[i],
-                                  label_rows_comp2[i]);
+         rec.start = resolve_ss_res(idx, label_rows_asym1[i], label_rows_seq1[i],
+                                    label_rows_comp1[i]);
+         rec.end   = resolve_ss_res(idx, label_rows_asym2[i], label_rows_seq2[i],
+                                    label_rows_comp2[i]);
          rec.id    = ids[i];
          rec.helix_class = label_rows_class[i];
          rec.length      = label_rows_length[i];
@@ -1156,8 +1252,8 @@ namespace {
       // _struct_sheet_range gave it only label ids.
       if (! block) return strands;
       gemmi::cif::Block *b = const_cast<gemmi::cif::Block *>(block);
-      label_map_t m = build_label_map(block);
-      if (m.empty()) return strands;
+      ss_index_t idx = build_ss_index(block);
+      if (idx.empty()) return strands;
 
       // strand ordering/sense: _struct_sheet_order says how range_id_2 sits
       // relative to range_id_1. PDB's sense column means the same thing about
@@ -1184,10 +1280,10 @@ namespace {
                                "?end_label_comp_id"})) {
          strand_rec_t rec;
          rec.sheet_id = row.str(0);
-         rec.start = lookup_label(m, row.str(2), row.str(3),
-                                  row.has(4) ? row.str(4) : std::string());
-         rec.end   = lookup_label(m, row.str(5), row.str(6),
-                                  row.has(7) ? row.str(7) : std::string());
+         rec.start = resolve_ss_res(idx, row.str(2), row.str(3),
+                                    row.has(4) ? row.str(4) : std::string());
+         rec.end   = resolve_ss_res(idx, row.str(5), row.str(6),
+                                    row.has(7) ? row.str(7) : std::string());
          if (! rec.start.ok() || ! rec.end.ok()) continue;
          rec.index_in_sheet = seen_in_sheet[rec.sheet_id]++;
          auto it = sense_of.find(std::make_pair(rec.sheet_id, row.str(1)));
@@ -1219,7 +1315,9 @@ namespace {
          pdb_line_t l("HELIX");
          l.put_int(8, 10, static_cast<int>(i) + 1);
          std::string id = h.id.empty() ? std::to_string(i + 1) : h.id;
-         l.put(12, id.substr(0, 3));
+         // RIGHT-justified in 12-14, as wwPDB writes it. Same bug as the sheet
+         // id, found the same way (--header-check against pdb1aon.ent).
+         l.put_right(12, 14, id.substr(0, 3));
          l.put(16, h.start.comp.substr(0, 3));
          l.put(20, h.start.chain.substr(0, 1));   // mmdb reads one char
          l.put_right(22, 25, h.start.seq);
@@ -1251,7 +1349,9 @@ namespace {
          // uses the number as an index into the sheet's strand array, so this
          // is 1-based per sheet rather than a running total.
          l.put_int(8, 10, static_cast<int>(s.index_in_sheet) + 1);
-         l.put(12, s.sheet_id.substr(0, 3));
+         // RIGHT-justified in 12-14, as wwPDB writes it ("  B"), not left.
+         // Found 2026-08-20 by --header-check comparing against pdb1aon.ent.
+         l.put_right(12, 14, s.sheet_id.substr(0, 3));
          l.put_int(15, 16, static_cast<int>(s.n_in_sheet));
          l.put(18, s.start.comp.substr(0, 3));
          l.put(22, s.start.chain.substr(0, 1));
@@ -1510,6 +1610,45 @@ void coot::transfer_pdb_header_to_gemmi(mmdb::Manager *mol, gemmi::Structure &st
 }
 
 
+// The resolution, from wherever the PDB header actually states it.
+//
+// mmdb answers GetResolution() from REMARK 2 -- but REMARK 2 is a wwPDB
+// DEPOSITION record, and a refinement program's output does not have to carry
+// one. phenix.refine's does not: SC1_2_refine_031.pdb has no REMARK 2 at all
+// and states the resolution only inside its REMARK 3 refinement account,
+// "RESOLUTION RANGE HIGH (ANGSTROMS) : 2.80" -- the same wwPDB template refmac
+// uses, and the same line we synthesize in the other direction.
+//
+// So the u80 fix covered wwPDB files and missed every phenix one: converting a
+// phenix PDB to mmCIF still produced a file with no resolution anywhere. Found
+// 2026-08-20 by Art, in the Header Browser, on the converted file -- "you can
+// see resolution bins in refinement information" is that REMARK 3, preserved as
+// text in _pdbx_database_remark while the typed value was missing.
+//
+// The BIN table's "BIN  RESOLUTION RANGE  COMPL. ..." header does not match:
+// the search is for RANGE HIGH specifically.
+double coot::pdb_header_resolution(mmdb::Manager *mol) {
+
+   if (! mol) return -1.0;
+   double r = mol->GetResolution();
+   if (r > 0.0) return r;
+
+   mmdb::TitleContainer *rc = mol->GetRemarks();
+   if (! rc) return -1.0;
+   for (int i = 0; i < rc->Length(); i++) {
+      mmdb::Remark *rem = static_cast<mmdb::Remark *>(rc->GetContainerClass(i));
+      if (! rem || rem->remarkNum != 3 || ! rem->remark) continue;
+      std::string line(rem->remark);
+      size_t p = line.find("RESOLUTION RANGE HIGH");
+      if (p == std::string::npos) continue;
+      size_t colon = line.find(':', p);
+      if (colon == std::string::npos) continue;
+      double v = std::atof(trimmed(line.substr(colon + 1)).c_str());
+      if (v > 0.0) return v;
+   }
+   return -1.0;
+}
+
 void coot::add_pdb_header_categories(mmdb::Manager *mol, gemmi::cif::Block &block) {
 
    if (! mol) return;
@@ -1662,6 +1801,35 @@ void coot::add_pdb_header_categories(mmdb::Manager *mol, gemmi::cif::Block &bloc
          rows.push_back({ std::to_string(kv.first), text });
       }
       add_loop(block, "_pdbx_database_remark", { "id", "text" }, rows);
+   }
+
+   // --- _refine.ls_d_res_high, from REMARK 2 ---
+   //
+   // mmdb parses REMARK 2 into a resolution, and the read path takes the
+   // resolution back out of _refine.ls_d_res_high (adjustment (6); gemmi
+   // populates st.resolution from it -- trap D5). Without this the number
+   // survives PDB -> mmdb and then dies at mmdb -> mmCIF, so converting a PDB
+   // to mmCIF loses the resolution silently. Found 2026-08-20 by --round-trip
+   // chain A once it learned to compare the resolution: ten of the fourteen
+   // PDB inputs reported "A=1 (1.390) B=0 (-2.000)".
+   //
+   // Guarded on the category being absent: this is the synthesis branch, so
+   // there is normally no _refine at all, but a block that already has one is
+   // better left alone than given a second, conflicting item.
+   if (! block.has_mmcif_category("_refine")) {
+      double reso = coot::pdb_header_resolution(mol);
+      if (reso > 0.0) {
+         char buf[32];
+         snprintf(buf, sizeof(buf), "%.2f", reso);
+         // pdbx_refine_id is dictionary-mandatory, and its value is the
+         // experimental method -- which we know only if EXPDTA said so. An
+         // absent tag is better than an invented "X-RAY DIFFRACTION" on a file
+         // that was refined against something else.
+         std::string method = join_continued(container_lines(t->GetExpData()));
+         if (! method.empty())
+            block.set_pair("_refine.pdbx_refine_id", cif_value(method));
+         block.set_pair("_refine.ls_d_res_high", buf);
+      }
    }
 
    // --- _entity.pdbx_description, from COMPND ---

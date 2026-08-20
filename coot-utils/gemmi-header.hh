@@ -103,9 +103,19 @@ namespace coot {
    void transfer_pdb_header_to_gemmi(mmdb::Manager *mol, gemmi::Structure &st);
 
    //! Add `_audit_author`, `_citation`, `_citation_author`,
-   //! `_pdbx_database_remark` and `_entity.pdbx_description` to a synthesized
-   //! block, from mmdb's AUTHOR / JRNL / REMARK / COMPND records.
+   //! `_pdbx_database_remark`, `_refine.ls_d_res_high` and
+   //! `_entity.pdbx_description` to a synthesized block, from mmdb's
+   //! AUTHOR / JRNL / REMARK / COMPND records.
    void add_pdb_header_categories(mmdb::Manager *mol, gemmi::cif::Block &block);
+
+   //! The resolution the PDB header states, from REMARK 2 if it has one and
+   //! from REMARK 3's "RESOLUTION RANGE HIGH" line if it does not.
+   //
+   //! `mmdb::Manager::GetResolution()` only knows REMARK 2, which is a wwPDB
+   //! deposition record: **phenix.refine output has none**, and states the
+   //! resolution only in its REMARK 3 refinement account. Returns -1.0 when the
+   //! header states no resolution anywhere.
+   double pdb_header_resolution(mmdb::Manager *mol);
 
    //! Synthesize the PDB header records implied by an mmCIF.
    //

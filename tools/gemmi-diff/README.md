@@ -105,6 +105,12 @@ Two lines are worth understanding:
 - `N distinct shape(s)` under a field difference — 60 differences all of one shape is a
   systematic rule; 60 differences of 40 shapes is something else entirely.
 
+Per-atom fields include the **anisotropic ADPs** — all six `u[]` components, the
+`ASET_Anis_tFac` flag and `sigU` — added 2026-08-20, and the model summary includes the
+**resolution**. Both were added because the read path adjusts them at the gemmi-to-mmdb
+boundary and nothing was checking that it did so correctly; between them they found traps
+**B19** and **E9** on the first run.
+
 ## Why path B calls `merge_chain_parts()`
 
 `copy_to_mmdb` does `CreateChain()` per `gemmi::Chain` and never merges, so a file where
@@ -221,6 +227,23 @@ gemmi normalises to `CL` (trap B10). Chain C's two are the same SC1 pair, whose 
 hydrogen-bond connections PDB cannot carry (trap C2). **A new unattributed line is the
 signal.**
 
+**It earned its place a third time the same day**, after Art tested the fix below and found
+the half it could not see: `GetResolution()` reads only REMARK 2, which phenix PDB output does
+not write, so a phenix PDB still converted to an mmCIF with no resolution while every wwPDB
+one now kept it. The check that replaced it is a **post-condition against the input file**,
+not a model-vs-model compare -- *if the input states a resolution anywhere, including inside
+REMARK 3 prose, our mmCIF must carry `_refine.ls_d_res_high`* -- because comparing
+`GetResolution()` on both sides makes a value mmdb cannot see on either side read as
+agreement. Verified to fail when it should: with the REMARK 3 fallback disabled, chain A
+prints `RESOLUTION LOST: input states 2.80, our mmCIF has no _refine.ls_d_res_high`.
+
+**It earned its place a second time on 2026-08-20**, when the model summary learned to
+compare the resolution: chain A dropped from `9 model preserved` to **`0 preserved, 14
+differ`**, every PDB input reporting `DIFF resolution present  A=1 (1.390) B=0 (-2.000)`.
+mmdb had the number from `REMARK 2` and our synthesized mmCIF wrote no `_refine` at all, so
+converting a PDB to mmCIF lost the resolution for good (trap E9). Fixed, and chain A is back
+to `9 / 5` with the resolution now genuinely compared rather than merely unmeasured.
+
 **It earned its place on the first run:** chain A reported 27 links of which 0 resolved on
 `pdb1aon.ent`, which turned out to be a real defect in our own writer — adjustment (W1)
 trimmed mmdb's atom-name padding on the model but not on the LINK records pointing at it,
@@ -228,6 +251,66 @@ so gemmi wrote `_struct_conn` with no atom names and no distances. Converting a 
 LINK records to mmCIF produced a file whose connections were silently inert. Fixed in
 `gemmi-write.cc`; only the synthesis path could show it, because with a retained document
 `struct_conn` is PASS and never rewritten.
+
+## `--header-check` — the mmCIF-to-PDB-record synthesis, against the deposition
+
+```sh
+./tools/gemmi-diff/gemmi-mmdb-diff --header-check       # whole corpus
+```
+
+Reads each coordinate mmCIF, calls **`coot::pdb_header_records_from_mmcif()`** — the same
+pure function the read path calls — and compares the records it synthesizes against the
+same entry's **PDB-format sibling in the corpus** (`5E1N.cif` vs `5E1N.pdb`,
+`3K0N_hierarchy.cif` vs `3K0N.pdb`, ...). Where a sibling exists, the deposition is the
+answer key: wwPDB wrote both files from the same deposited data, so any difference is
+ours.
+
+It compares **counts** for every record type, and **exact text** for `DBREF`, `FORMUL`,
+`HELIX` and `SHEET` — the four whose columns mmdb parses positionally, where being one
+column off is silently wrong rather than visibly wrong.
+
+**Why it calls the pure function directly** rather than writing a PDB file and reading it
+back: this mode exists to test *synthesis*, and going through `WritePDBASCII` would put
+mmdb's own record-writing conventions (which differ from its record-*reading* conventions —
+see traps B12 and B13) between the thing under test and the comparison. Three layers in
+one measurement means a difference cannot be attributed to any of them.
+
+Deliberate, reported-not-failed differences: `REVDAT` (ours states every revision the
+mmCIF lists, the PDB file omits some), `JRNL` (our `"; "` author separator rewraps),
+`EXPDTA` where the sibling writes none at all (phenix's PDB output does not, its mmCIF
+does), and `REMARK`, which is skipped entirely — our REMARK 3 is a deliberate *summary* of
+`_refine`, and the prose REMARK sections are wwPDB renderings of typed categories, so
+composing them would be reconstruction rather than translation.
+
+**It earned its place on the first run**, with three real synthesis defects that had been
+shipping:
+
+- `HELIX` and `SHEET` wrote the identifier **left**-justified in columns 12-14; wwPDB
+  right-justifies it (`"  B"`). Every helix and strand of every file was one to two columns
+  off (traps B16).
+- `HETNAM` **truncated** at column 80 instead of wrapping onto a continuation line, so
+  6DMH's long MER name lost its tail (trap B17).
+- `FORMUL` wrote `1(C27 H33 N9 O15 P2)` where the PDB convention for a single molecule of
+  a component is the formula **bare** (trap B18).
+
+and one real reader defect: phenix's `label_*`-only secondary structure turned out to hold
+**author** numbering under label tag names, which moved every strand in chains B/C/D of the
+SC1 pair by four residues (trap B15). It also closed out what had been written up as an
+accepted loss — the "3 of 35 helices cannot be mapped" note in trap B11 was a symptom of
+B15, and all 35 resolve now.
+
+`COMPND` also gained `OTHER_DETAILS`, from `_entity.details`, which `2GEW.pdb` has and we
+were dropping.
+
+Baseline:
+
+```
+header-check summary: 13 pair(s), 13 agree, 0 differ, 4 mmCIF with no PDB sibling
+```
+
+The four without a sibling are the small-molecule and chem_comp entries; `is_coordinate_mmcif()`
+excludes chem_comp and PDB inputs from the mode altogether — a component definition has no
+header to synthesize.
 
 ## The trap catalogue
 

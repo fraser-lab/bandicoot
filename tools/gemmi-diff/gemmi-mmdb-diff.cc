@@ -30,12 +30,14 @@
 
 #include "coot-utils/atom-selection-container.hh"
 #include "coot-utils/gemmi-coords.hh"   // the production gemmi read path
+#include "coot-utils/gemmi-header.hh"   // pdb_header_records_from_mmcif -- adjustment (9)
 #include "coot-utils/gemmi-write.hh"    // the production gemmi write path
 #include "coot-utils/mmcif-document.hh" // the retained document
 #include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
 #include "coords/mmdb.h"       // write_atom_selection_file -- the PRODUCTION writer
 
 #include <gemmi/read_cif.hpp>   // read_cif_gz, for the write-side re-read
+#include <gemmi/mmread_gz.hpp> // read_structure_gz -- header-check reads the .cif itself
 
 #include <dirent.h>            // corpus enumeration (--corpus / the default run)
 #include <sys/stat.h>          // mkdir, for the write-side output dir
@@ -44,6 +46,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <fstream>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -86,6 +89,17 @@ struct AtomRec {
    int seqnum = 0;
    double x = 0, y = 0, z = 0, occ = 0, b = 0, charge = 0;
    bool het = false;
+   // Anisotropic ADPs, and CRUCIALLY the flag mmdb consumers test.
+   //
+   // Added 2026-08-20 because the ANISOU defect got past every gate: gemmi's
+   // copy_to_mmdb set ASET_Anis_tFSigma (the flag for anisotropic SIGMAS) where
+   // mmdb's convention for the tensor is ASET_Anis_tFac, and gemmi read the same
+   // flag back, so it was SELF-CONSISTENT. File-level passthrough was perfect and
+   // 1518 ADPs were invisible to every mmdb and Coot consumer. Comparing the
+   // VALUES alone would not have caught it either -- the flag is the assertion.
+   bool aniso_tfac = false;    // ASET_Anis_tFac  -- what consumers test
+   bool aniso_sigma = false;   // ASET_Anis_tFSigma -- the sigmas, rarely set
+   double u[6] = {0,0,0,0,0,0}; // u11 u22 u33 u12 u13 u23
 };
 
 // Model-wide facts that are not per-atom.
@@ -117,6 +131,12 @@ struct ModelSummary {
    // gemmi, blank-as-space insCode/altLoc from mmdb's CIF writer) both left the
    // count at 130 and the resolved count at 0.
    int n_links_resolved = 0;
+   // Resolution, via mmdb's GetResolution(). Added 2026-08-20: mmdb's own
+   // _refine.ls_d_res_high reader WORKS, so losing it on the gemmi path was a
+   // genuine regression (1.0 -> -2.0) that adjustment (6) exists to fix -- and
+   // this differential never checked it. NOTE GetResolution() CACHES and scans
+   // the REMARK container, giving up at the first remark numbered above 2.
+   double resolution = 0.0;
 };
 
 // Key deliberately uses the TRIMMED atom name and altloc: mmdb and gemmi are
@@ -167,6 +187,11 @@ static void harvest(mmdb::Manager *mol, ModelSummary &s) {
 
    char *sg = mol->GetSpaceGroup();
    if (sg) s.spacegroup = trim(sg);
+
+   // Resolution. GetResolution() returns a negative value when it has nothing
+   // (-1.0 after a failed REMARK scan, -2.0 unset), so the comparison below
+   // treats "has a resolution" and "the value" as separate questions.
+   s.resolution = mol->GetResolution();
 
    mmdb::realtype cell_a, cell_b, cell_c, al, be, ga, vol;
    int ncode = 0;
@@ -230,6 +255,10 @@ static void harvest(mmdb::Manager *mol, ModelSummary &s) {
                r.x = at->x; r.y = at->y; r.z = at->z;
                r.occ = at->occupancy; r.b = at->tempFactor; r.charge = at->charge;
                r.het = at->Het;
+               r.aniso_tfac  = (at->WhatIsSet & mmdb::ASET_Anis_tFac)   != 0;
+               r.aniso_sigma = (at->WhatIsSet & mmdb::ASET_Anis_tFSigma) != 0;
+               r.u[0] = at->u11; r.u[1] = at->u22; r.u[2] = at->u33;
+               r.u[3] = at->u12; r.u[4] = at->u13; r.u[5] = at->u23;
 
                std::string base = atom_key(r, 0);
                int occ_index = seen[base]++;
@@ -532,6 +561,19 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
       printf("    DIFF spacegroup  A=%s B=%s\n",
              quote(A.spacegroup).c_str(), quote(B.spacegroup).c_str());
    }
+   // Resolution. Compared as "has one" plus the value, because mmdb reports
+   // absence with a NEGATIVE number rather than a flag.
+   {
+      bool a_has = A.resolution > 0.0, b_has = B.resolution > 0.0;
+      if (a_has != b_has) {
+         clean = false;
+         printf("    DIFF resolution present  A=%d (%.3f) B=%d (%.3f)\n",
+                (int)a_has, A.resolution, (int)b_has, B.resolution);
+      } else if (a_has && std::fabs(A.resolution - B.resolution) > 1e-3) {
+         clean = false;
+         printf("    DIFF resolution  A=%.3f B=%.3f\n", A.resolution, B.resolution);
+      }
+   }
    if (A.have_cell != B.have_cell) {
       clean = false;
       printf("    DIFF cell present  A=%d B=%d\n", (int)A.have_cell, (int)B.have_cell);
@@ -574,6 +616,23 @@ static bool compare(const ModelSummary &A, const ModelSummary &B) {
          tally.note("segID", k, quote(a.segid), quote(b.segid));
       if (a.het != b.het)
          tally.note("het flag", k, a.het ? "true" : "false", b.het ? "true" : "false");
+      // The FLAG first, and separately from the values. gemmi setting
+      // ASET_Anis_tFSigma where mmdb wants ASET_Anis_tFac left the tensors
+      // present and correct but invisible to every consumer, so a value-only
+      // comparison would have reported this file as clean.
+      if (a.aniso_tfac != b.aniso_tfac)
+         tally.note("aniso ADP flag (ASET_Anis_tFac)", k,
+                    a.aniso_tfac ? "set" : "unset", b.aniso_tfac ? "set" : "unset");
+      if (a.aniso_sigma != b.aniso_sigma)
+         tally.note("aniso SIGMA flag (ASET_Anis_tFSigma)", k,
+                    a.aniso_sigma ? "set" : "unset", b.aniso_sigma ? "set" : "unset");
+      if (a.aniso_tfac && b.aniso_tfac) {
+         static const char *un[6] = {"u11","u22","u33","u12","u13","u23"};
+         for (int iu=0; iu<6; iu++)
+            if (std::fabs(a.u[iu] - b.u[iu]) > 1e-5)
+               tally.note(std::string("aniso ") + un[iu], k,
+                          fnum(a.u[iu]), fnum(b.u[iu]));
+      }
       if (fabs(a.x - b.x) > TOL_XYZ || fabs(a.y - b.y) > TOL_XYZ ||
           fabs(a.z - b.z) > TOL_XYZ)
          tally.note("coordinates", k,
@@ -1070,6 +1129,57 @@ static int lost_categories(const std::string &before_path, const std::string &af
    }
 }
 
+// Does the file STATE a resolution, and did our conversion keep it?
+//
+// The model-vs-model comparison cannot answer this: it compares
+// mmdb::GetResolution() on both sides, so "neither has one" reads as agreement.
+// That is exactly how the phenix case hid -- a PDB with no REMARK 2 gives mmdb
+// nothing, our mmCIF then had nothing, and the two nothings matched. So this
+// asks the FILES instead, by text, which is also the only way to see a
+// resolution that lives in REMARK 3 prose.
+static double stated_resolution_of_pdb(const std::string &path) {
+
+   std::ifstream f(path.c_str());
+   if (! f) return -1.0;
+   std::string line;
+   double from_remark_3 = -1.0;
+   while (std::getline(f, line)) {
+      if (line.compare(0, 6, "ATOM  ") == 0 || line.compare(0, 6, "HETATM") == 0) break;
+      if (line.compare(0, 10, "REMARK   2") == 0) {
+         size_t p = line.find("RESOLUTION.");
+         if (p != std::string::npos) {
+            double v = std::atof(line.substr(p + 11).c_str());
+            if (v > 0.0) return v;                      // the authoritative one
+         }
+      }
+      if (line.compare(0, 10, "REMARK   3") == 0) {
+         size_t p = line.find("RESOLUTION RANGE HIGH");
+         if (p != std::string::npos) {
+            size_t colon = line.find(':', p);
+            if (colon != std::string::npos) {
+               double v = std::atof(line.substr(colon + 1).c_str());
+               if (v > 0.0 && from_remark_3 < 0.0) from_remark_3 = v;
+            }
+         }
+      }
+   }
+   return from_remark_3;
+}
+
+static double stated_resolution_of_mmcif(const std::string &path) {
+
+   std::ifstream f(path.c_str());
+   if (! f) return -1.0;
+   std::string line;
+   while (std::getline(f, line)) {
+      size_t p = line.find("_refine.ls_d_res_high");
+      if (p == std::string::npos) continue;
+      double v = std::atof(line.substr(p + 21).c_str());
+      if (v > 0.0) return v;
+   }
+   return -1.0;
+}
+
 // returns 0 if chain B held everywhere, 1 otherwise
 static int round_trip(const std::vector<std::string> &files, const std::string &out_dir) {
 
@@ -1120,6 +1230,22 @@ static int round_trip(const std::vector<std::string> &files, const std::string &
          printf("  A  PDB -> mmCIF -> mmCIF   (%zu categories written)\n",
                 category_count(hop1));
          bool clean = compare(m0, m2);
+         // Post-condition, not a model compare: a resolution the INPUT FILE
+         // states must appear in our mmCIF as _refine.ls_d_res_high. Only PDB
+         // inputs are asked -- a chem_comp file states no resolution and is not
+         // expected to.
+         if (! is_coordinate_mmcif(in) && in.rfind(".cif") != in.size() - 4) {
+            double r_in  = stated_resolution_of_pdb(in);
+            double r_out = stated_resolution_of_mmcif(hop1);
+            if (r_in > 0.0 && r_out <= 0.0) {
+               printf("     RESOLUTION LOST: input states %.2f, our mmCIF has no "
+                      "_refine.ls_d_res_high\n", r_in);
+               clean = false;
+            } else if (r_in > 0.0 && std::fabs(r_in - r_out) > 0.02) {
+               printf("     RESOLUTION CHANGED: input %.2f, our mmCIF %.2f\n", r_in, r_out);
+               clean = false;
+            }
+         }
          printf("     ==> %s\n", clean ? "model preserved" : "MODEL DIFFERS");
          if (clean) a_ok++; else a_diff++;
          delete back.mol;
@@ -1208,6 +1334,203 @@ static int round_trip(const std::vector<std::string> &files, const std::string &
 }
 
 
+
+// ===================================================================
+// --header-check : does the mmCIF header synthesis agree with the PDB sibling?
+//
+// Asserts adjustment (9) -- pdb_header_records_from_mmcif() -- and it is the one
+// boundary adjustment the read-side differential CANNOT assert. That mode
+// compares gemmi against mmdb, and mmdb's own mmCIF header readers are keyed to
+// NDB-era tag names PDBx abandoned, so they return nothing from a modern file:
+// parity with mmdb would assert the ABSENCE of a header. The only available
+// ground truth is the wwPDB's own PDB rendering of the same entry.
+//
+// This calls the PURE FUNCTION directly and compares its output, as text,
+// against the sibling .pdb's header records. Deliberately NOT via a writer: the
+// question is whether the SYNTHESIS is right, and routing through mmdb's
+// containers plus WritePDBASCII would make a synthesis bug and a writer bug look
+// identical. The function was made pure and portable for exactly this reason.
+// ===================================================================
+
+static std::string lowercased(const std::string &in) {
+   std::string o = in;
+   for (size_t i = 0; i < o.size(); i++) o[i] = tolower((unsigned char)o[i]);
+   return o;
+}
+
+static std::string header_record_name(const std::string &line) {
+   size_t n = line.find_first_of(" ");
+   std::string r = line.substr(0, n == std::string::npos ? line.size() : n);
+   if (r == "JRNL" || r == "REMARK") return r;   // grouped, not compared line-by-line
+   return r;
+}
+
+// Read the header records of a PDB file as text, keyed by record name.
+static std::map<std::string, std::vector<std::string> >
+pdb_header_records_of_file(const std::string &path) {
+   std::map<std::string, std::vector<std::string> > m;
+   FILE *f = fopen(path.c_str(), "r");
+   if (! f) return m;
+   char buf[512];
+   while (fgets(buf, sizeof buf, f)) {
+      std::string line(buf);
+      while (! line.empty() && (line.back() == '\n' || line.back() == '\r' ||
+                                line.back() == ' ')) line.pop_back();
+      if (line.empty()) continue;
+      std::string rec = header_record_name(line);
+      // The records adjustment (9) synthesizes, and only those.
+      static const char *of_interest[] = {"HEADER","TITLE","COMPND","SOURCE","KEYWDS",
+                                          "EXPDTA","AUTHOR","REVDAT","JRNL","DBREF",
+                                          "HETNAM","FORMUL","HELIX","SHEET", NULL};
+      bool want = false;
+      for (int i=0; of_interest[i]; i++) if (rec == of_interest[i]) { want = true; break; }
+      if (! want) continue;
+      m[rec].push_back(line);
+   }
+   fclose(f);
+   return m;
+}
+
+// The PDB sibling of an mmCIF, by the two conventions the corpus uses:
+// <stem>.pdb, and the wwPDB download name pdb<code>.ent.
+static std::string pdb_sibling_of(const std::string &cif_path) {
+   std::string dir = ".", base = cif_path;
+   size_t slash = cif_path.rfind('/');
+   if (slash != std::string::npos) { dir = cif_path.substr(0, slash); base = cif_path.substr(slash+1); }
+   size_t dot = base.rfind('.');
+   std::string stem = (dot == std::string::npos) ? base : base.substr(0, dot);
+   // a *_hierarchy.cif has the same entry as its plain sibling
+   const std::string tail = "_hierarchy";
+   if (stem.size() > tail.size() && stem.compare(stem.size()-tail.size(), tail.size(), tail) == 0)
+      stem = stem.substr(0, stem.size()-tail.size());
+   std::string cands[2] = { dir + "/" + stem + ".pdb", dir + "/pdb" + lowercased(stem) + ".ent" };
+   for (int i=0; i<2; i++) {
+      FILE *f = fopen(cands[i].c_str(), "r");
+      if (f) { fclose(f); return cands[i]; }
+   }
+   return std::string();
+}
+
+static int run_header_check(const std::vector<std::string> &files) {
+
+   int n_pairs = 0, n_clean = 0, n_diff = 0, n_nosib = 0;
+   printf("header-check: synthesized mmCIF header vs the PDB sibling\n\n");
+
+   for (size_t i = 0; i < files.size(); i++) {
+      const std::string &in = files[i];
+      if (! is_coordinate_mmcif(in)) continue;      // chem_comp and PDB inputs are not the subject
+      std::string base = in.substr(in.rfind('/') + 1);
+      std::string sib = pdb_sibling_of(in);
+      if (sib.empty()) { n_nosib++; continue; }
+
+      std::vector<std::string> synth;
+      try {
+         gemmi::cif::Document doc;
+         gemmi::Structure st = gemmi::read_structure_gz(in, gemmi::CoorFormat::Unknown, &doc);
+         if (doc.blocks.empty()) { n_nosib++; continue; }
+         synth = coot::pdb_header_records_from_mmcif(st, &doc.blocks[0]);
+      } catch (const std::exception &e) {
+         printf("=== %s\n    READ FAILED: %s\n\n", base.c_str(), e.what());
+         n_diff++;
+         continue;
+      }
+
+      std::map<std::string, std::vector<std::string> > mine;
+      for (size_t k = 0; k < synth.size(); k++)
+         mine[header_record_name(synth[k])].push_back(synth[k]);
+      std::map<std::string, std::vector<std::string> > theirs =
+         pdb_header_records_of_file(sib);
+
+      printf("=== %s   vs %s\n", base.c_str(), sib.substr(sib.rfind('/')+1).c_str());
+      bool clean = true;
+      std::set<std::string> recs;
+      for (std::map<std::string, std::vector<std::string> >::const_iterator
+              it = mine.begin(); it != mine.end(); ++it) recs.insert(it->first);
+      for (std::map<std::string, std::vector<std::string> >::const_iterator
+              it = theirs.begin(); it != theirs.end(); ++it) recs.insert(it->first);
+
+      for (std::set<std::string>::const_iterator r = recs.begin(); r != recs.end(); ++r) {
+         // REMARK is NOT comparable and never will be by this route. Our REMARK 3
+         // is a deliberate SUMMARY of _refine, and the prose REMARK sections
+         // (200/280/350/465/500) were decided against -- they are wwPDB's
+         // renderings of typed categories, so composing them is reconstruction,
+         // not translation. Comparing counts here would report a permanent
+         // difference that means nothing.
+         if (*r == "REMARK") continue;
+         size_t a = theirs.count(*r) ? theirs[*r].size() : 0;   // deposition
+         size_t b = mine.count(*r)   ? mine[*r].size()   : 0;   // ours
+         if (a == b) continue;
+         // REVDAT: ours carries every revision the mmCIF states; the PDB-format
+         // file omits some. JRNL: our author separator is "; " not ",", so the
+         // wrap can differ by a line. Both are deliberate -- reported, not failed.
+         // EXPDTA: phenix.refine's PDB output writes none at all, while its
+         // mmCIF does state _exptl.method -- so ours carries a record the
+         // sibling simply never wrote. Also reported, not failed.
+         const char *why = (*r == "REVDAT") ? "  (deliberate: mmCIF states more revisions)"
+                         : (*r == "JRNL")   ? "  (deliberate: \"; \" author separator rewraps)"
+                         : (*r == "EXPDTA" && a == 0)
+                           ? "  (deliberate: sibling writes none, ours from _exptl.method)"
+                         : "";
+         printf("    %-7s deposition %2zu  ours %2zu%s\n", r->c_str(), a, b, why);
+         if (why[0] == '\0') clean = false;
+      }
+      // Exact text for the records that must match character for character.
+      const char *exact[] = {"DBREF", "FORMUL", "HELIX", "SHEET", NULL};
+      for (int e = 0; exact[e]; e++) {
+         std::string r = exact[e];
+         if (! mine.count(r) || ! theirs.count(r)) continue;
+         if (mine[r].size() != theirs[r].size()) continue;    // count line covers it
+         std::vector<std::string> A = theirs[r], B = mine[r];
+         // SHEET: compare columns 1-41 only. The two registration atoms
+         // (42-70) are a DELIBERATE omission -- gemmi carries them only from
+         // _pdbx_struct_sheet_hbond, which no corpus file has -- so including
+         // them would make every sheet look wrong for a documented reason.
+         // FORMUL: blank out columns 9-11 before comparing. We write the
+         // component number RIGHT-JUSTIFIED IN 10-11 ON PURPOSE (TRAPS B12):
+         // mmdb WRITES it at 9-10 but READS it at 10-11, so a string laid out to
+         // match the deposition would be mis-read, and one laid out for the
+         // reader does not match the deposition. The synthesized string is only
+         // ever fed to mmdb, and mmdb's writer then emits 9-10 correctly -- so
+         // the column is right where it matters and wrong here by construction.
+         if (r == "FORMUL")
+            for (size_t k = 0; k < A.size(); k++) {
+               for (int c = 8; c < 11 && c < (int)A[k].size(); c++) A[k][c] = ' ';
+               for (int c = 8; c < 11 && c < (int)B[k].size(); c++) B[k][c] = ' ';
+            }
+         if (r == "SHEET")
+            for (size_t k = 0; k < A.size(); k++) {
+               if (A[k].size() > 41) A[k] = A[k].substr(0, 41);
+               if (B[k].size() > 41) B[k] = B[k].substr(0, 41);
+               // and trim: the cut lands on a space in the deposition while our
+               // synthesized line has already had its trailing blanks removed,
+               // so without this every sheet differs by one invisible character.
+               while (! A[k].empty() && A[k].back() == ' ') A[k].pop_back();
+               while (! B[k].empty() && B[k].back() == ' ') B[k].pop_back();
+            }
+         std::sort(A.begin(), A.end()); std::sort(B.begin(), B.end());
+         for (size_t k = 0; k < A.size(); k++) {
+            if (A[k] == B[k]) continue;
+            // Element/molecule-name CASE is a recorded deliberate deviation: the
+            // file's own spelling is kept where wwPDB upper-cases everything.
+            std::string a_up = A[k], b_up = B[k];
+            for (size_t c = 0; c < a_up.size(); c++) a_up[c] = toupper((unsigned char)a_up[c]);
+            for (size_t c = 0; c < b_up.size(); c++) b_up[c] = toupper((unsigned char)b_up[c]);
+            if (a_up == b_up) continue;                       // case only
+            printf("      %s TEXT DIFFERS\n        deposition: %s\n        ours      : %s\n",
+                   r.c_str(), A[k].c_str(), B[k].c_str());
+            clean = false;
+         }
+      }
+      printf("    ==> %s\n\n", clean ? "AGREES with the deposition" : "DIFFERS");
+      n_pairs++;
+      if (clean) n_clean++; else n_diff++;
+   }
+
+   printf("header-check summary: %d pair(s), %d agree, %d differ, %d mmCIF with no PDB sibling\n",
+          n_pairs, n_clean, n_diff, n_nosib);
+   return n_diff == 0 ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
    ensure_syminfo();
    bool setup_entities = true;
@@ -1217,6 +1540,7 @@ int main(int argc, char **argv) {
    std::string corpus;
    bool do_write_check = false;
    bool do_round_trip = false;
+   bool do_header_check = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--no-setup-entities") setup_entities = false;
@@ -1226,6 +1550,7 @@ int main(int argc, char **argv) {
       else if (a == "--corpus" && i + 1 < argc) corpus = argv[++i];
       else if (a == "--write-check") do_write_check = true;
       else if (a == "--round-trip") do_round_trip = true;
+      else if (a == "--header-check") do_header_check = true;
       else if (a == "--examples" && i + 1 < argc) DiffTally::max_examples = atoi(argv[++i]);
       else files.push_back(a);
    }
@@ -1255,7 +1580,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "usage: gemmi-mmdb-diff [--dump-chains] [--examples N]\n"
                       "                      [--no-setup-entities] [--no-merge-chains]\n"
                       "                      [--keep-hydrog-links] [--corpus DIR]\n"
-                      "                      [--write-check] [--round-trip]\n"
+                      "                      [--write-check] [--round-trip] [--header-check]\n"
                       "                      [<coord-file> ...]\n"
                       "\n"
                       "With no files, runs every .cif/.ent/.pdb in the corpus directory\n"
@@ -1268,6 +1593,9 @@ int main(int argc, char **argv) {
       std::string out_dir = std::string(tmp ? tmp : "/tmp") + "/bandicoot-round-trip";
       return round_trip(files, out_dir);
    }
+
+   if (do_header_check)
+      return run_header_check(files);
 
    if (do_write_check) {
       const char *tmp = getenv("TMPDIR");

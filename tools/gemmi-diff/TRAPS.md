@@ -298,13 +298,14 @@ and morph-by-SSE are the consumers that notice).
 itself, so this is a resolution, not a guess. It has to run **before** the read path strips
 `_atom_site` from the retained document, which is why the header records are synthesized at
 read time rather than on demand.
-**Known and deliberate residue:** a helix whose END residue has no observed atoms cannot be
-mapped and is dropped — 3 of 35 in the SC1 files, which is why they give 32 helices where the
-PDB sibling gives 35. mmdb accepts all 35 from the PDB only because a PDB reader never
-validates the record against the model. **The count is printed to the console rather than
-silently absorbed**, so a difference from the PDB sibling does not read as a bug.
-**Assertion:** UNCHECKED. Worth adding: a post-condition that a file whose `_struct_conf`
-has rows ends up with helices in the model.
+**The residue that looked deliberate and was not:** three of the 35 SC1 helices used to be
+dropped as "an end residue is not in the model", and that was written up here as an accepted
+loss. It was a symptom of **B15** — the ids were being resolved in the wrong space, so the
+end residue genuinely did not exist *in that space*. With B15 fixed all 35 resolve, and the
+SC1 pair now agrees with its PDB sibling on every HELIX and SHEET record. A count that
+differs is still printed rather than silently absorbed, but the count no longer differs.
+**Assertion:** CHECKED, by `--header-check`: the SC1 pair is the case it exists for, and
+"35 vs 35" is now part of the baseline.
 
 ### B9. Non-canonical space-group spellings
 **Property:** `P212121`, `C2`, lower case — legal in hand-edited files.
@@ -365,6 +366,94 @@ atoms, and wwPDB counts those.
 **The general lesson, for the third time in this file:** 3K0N alone would have confirmed the
 wrong rule.
 
+### B15. A file that gives only `label_*` columns may not be giving label ids
+**Property:** `_struct_conf` / `_struct_sheet_range` with `beg_label_seq_id` +
+`end_label_seq_id` and no auth columns (trap B11) whose values are nevertheless **author**
+numbering. The tag name says label; the data says otherwise, and nothing in the file flags it.
+**Exhibited by:** `SC1_2_refine_031.cif` / `_036.cif` — phenix.refine output.
+`_struct_sheet_range` says `B 1 VAL B 71 ? THR B 79 ?`, and in `_atom_site` **auth** B 71 is VAL
+while **label** B 71 is ALA (auth 75). Chain A happens to agree under both readings, which is
+exactly the kind of file that confirms the wrong rule.
+**Consequence before the fix:** resolving those ids through the label index — the honest
+reading of the tag name — slid every strand and helix of chains B, C and D by four residues,
+and dropped 3 of 35 helices whose label-space end residue does not exist. The records looked
+perfectly well-formed. `SHEET    1   B 8 ALA B  75  THR B  83` instead of
+`VAL B  71  THR B  79`.
+**Handled:** `build_ss_index()` in `coot-utils/gemmi-header.cc` builds BOTH indices —
+`(label_asym_id, label_seq_id)` and `(auth_asym_id, auth_seq_id)` — and `score_ss_columns()`
+votes: each reading is scored by how many endpoint `*_label_comp_id` residue names it gets
+right across every `_struct_conf` and `_struct_sheet_range` row, and the winner is used for the
+whole file. On the SC1 pair that is **132 matches as author ids vs 45 as label ids**, and it is
+printed to the console. A wwPDB file never reaches the vote (gemmi resolves its auth columns
+directly), so the decision only fires where it is needed.
+**Why per file and not per row:** a row whose two endpoints happen to agree under different
+readings gets torn in half. `VAL B 71 THR B 79` came out as `VAL B 71 THR B 83` under a per-row
+comp_id test, because THR sits at label 79 *and* at auth 83.
+**Assertion:** CHECKED, by `--header-check` — which is what found it.
+
+### B16. wwPDB RIGHT-justifies the `HELIX` / `SHEET` identifier in columns 12-14
+**Property:** a format convention the format description does not state. `SHEET    1   B 8`
+and `HELIX    1  AA1` — the sheet id `B` sits in column 14, not 12.
+**Consequence:** left-justifying it puts a single-character id two columns early. mmdb reads
+the field with `GetString(&S[11], 3)` and stores `"B  "`, so the sheet id gains trailing
+blanks and no longer matches the same sheet named anywhere else.
+**Handled:** `put_right(12, 14, ...)` for both records.
+**Assertion:** CHECKED, by `--header-check`'s exact-text comparison of HELIX and SHEET,
+which is what found it.
+
+### B17. `HETNAM` must WRAP, not truncate
+**Property:** a chemical name longer than the 55 columns of one record. The PDB form is a
+continuation number in columns 9-10 and the text resuming at column 17 (one column in from
+the first line's 16).
+**Exhibited by:** `6DMH.cif`, whose MER component name runs past one line.
+**Consequence:** truncating at column 80 silently loses the tail of the name — the component
+is still identified by its 3-letter code, so nothing downstream fails, it just displays a name
+that stops mid-word.
+**Handled:** `wrap_text(name, 55, 54)` and a continuation number on every line after the first.
+**Assertion:** CHECKED by `--header-check` (count comparison — a wrapped name is 2 records
+where a truncated one is 1), which is what found it.
+
+### B18. `FORMUL` writes a SINGLE molecule bare, with no count and no parentheses
+**Property:** another unstated convention. One molecule of a component is
+`FORMUL      FAD    C27 H33 N9 O15 P2`; two or more are `FORMUL   2  MG    2(MG 2+)`.
+**Exhibited by:** `pdb1aon.ent`, and every deposition with a single-copy ligand.
+**Consequence:** writing `1(C27 H33 N9 O15 P2)` is not what mmdb's
+`HetCompounds::ConvertFORMUL` expects to parse and is not what any tool reading our PDB
+output expects to see.
+**Handled:** `c->second == 1 ? f : std::to_string(c->second) + "(" + f + ")"`.
+**Assertion:** CHECKED, by `--header-check`'s exact-text comparison of FORMUL, which is what
+found it.
+
+### B19. mmdb applies `_atom_site_anisotrop` rows POSITIONALLY and ignores `.id`
+**Property:** an `_atom_site_anisotrop` loop that is shorter than `_atom_site` — which is
+every real file with hydrogens, since riding hydrogens get no ADPs. The loop's `.id` column
+points at `_atom_site.id`, and the row order therefore does NOT correspond to atom order.
+**Exhibited by:** `2GEW.cif` — 9018 atoms, 5184 anisotrop rows, ids `1 2 3 4 8 ...`.
+**Measured, and the mechanism is exact:**
+
+| | atom | U[1][1] |
+|---|---|---|
+| deposition `2GEW.pdb`, `ANISOU   17  C   TYR A  10` | C of TYR A 10 | **0.1569** |
+| `_atom_site_anisotrop` row with **id 17** | C, TYR, seq 5 | **0.1569** |
+| the **17th** `_atom_site_anisotrop` row (id 23) | CE1, TYR, seq 5 | 0.1321 |
+| mmdb, reading `2GEW.cif`, for atom C of TYR A 10 | | **0.1321** |
+
+So mmdb hands the k-th row to the k-th atom. Once the first hydrogen is passed every ADP
+after it lands on the wrong atom, and the hydrogens themselves — which have none in the file
+— come out flagged anisotropic. On `2GEW.cif` that is **2445 atoms given an ADP they do not
+have and 2445 robbed of theirs**, all six U components wrong on ~2730 atoms.
+**gemmi is correct** — it matches on the identity columns, and agrees with the deposited
+`ANISOU` records to the last digit.
+**Consequence:** every mmCIF read through mmdb had scrambled ADPs. Ellipsoid display, any
+B-factor analysis that uses the anisotropic part, and — worst — **saving that model back out
+writes the scrambled values as if they were the file's own**. This is upstream Coot 0.9
+behaviour on every mmCIF with hydrogens, not something v0.2 introduced; v0.2 ends it by not
+using the mmdb reader.
+**Assertion:** CHECKED, by the read-side differential, once `AtomRec` learned to carry
+`u[6]`, `aniso_tfac` and `aniso_sigma` (2026-08-20). **It is the reason that comparison was
+added, and it found this on the first run.** The difference is permanent and expected — it
+is mmdb being wrong — so it stays in the read-side baseline as an attributed line.
+
 ---
 
 ## C. Cross-format traps
@@ -399,6 +488,18 @@ gemmi's reader keys on.
 **Exhibited by:** `2RSF.cif`, `3NYD_hierarchy.cif`, `6DMH.cif`. Holds 0 atoms; gemmi does
 not produce it.
 **Assertion:** CHECKED (chain id sets).
+
+### C6. PDB's `ANISOU` holds four decimal places; a five-decimal mmCIF loses the fifth
+**Property:** `ANISOU` writes U x 10^4 as a 7-column integer, so `2.38654` becomes `23865`
+and reads back `2.3865`. wwPDB mmCIF writes four decimals and round-trips exactly; **phenix
+writes five** (`SC1_2_refine_031.cif`: `2.38654 0.98676 1.51165 ...`).
+**Exhibited by:** the SC1 pair, and only them — hence ~7000 of 8740 atoms differing in every
+U component on `--round-trip` chain C, while every wwPDB file in the corpus is clean.
+**Deliberate and unfixable in this direction:** the format has four decimals. It matters only
+for a model saved as PDB and refined further from there, and 1e-5 A^2 on a 2.4 A^2 ADP is far
+inside the parameter's own uncertainty.
+**Assertion:** CHECKED, by `--round-trip` chain C, and attributed here so the lines are not
+read as a regression. Chain C is reported, not a gate, for exactly this class of reason.
 
 ---
 
@@ -497,13 +598,23 @@ Mirror image of A2 on the write side: `copy_from_mmdb` on a deliberately cell-le
 yields a **zero** cell, and EDIT would then create `_cell` full of zeros where the input had
 none.
 
-### E3. `_atom_site_anisotrop` — emission unconfirmed
+### E3. `_atom_site_anisotrop` — emission CONFIRMED 2026-08-20
 There is no separate toggle for it among the 33 `MmcifOutputGroups` flags, and `to_mmcif.hpp`
-does not mention it. If gemmi does not emit it, then stripping anisotropic records from the
-model leaves a **stale** `_atom_site_anisotrop` in the file and the user's checkbox is
-defeated for mmCIF.
+does not mention it. The open question was whether gemmi emits it at all: if it does not,
+stripping anisotropic records from the model leaves a **stale** `_atom_site_anisotrop` in the
+file and the user's checkbox is defeated for mmCIF.
+**Answered:** it does, and correctly. `--round-trip` chain A takes each PDB through
+mmdb -> our writer -> mmCIF -> back, and with the ADPs now compared atom by atom
+(`u[6]`, `aniso_tfac`, `aniso_sigma`) **not one of the 5184 anisotropic atoms of `2GEW.pdb`,
+3141 of `5E1N.pdb`, 2316 of `6DMH.pdb` or 6443 of `pdb3nyd.ent` differs** — through the
+synthesis branch, where nothing is passed through and every category is derived from the
+model. Values, flags and the atom each one belongs to all survive.
 **Corpus:** every `*_hierarchy.cif`, `3K0N`, `5E1N`, `6DMH`, both `SC1_2_refine_*` have
 anisotropic records. `1AON`, `1FFK`, `2RSF` do not — a useful negative control.
+**Assertion:** CHECKED (read-side differential + `--round-trip` chains A and C). The
+remaining caveat is C6, a format limit rather than a defect. What is still unchecked is the
+*deletion* case that motivated the entry — stripping ADPs and confirming the category goes
+with them (that is E5's family).
 
 ### E6. The writer preset reformats passthrough categories
 **Property:** any category stored as a **single-row loop**.
@@ -567,19 +678,73 @@ is never rewritten, so mmCIF -> mmCIF was unaffected and only PDB -> mmCIF broke
 post-condition (`n_links_resolved`) was already in the tool; what was missing was a mode
 that fed our own output back in.
 
+### E9. The synthesized mmCIF carried no resolution at all
+**Property:** on the synthesis branch (PDB in, mmCIF out) the resolution died at the
+mmdb -> gemmi hop. mmdb parses `REMARK   2 RESOLUTION.    1.39 ANGSTROMS.` and answers
+`GetResolution() == 1.39`; `copy_from_mmdb` does not carry it, gemmi's mmCIF writer emits no
+`_refine` for a structure whose `Metadata` is empty, and the read path takes the resolution
+back out of `_refine.ls_d_res_high` -- so a PDB converted to mmCIF came back with **no
+resolution**, and the number was gone for good.
+**Exhibited by:** ten of the fourteen PDB inputs in the corpus. `3K0N.pdb` in, and the
+output `.cif` has no `_refine`, no `_reflns` and no resolution on any tag.
+**Consequence:** anything that asks the molecule for its resolution gets "unset" -- map
+sharpening defaults, the header browser's resolution line, and the resolution shown after a
+PDB -> mmCIF save. Silent: an unset resolution is a legitimate state, so nothing complains.
+**Handled 2026-08-20:** `add_pdb_header_categories()` writes `_refine.ls_d_res_high` (and
+`_refine.pdbx_refine_id` from EXPDTA when the file states a method -- omitted rather than
+invented when it does not), guarded on the block having no `_refine` category already.
+**Assertion:** CHECKED, by `--round-trip` chain A -- which is what found it, the moment the
+model summary learned to compare the resolution. Before that, chain A read
+`9 model preserved, 5 differ` while ten files were losing it.
+
+**And then it was found AGAIN, by Art, in the half the assertion could not see (2026-08-20).**
+`GetResolution()` only knows **REMARK 2**, which is a wwPDB *deposition* record -- and
+**phenix.refine output has none**. `SC1_2_refine_031.pdb` states its resolution only inside
+REMARK 3, `RESOLUTION RANGE HIGH (ANGSTROMS) : 2.80`, the same wwPDB template refmac uses and
+the same line we synthesize in the other direction. So the first fix covered wwPDB files and
+missed every phenix one: the converted mmCIF still had no resolution anywhere. Art saw it in
+the Header Browser as a missing category, with "resolution bins in refinement information"
+still visible -- that is the REMARK 3 text, preserved verbatim in `_pdbx_database_remark`
+while the typed value was gone.
+**Handled:** `coot::pdb_header_resolution()` -- REMARK 2 if there is one, else REMARK 3's
+`RESOLUTION RANGE HIGH`. (The BIN table's `BIN  RESOLUTION RANGE  COMPL.` header does not
+match: the search is for `RANGE HIGH`.)
+**Why the assertion missed it, and the general lesson:** the model summary compares
+`GetResolution()` on **both sides**, so a resolution mmdb cannot see on either side reads as
+**agreement**. Two nothings match. The replacement asks the FILES, in text: *if the input
+states a resolution anywhere, our mmCIF must carry `_refine.ls_d_res_high`* -- a
+**post-condition against the input**, not a comparison of two derived models.
+**Proven to fail when it should:** with the REMARK 3 fallback disabled and rebuilt, chain A
+prints `RESOLUTION LOST: input states 2.80, our mmCIF has no _refine.ls_d_res_high` on both
+SC1 files; with it restored, neither. Note it does not move chain A's `9 / 5` -- both files
+were already differing for B10 -- so **the line is the signal, not the count.**
+
 ## Assertion scoreboard
 
 | group | checked | unchecked |
 |---|---|---|
 | A. file shape | 4 | 3 |
-| B. model content | 10 | 1 |
-| C. cross-format | 2 | 3 |
+| B. model content | 18 | 1 (B9) |
+| C. cross-format | 4 | 1 (C3) |
 | D. environment/API | n/a — documentation, not assertions | |
-| E. write side | 6 | 2 |
+| E. write side | 7 | 2 |
 
 Section E moved from 0-checked when `--write-check` landed (2026-08-12) and again when it
 learned to compare COLUMNS and VALUES (2026-08-13). Still unchecked there: E5 (dangling
 records after deletion) and A4's write-side half (a 20-model ensemble through the writer).
+
+Section B moved 10 -> 18 on **2026-08-20**, when the three remaining gemmi-to-mmdb boundary
+adjustments got assertions of their own:
+
+| adjustment | what now checks it | what it found on the first run |
+|---|---|---|
+| **(6) resolution backfill** | `resolution` in the read-side and round-trip model summary | **E9** — the synthesized mmCIF carried no resolution at all, on 10 of 14 PDB inputs |
+| **(9) PDB-record synthesis** | the new **`--header-check`** mode, against the PDB sibling | **B15-B18** — four real defects: author ids read as label ids, HELIX/SHEET justification, HETNAM truncation, FORMUL's single-molecule form |
+| **(10) ANISOU transfer** | `u[6]`, `aniso_tfac`, `aniso_sigma` per matched atom | **B19** — mmdb applies `_atom_site_anisotrop` positionally and scrambles every ADP after the first hydrogen; and **E3**, confirmed sound, which had been an open question since Phase 3 |
+
+Five real defects from three assertions, on files that had been in the corpus for a week.
+**The lesson is the ordinary one and it keeps holding: an adjustment with no assertion is an
+assumption.**
 
 ## Baselines — compare a run against these
 
@@ -600,6 +765,10 @@ structure-factor files that both paths correctly refuse (zero atoms); `2GEW.cif`
 only by B2 atom-name padding. **Before reading a changed baseline as a regression, check
 whether the corpus grew** -- `ls ~/sw/bandicoot-project/samples` -- because it has three
 times now.
+Unchanged at `u80`, where the comparison **grew** rather than the numbers: it now also
+compares the six anisotropic U components, the ADP flag and `sigU`, which added a large new
+block of attributed lines to `2GEW.cif` (**B19** — mmdb misassigns them) without moving the
+summary. A comparison getting stricter with the summary unmoved is the good case.
 Every line is attributable to an entry above; a NEW unexplained line is the signal. The
 exit status is NOT a gate here — several differences are permanent and deliberate.
 
@@ -625,11 +794,28 @@ Chain A was `8 preserved` at `u49`; the extra one is `3K0N-CIF2PDB.pdb`. Its `di
 3 -> 5 at `u68` when `AR6.cif` and `ADP.cif` joined the corpus: a chem_comp file takes the
 PDB-shaped chain A, and its first hop is a cross-format synthesis, so differing is correct.
 Chains B and C have not moved.
-Chain B is the gate. Chain A's three differences are `2RSF.pdb` (A3) and the two
-`SC1_2_refine_*.pdb` (B10); chain C's two are the same SC1 pair (C2).
+Chain B is the gate. Chain A's five differences are `2RSF.pdb` (A3), the two
+`SC1_2_refine_*.pdb` (B10) and the two chem_comp files (`AR6.cif`, `ADP.cif`, cell present in
+A and not in B); chain C's two are the same SC1 pair (C2, and now C6 as well).
+**Re-measured at `u80` with the resolution and the ADPs compared, and it holds** — but only
+after a fix: with the resolution first compared, chain A read `0 model preserved, 14 differ`,
+because **E9** had ten PDB inputs silently losing it on conversion. The `9 / 5` above is the
+number after that was fixed, not the number the stricter comparison first produced.
 **Here the exit status IS a gate** — losing a category, a column or a value is never
 deliberate. Read declines (a small-molecule CIF yielding zero atoms) do not fail it, or the
 gate would be permanently red and stop being read.
+
+**Header synthesis** (`gemmi-mmdb-diff --header-check`), `0.2.0.0-u80` — new 2026-08-20:
+```
+header-check summary: 13 pair(s), 13 agree, 0 differ, 4 mmCIF with no PDB sibling
+```
+**Every pair agrees**, including exact text for DBREF, FORMUL, HELIX and SHEET. The four
+without a sibling are the small-molecule and chem_comp entries. `13 agree` is the number to
+watch: it started at `2 agree, 11 differ` and the eleven were B15-B18, all real.
+Deliberate, annotated count differences remain inside an agreeing pair — REVDAT (ours states
+every revision the mmCIF lists), JRNL (`"; "` author separator rewraps) and EXPDTA on the SC1
+pair (their PDB sibling writes none). **Here too the exit status is a gate**: an unannotated
+difference means the synthesis and the deposition disagree, and the deposition is right.
 
 **Proven to fail when it should:** deliberately erasing `_struct_conf` before the write gives
 `LOST : _struct_conf (279 rows)` and exit 1.
