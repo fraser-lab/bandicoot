@@ -55,6 +55,28 @@ namespace coot {
    //! Classify a CIF by CONTENT. Handles .gz. Never throws.
    cif_flavour_t classify_cif_file(const std::string &file_name);
 
+   //! Is this CIF a CHEMICAL COMPONENT definition, and if so, which component?
+   //
+   //! Returns the `_chem_comp.id` (e.g. "AR6") for a wwPDB/PDBe component
+   //! definition or a Refmac monomer-library entry, and "" for anything else.
+   //!
+   //! Such a file has NO `_atom_site` -- its coordinates live in
+   //! `_chem_comp_atom.model_Cartn_*` and `pdbx_model_Cartn_*_ideal` -- so the
+   //! ordinary coordinate reader finds nothing in it. It is nevertheless how a
+   //! user obtains a ligand from the PDB, so it has to load.
+   std::string cif_chem_comp_id(const std::string &file_name);
+
+   //! Does the chem_comp carry BOND DISTANCES, i.e. can it restrain a model?
+   //
+   //! This is the difference between a dictionary you can refine with (elbow,
+   //! acedrg, the Refmac monomer library: `_chem_comp_bond.value_dist`) and a
+   //! wwPDB/PDBe component definition, which states bond ORDER and aromaticity
+   //! but no distances at all. Importing the latter as restraints yields an
+   //! entry with connectivity and no geometry -- which is the shape that caused
+   //! the drag-and-drop monomer-library corruption when the file also covered
+   //! standard residues.
+   bool cif_chem_comp_has_bond_distances(const std::string &file_name);
+
    //! Do the structure factors in \a file_name carry phases?
    //
    //! Decides WHICH reader to use, not whether to read: deposited SF files

@@ -78,8 +78,20 @@ PATH=$COOT_PREFIX/bin:$PATH
 
 SYMINFO=$COOT_PREFIX/share/coot/syminfo.lib
 COOT_SCHEME_DIR=$COOT_PREFIX/share/coot/scheme
-if [ -z $CLIBD_MON ] ; then
- # echo debug:: CLIBD_MON not set, using COOT_REFMAC_LIB_DIR
+# The monomer (restraints) dictionary. Bandicoot bundles a SMALL library -- 115
+# entries, the standard residues plus a handful of common ligands -- so that the
+# tarball works with no CCP4 installed. A full CCP4 monomer library has ~35,600
+# entries, i.e. acedrg-derived restraints for essentially every PDB chemical
+# component, and if the user has one it should win.
+#
+# WARNING: THIS USED TO OVERWRITE COOT_REFMAC_LIB_DIR UNCONDITIONALLY whenever
+# CLIBD_MON happened to be unset. Coot documents COOT_REFMAC_LIB_DIR as the
+# HIGHEST-priority override, so a user pointing Bandicoot at their own library
+# with it was silently ignored and got the 115-entry bundle instead. Measured
+# 2026-08-19. Both variables are now respected if either is already set, and
+# the tests are quoted (an unquoted [ -z $X ] breaks on a path with spaces).
+if [ -z "$CLIBD_MON" ] && [ -z "$COOT_REFMAC_LIB_DIR" ] ; then
+ # echo debug:: no dictionary override set, using the bundled library
  COOT_REFMAC_LIB_DIR=$COOT_PREFIX/share/coot/lib
  export COOT_REFMAC_LIB_DIR
 fi

@@ -98,12 +98,33 @@ static void normalise_link_atom_names(mmdb::Manager *mol) {
 // monomer library, and RSR silently stopped making restraints for every
 // molecule in the session. See src/drag-and-drop.cc.
 //
-// Order matters: _atom_site wins. A file can legitimately hold BOTH coordinates
-// and restraints -- phenix.refine writes the ligand dictionary into a second
-// data block -- and such a file is coordinates that happen to carry restraints,
-// not an ambiguous case.
+// Order matters: coordinates win. A file can legitimately hold coordinates AND
+// restraints -- phenix.refine writes the ligand dictionary into a second data
+// block -- or coordinates AND structure factors, which is the NORM for a
+// small-molecule deposition: a COD/SHELXL file routinely carries the refined
+// structure and the reflections it was refined against, in one file. Such a file
+// is coordinates that happen to carry other things, not an ambiguous case.
+//
+// WARNING: BOTH TAG DIALECTS MUST BE TESTED, and getting this wrong is what Art hit on
+// 2026-08-19 (build -u65): a dropped small-molecule CIF was reported as
+// unclassifiable. The two dialects spell the SAME categories differently --
+// mmCIF/PDBx separates category from item with a DOT (`_atom_site.Cartn_x`,
+// `_refln.F_meas_au`) while the CIF core dictionary small-molecule software
+// writes uses an UNDERSCORE (`_atom_site_fract_x`, `_refln_index_h`). Testing
+// only the dotted spelling matched nothing in a file that plainly had two of the
+// three categories, and the dialog then told the user it contained no
+// coordinates and no structure factors, which was true only of the spelling.
+//
+// This is the same blind spot the Interlude B sweep went after in
+// read-sm-cif.cc, one layer earlier: the sweep fixed the READER and left the
+// ROUTER that decides which reader runs. Sweep the routing, not just the parsing.
 coot::cif_flavour_t
 coot::classify_cif_file(const std::string &file_name) {
+
+   auto has_prefix = [](const std::string &tag, const char *prefix) {
+      size_t n = strlen(prefix);
+      return tag.size() >= n && tag.compare(0, n, prefix) == 0;
+   };
 
    try {
       gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
@@ -115,9 +136,18 @@ coot::classify_cif_file(const std::string &file_name) {
             else if (it.type == gemmi::cif::ItemType::Loop && !it.loop.tags.empty())
                tag = it.loop.tags[0];
             if (tag.empty()) continue;
-            if (tag.compare(0, 11, "_atom_site.") == 0)      has_atom_site = true;
-            else if (tag.compare(0, 16, "_chem_comp_atom.") == 0) has_chem_comp_atom = true;
-            else if (tag.compare(0, 7,  "_refln.") == 0)     has_refln = true;
+
+            // "_atom_site_" also catches the core aniso loop and PDBx's
+            // _atom_site_anisotrop; neither can belong to anything but a
+            // coordinate file. It does NOT catch "_atom_sites." (the PDBx
+            // fractional-transformation category), which is what we want.
+            if (has_prefix(tag, "_atom_site.") || has_prefix(tag, "_atom_site_"))
+               has_atom_site = true;
+            else if (has_prefix(tag, "_chem_comp_atom."))
+               has_chem_comp_atom = true;
+            else if (has_prefix(tag, "_refln.") || has_prefix(tag, "_refln_") ||
+                     has_prefix(tag, "_pd_refln_"))   // powder
+               has_refln = true;
          }
       }
       if (has_atom_site)      return cif_flavour_t::coordinates;
@@ -128,6 +158,46 @@ coot::classify_cif_file(const std::string &file_name) {
                 << std::endl;
    }
    return cif_flavour_t::unknown;
+}
+
+
+// A chemical-component definition: _chem_comp_atom instead of _atom_site.
+//
+// gemmi recognises both flavours -- a wwPDB/PDBe CCD entry (one block, no
+// _atom_site, has _chem_comp_atom.atom_id) and a Refmac monomer-library file
+// (comp_list blocks) -- and check_chemcomp_block_number() returns which block
+// holds it, or -1.
+std::string
+coot::cif_chem_comp_id(const std::string &file_name) {
+
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      int n = gemmi::check_chemcomp_block_number(doc);
+      if (n < 0) return std::string();
+      if (const std::string *id = doc.blocks[n].find_value("_chem_comp.id"))
+         return gemmi::cif::as_string(*id);
+      return std::string();
+   } catch (const std::exception &e) {
+      std::cout << "INFO:: cif_chem_comp_id(): " << file_name << ": " << e.what()
+                << std::endl;
+   }
+   return std::string();
+}
+
+
+bool
+coot::cif_chem_comp_has_bond_distances(const std::string &file_name) {
+
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      for (const gemmi::cif::Block &block : doc.blocks)
+         if (block.has_any_value("_chem_comp_bond.value_dist"))
+            return true;
+   } catch (const std::exception &e) {
+      std::cout << "INFO:: cif_chem_comp_has_bond_distances(): " << file_name
+                << ": " << e.what() << std::endl;
+   }
+   return false;
 }
 
 
@@ -233,6 +303,70 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
    mmdb::Manager *mol = nullptr;
 
    try {
+      // A CHEMICAL-COMPONENT DEFINITION is handled first and separately.
+      //
+      // A ligand downloaded from the PDB (files.rcsb.org/ligands/.../AR6.cif)
+      // is a chem_comp definition: its coordinates are in
+      // _chem_comp_atom.model_Cartn_* and pdbx_model_Cartn_*_ideal, and there is
+      // no _atom_site anywhere. The ordinary reader therefore found nothing,
+      // fell through to the small-molecule reader, which found no
+      // _atom_site_fract_* either, and produced an empty molecule. That is how
+      // most users will obtain a ligand, so it has to work.
+      //
+      // WARNING: THE `which` ARGUMENT MUST BE CHOSEN, NOT DEFAULTED. gemmi's default is
+      // 7 = all three coordinate sets, and a CCD carries TWO of them -- so
+      // AR6.cif comes back as a TWO-MODEL, 118-atom molecule (59 atoms twice)
+      // rather than one ligand. Preference order here matches Coot's own Get
+      // Monomer, which asks the dictionary for the idealised coordinates first:
+      // Ideal, then the observed "example" set, then a Refmac x/y/z set.
+      //
+      // The document is deliberately NOT retained. mmcif_document_t exists to
+      // pass an _atom_site-bearing coordinate document through to the writer;
+      // handing it a chem_comp document would have update_mmcif_block() edit
+      // categories that are not there. Leaving it null makes the writer
+      // synthesize a fresh mmCIF from the model, which is what happens for PDB
+      // input too.
+      {
+         gemmi::cif::Document ccd_doc;
+         bool is_ccd = false;
+         int n_block = -1;
+         if (gemmi_handles_extension(util::file_name_extension(file_name))) {
+            try {
+               ccd_doc = gemmi::read_cif_gz(file_name);
+               n_block = gemmi::check_chemcomp_block_number(ccd_doc);
+               is_ccd = (n_block >= 0);
+            } catch (const std::exception &e) {
+               is_ccd = false;   // not a CIF at all, or unparsable: fall through
+            }
+         }
+         if (is_ccd) {
+            const int which_order[3] = { 4, 2, 1 };   // Ideal, Example, Xyz
+            gemmi::Structure st;
+            long n_atoms_ccd = 0;
+            for (int i = 0; i < 3 && n_atoms_ccd == 0; i++) {
+               st = gemmi::make_structure_from_chemcomp_block(ccd_doc.blocks[n_block],
+                                                              which_order[i]);
+               n_atoms_ccd = 0;
+               for (const gemmi::Model &model : st.models)
+                  for (const gemmi::Chain &chain : model.chains)
+                     for (const gemmi::Residue &res : chain.residues)
+                        n_atoms_ccd += static_cast<long>(res.atoms.size());
+            }
+            if (n_atoms_ccd == 0) {
+               if (message)
+                  *message = "a chemical-component definition with no coordinates";
+               return nullptr;
+            }
+            mol = new mmdb::Manager;
+            gemmi::copy_to_mmdb(st, mol);
+            std::cout << "INFO:: read chemical component " << st.name << ": "
+                      << n_atoms_ccd << " atoms" << std::endl;
+            if (message)
+               *message = "chemical component " + st.name;
+            return mol;
+         }
+      }
+
       // Read, optionally keeping the parsed document (Phase 3 / D3).
       //
       // This is gemmi::read_structure_file() with one extra argument -- that

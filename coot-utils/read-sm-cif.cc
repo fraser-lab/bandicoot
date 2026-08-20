@@ -39,6 +39,16 @@
 #include "clipper/clipper-cif.h"
 #include "clipper/contrib/sfcalc.h"
 
+// BANDICOOT v0.2 (Interlude B): gemmi resolves a space-group name or number
+// into its operators. Used only as a FALLBACK, when a file states its space
+// group without listing the operators -- see
+// symops_from_space_group_statement() below. gemmi rather than clipper because
+// clipper's name parsing fails UNSAFE: measured, clipper::Spgr_descr turns
+// "P212121" and "C2" into P 1 with a single operator, silently, and throws
+// Message_fatal on a lower-case name. gemmi recognised every valid spelling
+// tested and got all of them right.
+#include <gemmi/symmetry.hpp>
+
 #include "compat/coot-sysdep.h"
 #include "utils/coot-utils.hh"
 #include "geometry/residue-and-atom-specs.hh"
@@ -134,6 +144,114 @@ coot::smcif::get_space_group(const std::vector<std::string> &symm_strings) const
    return std::pair<bool,clipper::Spacegroup>(status, space_group);
 }
 
+namespace {
+
+   // BANDICOOT v0.2, Interlude B nomenclature sweep.
+   //
+   // A CIF may state its space group WITHOUT listing the operators: the
+   // operator loop is optional in the CIF core dictionary, and a name or an
+   // International Tables number is a complete specification on its own. Before
+   // this, such a file loaded NOTHING -- not "no symmetry", nothing at all,
+   // because the atom loop was read inside the operator-loop branch. Measured
+   // on a real COD file with its operator loop removed: cell parsed, 31 atoms
+   // present and parseable, whole file rejected.
+   //
+   // ORDER MATTERS AND IT IS NOT THE OBVIOUS ONE. The number is tried LAST,
+   // because an International Tables number does not fix the SETTING: P 1 21/c 1
+   // and P 1 21/n 1 are both number 14, so resolving from the number alone can
+   // silently produce a different space group from the one the file means. The
+   // Hall symbol is unambiguous by construction, and an H-M name carries its
+   // setting ("P 1 21/n 1"), so both are better evidence than the number.
+   //
+   // Both spellings of each tag are accepted: the `_symmetry_*` forms are the
+   // CIF 1.0 names, the `_space_group_*` forms superseded them, and files in
+   // circulation carry either or both -- the two COD files checked while writing
+   // this use `_symmetry_space_group_name_H-M` while a third uses
+   // `_space_group_name_H-M_alt`.
+   std::vector<std::string>
+   symops_from_space_group_statement(mmdb::mmcif::Data *data) {
+
+      std::vector<std::string> symops;
+      if (! data) return symops;
+
+      const gemmi::SpaceGroup *sg = NULL;
+      const char *how = NULL;
+
+      // 1. Hall symbol -- unambiguous, so it is preferred.
+      const char *hall_tags[] = { "_space_group_name_Hall",
+                                  "_symmetry_space_group_name_Hall", NULL };
+      for (int i=0; hall_tags[i] && !sg; i++) {
+         mmdb::pstr S = NULL;
+         if (data->GetString(S, "", hall_tags[i]) == 0 && S) {
+            std::string hall = coot::util::remove_whitespace(std::string(S));
+            if (! hall.empty()) {
+               try {
+                  gemmi::GroupOps ops = gemmi::symops_from_hall(std::string(S).c_str());
+                  if (! ops.sym_ops.empty()) {
+                     sg = gemmi::find_spacegroup_by_ops(ops);
+                     how = hall_tags[i];
+                     if (! sg) {
+                        // A valid Hall symbol gemmi cannot name is still a
+                        // valid operator set: use it directly.
+                        for (const gemmi::Op &op : ops.all_ops_sorted())
+                           symops.push_back(op.triplet());
+                        std::cout << "INFO:: symmetry taken from " << hall_tags[i]
+                                  << ": " << symops.size() << " operators"
+                                  << std::endl;
+                        return symops;
+                     }
+                  }
+               }
+               catch (const std::exception &e) { sg = NULL; }
+            }
+         }
+      }
+
+      // 2. Hermann-Mauguin name -- carries the setting.
+      const char *hm_tags[] = { "_space_group_name_H-M_alt",
+                                "_symmetry_space_group_name_H-M",
+                                "_space_group_name_H-M_full", NULL };
+      for (int i=0; hm_tags[i] && !sg; i++) {
+         mmdb::pstr S = NULL;
+         if (data->GetString(S, "", hm_tags[i]) == 0 && S) {
+            std::string name(S);
+            if (! coot::util::remove_whitespace(name).empty()) {
+               sg = gemmi::find_spacegroup_by_name(name);
+               if (sg) how = hm_tags[i];
+            }
+         }
+      }
+
+      // 3. International Tables number -- last resort, and say so out loud,
+      //    because the setting is being assumed rather than read.
+      const char *number_tags[] = { "_space_group_IT_number",
+                                    "_symmetry_Int_Tables_number", NULL };
+      for (int i=0; number_tags[i] && !sg; i++) {
+         int n = 0;
+         if (data->GetInteger(n, "", number_tags[i]) == 0 && n > 0 && n <= 230) {
+            sg = gemmi::find_spacegroup_by_number(n);
+            if (sg) {
+               how = number_tags[i];
+               std::cout << "WARNING:: space group taken from " << number_tags[i]
+                         << " = " << n << " (" << sg->xhm() << "). The number does "
+                         << "not specify the setting, so this is the standard one "
+                         << "and may not be the file's." << std::endl;
+            }
+         }
+      }
+
+      if (! sg) return symops;
+
+      for (const gemmi::Op &op : sg->operations().all_ops_sorted())
+         symops.push_back(op.triplet());
+
+      std::cout << "INFO:: no symmetry-operator loop; symmetry taken from "
+                << (how ? how : "?") << " as " << sg->xhm() << " -- "
+                << symops.size() << " operators" << std::endl;
+      return symops;
+   }
+}
+
 std::vector<mmdb::Atom *>
 coot::smcif::read_coordinates(mmdb::mmcif::PData data, const clipper::Cell &cell, const clipper::Spacegroup &spg) const {
 
@@ -223,10 +341,37 @@ coot::smcif::read_coordinates(mmdb::mmcif::PData data, const clipper::Cell &cell
             symmetry_multiplicity = 1;
 
             // can we get a real value for tf?
-            int ierr_tf = 0;
-            loop->GetReal(tf, "_atom_site_U_iso_or_equiv", il, ierr_tf);
-            if (! ierr_tf) {
-               tf *= 8 * M_PI * M_PI; // PDB-scaled
+            //
+            // BANDICOOT v0.2, Interlude B. Two things here, and the second one
+            // is a bug this sweep found rather than a nomenclature gap:
+            //
+            // 1. Accept B as well as U. The CIF core dictionary defines BOTH
+            //    _atom_site_U_iso_or_equiv and _atom_site_B_iso_or_equiv. Only
+            //    the U form is scaled; B is already what mmdb wants.
+            //
+            // 2. WARNING: Loop::GetReal CANNOT BE TRUSTED TO REPORT AN ABSENT TAG.
+            //    Measured: on a file with no U tag at all it returns success and
+            //    leaves the target untouched, so the scaling below was applied to
+            //    the DEFAULT and every atom came out with B = 789.57
+            //    (= 10 x 8pi^2). Both real COD files checked while writing this
+            //    (1000041, 2000001) state no displacement parameter and so had
+            //    every atom at 789.57. The same distrust is already applied to
+            //    _atom_site_type_symbol above -- "this may not exist (strangely
+            //    enough)" -- and for the same reason: GetString DOES report
+            //    absence, by returning NULL.
+            int ierr_str = 0;
+            if (loop->GetString("_atom_site_U_iso_or_equiv", il, ierr_str)) {
+               int ierr_u = 0;
+               loop->GetReal(tf, "_atom_site_U_iso_or_equiv", il, ierr_u);
+               if (! ierr_u) tf *= 8 * M_PI * M_PI;  // PDB-scaled
+               else          tf = 10.0;
+            } else {
+               ierr_str = 0;
+               if (loop->GetString("_atom_site_B_iso_or_equiv", il, ierr_str)) {
+                  int ierr_b = 0;
+                  loop->GetReal(tf, "_atom_site_B_iso_or_equiv", il, ierr_b);
+                  if (ierr_b) tf = 10.0;
+               }
             }
             
             // real value for occ?
@@ -436,50 +581,114 @@ coot::smcif::read_sm_cif(const std::string &file_name) const {
                   }
                }
             }
-            if (symm_strings.size()) {
-               try { 
-                  std::pair<bool, clipper::Spacegroup> spg_pair = get_space_group(symm_strings);
-                  if (spg_pair.first == true) { 
-
-                     std::vector<mmdb::Atom *> atoms = read_coordinates(data, cell, spg_pair.second);
-                     std::cout << "INFO:: from cif we read " << atoms.size() << " atoms"
-                               << std::endl;
-
-                     if (atoms.size()) {
-
-                        mol = new mmdb::Manager;
-                        mmdb::Model *model_p = new mmdb::Model;
-                        mmdb::Chain *chain_p = new mmdb::Chain;
-                        mmdb::Residue *residue_p = new mmdb::Residue;
-                        chain_p->SetChainID("");
-                        residue_p->seqNum = 1;
-                        residue_p->SetResName("XXX");
-                        for (unsigned int iat=0; iat<atoms.size(); iat++)
-                           residue_p->AddAtom(atoms[iat]);
-                        chain_p->AddResidue(residue_p);
-                        model_p->AddChain(chain_p);
-                        mol->AddModel(model_p);
-
-                        mol->SetCell(cell.a(), cell.b(), cell.c(),
-                                     clipper::Util::rad2d(cell.alpha()),
-                                     clipper::Util::rad2d(cell.beta()),
-                                     clipper::Util::rad2d(cell.gamma()));
-                        mol->SetSpaceGroup(spg_pair.second.symbol_xhm().c_str());
-                     }
-                  } 
-               } 
-               catch (const clipper::Message_base &exc) {
-                  // 20130710 clipper::Message_base::text() doesn't exist yet? 
-                  std::cout << "ERROR:: Oops, trouble.  No such spacegroup " << "\n";
-               }
-            } else {
-               std::cout << "ERROR:: no symm strings" << std::endl;
-            } 
-         } else {
-            std::cout << "No symmetry loop (looked for _symmetry_equiv_pos_as_xyz "
-                      << "and _space_group_symop_operation_xyz)" << std::endl;
          }
-         
+
+         // BANDICOOT v0.2, Interlude B: no operator loop is not an error. The
+         // loop is OPTIONAL in the CIF core dictionary -- a name or an
+         // International Tables number specifies the group just as well.
+         if (symm_strings.empty())
+            symm_strings = symops_from_space_group_statement(data);
+
+         // Resolve the space group if we can, but do NOT make the coordinates
+         // depend on it.
+         //
+         // THE ATOM LOOP USED TO BE READ INSIDE THE SYMMETRY BRANCH, so any
+         // file whose symmetry could not be resolved -- one unrecognised
+         // spelling, one space group clipper would not take -- was rejected
+         // ENTIRELY, having already parsed the cell and with a perfectly
+         // readable atom loop in hand. That is the shape of the
+         // `_symmetry_equiv_pos_as_xyz` bug: the earlier fix added the missing
+         // spelling but left the nesting, so the next surprise would have failed
+         // the same way. Structure beats enumeration -- an unknown symmetry
+         // spelling now costs the symmetry, not the molecule, and Coot already
+         // has a non-crystallographic path for a model without a space group.
+         bool have_spg = false;
+         clipper::Spacegroup spg;
+         if (! symm_strings.empty()) {
+            try {
+               std::pair<bool, clipper::Spacegroup> spg_pair = get_space_group(symm_strings);
+               if (spg_pair.first) {
+                  spg = spg_pair.second;
+                  have_spg = true;
+               }
+            }
+            catch (const clipper::Message_base &exc) {
+               // 20130710 clipper::Message_base::text() doesn't exist yet?
+               std::cout << "ERROR:: Oops, trouble.  No such spacegroup " << "\n";
+            }
+         } else {
+            std::cout << "WARNING:: no symmetry in this cif (no operator loop, "
+                      << "and no space-group name or number that could be "
+                      << "resolved) - reading coordinates without it" << std::endl;
+         }
+
+         // spg is unused by read_coordinates() -- it takes it and ignores it --
+         // so an unresolved space group costs the atoms nothing.
+         std::vector<mmdb::Atom *> atoms = read_coordinates(data, cell, spg);
+         std::cout << "INFO:: from cif we read " << atoms.size() << " atoms"
+                   << std::endl;
+
+         if (atoms.size()) {
+
+            mol = new mmdb::Manager;
+            mmdb::Model *model_p = new mmdb::Model;
+            mmdb::Chain *chain_p = new mmdb::Chain;
+            mmdb::Residue *residue_p = new mmdb::Residue;
+            chain_p->SetChainID("");
+            residue_p->seqNum = 1;
+
+            // BANDICOOT v0.2, Interlude B: name the residue after the component
+            // if the file says what it is, and "LIG" otherwise -- not "XXX".
+            //
+            // THE NAME IS LOAD-BEARING, not cosmetic. Refinement finds restraints
+            // BY RESIDUE NAME, so a molecule called XXX can never be refined: no
+            // dictionary anywhere is keyed on XXX, and importing the correct one
+            // for the ligand cannot help either, because the names will not
+            // match. That is why RSR fails on a small-molecule CIF while the same
+            // ligand as a PDB file plus its restraint CIF refines perfectly --
+            // the PDB file carries a real residue name and the CIF path threw it
+            // away.
+            //
+            // "LIG" is the default because it is what the tools that generate
+            // ligand restraints use (acedrg/elbow via phenix write LIG), so an
+            // imported dictionary matches without the user renaming anything.
+            //
+            // _chem_comp.id is preferred when present because it is the actual
+            // CCD code (e.g. AR6), which both names the thing correctly and
+            // matches the wwPDB dictionary for it. mmdb may present a dotted tag
+            // either whole or split into category+tag depending on how it
+            // suggested categories, so both forms are asked for.
+            std::string res_name = "LIG";
+            {
+               mmdb::pstr S_id = NULL;
+               int ierr_id = data->GetString(S_id, "", "_chem_comp.id");
+               if (ierr_id || ! S_id)
+                  ierr_id = data->GetString(S_id, "_chem_comp", "id");
+               if (! ierr_id && S_id) {
+                  std::string id = coot::util::remove_whitespace(std::string(S_id));
+                  if (! id.empty() && id != "." && id != "?")
+                     res_name = id;
+               }
+            }
+            std::cout << "INFO:: small-molecule cif: residue named " << res_name
+                      << std::endl;
+            residue_p->SetResName(res_name.c_str());
+            for (unsigned int iat=0; iat<atoms.size(); iat++)
+               residue_p->AddAtom(atoms[iat]);
+            chain_p->AddResidue(residue_p);
+            model_p->AddChain(chain_p);
+            mol->AddModel(model_p);
+
+            // The cell is set either way: fractional coordinates are
+            // meaningless without it, and it is what the display needs.
+            mol->SetCell(cell.a(), cell.b(), cell.c(),
+                         clipper::Util::rad2d(cell.alpha()),
+                         clipper::Util::rad2d(cell.beta()),
+                         clipper::Util::rad2d(cell.gamma()));
+            if (have_spg)
+               mol->SetSpaceGroup(spg.symbol_xhm().c_str());
+         }
+
       }
 
       catch (const std::runtime_error &rte) {

@@ -56,7 +56,7 @@ namespace {
    // nobody has heard of counts as header and appears. The GUI offers "show
    // all" so this is a default, not a censor.
    //
-   // ⚠ A BY-NAME LIST IS THE WEAK PART OF THIS DESIGN, and there is a
+   // WARNING: A BY-NAME LIST IS THE WEAK PART OF THIS DESIGN, and there is a
    // promising rule hiding in it (Art, 2026-08-17: "a solid idea and worth
    // revisiting when we touch header browser again"). Nearly every category
    // below has a row count that SCALES WITH THE MODEL -- per atom, per

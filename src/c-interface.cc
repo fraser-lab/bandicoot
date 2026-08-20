@@ -869,6 +869,34 @@ int handle_read_draw_molecule_with_recentre(const char *filename,
 	 if (types_with_no_dictionary.size()) {
 	    if (g.Geom_p()->try_load_ccp4srs_description(types_with_no_dictionary))
 	       g.molecules[imol].make_bonds_type_checked();
+
+	    // BANDICOOT v0.2 (2026-08-19): SAY SO when a molecule arrives with no
+	    // restraints for some of its components.
+	    //
+	    // Everything above is Coot's own lookup and it is silent: the residue
+	    // types with no dictionary are collected, try_dynamic_add() searches
+	    // the monomer library for each (which since u70 reaches a CCP4 library
+	    // through CLIBD_MON / COOT_REFMAC_LIB_DIR), and if that finds nothing
+	    // the molecule is simply drawn. The user learns about it later, from
+	    // "Refinement setup failure. Failed to find restraints for: X" the
+	    // first time they try to refine -- which is a poor moment to find out
+	    // and does not say what to do about it.
+	    //
+	    // The components listed here are exactly the ones refinement will
+	    // refuse, so this is the honest place to report them.
+	    std::string m = "This molecule loaded WITHOUT restraints for:\n\n";
+	    for (unsigned int i=0; i<types_with_no_dictionary.size(); i++) {
+	       m += "    ";
+	       m += types_with_no_dictionary[i];
+	       m += "\n";
+	    }
+	    m += "\nIt will display, but refinement (RSR) cannot restrain those\n"
+		 "components until a restraints dictionary for them is read in\n"
+		 "(File -> Import CIF dictionary..., or generate one with acedrg\n"
+		 "or phenix.elbow).";
+	    std::cout << "WARNING:: " << m << std::endl;
+	    if (graphics_info_t::use_graphics_interface_flag)
+	       info_dialog(m.c_str());
 	 } else {
 	    // perhaps we have read dictionaries for everything (but
 	    // first check that there had been dictionaries to read.

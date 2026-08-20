@@ -54,7 +54,19 @@ int get_monomer_molecule_by_network_and_dict_gen(const std::string &text) {
       args.push_back(coot::util::single_quote(file_name));
       retval = coot::scripting_function("generate-molecule-from-mmcif", args);
       if (retval.type == coot::command_arg_t::INT) {
-	 imol = retval.type;
+	 // BANDICOOT v0.2 (2026-08-19): retval.i, NOT retval.type.
+	 //
+	 // This said `imol = retval.type`, which is the ENUM TAG rather than the
+	 // value: coot_script_arg_type is {UNSET, INT, FLOAT, STRING, BOOL}, so
+	 // it returned the constant 1 for every successful fetch. The caller then
+	 // tests is_valid_model_molecule(1) and says "Failed to import molecule"
+	 // when molecule 1 is not a model -- which it usually is not, because
+	 // models and maps share one numbering, so with a map loaded (i.e. any
+	 // time you are about to refine) 1 is the map.
+	 //
+	 // Symptom Art hit: Get Monomer fetched the dictionary, built the
+	 // molecule, RSR worked on it -- and the dialog claimed it had failed.
+	 imol = retval.i;
       }
    }
    return imol;

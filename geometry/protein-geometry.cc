@@ -568,6 +568,40 @@ coot::protein_geometry::try_dynamic_add(const std::string &resname, int read_num
    } else {
       s  = getenv("CLIB");
 
+      // BANDICOOT v0.2 (2026-08-19): also honour CLIBD_MON.
+      //
+      // WARNING: THIS FUNCTION NEVER LOOKED AT CLIBD_MON, and init_standard() always
+      // has. CLIBD_MON is what a CCP4 setup actually exports, so the effect was
+      // that a user with CCP4 loaded got CCP4's STANDARD monomers and NO
+      // LIGANDS: every non-standard component arrives through this function.
+      // Measured -- with CLIBD_MON alone pointing at a 35,649-entry library,
+      // AR6 came back "NO DICT" and get_monomer("AR6") failed; with CLIB set as
+      // well it gave 60 bonds, all with distances. Needing the undocumented
+      // second variable is not a reasonable thing to ask of anyone.
+      //
+      // CLIBD_MON points AT the monomers directory (<ccp4>/lib/data/monomers),
+      // not at lib/ -- which is exactly the COOT_MONOMER_LIB_DIR convention
+      // used below, so routing it through cmld means the path building needs no
+      // special case. s is set too, only because the guard below rejects a null
+      // s before cmld is ever consulted.
+      // The directory is CHECKED before being adopted, as init_standard() does.
+      // Without that, a stale or wrong CLIBD_MON would be used blindly and the
+      // bundled library below never consulted -- so a broken environment
+      // variable would cost the user the 115 entries they DO have, which is
+      // worse than ignoring it.
+      if (! s) {
+	 if (! cmld) {
+	    char *clibd_mon = getenv("CLIBD_MON");
+	    if (clibd_mon && is_dir_or_link(clibd_mon)) {
+	       cmld = clibd_mon;
+	       s    = clibd_mon;
+	       if (verbose_mode)
+		  std::cout << "INFO:: using CCP4 monomer library from CLIBD_MON"
+			    << " to search for \"" << resname << "\"" << std::endl;
+	    }
+	 }
+      }
+
       if (! s) {
          if (false)
 	    std::cout << "DEBUG:: try_dynamic_add() using package_data_dir(): " << package_data_dir()

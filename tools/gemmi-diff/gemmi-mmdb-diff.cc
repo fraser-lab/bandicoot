@@ -763,6 +763,17 @@ static bool is_mmcif_path(const std::string &p) {
    return e == ".cif" || e == ".mmcif" || e == ".mcif";
 }
 
+// Is this a COORDINATE mmCIF, i.e. a file whose document the writer preserves?
+//
+// Extension is not enough: a chemical-component definition is also ".cif" but
+// carries _chem_comp_atom instead of _atom_site, and the read path deliberately
+// keeps no document for it. Such a file belongs with the PDB inputs -- read it,
+// but do not ask the mmCIF-preservation questions of it.
+static bool is_coordinate_mmcif(const std::string &p) {
+   if (! is_mmcif_path(p)) return false;
+   return coot::cif_chem_comp_id(p).empty();
+}
+
 // returns: 0 clean, 1 something was lost
 static int write_check(const std::vector<std::string> &files, const std::string &out_dir) {
 
@@ -779,7 +790,15 @@ static int write_check(const std::vector<std::string> &files, const std::string 
       // A PDB input has no document to preserve, so "categories in vs out" is
       // not a question that means anything -- the writer synthesises, and the
       // input had no categories to compare against. Skip rather than pretend.
-      if (! is_mmcif_path(in)) { n_skipped++; continue; }
+      //
+      // A CHEMICAL-COMPONENT definition (AR6.cif, ADP.cif) is in exactly that
+      // position: the read path deliberately does not retain a chem_comp
+      // document, because handing one to update_mmcif_block() would have it edit
+      // _atom_site categories that are not there. Reading one and writing
+      // coordinate mmCIF is a CROSS-FORMAT conversion, like PDB -> mmCIF, so its
+      // chem_comp categories are gone by construction and counting that as
+      // "lossy" measures the wrong thing.
+      if (! is_coordinate_mmcif(in)) { n_skipped++; continue; }
 
       printf("=== %s\n", base.c_str());
 
@@ -1076,7 +1095,10 @@ static int round_trip(const std::vector<std::string> &files, const std::string &
       ModelSummary m0;
       harvest(first.mol, m0);
 
-      if (! is_mmcif_path(in)) {
+      // Chem_comp inputs take the PDB-shaped path too: no document to preserve,
+      // so the meaningful question is chain A (synthesise -> mmCIF -> mmCIF),
+      // not chain B's byte-identity of a document that was never kept.
+      if (! is_coordinate_mmcif(in)) {
 
          // ---- chain A: PDB in -> mmCIF out -> mmCIF in ----
          std::string hop1 = out_dir + "/" + base + ".A1.cif";

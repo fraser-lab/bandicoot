@@ -101,6 +101,45 @@ rather than a success.
 **Breaks if regressed:** opening a small-molecule CIF produces an empty molecule with no
 error at all — the exact bug that was fixed once already.
 
+### A5b. The symmetry-operator loop is OPTIONAL in a small-molecule CIF — FIXED 2026-08-19
+**Property:** in the CIF core dictionary a space-group **name** or **International Tables
+number** fully specifies the group; the operator loop need not be there at all.
+**What it cost:** `read-sm-cif.cc` read its atom loop *inside* the operator-loop branch, so such
+a file loaded **nothing** — cell parsed, 31 readable atoms in hand, whole file rejected. Measured
+on the real COD file with only its operator loop removed. **Same shape as the
+`_symmetry_equiv_pos_as_xyz` bug**: that fix added the missing spelling and left the nesting, so
+the next surprise failed identically.
+**Fixed two ways, and the structural half is the one that matters:** coordinates no longer depend
+on the symmetry resolving (an unknown spelling now costs the symmetry, not the molecule — Coot has
+a non-crystallographic path already), plus a name/number fallback.
+**⚠ The fallback order is a correctness matter, not a preference:** Hall symbol (unambiguous),
+then H-M name (carries the setting), then IT number **last and with a warning** — the number does
+NOT fix the setting, since `P 1 21/c 1` and `P 1 21/n 1` are both 14.
+**Resolution goes through gemmi, never clipper** — see D2: clipper silently turns `P212121` into
+P 1 with one operator.
+
+### A5c. A chemical-component definition is a ".cif" with no `_atom_site` — FIXED 2026-08-19
+**Property:** a ligand downloaded from the PDB (`files.rcsb.org/ligands/download/AR6.cif`) is a
+CCD entry: its coordinates live in `_chem_comp_atom.model_Cartn_*` and
+`pdbx_model_Cartn_*_ideal`, and there is no `_atom_site` anywhere. A Refmac monomer-library file
+(`comp_list` blocks) has the same shape with `_chem_comp_atom.x`.
+**Exhibited by:** `AR6.cif`, `ADP.cif`.
+**What it cost:** the coordinate reader found no `_atom_site`, fell through to the small-molecule
+reader, which found no `_atom_site_fract_*` either, and produced an EMPTY molecule -- "loads but
+shows nothing". Dropping the same file classified it as restraints and silently imported a
+dictionary, so the drop counted as handled and nothing appeared.
+**⚠ gemmi's DEFAULT `which=7` IS WRONG HERE.** `make_structure_from_chemcomp_block(block, which)`
+takes a bitmask -- 1 = Refmac `x/y/z`, 2 = `model_Cartn` ("example"), 4 = `pdbx_model_Cartn_ideal`
+-- and a CCD carries TWO of them, so the default returns a **TWO-MODEL, 118-atom** molecule for
+AR6's 59 atoms. Choose one: this reader tries Ideal, then Example, then Xyz, matching Coot's own
+Get Monomer, which asks the dictionary for idealised coordinates first.
+**Also: `check_chemcomp_block_number()` is the detector** -- it returns the block index for both
+CCD and monomer-library shapes, and -1 otherwise.
+**The document is deliberately NOT retained** for these files: `update_mmcif_block()` would edit
+`_atom_site` categories that are not there. That makes reading one and writing mmCIF a
+CROSS-FORMAT conversion, which is why the harness now classifies chem_comp inputs with the PDB
+inputs (`is_coordinate_mmcif()`) instead of asking mmCIF-preservation questions of them.
+
 ### A6. SHELX `.ins` / `.res`
 **Property:** not a format gemmi reads; it throws `Unknown format`.
 **Exhibited by:** `F1-Cu-8_anom_diffs.ins`.
@@ -398,6 +437,50 @@ reads as PDB-only. The mmCIF parse happens inside the compiled
 **General rule this implies:** for anything `GEMMI_DLL`, the headers describe the interface,
 not the behaviour. **Probe, do not read.**
 
+### D6. `mmdb::mmcif::Loop::GetReal` reports SUCCESS for an absent tag
+Its own documentation promises `CIFRC_NoTag` when the tag is not found. **Measured: it returns
+success and leaves the target variable untouched.**
+**What it cost:** `read-sm-cif.cc` read `_atom_site_U_iso_or_equiv` this way and scaled the
+result by 8π², so any small-molecule CIF stating no displacement parameter had the **hardcoded
+default 10.0** scaled instead — **every atom at B = 789.57**. Both real COD files checked
+(`1000041`, `2000001`) were doing exactly that.
+**The idiom that works, and it was already in the same function:** test presence with
+`GetString`, which *does* report absence by returning NULL, then read the number. The existing
+`_atom_site_type_symbol` code does this, with the comment *"this may not exist (strangely
+enough)"* — evidently written about this same quirk.
+**Suspect every `ierr` from this API.** Fixed 2026-08-19.
+
+### D7. Importing a wwPDB CCD as a dictionary DESTROYS a working library entry for that component
+**Measured 2026-08-19 on `ADP.cif` downloaded from the PDB:**
+```
+bundled monomer library ADP : 41 bonds, 41 with distance   [' PB ',' O1B','double',1.509,0.02]
+after read_cif_dictionary(the CCD) : 44 bonds,  0 with distance   [' PB ',' O1B','double',False,False]
+```
+**Why:** a CCD states bond ORDER and aromaticity and no `value_dist` at all, so importing it
+replaces a refinable entry with connectivity-only. This is the drag-and-drop monomer-library
+corruption in miniature -- scoped to one component instead of the standard residues, and therefore
+much quieter.
+**Consequence:** dropping `ADP.cif` used to break RSR for ADP for the rest of the session. Since
+u68 drag-and-drop reads a component definition as COORDINATES and does not import it, so the
+bundled entry survives and RSR works (verified: 41 bonds with distances after the coordinate read).
+**The tension to respect if this is ever revisited:** importing the CCD is what makes
+`Get Monomer <code>` work for a component NOT in the library (that is how AR6 used to load), and
+what breaks one that IS. Any change here must key on whether a dictionary for that comp_id already
+exists.
+
+### D8. `scripting_function()`'s return value: `.i`, not `.type`
+`coot::command_arg_t::coot_script_arg_type` is `{UNSET, INT, FLOAT, STRING, BOOL}`, so `.type` for
+an integer return is the constant **1**. `get_monomer_molecule_by_network_and_dict_gen()` did
+`imol = retval.type`, returning 1 for every successful fetch.
+**Why it stayed hidden and then looked like a different bug entirely:** the caller tests
+`is_valid_model_molecule(imol)` and pops "Failed to import molecule" when it fails. Models and MAPS
+share one numbering in Coot, so molecule 1 is usually the map whenever a map is loaded -- i.e.
+exactly when the user is about to refine. Observed 2026-08-19: Get Monomer downloaded the
+dictionary, created the molecule, RSR worked on it, and the dialog said it had failed.
+**Check the marshalling before blaming it:** `scripting_function()` fills `.i` correctly, and the
+Py2 `PyInt_Check` resolves to `PyLong_Check` through `compat/python23-shim.hh`, so the type test
+does pass. The bug was purely the assignment. Fixed 2026-08-19.
+
 ---
 
 ## E. Write-side traps — Phase 3 and later, nearly all UNCHECKED
@@ -502,7 +585,7 @@ records after deletion) and A4's write-side half (a 20-model ensemble through th
 
 **Read side** (`gemmi-mmdb-diff`, no arguments), `0.2.0.0-u63`:
 ```
-summary: 6 identical, 17 with differences, 6 failed to load
+summary: 6 identical, 17 with differences, 8 failed to load
 ```
 Was `5 identical, ...` at `u49`. The one move is a corpus addition, not a code change:
 `samples/` gained `3K0N-CIF2PDB.pdb` (Art's mmCIF->PDB comparison artifact), and it reads
@@ -510,6 +593,8 @@ IDENTICAL. The six identical files are `2GEW.pdb`, `3K0N-CIF2PDB.pdb`, `3K0N.pdb
 `pdb1aon.ent`, `pdb3k0n.ent`.
 Was `3 identical, 16 with differences, 4 failed to load` at `u34`. Every change since is a
 corpus addition, and each was checked individually rather than assumed:
+the two extra `failed to load` at `u68` are `AR6.cif` and `ADP.cif`, where **path A fails
+because raw mmdb cannot read a chem_comp file at all** -- correct, not a regression;
 `3K0N.pdb` and `2GEW.pdb` compare IDENTICAL; `3K0N-sf.cif` and `2GEW-sf.cif` are
 structure-factor files that both paths correctly refuse (zero atoms); `2GEW.cif` differs
 only by B2 atom-name padding. **Before reading a changed baseline as a regression, check
@@ -520,9 +605,11 @@ exit status is NOT a gate here — several differences are permanent and deliber
 
 **Write side** (`gemmi-mmdb-diff --write-check`), `0.2.0.0-u63`:
 ```
-write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 12 skipped (not mmCIF)
+write-side summary: 14 clean, 0 lossy, 0 write-failed, 3 read-declined, 14 skipped (not mmCIF)
 ```
-`skipped` moved 11 -> 12 for the same corpus addition as above (`3K0N-CIF2PDB.pdb`, not mmCIF).
+`skipped` moved 11 -> 12 for `3K0N-CIF2PDB.pdb`, then 12 -> 14 when the corpus gained the two
+chemical-component files (`AR6.cif`, `ADP.cif`), which are skipped by `is_coordinate_mmcif()` --
+see A5c. **`0 lossy` has still never moved.**
 Was `15 clean, 0 lossy, 0 write-failed, 1 read-declined, 9 skipped` when the column/value
 work landed; the moves since are corpus additions (`3K0N.pdb`, `2GEW.pdb` skipped as not
 mmCIF; `3K0N-sf.cif`, `2GEW-sf.cif` declined for having no atoms). **The number that matters,
@@ -530,12 +617,14 @@ mmCIF; `3K0N-sf.cif`, `2GEW-sf.cif` declined for having no atoms). **The number 
 
 **Round trip** (`gemmi-mmdb-diff --round-trip`), `0.2.0.0-u63`:
 ```
-  A  PDB->mmCIF->mmCIF : 9 model preserved, 3 differ
+  A  PDB->mmCIF->mmCIF : 9 model preserved, 5 differ
   B  mmCIF round trip  : 14 stable, 0 NOT stable   <-- the gate
   C  mmCIF->PDB->PDB   : 12 model preserved, 2 differ
 ```
-Chain A was `8 preserved` at `u49`; the extra one is `3K0N-CIF2PDB.pdb`, the same corpus
-addition as above. Chains B and C have not moved.
+Chain A was `8 preserved` at `u49`; the extra one is `3K0N-CIF2PDB.pdb`. Its `differ` count moved
+3 -> 5 at `u68` when `AR6.cif` and `ADP.cif` joined the corpus: a chem_comp file takes the
+PDB-shaped chain A, and its first hop is a cross-format synthesis, so differing is correct.
+Chains B and C have not moved.
 Chain B is the gate. Chain A's three differences are `2RSF.pdb` (A3) and the two
 `SC1_2_refine_*.pdb` (B10); chain C's two are the same SC1 pair (C2).
 **Here the exit status IS a gate** — losing a category, a column or a value is never

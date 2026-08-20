@@ -65,7 +65,7 @@ try:
     sys.modules.setdefault('ConfigParser', _bandicoot_configparser)
 except ImportError:
     pass
-# v0.1.0.2: Py2's `commands` module → Py3's `subprocess.getoutput`/`getstatusoutput`
+# v0.1.0.2: Py2's `commands` module -> Py3's `subprocess.getoutput`/`getstatusoutput`
 # live on `subprocess`. coot_utils.find_exe() does `import commands; commands.getoutput`.
 try:
     import subprocess as _bandicoot_subprocess

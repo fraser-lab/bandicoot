@@ -827,7 +827,7 @@ class PanddaInspect(object):
 
     def _near_ligand_dirs(self, lig_id):
         """Directory names under the cifs dir that match lig_id but for '-'/'_'
-        separators or case — the usual CSV-vs-folder naming slip (e.g. CSV
+        separators or case -- the usual CSV-vs-folder naming slip (e.g. CSV
         'pxr-1_E14' vs folder 'pxr_1_E14'). Used only to enrich the error."""
         def norm(s):
             return s.lower().replace("-", "_")

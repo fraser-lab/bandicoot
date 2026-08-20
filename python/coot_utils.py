@@ -3784,8 +3784,23 @@ def get_pdbe_cif_for_comp_id(comp_id):
     download_dir = get_directory("coot-download")
     cif_file_name = os.path.join(download_dir,
                                  "PDBe-" + comp_id + ".cif")
-    url = "ftp://ftp.ebi.ac.uk/pub/databases/msd/pdbechem/files/mmcif/" + comp_id + ".cif"
-    
+
+    # BANDICOOT v0.2 (2026-08-19): the old address was
+    #   ftp://ftp.ebi.ac.uk/pub/databases/msd/pdbechem/files/mmcif/<code>.cif
+    # and PDBe retired that FTP layout years ago. Measured through this very
+    # function: the old URL returns curl state 9 (remote file not found) and
+    # writes a ZERO-BYTE file, while this one returns 0 and 25930 bytes for AR6.
+    # Every PDBe fetch on this machine had been failing that way -- 0-byte
+    # PDBe-*.cif files were found in four different working directories, for
+    # AR6, MPO, DTT and TRS, from projects predating the v0.2 line.
+    url = "https://www.ebi.ac.uk/pdbe/static/files/pdbechem_v2/" + comp_id + ".cif"
+
+    # The CCP4 monomer library, which is where actual RESTRAINTS live. Same
+    # layout as a local library: lower-cased first letter as the subdirectory.
+    # Verified 2026-08-19: 33,835 bytes for AR6, with value_dist present.
+    mon_lib_url = ("https://raw.githubusercontent.com/MonomerLibrary/monomers/"
+                   "master/" + comp_id[0].lower() + "/" + comp_id + ".cif")
+
     if os.path.isfile(cif_file_name):
         # try the filesystem cache
         stat_data = os.stat(cif_file_name)
@@ -3793,21 +3808,71 @@ def get_pdbe_cif_for_comp_id(comp_id):
         if (l > 0):
             return cif_file_name
         else:
-            # give a dialog, saying that the file will not be
-            # overwritten
-            msg = cif_file_name + " exists but is empty." + "\nNot overwriting."
-            info_dialog(msg)
-            return False
+            # An EMPTY cached file is a failed download, not data.
+            #
+            # This used to show "exists but is empty. Not overwriting." and give
+            # up. No rationale was ever recorded for it and none survives
+            # scrutiny: coot_get_url() writes the target file, so any failed
+            # fetch leaves 0 bytes behind, and from then on every attempt in that
+            # directory hit the dialog instead of retrying. One transient failure
+            # poisoned the cache permanently -- which is exactly what happened
+            # here, in four directories, invisibly. An empty CIF is worthless by
+            # definition, so re-fetch over it.
+            print("BL INFO:: discarding empty cached file", cif_file_name)
+            try:
+                os.remove(cif_file_name)
+            except OSError as e:
+                msg = "Cannot replace the empty file\n" + cif_file_name + \
+                      "\n\n" + str(e)
+                info_dialog(msg)
+                return False
     # use network then
-    print("BL INFO:: getting url:", url)
-    state = coot_get_url(url, cif_file_name)
-    if (state != 0):
-        msg = "Problem downloading\n" + url + "\n to file \n" + cif_file_name + "."
-        info_dialog(msg)
-        return False
-    else:
-        # it worked!?!
-        return cif_file_name
+    #
+    # BANDICOOT v0.2 (2026-08-19): try the MONOMER LIBRARY first, and only then
+    # the chemical-component definition.
+    #
+    # The reason is what the two sources contain. A PDB/PDBe component
+    # definition has coordinates, connectivity, bond orders and stereo flags and
+    # NO RESTRAINTS -- measured, `value_dist` and `value_angle` appear zero times
+    # in both the RCSB (15 kB) and the larger PDBe (26 kB) file for AR6. So a
+    # monomer fetched from there loads and then cannot be refined, which is not
+    # what anyone wanted when they asked for it. The monomer library entry for
+    # the same component carries acedrg-derived bonds, angles, torsions, chirals
+    # and planes -- everything refinement needs.
+    #
+    # NOTE: coot_get_url() RETURNS 0 FOR A 404. Measured: a bad component code gives
+    # state 0 and a 14-byte body reading "404: Not Found", which would then be
+    # cached as if it were a dictionary. The return code cannot be trusted, so
+    # the CONTENT is checked -- the same lesson as the structure-factor reader,
+    # where a spelling nobody had seen produced a silent empty map.
+    def looks_like_a_cif(file_name):
+        try:
+            if os.path.getsize(file_name) < 200:
+                return False
+            with open(file_name, errors="replace") as fh:
+                head = fh.read(4096)
+            return ("_chem_comp" in head) or ("data_" in head) or ("global_" in head)
+        except (OSError, IOError):
+            return False
+
+    sources = [("monomer library", mon_lib_url), ("PDBe", url)]
+    for what, u in sources:
+        print("BL INFO:: getting url:", u)
+        state = coot_get_url(u, cif_file_name)
+        if state == 0 and looks_like_a_cif(cif_file_name):
+            print("BL INFO:: got %s definition for %s" % (what, comp_id))
+            return cif_file_name
+        # not usable - do not leave it behind to poison the cache
+        if os.path.exists(cif_file_name):
+            try:
+                os.remove(cif_file_name)
+            except OSError:
+                pass
+
+    msg = "Could not download a dictionary for " + comp_id + ".\n\nTried:\n" + \
+          "\n".join(u for _, u in sources)
+    info_dialog(msg)
+    return False
 
     # something probably went wrong if we got to here
     return False

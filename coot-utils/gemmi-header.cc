@@ -722,7 +722,7 @@ namespace {
    // HETNAM: hetID 12-14, text from 16. FORMUL: component number 9-10, hetID
    // 13-15, asterisk 19, text from 20.
    //
-   // ⚠ FORMUL's COMPONENT NUMBER IS WRITTEN AT 10-11 HERE, NOT AT THE 9-10 THE
+   // WARNING: FORMUL's COMPONENT NUMBER IS WRITTEN AT 10-11 HERE, NOT AT THE 9-10 THE
    // FORMAT DESCRIPTION GIVES, AND THAT IS DELIBERATE: mmdb WRITES it at 9-10
    // (`sprintf("FORMUL  %2i  %3s    ")`) but READS it at &S[9] width 2, which
    // is columns 10-11 -- so mmdb misreads its own output, and every real
@@ -732,7 +732,7 @@ namespace {
    // makes the value survive; mmdb's writer then puts it back at 9-10 where
    // wwPDB has it. One-digit numbers land in column 11 either way.
    //
-   // ⚠ THE COMPONENT NUMBER IS THE SUBCHAIN ORDINAL, NOT THE ENTITY ID. This
+   // WARNING: THE COMPONENT NUMBER IS THE SUBCHAIN ORDINAL, NOT THE ENTITY ID. This
    // was measured, after the entity id turned out to be wrong: the number is
    // the 1-based position of the component's first label_asym_id in
    // _struct_asym. Three depositions agree and the entity id matches none of

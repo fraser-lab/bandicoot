@@ -93,11 +93,11 @@ namespace coot {
    //!
    //! Split in two because gemmi does half the work if asked properly:
    //!
-   //!  -  transfer_pdb_header_to_gemmi fills `st.info` and
+   //!  -  transfer_pdb_header_to_gemmi fills `st.info` and
    //!    `st.helices`/`st.sheets`, which gemmi's writer then emits as
    //!    `_struct`, `_struct_keywords`, `_exptl`, `_entry`,
    //!    `_pdbx_database_status`, `_struct_conf` and `_struct_sheet*`.
-   //!  -  add_pdb_header_categories writes the categories gemmi has no model
+   //!  -  add_pdb_header_categories writes the categories gemmi has no model
    //!    for at all: `gemmi::Metadata` has no author and no citation field
    //!    anywhere, and no home for free REMARK text.
    void transfer_pdb_header_to_gemmi(mmdb::Manager *mol, gemmi::Structure &st);

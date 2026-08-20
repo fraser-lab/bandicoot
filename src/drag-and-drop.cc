@@ -259,6 +259,36 @@ int handle_drag_and_drop_single_item(const std::string &file_name) {
       switch (coot::classify_cif_file(file_name)) {
 
       case coot::cif_flavour_t::restraints:
+	 // Two very different files land here, and dropping them should not do
+	 // the same thing.
+	 //
+	 // A dictionary you can refine with (elbow, acedrg, the Refmac monomer
+	 // library) carries _chem_comp_bond.value_dist. Importing it is the whole
+	 // point -- the user already has the ligand and wants restraints for it.
+	 //
+	 // A wwPDB/PDBe COMPONENT DEFINITION (AR6.cif and friends) carries bond
+	 // orders and coordinates but NO distances. Importing that as a dictionary
+	 // is what dropping it used to do, and since read_cif_dictionary()
+	 // succeeded, the drop counted as "handled" and NOTHING VISIBLE HAPPENED.
+	 // What the user wants from a ligand downloaded off the PDB is the ligand,
+	 // so read it as coordinates instead.
+	 // No dialog here about the missing restraints. handle_read_draw_molecule
+	 // already looks the component up in the monomer library (CCP4's, if the
+	 // environment points at one) and warns if it comes back empty -- so
+	 // saying it here as well would be a second dialog for one drop, and
+	 // WRONG in the case that matters: when the library does supply
+	 // restraints, this file's lack of them is irrelevant.
+	 if (! coot::cif_chem_comp_has_bond_distances(file_name)) {
+	    std::string comp_id = coot::cif_chem_comp_id(file_name);
+	    if (! comp_id.empty()) {
+	       std::cout << "INFO:: " << comp_id << " is a chemical component "
+			 << "definition (coordinates and bond orders, no bond "
+			 << "distances) - reading it as coordinates" << std::endl;
+	       handle_read_draw_molecule_with_recentre(file_name.c_str(), 0);
+	       handled = TRUE;
+	       break;
+	    }
+	 }
 	 if (read_cif_dictionary(file_name.c_str()) > 0)
 	    handled = TRUE;
 	 break;
