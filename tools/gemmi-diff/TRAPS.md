@@ -97,9 +97,15 @@ of `st.models` from inside a per-model call. Not yet examined for a 20-model fil
 **Rule:** gemmi **does not throw** on these — it returns a `Structure` with **zero
 atoms**. That is why `read_coords_with_gemmi` treats "no atoms" as a fall-back condition
 rather than a success.
-**Assertion:** UNCHECKED in the harness.
+**Assertion:** UNCHECKED in the harness (the corpus run reports `4517425.cif` under
+`failed to load`, which is correct for both paths and is not the same as checking that the
+small-molecule reader handles it).
 **Breaks if regressed:** opening a small-molecule CIF produces an empty molecule with no
 error at all — the exact bug that was fixed once already.
+**Phase 4, 2026-08-20:** the small-molecule reader itself is now on
+`gemmi::SmallStructure`, so both paths in that fall-back are gemmi. What checks it is a
+before/after dump of the built `mmdb::Manager` (atom by atom, with cell, space group,
+occupancies, B factors and ADPs) rather than the corpus run — see B20.
 
 ### A5b. The symmetry-operator loop is OPTIONAL in a small-molecule CIF — FIXED 2026-08-19
 **Property:** in the CIF core dictionary a space-group **name** or **International Tables
@@ -454,6 +460,23 @@ using the mmdb reader.
 added, and it found this on the first run.** The difference is permanent and expected — it
 is mmdb being wrong — so it stays in the read-side baseline as an attributed line.
 
+### B20. Every anisotropic atom in a small-molecule CIF got the SAME ADPs
+**Property:** not a file property at all -- a bug in the reader, found while porting it
+(Phase 4, 2026-08-20). The `_atom_site_aniso_*` block of `read-sm-cif.cc` matched each aniso
+row to its atom by label correctly, and then wrote `u11 .. u23` -- **the loop's last-read
+locals** -- into every atom it matched, instead of that row's own values.
+**Exhibited by:** `4517425.cif`, and any small-molecule CIF with more than one anisotropic
+atom. Measured: 31 atoms, 16 anisotropic, **1 distinct set of ADPs** before the port and 16
+after. The wrong values were the LAST row's, for every atom.
+**Consequence:** anisotropic display and any ADP analysis of a small-molecule structure were
+showing one atom's ellipsoid on all of them. Silent -- the values are plausible and the flag
+is set.
+**Fixed by the port rather than carried across:** `gemmi::SmallStructure` keeps the ADPs per
+site, so the class of mistake is gone with the hand-written loop.
+**Assertion:** CHECKED, by the before/after dump described in A5 -- which is what found it.
+The dump compares every field of every built atom, and this was the only difference in the
+whole file.
+
 ---
 
 ## C. Cross-format traps
@@ -550,6 +573,12 @@ default 10.0** scaled instead — **every atom at B = 789.57**. Both real COD fi
 `_atom_site_type_symbol` code does this, with the comment *"this may not exist (strangely
 enough)"* — evidently written about this same quirk.
 **Suspect every `ierr` from this API.** Fixed 2026-08-19.
+**Retired 2026-08-20 (Phase 4):** `read-sm-cif.cc` no longer uses mmdb's CIF parser at all, so
+this API has **no callers left in the tree** and the trap is now history rather than a hazard.
+Worth keeping for one reason: measured while porting, the 3-argument
+`GetReal(target, tag, row)` overload used by the reflection loop **does** report an absent tag
+correctly. So the quirk was specific to the 4-argument form, which is exactly the kind of
+distinction that makes "suspect the API" the right posture rather than "learn the rule".
 
 ### D7. Importing a wwPDB CCD as a dictionary DESTROYS a working library entry for that component
 **Measured 2026-08-19 on `ADP.cif` downloaded from the PDB:**

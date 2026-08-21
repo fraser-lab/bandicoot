@@ -26,6 +26,8 @@
 #include <algorithm> // for remove_if
 #include <string.h> // for strncpy
 
+#include <map>
+
 #include <mmdb2/mmdb_manager.h>
 #include <clipper/core/clipper_util.h>
 #include <clipper/core/spacegroup.h>
@@ -49,6 +51,15 @@
 // tested and got all of them right.
 #include <gemmi/symmetry.hpp>
 
+// BANDICOOT v0.2 Phase 4: gemmi reads this format natively --
+// SmallStructure is gemmi's model of a small-molecule CIF, and
+// make_small_structure_from_block() is its reader.
+#include <gemmi/small.hpp>
+#include <gemmi/smcif.hpp>
+#include <gemmi/read_cif.hpp>   // read_cif_gz
+#include <gemmi/atox.hpp>       // string_to_int
+#include <gemmi/math.hpp>       // u_to_b
+
 #include "compat/coot-sysdep.h"
 #include "utils/coot-utils.hh"
 #include "geometry/residue-and-atom-specs.hh"
@@ -59,1184 +70,644 @@
 
 // This can throw a std::runtime_error.
 // 
-clipper::Cell
-coot::smcif::get_cell(mmdb::mmcif::PData data) const {
-
-   mmdb::pstr cell_a = NULL;
-   mmdb::pstr cell_b = NULL;
-   mmdb::pstr cell_c = NULL;
-   mmdb::pstr cell_alpha = NULL;
-   mmdb::pstr cell_beta  = NULL;
-   mmdb::pstr cell_gamma = NULL;
-   
-   int ierr = 0;
-   ierr += data->GetString (cell_a,     "" ,"_cell_length_a");
-   ierr += data->GetString (cell_b,     "" ,"_cell_length_b");
-   ierr += data->GetString (cell_c,     "" ,"_cell_length_c");
-   ierr += data->GetString (cell_alpha, "" ,"_cell_angle_alpha");
-   ierr += data->GetString (cell_beta,  "" ,"_cell_angle_beta");
-   ierr += data->GetString (cell_gamma, "" ,"_cell_angle_gamma");
-
-   clipper::Cell cell;
-
-   if (! ierr) {
-      if (false)
-         std::cout << "make cell from " 
-                   << cell_a << " " 
-                   << cell_b << " " 
-                   << cell_c << " " 
-                   << cell_alpha << " " 
-                   << cell_beta  << " " 
-                   << cell_gamma << " " 
-                   << std::endl;
-      std::vector<std::string> a_v     = coot::util::split_string_no_blanks(cell_a, "(");
-      std::vector<std::string> b_v     = coot::util::split_string_no_blanks(cell_b, "(");
-      std::vector<std::string> c_v     = coot::util::split_string_no_blanks(cell_c, "(");
-      std::vector<std::string> alpha_v = coot::util::split_string_no_blanks(cell_alpha, "(");
-      std::vector<std::string> beta_v  = coot::util::split_string_no_blanks(cell_beta,  "(");
-      std::vector<std::string> gamma_v = coot::util::split_string_no_blanks(cell_gamma, "(");
-
-      double a     = coot::util::string_to_float(a_v[0]);
-      double b     = coot::util::string_to_float(b_v[0]);
-      double c     = coot::util::string_to_float(c_v[0]);
-      double alpha = coot::util::string_to_float(alpha_v[0]);
-      double beta  = coot::util::string_to_float( beta_v[0]);
-      double gamma = coot::util::string_to_float(gamma_v[0]);
-      clipper::Cell_descr cell_descr(a,b,c,
-                                     clipper::Util::d2rad(alpha),
-                                     clipper::Util::d2rad(beta),
-                                     clipper::Util::d2rad(gamma));
-      cell.init(cell_descr);
-   } else {
-      std::string mess = "failed to get cell";
-      throw std::runtime_error(mess);
-   } 
-   // Oh dear, we are returning an empty cell, maybe sometimes
-   return cell; // shouldn't happen because we throw an exception in the other path.
-}
-
-
-// 
-std::pair<bool,clipper::Spacegroup>
-coot::smcif::get_space_group(const std::vector<std::string> &symm_strings) const {
-
-   bool status = false;
-   std::string symmetry_ops;
-   for (unsigned int isym=0; isym<symm_strings.size(); isym++) { 
-      symmetry_ops += symm_strings[isym];
-      symmetry_ops += " ; ";
-   }
-   clipper::Spacegroup space_group;
-   clipper::Spgr_descr spg_descr(symmetry_ops, clipper::Spgr_descr::Symops);
-
-   if (spg_descr.spacegroup_number() == 0) {
-      // Failed.
-      std::cout << "Failed to init space_group description with symop strings " << symmetry_ops << std::endl;
-      
-   } else {
-      // Happy path
-      space_group.init(spg_descr);
-      status = true;
-      if (false)
-         std::cout << "DEBUG:: space group initialised with symbol \""
-                   << space_group.symbol_xhm() << "\"" << std::endl;
-   }
-   return std::pair<bool,clipper::Spacegroup>(status, space_group);
-}
+// ---------------------------------------------------------------------------
+// BANDICOOT v0.2 PHASE 4: the small-molecule COORDINATE reader, on gemmi.
+//
+// This was the last coordinate reader in the tree still built on mmdb's CIF
+// parser (mmdb::mmcif::Data), and the charter is that all CIF input goes
+// through gemmi and nothing else. The port is not a like-for-like translation
+// -- gemmi already models this format, in gemmi::SmallStructure, so most of
+// what was hand-written here is deleted rather than rewritten:
+//
+//   * get_cell()                        -> _cell_* parsing, INCLUDING the
+//                                          standard uncertainty in parentheses
+//                                          ("7.97537(5)"), which this file used
+//                                          to strip by splitting on "(".
+//   * get_space_group(symm_strings)      -> gemmi resolves the group itself.
+//   * symops_from_space_group_statement()-> ... in exactly the fallback order
+//                                          measured in Interlude B, which is
+//                                          what "S.H2n" spells: operator loop
+//                                          first, then Hall, then Hermann-
+//                                          Mauguin, then the International
+//                                          Tables number LAST, because a number
+//                                          does not fix the setting.
+//   * symbol_to_element()               -> gemmi's split_element_and_charge()
+//                                          parses "Zn2+" into element + charge.
+//   * the U-vs-B distinction            -> gemmi reads either and normalises.
+//
+// AND IT REMOVES A WHOLE CLASS OF BUG. TRAPS D6: mmdb::mmcif::Loop::GetReal
+// reports SUCCESS for a tag that is not there, leaving the target untouched --
+// which is how every atom in a file stating no displacement parameter came out
+// with B = 789.57 (= 10 x 8pi^2, the default scaled as though it had been read).
+// Every value read through that API had to be defended against by asking
+// GetString first. gemmi's Table/find has no such behaviour: a column that is
+// not there is not there.
+//
+// Two behaviours are deliberately PRESERVED rather than modernised, because
+// they are observable and this is a port, not a redesign:
+//   * B = 10.0 when the file states no displacement parameter at all;
+//   * occupancy divided by _atom_site_symmetry_multiplicity when the file
+//     states it -- and NOT by _atom_site_site_symmetry_order, which is the
+//     other spelling in circulation. Accepting both would be the usual
+//     nomenclature fix, but here it would CHANGE OCCUPANCIES: SHELX writes an
+//     already-reduced occupancy for an atom on a special position alongside
+//     site_symmetry_order 2, so honouring that tag as well would halve it
+//     twice. Which of the two tags this division is actually right for is an
+//     open question, recorded rather than guessed at. (Every atom in the corpus
+//     file 4517425.cif has order 1, so this is untested either way.)
+//
+// One BUG IS FIXED by the port rather than carried across: the old aniso block
+// applied `u11..u23`, the loop's last-read locals, to every matched atom
+// instead of that atom's own values -- so all 16 anisotropic atoms of
+// 4517425.cif came out with identical ADPs. gemmi keeps them per site.
 
 namespace {
 
-   // BANDICOOT v0.2, Interlude B nomenclature sweep.
-   //
-   // A CIF may state its space group WITHOUT listing the operators: the
-   // operator loop is optional in the CIF core dictionary, and a name or an
-   // International Tables number is a complete specification on its own. Before
-   // this, such a file loaded NOTHING -- not "no symmetry", nothing at all,
-   // because the atom loop was read inside the operator-loop branch. Measured
-   // on a real COD file with its operator loop removed: cell parsed, 31 atoms
-   // present and parseable, whole file rejected.
-   //
-   // ORDER MATTERS AND IT IS NOT THE OBVIOUS ONE. The number is tried LAST,
-   // because an International Tables number does not fix the SETTING: P 1 21/c 1
-   // and P 1 21/n 1 are both number 14, so resolving from the number alone can
-   // silently produce a different space group from the one the file means. The
-   // Hall symbol is unambiguous by construction, and an H-M name carries its
-   // setting ("P 1 21/n 1"), so both are better evidence than the number.
-   //
-   // Both spellings of each tag are accepted: the `_symmetry_*` forms are the
-   // CIF 1.0 names, the `_space_group_*` forms superseded them, and files in
-   // circulation carry either or both -- the two COD files checked while writing
-   // this use `_symmetry_space_group_name_H-M` while a third uses
-   // `_space_group_name_H-M_alt`.
-   std::vector<std::string>
-   symops_from_space_group_statement(mmdb::mmcif::Data *data) {
+   // mmdb wants an element name upper-cased and right-justified in two
+   // characters (" C", "ZN"); gemmi::Element::name() gives "C", "Zn".
+   std::string mmdb_element_name(const gemmi::Element &e) {
 
-      std::vector<std::string> symops;
-      if (! data) return symops;
+      std::string s = coot::util::upcase(std::string(e.name()));
+      if (s.length() == 1) s = " " + s;
+      if (s.length() > 2)  s = s.substr(0, 2);
+      return s;
+   }
 
-      const gemmi::SpaceGroup *sg = NULL;
-      const char *how = NULL;
+   // The charge this reader has always assigned by element. Kept as a FALLBACK
+   // only: a file that states the oxidation state in its type symbol ("Zn2+")
+   // is now believed instead, which the old code could not do -- it parsed the
+   // number out and then threw it away, so a stated 2+ on an element missing
+   // from this table came out as 0.
+   int charge_for_element(const std::string &ele) {
 
-      // 1. Hall symbol -- unambiguous, so it is preferred.
-      const char *hall_tags[] = { "_space_group_name_Hall",
-                                  "_symmetry_space_group_name_Hall", NULL };
-      for (int i=0; hall_tags[i] && !sg; i++) {
-         mmdb::pstr S = NULL;
-         if (data->GetString(S, "", hall_tags[i]) == 0 && S) {
-            std::string hall = coot::util::remove_whitespace(std::string(S));
-            if (! hall.empty()) {
-               try {
-                  gemmi::GroupOps ops = gemmi::symops_from_hall(std::string(S).c_str());
-                  if (! ops.sym_ops.empty()) {
-                     sg = gemmi::find_spacegroup_by_ops(ops);
-                     how = hall_tags[i];
-                     if (! sg) {
-                        // A valid Hall symbol gemmi cannot name is still a
-                        // valid operator set: use it directly.
-                        for (const gemmi::Op &op : ops.all_ops_sorted())
-                           symops.push_back(op.triplet());
-                        std::cout << "INFO:: symmetry taken from " << hall_tags[i]
-                                  << ": " << symops.size() << " operators"
-                                  << std::endl;
-                        return symops;
-                     }
-                  }
-               }
-               catch (const std::exception &e) { sg = NULL; }
-            }
+      if (ele == "NA" || ele == " K" || ele == "LI" ||
+          ele == "RU" || ele == "CS") return 1;
+      if (ele == "MG" || ele == "CA" || ele == "SR") return 2;
+      if (ele == " F" || ele == "CL" || ele == "BR" || ele == " I") return -1;
+      return 0;
+   }
+
+   // The block holding the coordinates. A small-molecule CIF is usually one
+   // block, but a multi-block file (several structures, or a header block
+   // followed by the data) must not be answered with block 0 regardless.
+   gemmi::cif::Block *coordinate_block(gemmi::cif::Document &doc) {
+
+      for (gemmi::cif::Block &b : doc.blocks)
+         if (b.has_any_value("_atom_site_fract_x") || b.has_any_value("_atom_site_label"))
+            return &b;
+      return NULL;
+   }
+
+   // Does the file state this tag at all, as a loop column or as a pair? The
+   // distinction between "absent" and "present but null" is what the B-factor
+   // default turns on.
+   bool block_states_tag(gemmi::cif::Block &b, const char *tag) {
+
+      return b.has_any_value(tag);
+   }
+
+   // The atoms, from the parsed structure. A free function rather than a method
+   // so that gemmi types stay out of read-sm-cif.hh -- src/ includes that
+   // header, and mmcif-document.hh is meant to remain the only gemmi-aware one.
+   std::vector<mmdb::Atom *>
+   atoms_from_small_structure(const gemmi::SmallStructure &st,
+                              gemmi::cif::Block &block,
+                              const clipper::Cell &cell) {
+
+      std::vector<mmdb::Atom *> atom_vec;
+
+      // B = 10.0 is the default this reader has always used for a file that
+      // states no displacement parameter. Asked of the FILE, not of the value:
+      // gemmi reports u_iso 0 both for "absent" and for "stated as zero", and
+      // the difference decides whether 10.0 or 0 is right.
+      bool have_adp = block_states_tag(block, "_atom_site_U_iso_or_equiv") ||
+                      block_states_tag(block, "_atom_site_B_iso_or_equiv");
+
+      // The two per-atom columns gemmi::SmallStructure does not model: the
+      // symmetry multiplicity the occupancy is divided by, and the disorder
+      // ASSEMBLY, which this reader has always used as the altLoc (gemmi keeps
+      // the disorder GROUP, which is a different column). Keyed by label rather
+      // than by row index, so a reordering cannot mis-assign them.
+      std::map<std::string, int> mult_of_label;
+      std::map<std::string, std::string> altloc_of_label;
+      for (auto row : block.find("_atom_site_", {"label",
+                                                 "?symmetry_multiplicity",
+                                                 "?disorder_assembly"})) {
+         std::string label = row.str(0);
+         if (row.has(1) && ! gemmi::cif::is_null(row[1])) {
+            int m = gemmi::string_to_int(row.str(1), false);
+            if (m > 0) mult_of_label[label] = m;
+         }
+         if (row.has(2) && ! gemmi::cif::is_null(row[2])) {
+            std::string a = coot::util::remove_whitespace(row.str(2));
+            if (! a.empty()) altloc_of_label[label] = a;
          }
       }
 
-      // 2. Hermann-Mauguin name -- carries the setting.
-      const char *hm_tags[] = { "_space_group_name_H-M_alt",
-                                "_symmetry_space_group_name_H-M",
-                                "_space_group_name_H-M_full", NULL };
-      for (int i=0; hm_tags[i] && !sg; i++) {
-         mmdb::pstr S = NULL;
-         if (data->GetString(S, "", hm_tags[i]) == 0 && S) {
-            std::string name(S);
-            if (! coot::util::remove_whitespace(name).empty()) {
-               sg = gemmi::find_spacegroup_by_name(name);
-               if (sg) how = hm_tags[i];
-            }
+      for (const gemmi::SmallStructure::Site &site : st.sites) {
+
+         mmdb::Atom *at = new mmdb::Atom;
+
+         gemmi::Position pos = st.cell.orthogonalize(site.fract);
+
+         double occ = site.occ;
+         std::map<std::string, int>::const_iterator it = mult_of_label.find(site.label);
+         if (it != mult_of_label.end())
+            occ /= double(it->second);
+
+         double b_factor = (have_adp && site.u_iso > 0.0)
+            ? site.u_iso * gemmi::u_to_b() : 10.0;
+
+         at->SetCoordinates(pos.x, pos.y, pos.z, occ, b_factor);
+         at->SetAtomName(site.label.c_str());
+
+         std::string ele = mmdb_element_name(site.element);
+         at->SetElementName(ele.c_str());
+         // The file's own statement first ("Zn2+" -> 2), the element table only
+         // as a fallback -- see charge_for_element().
+         at->charge = site.charge ? int(site.charge) : charge_for_element(ele);
+
+         std::map<std::string, std::string>::const_iterator ia =
+            altloc_of_label.find(site.label);
+         if (ia != altloc_of_label.end())
+            strncpy(at->altLoc, ia->second.c_str(), sizeof(at->altLoc) - 1);
+
+         at->Het = 1;   // all small-molecule cif atoms are HETATMs :)
+
+         // The ADPs, per site -- which is the point. The old loop applied its
+         // last-read locals to every matched atom, so all 16 anisotropic atoms
+         // of 4517425.cif shared one set of Us.
+         const gemmi::SMat33<double> &u = site.aniso;
+         if (u.u11 > 0 && u.u22 > 0 && u.u33 > 0) {
+            double a = cell.a();
+            double b = cell.b();
+            double c = cell.c();
+            clipper::U_aniso_frac caf(u.u11/(a*a), u.u22/(b*b), u.u33/(c*c),
+                                      u.u12/(a*b), u.u13/(a*c), u.u23/(b*c));
+            clipper::U_aniso_orth cao = caf.u_aniso_orth(cell);
+            at->u11 = cao(0,0);
+            at->u22 = cao(1,1);
+            at->u33 = cao(2,2);
+            at->u12 = cao(0,1);
+            at->u13 = cao(0,2);
+            at->u23 = cao(1,2);
+            at->WhatIsSet |= mmdb::ASET_Anis_tFac;
+         }
+
+         atom_vec.push_back(at);
+      }
+      return atom_vec;
+   }
+
+   // Symmetry operators -> a clipper::Spacegroup. Still needed by the
+   // REFLECTION-DATA half of this file, which is not ported yet and which works
+   // in clipper types throughout (HKL_info, HKL_data). The coordinate half no
+   // longer uses it: gemmi resolves the group and mmdb takes the name.
+   std::pair<bool, clipper::Spacegroup>
+   spacegroup_from_symop_strings(const std::vector<std::string> &symm_strings) {
+
+      bool status = false;
+      std::string symmetry_ops;
+      for (unsigned int isym=0; isym<symm_strings.size(); isym++) {
+         symmetry_ops += symm_strings[isym];
+         symmetry_ops += " ; ";
+      }
+      clipper::Spacegroup space_group;
+      clipper::Spgr_descr spg_descr(symmetry_ops, clipper::Spgr_descr::Symops);
+      if (spg_descr.spacegroup_number() == 0) {
+         std::cout << "Failed to init space_group description with symop strings "
+                   << symmetry_ops << std::endl;
+      } else {
+         space_group.init(spg_descr);
+         status = true;
+      }
+      return std::pair<bool, clipper::Spacegroup>(status, space_group);
+   }
+
+   // The residue name. _chem_comp.id is the component's actual CCD code (AR6,
+   // ADP), so a file that states it names the residue correctly AND matches the
+   // wwPDB dictionary for it.
+   //
+   // THE NAME IS LOAD-BEARING, not cosmetic: refinement finds restraints BY
+   // RESIDUE NAME, so a molecule called XXX -- which is what this reader used to
+   // produce -- can never be refined, because no dictionary anywhere is keyed on
+   // XXX and importing the right one cannot help either, the names not matching.
+   // "LIG" is the default because it is what the tools that generate ligand
+   // restraints write (acedrg, and elbow via phenix), so an imported dictionary
+   // matches without the user renaming anything.
+   std::string residue_name_for_block(gemmi::cif::Document &doc,
+                                      gemmi::cif::Block &block) {
+
+      const char *tags[] = { "_chem_comp.id", "_chem_comp_id", NULL };
+      for (int i = 0; tags[i]; i++) {
+         const std::string *v = block.find_value(tags[i]);
+         if (! v)
+            for (gemmi::cif::Block &b : doc.blocks)
+               if ((v = b.find_value(tags[i])) != NULL)
+                  break;
+         if (v) {
+            std::string id = coot::util::remove_whitespace(gemmi::cif::as_string(*v));
+            if (! id.empty() && id != "." && id != "?")
+               return id;
          }
       }
-
-      // 3. International Tables number -- last resort, and say so out loud,
-      //    because the setting is being assumed rather than read.
-      const char *number_tags[] = { "_space_group_IT_number",
-                                    "_symmetry_Int_Tables_number", NULL };
-      for (int i=0; number_tags[i] && !sg; i++) {
-         int n = 0;
-         if (data->GetInteger(n, "", number_tags[i]) == 0 && n > 0 && n <= 230) {
-            sg = gemmi::find_spacegroup_by_number(n);
-            if (sg) {
-               how = number_tags[i];
-               std::cout << "WARNING:: space group taken from " << number_tags[i]
-                         << " = " << n << " (" << sg->xhm() << "). The number does "
-                         << "not specify the setting, so this is the standard one "
-                         << "and may not be the file's." << std::endl;
-            }
-         }
-      }
-
-      if (! sg) return symops;
-
-      for (const gemmi::Op &op : sg->operations().all_ops_sorted())
-         symops.push_back(op.triplet());
-
-      std::cout << "INFO:: no symmetry-operator loop; symmetry taken from "
-                << (how ? how : "?") << " as " << sg->xhm() << " -- "
-                << symops.size() << " operators" << std::endl;
-      return symops;
+      return "LIG";
    }
 }
-
-std::vector<mmdb::Atom *>
-coot::smcif::read_coordinates(mmdb::mmcif::PData data, const clipper::Cell &cell, const clipper::Spacegroup &spg) const {
-
-   std::vector<mmdb::Atom *> atom_vec;
-   const char *loopTagsAtom[6] = { "_atom_site_label",
-                                   "_atom_site_fract_x",
-                                   "_atom_site_fract_y",
-                                   "_atom_site_fract_z",
-                        //            "_atom_site_type_symbol",
-                        //            "_atom_site_disorder_assembly",
-                        //            "_atom_site_disorder_group",
-                                   ""};
-   const char *loopTagsAniso[2] = { "_atom_site_aniso_label", ""};
-
-
-   int ierr = 0;
-   mmdb::pstr S = NULL;
-   mmdb::mmcif::Loop *loop = data->FindLoop(loopTagsAtom);
-
-   if (loop) {
-      int ll = loop->GetLoopLength();
-      if (ll >= 0) {
-
-         char *label  = NULL;
-         mmdb::realtype xf,yf,zf, occ, tf;
-         int symmetry_multiplicity;
-         mmdb::realtype x,y,z;
-         char *disorder_assembly = NULL;
-         char *disorder_group = NULL;
-         std::string alt_loc;
-
-         for (int il=0; il<ll; il++) {
-
-            int ierr_tot = 0;
-            label  = loop->GetString(loopTagsAtom[0], il, ierr);
-            ierr_tot += ierr;
-            loop->GetReal(xf, loopTagsAtom[1], il, ierr);
-            ierr_tot += ierr;
-            loop->GetReal(yf, loopTagsAtom[2], il, ierr);
-            ierr_tot += ierr;
-            loop->GetReal(zf, loopTagsAtom[3], il, ierr);
-            ierr_tot += ierr;
-
-            // This (the element specifier e.g "Mg+2") may not exist
-            // (strangely enough)
-            //
-            int ierr_symbol = 0;
-            std::string symbol;
-            char *symbol_c = NULL;
-            symbol_c = loop->GetString("_atom_site_type_symbol", il, ierr_symbol);
-
-            if (! symbol_c) {
-               // symbol_c was not set
-               
-               if (ierr_symbol) {
-                  // this can happen: 4313232.cif
-                  
-                  // strip numbers from the label and use that as a symbol
-                  std::string s = label;
-                  s.erase(std::remove_if(s.begin(), s.end(), (int(*)(int))std::isdigit), s.end());
-                  symbol = s;
-
-               } else {
-                  // something strange
-                  symbol = "UNK";
-               }
-            } else {
-               // normal path
-               symbol = symbol_c;
-            }
-
-            // this may not exist
-            //
-            alt_loc.clear();
-            disorder_group  = loop->GetString("_atom_site_disorder_assembly", il, ierr);
-            if (! ierr) {
-               if (disorder_group == NULL) { 
-                  // std::cout << "disorder_group NULL" << std::endl;
-               } else { 
-                  std::cout << "disorder_group " << disorder_group << std::endl;
-                  alt_loc = disorder_group;
-               }
-            }
-            
-            occ = 1; // hack
-            tf = 10.0;
-            symmetry_multiplicity = 1;
-
-            // can we get a real value for tf?
-            //
-            // BANDICOOT v0.2, Interlude B. Two things here, and the second one
-            // is a bug this sweep found rather than a nomenclature gap:
-            //
-            // 1. Accept B as well as U. The CIF core dictionary defines BOTH
-            //    _atom_site_U_iso_or_equiv and _atom_site_B_iso_or_equiv. Only
-            //    the U form is scaled; B is already what mmdb wants.
-            //
-            // 2. WARNING: Loop::GetReal CANNOT BE TRUSTED TO REPORT AN ABSENT TAG.
-            //    Measured: on a file with no U tag at all it returns success and
-            //    leaves the target untouched, so the scaling below was applied to
-            //    the DEFAULT and every atom came out with B = 789.57
-            //    (= 10 x 8pi^2). Both real COD files checked while writing this
-            //    (1000041, 2000001) state no displacement parameter and so had
-            //    every atom at 789.57. The same distrust is already applied to
-            //    _atom_site_type_symbol above -- "this may not exist (strangely
-            //    enough)" -- and for the same reason: GetString DOES report
-            //    absence, by returning NULL.
-            int ierr_str = 0;
-            if (loop->GetString("_atom_site_U_iso_or_equiv", il, ierr_str)) {
-               int ierr_u = 0;
-               loop->GetReal(tf, "_atom_site_U_iso_or_equiv", il, ierr_u);
-               if (! ierr_u) tf *= 8 * M_PI * M_PI;  // PDB-scaled
-               else          tf = 10.0;
-            } else {
-               ierr_str = 0;
-               if (loop->GetString("_atom_site_B_iso_or_equiv", il, ierr_str)) {
-                  int ierr_b = 0;
-                  loop->GetReal(tf, "_atom_site_B_iso_or_equiv", il, ierr_b);
-                  if (ierr_b) tf = 10.0;
-               }
-            }
-            
-            // real value for occ?
-            int ierr_occ = 0;
-            loop->GetReal(occ, "_atom_site_occupancy", il, ierr_occ);
-
-            int ierr_symm_mult = 0;
-            loop->GetInteger(symmetry_multiplicity, "_atom_site_symmetry_multiplicity", il, ierr_symm_mult);
-
-            if (ierr_tot == 0) {
-               mmdb::Atom *at = new mmdb::Atom;
-               clipper::Coord_frac cf(xf,yf,zf);
-               clipper::Coord_orth co = cf.coord_orth(cell);
-               mmdb::realtype occ_symm = occ;
-               if (ierr_symm_mult == 0)
-                  occ_symm /= float(symmetry_multiplicity);
-               at->SetCoordinates(co.x(), co.y(),co.z(), occ_symm, tf);
-               // label -> 4c atom name conversion? 
-               at->SetAtomName(label);
-               std::pair<std::string, int> ele = symbol_to_element(symbol);
-
-               int charge = 0;
-               if (ele.first == "NA") charge = 1;
-               if (ele.first == "K")  charge = 1;
-               if (ele.first == "LI") charge = 1;
-               if (ele.first == "RU") charge = 1;
-               if (ele.first == "CS") charge = 1;
-               if (ele.first == "MG") charge = 2;
-               if (ele.first == "CA") charge = 2;
-               if (ele.first == "SR") charge = 2;
-               if (ele.first == "F")  charge = -1;
-               if (ele.first == "CL") charge = -1;
-               if (ele.first == "BR") charge = -1;
-               if (ele.first == "I")  charge = -1;
-
-               at->charge = charge;
-
-               if (alt_loc.length())
-                  strncpy(at->altLoc, alt_loc.c_str(), (alt_loc.size()+1)); // shove.
-
-               if (false)
-                  std::cout << " found atom: \"" << label << "\" symbol: \"" << symbol
-                            << "\" ele: \"" << ele.first << "\" " << ele.second << " alt-loc \""
-                            << alt_loc << "\" " << cf.format() << std::endl;
-               at->SetElementName(ele.first.c_str());
-               at->Het = 1; // all SM cifs atoms are HETATMs :)
-               atom_vec.push_back(at);
-            } else {
-               if (true)
-                  std::cout << "WARNING:: reject atom at loop count " << il << std::endl;
-            }
-         }
-      }
-   }
-
-   // Aniso atoms
-   //
-   std::vector<coot::simple_sm_u> u_aniso_vec;
-   
-   // loop = data->FindLoop((pstr *) loopTagsAniso);
-   loop = data->FindLoop(loopTagsAniso);
-   if (loop) {
-      int ll = loop->GetLoopLength();
-      char *label  = NULL;
-      mmdb::realtype u11=-1, u22=-1, u33=-1, u12=-1, u13=-1, u23=-1;
-      int ierr_tot = 0;
-      for (int il=0; il<ll; il++) {
-         int ierr_tot = 0;
-         label  = loop->GetString(loopTagsAniso[0], il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u11, "_atom_site_aniso_U_11", il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u22, "_atom_site_aniso_U_22", il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u33, "_atom_site_aniso_U_33", il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u12, "_atom_site_aniso_U_12", il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u13, "_atom_site_aniso_U_13", il, ierr);
-         ierr_tot += ierr;
-         loop->GetReal(u23, "_atom_site_aniso_U_23", il, ierr);
-         ierr_tot += ierr;
-
-         if (! ierr_tot) {
-            // label -> atom name conversion here?
-            if ((u11>0) && (u22>0) && (u33>0)) {
-               coot::simple_sm_u smu(label, u11, u22, u33, u12, u13, u23);
-               u_aniso_vec.push_back(smu);
-            }
-         }
-      }
-
-      // now put those aniso Us into the atom_vec;
-      //
-      double a = cell.a();
-      double b = cell.b();
-      double c = cell.c();
-      for (unsigned int ianiso=0; ianiso<u_aniso_vec.size(); ianiso++) { 
-         for (unsigned int iat=0; iat<atom_vec.size(); iat++) {
-            mmdb::Atom *at = atom_vec[iat];
-            if (u_aniso_vec[ianiso].label == std::string(at->GetAtomName())) {
-               clipper::U_aniso_frac caf(u11/(a*a), u22/(b*b), u33/(c*c),
-                                         u12/(a*b), u13/(a*c), u23/(b*c));
-               clipper::U_aniso_orth cao = caf.u_aniso_orth(cell);
-               at->u11 = cao(0,0);
-               at->u22 = cao(1,1);
-               at->u33 = cao(2,2);
-               at->u12 = cao(0,1);
-               at->u13 = cao(0,2);
-               at->u23 = cao(1,2);
-               at->WhatIsSet |= mmdb::ASET_Anis_tFac; // is anisotropic
-            }
-         }
-      }
-   }
-   return atom_vec;
-}
-
-std::pair<std::string, int>
-coot::smcif::symbol_to_element(const std::string &symbol) const {
-
-   std::string s = symbol;
-   std::string::size_type l = symbol.length();
-   int sign_mult = 1;
-   int oxidation_state = 0;
-   for (std::string::size_type i=0; i<l; i++) {
-      char c = symbol[i];
-      if (c >= '0' && c <= '9') { 
-         s[i] = ' ';
-         oxidation_state = c - 48;
-      }
-      if (c == '+')
-         s[i] = ' ';
-      if (c == '-') {
-         s[i] = ' ';
-         sign_mult = -1; 
-      } 
-   }
-   std::string s1 = util::upcase(util::remove_whitespace(s));
-   if (s1.length() == 1)
-      s1 = " " + s1;
-   return std::pair<std::string, int> (s1, oxidation_state * sign_mult);
-}
-
-
 
 mmdb::Manager *
 coot::smcif::read_sm_cif(const std::string &file_name) const {
 
    mmdb::Manager *mol = NULL;
-   mmdb::pstr S = NULL;
-   mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-   data->SetFlag (mmdb::mmcif::CIFFL_SuggestCategories);
-   int ierr = data->ReadMMCIFData (file_name.c_str());
-   if (ierr) {
-      std::cout << "WARNING:: Error reading small-molecule cif \"" << file_name << "\"" << std::endl;
-   } else { 
 
-// testing      
-//       int ierr = data->GetString (S, "" ,"_chemical_formula_sum");
-//       if (! ierr) { 
-//          printf("chemical-formula-sum: %s\n", S);
-//       } else {
-//          printf("error getting chemical-formula-sum string.\n");
-//       } 
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      gemmi::cif::Block *block = coordinate_block(doc);
+      if (! block) {
+         std::cout << "WARNING:: no atom site loop in small-molecule cif \""
+                   << file_name << "\"" << std::endl;
+         return NULL;
+      }
 
-      ierr = data->GetString (S, "", "_[local]_cod_chemical_formula_sum_orig");
-      if (!ierr)
-         printf("_[local]_cod_chemical_formula_sum_orig: %s\n", S);
+      gemmi::SmallStructure st = gemmi::make_small_structure_from_block(*block);
 
-      try { 
-         clipper::Cell cell = get_cell(data);
-         std::cout << "INFO:: got cell from cif: " << cell.format() << std::endl;
-
-         std::vector<std::string> symm_strings;
-
-         // BANDICOOT v0.2: accept BOTH spellings of the symmetry-operator loop.
-         // "_symmetry_equiv_pos_as_xyz" is the CIF 1.0 name; the CIF core
-         // dictionary superseded it with "_space_group_symop_operation_xyz",
-         // which is what SHELXL, Olex2 and COD have emitted for years. Knowing
-         // only the deprecated name meant Bandicoot could not open ANY modern
-         // small-molecule CIF -- and because the atom reading below sits INSIDE
-         // this branch, such a file failed to load entirely (the cell was parsed
-         // and then thrown away) rather than merely losing its symmetry.
-         const char *sym_tag_candidates[2] = { "_symmetry_equiv_pos_as_xyz",
-                                               "_space_group_symop_operation_xyz" };
-         const char *sym_tag = NULL;
-         mmdb::mmcif::PLoop loop = NULL;
-         for (int i_tag=0; i_tag<2 && !loop; i_tag++) {
-            const char *loopTag1[2] = { sym_tag_candidates[i_tag], "" };
-            loop = data->FindLoop(loopTag1);
-            if (loop)
-               sym_tag = sym_tag_candidates[i_tag];
-         }
-
-         if (loop) {
-            int ll = loop->GetLoopLength();
-            if (ll > 0) {
-               for (int il=0; il<ll; il++) {
-
-                  S = loop->GetString(sym_tag, il, ierr);
-                  if (! ierr) {
-                     // std::cout << "symmetry: " << S << std::endl;
-                     symm_strings.push_back(S);
-                  } else {
-                     std::cout << "error reading " << sym_tag << " string.\n";
-                  }
-               }
-            }
-         }
-
-         // BANDICOOT v0.2, Interlude B: no operator loop is not an error. The
-         // loop is OPTIONAL in the CIF core dictionary -- a name or an
-         // International Tables number specifies the group just as well.
-         if (symm_strings.empty())
-            symm_strings = symops_from_space_group_statement(data);
-
-         // Resolve the space group if we can, but do NOT make the coordinates
-         // depend on it.
-         //
-         // THE ATOM LOOP USED TO BE READ INSIDE THE SYMMETRY BRANCH, so any
-         // file whose symmetry could not be resolved -- one unrecognised
-         // spelling, one space group clipper would not take -- was rejected
-         // ENTIRELY, having already parsed the cell and with a perfectly
-         // readable atom loop in hand. That is the shape of the
-         // `_symmetry_equiv_pos_as_xyz` bug: the earlier fix added the missing
-         // spelling but left the nesting, so the next surprise would have failed
-         // the same way. Structure beats enumeration -- an unknown symmetry
-         // spelling now costs the symmetry, not the molecule, and Coot already
-         // has a non-crystallographic path for a model without a space group.
-         bool have_spg = false;
-         clipper::Spacegroup spg;
-         if (! symm_strings.empty()) {
-            try {
-               std::pair<bool, clipper::Spacegroup> spg_pair = get_space_group(symm_strings);
-               if (spg_pair.first) {
-                  spg = spg_pair.second;
-                  have_spg = true;
-               }
-            }
-            catch (const clipper::Message_base &exc) {
-               // 20130710 clipper::Message_base::text() doesn't exist yet?
-               std::cout << "ERROR:: Oops, trouble.  No such spacegroup " << "\n";
-            }
-         } else {
-            std::cout << "WARNING:: no symmetry in this cif (no operator loop, "
-                      << "and no space-group name or number that could be "
-                      << "resolved) - reading coordinates without it" << std::endl;
-         }
-
-         // spg is unused by read_coordinates() -- it takes it and ignores it --
-         // so an unresolved space group costs the atoms nothing.
-         std::vector<mmdb::Atom *> atoms = read_coordinates(data, cell, spg);
-         std::cout << "INFO:: from cif we read " << atoms.size() << " atoms"
+      // The cell is REQUIRED, and this is the one place the read still refuses:
+      // the coordinates in this format are FRACTIONAL, so without a cell there
+      // is nothing to orthogonalise them with and the atoms would land at
+      // 0-1 Angstrom of each other. gemmi's UnitCell defaults to 1,1,1,90,90,90
+      // rather than to a null, so the file has to be asked directly.
+      if (! block->has_any_value("_cell_length_a") ||
+          ! block->has_any_value("_cell_length_b") ||
+          ! block->has_any_value("_cell_length_c") ||
+          st.cell.a <= 0 || st.cell.b <= 0 || st.cell.c <= 0) {
+         std::cout << "WARNING:: no cell in small-molecule cif \"" << file_name
+                   << "\" - fractional coordinates cannot be used without one"
                    << std::endl;
-
-         if (atoms.size()) {
-
-            mol = new mmdb::Manager;
-            mmdb::Model *model_p = new mmdb::Model;
-            mmdb::Chain *chain_p = new mmdb::Chain;
-            mmdb::Residue *residue_p = new mmdb::Residue;
-            chain_p->SetChainID("");
-            residue_p->seqNum = 1;
-
-            // BANDICOOT v0.2, Interlude B: name the residue after the component
-            // if the file says what it is, and "LIG" otherwise -- not "XXX".
-            //
-            // THE NAME IS LOAD-BEARING, not cosmetic. Refinement finds restraints
-            // BY RESIDUE NAME, so a molecule called XXX can never be refined: no
-            // dictionary anywhere is keyed on XXX, and importing the correct one
-            // for the ligand cannot help either, because the names will not
-            // match. That is why RSR fails on a small-molecule CIF while the same
-            // ligand as a PDB file plus its restraint CIF refines perfectly --
-            // the PDB file carries a real residue name and the CIF path threw it
-            // away.
-            //
-            // "LIG" is the default because it is what the tools that generate
-            // ligand restraints use (acedrg/elbow via phenix write LIG), so an
-            // imported dictionary matches without the user renaming anything.
-            //
-            // _chem_comp.id is preferred when present because it is the actual
-            // CCD code (e.g. AR6), which both names the thing correctly and
-            // matches the wwPDB dictionary for it. mmdb may present a dotted tag
-            // either whole or split into category+tag depending on how it
-            // suggested categories, so both forms are asked for.
-            std::string res_name = "LIG";
-            {
-               mmdb::pstr S_id = NULL;
-               int ierr_id = data->GetString(S_id, "", "_chem_comp.id");
-               if (ierr_id || ! S_id)
-                  ierr_id = data->GetString(S_id, "_chem_comp", "id");
-               if (! ierr_id && S_id) {
-                  std::string id = coot::util::remove_whitespace(std::string(S_id));
-                  if (! id.empty() && id != "." && id != "?")
-                     res_name = id;
-               }
-            }
-            std::cout << "INFO:: small-molecule cif: residue named " << res_name
-                      << std::endl;
-            residue_p->SetResName(res_name.c_str());
-            for (unsigned int iat=0; iat<atoms.size(); iat++)
-               residue_p->AddAtom(atoms[iat]);
-            chain_p->AddResidue(residue_p);
-            model_p->AddChain(chain_p);
-            mol->AddModel(model_p);
-
-            // The cell is set either way: fractional coordinates are
-            // meaningless without it, and it is what the display needs.
-            mol->SetCell(cell.a(), cell.b(), cell.c(),
-                         clipper::Util::rad2d(cell.alpha()),
-                         clipper::Util::rad2d(cell.beta()),
-                         clipper::Util::rad2d(cell.gamma()));
-            if (have_spg)
-               mol->SetSpaceGroup(spg.symbol_xhm().c_str());
-         }
-
+         return NULL;
       }
 
-      catch (const std::runtime_error &rte) {
-         std::cout << "ERROR:: " << rte.what() << std::endl;
+      clipper::Cell_descr cell_descr(st.cell.a, st.cell.b, st.cell.c,
+                                     clipper::Util::d2rad(st.cell.alpha),
+                                     clipper::Util::d2rad(st.cell.beta),
+                                     clipper::Util::d2rad(st.cell.gamma));
+      clipper::Cell cell(cell_descr);
+      std::cout << "INFO:: got cell from cif: " << cell.format() << std::endl;
+
+      // The space group, in the fallback order Interlude B measured and this
+      // reader used to implement by hand. "S.H2n" is that order: Symops,
+      // then "." (an operator set complete but not matching a tabulated
+      // setting still gives usable cell images), then Hall, then
+      // Hermann-Mauguin preferring setting 2, then the International Tables
+      // Number -- last, because a number does not fix the setting (P 1 21/c 1
+      // and P 1 21/n 1 are both number 14).
+      st.determine_and_set_spacegroup("S.H2n");
+      if (st.spacegroup) {
+         const char *how = ! st.symops.empty()          ? "operator loop"
+                         : ! st.spacegroup_hall.empty() ? "Hall symbol"
+                         : ! st.spacegroup_hm.empty()   ? "H-M name"
+                         :                                "IT number";
+         std::cout << "INFO:: space group " << st.spacegroup->xhm()
+                   << " (from the " << how << ")" << std::endl;
+         if (st.symops.empty() && st.spacegroup_hall.empty() && st.spacegroup_hm.empty())
+            std::cout << "WARNING:: the International Tables number does not "
+                      << "specify the setting, so this is the standard setting "
+                      << "and may not be the file's" << std::endl;
+      } else {
+         // Not fatal, and this is the shape of the bug that used to make this
+         // reader reject whole files: the atom loop was read INSIDE the symmetry
+         // branch, so one unrecognised spelling cost the molecule rather than
+         // its symmetry. Coot has a non-crystallographic path for a model with
+         // no space group; use it.
+         std::cout << "WARNING:: no space group could be resolved for \""
+                   << file_name << "\" - reading the coordinates without it"
+                   << std::endl;
       }
+
+      std::vector<mmdb::Atom *> atoms = atoms_from_small_structure(st, *block, cell);
+      std::cout << "INFO:: from cif we read " << atoms.size() << " atoms" << std::endl;
+      if (atoms.empty())
+         return NULL;
+
+      mol = new mmdb::Manager;
+      mmdb::Model *model_p = new mmdb::Model;
+      mmdb::Chain *chain_p = new mmdb::Chain;
+      mmdb::Residue *residue_p = new mmdb::Residue;
+      chain_p->SetChainID("");
+      residue_p->seqNum = 1;
+
+      std::string res_name = residue_name_for_block(doc, *block);
+      std::cout << "INFO:: small-molecule cif: residue named " << res_name << std::endl;
+      residue_p->SetResName(res_name.c_str());
+
+      for (unsigned int iat=0; iat<atoms.size(); iat++)
+         residue_p->AddAtom(atoms[iat]);
+      chain_p->AddResidue(residue_p);
+      model_p->AddChain(chain_p);
+      mol->AddModel(model_p);
+
+      mol->SetCell(cell.a(), cell.b(), cell.c(),
+                   clipper::Util::rad2d(cell.alpha()),
+                   clipper::Util::rad2d(cell.beta()),
+                   clipper::Util::rad2d(cell.gamma()));
+      if (st.spacegroup)
+         mol->SetSpaceGroup(st.spacegroup->xhm().c_str());
    }
-      
-   delete data;
-   // delete S;
-   data = NULL;
-   S = NULL;
+
+   catch (const std::exception &e) {
+      std::cout << "ERROR:: reading small-molecule cif \"" << file_name << "\": "
+                << e.what() << std::endl;
+      if (mol) { delete mol; mol = NULL; }
+   }
 
    return mol;
 }
 
 
-clipper::Resolution
-coot::smcif::get_resolution(const clipper::Cell &cell,
-                            const std::string &file_name) const {
+// ---------------------------------------------------------------------------
+// BANDICOOT v0.2 PHASE 4, second half: the REFLECTION-DATA reader, on gemmi.
+//
+// Same charter as the coordinate half above, and the same parser removed. Three
+// things change beyond the parser swap, all of them consequences of it:
+//
+//  1. ONE PARSE, not five. read_data_sm_cif() used to call get_cell_for_data(),
+//     get_space_group(), get_resolution() and setup_hkls(), each of which
+//     opened, parsed and closed the file for itself, and then parsed it a fifth
+//     time for the data values. The document is now read once and the block
+//     passed around.
+//  2. A column that is not there is asked about rather than assumed. TRAPS D6
+//     is the reason to distrust the old code here -- Loop::GetReal reports
+//     SUCCESS for an absent tag in the 4-argument form used by the atom loop --
+//     but MEASURED on a synthetic file carrying h/k/l and nothing else, the
+//     3-argument form used here does report the absence, and the old reader
+//     correctly returned false. So this is a hardening, NOT a bug fixed: the
+//     defence is now structural (an optional column is declared optional and
+//     tested) instead of resting on which overload happens to be honest.
+//  3. get_space_group(Data*, symm_tag) is deleted rather than ported: it always
+//     returned false and printed "Hoooray!" when it found the structure it then
+//     did nothing with.
+//
+// Tag dialects: the SHELX .fcf spelling `_refln_*` and the powder `_pd_refln_*`
+// are both accepted, as before. PDBx `_refln.*` (a wwPDB structure-factor file)
+// is deliberately NOT read here -- that is a different path, and quietly
+// accepting it would mean this reader answering for files it has never been
+// tested on.
+//
+// The clipper HKL machinery below is unchanged: it is what feeds the sigma-A
+// maps, and Phase 4 is about the parser, not about replacing clipper.
 
-   clipper::HKL hkl;
-   int h,k,l;
-   mmdb::pstr S = NULL;
-   clipper::ftype slim = 0.0;
-   mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-   data->SetFlag (mmdb::mmcif::CIFFL_SuggestCategories);
-   int ierr = data->ReadMMCIFData (file_name.c_str());
-   if (ierr) {
-      std::cout << "WARNING:: Error reading small-molecule cif \"" << file_name << "\"" << std::endl;
-   } else {
+namespace {
 
-      const char *loopTag_data[4] = { "_refln_index_h",
-                                      "_refln_index_k",
-                                      "_refln_index_l",
-                                      ""};
-      std::string h_tag = "_refln_index_h";
-      std::string k_tag = "_refln_index_k";
-      std::string l_tag = "_refln_index_l";
-      
-      mmdb::mmcif::PLoop loop = data->FindLoop(loopTag_data);
-      if (! loop) {
-         const char *loopTag_data_pd[4] = { "_pd_refln_index_h",
-                                            "_pd_refln_index_k",
-                                            "_pd_refln_index_l",
-                                            ""};
-         loop = data->FindLoop(loopTag_data_pd);
-         if (loop) {
-            h_tag = "_pd_refln_index_h";
-            k_tag = "_pd_refln_index_k";
-            l_tag = "_pd_refln_index_l";
-         } 
-      } 
-      if (loop) {
-         int ll = loop->GetLoopLength();
-         if (ll > 0) {
-            for (int il=0; il<ll; il++) {
-                int ierr_h = loop->GetInteger(h, h_tag.c_str(), il);
-               int ierr_k = 0;
-               int ierr_l = 0;
-                if (! ierr_h) {
-                   ierr_k = loop->GetInteger(k, k_tag.c_str(), il);
-                }
-                if (! ierr_k) {
-                   ierr_l = loop->GetInteger(l, l_tag.c_str(), il);
-                }
-               if (!ierr_h && !ierr_k && !ierr_l) {
-                  hkl = clipper::HKL(h,k,l);
-                  double reso = hkl.invresolsq(cell);
-                  // std::cout << "in get_resolution() " << hkl.format() << " has resolution "
-                  // << reso << std::endl;
-                  slim = clipper::Util::max(slim, reso);
-               }
+   // The block, and which of the two spellings its reflection loop uses.
+   struct refln_loop_t {
+      gemmi::cif::Block *block = NULL;
+      std::string prefix;
+      bool ok() const { return block != NULL; }
+   };
+
+   refln_loop_t find_refln_loop(gemmi::cif::Document &doc) {
+
+      refln_loop_t r;
+      const char *prefixes[] = { "_refln_", "_pd_refln_", NULL };
+      for (int i = 0; prefixes[i]; i++) {
+         for (gemmi::cif::Block &b : doc.blocks) {
+            if (b.has_any_value((std::string(prefixes[i]) + "index_h").c_str())) {
+               r.block = &b;
+               r.prefix = prefixes[i];
+               return r;
             }
          }
       }
+      return r;
    }
-   delete data;
-   double reso_A = 1/sqrt(slim);
-   // std::cout << "returning clipper::Resolution( " << reso_A << " A)" << std::endl;
-   return clipper::Resolution(reso_A);
-}
 
+   clipper::Cell cell_from_block(gemmi::cif::Block &block) {
 
-std::pair<bool,clipper::Spacegroup> 
-coot::smcif::get_space_group(const std::string &file_name) const {
+      clipper::Cell cell;
+      gemmi::cif::Table t = block.find("_cell_", {"length_a", "length_b", "length_c",
+                                                  "angle_alpha", "angle_beta", "angle_gamma"});
+      if (! t.ok())
+         return cell;    // null cell: the caller declines
+      gemmi::cif::Table::Row row = t.one();
+      double v[6];
+      for (int i = 0; i < 6; i++) {
+         if (gemmi::cif::is_null(row[i])) return cell;
+         v[i] = gemmi::cif::as_number(row[i]);
+         if (std::isnan(v[i])) return cell;
+      }
+      clipper::Cell_descr descr(v[0], v[1], v[2],
+                               clipper::Util::d2rad(v[3]),
+                               clipper::Util::d2rad(v[4]),
+                               clipper::Util::d2rad(v[5]));
+      cell.init(descr);
+      return cell;
+   }
 
-   std::pair<bool,clipper::Spacegroup> s;
-   mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-   data->SetFlag(mmdb::mmcif::CIFFL_SuggestCategories);
-   int ierr = data->ReadMMCIFData(file_name.c_str());
-   if (! ierr) {
-      s  = get_space_group(data);
+   // The space group of a data file. Both spellings of the operator loop, then
+   // the same name/number fallbacks gemmi resolves for the coordinate half --
+   // a .fcf written by an older SHELXL states `_symmetry_equiv_pos_as_xyz`,
+   // a newer one `_space_group_symop_operation_xyz`.
+   std::pair<bool, clipper::Spacegroup>
+   spacegroup_from_block(gemmi::cif::Block &block) {
 
-      if (!s.first) {
-         int spg_int = 0;
-         ierr = data->GetInteger(spg_int, "", "_space_group_IT_number", 1);
-         if (! ierr) {
-            clipper::Spgr_descr spgd(spg_int);
-            s.first = true;
-            s.second = clipper::Spacegroup(spgd);
-         }
+      std::vector<std::string> symops;
+      const char *tags[] = { "_symmetry_equiv_pos_as_xyz",
+                             "_space_group_symop_operation_xyz", NULL };
+      for (int i = 0; tags[i] && symops.empty(); i++)
+         for (const std::string &v : block.find_loop(tags[i]))
+            symops.push_back(gemmi::cif::as_string(v));
+
+      if (! symops.empty()) {
+         std::pair<bool, clipper::Spacegroup> s = spacegroup_from_symop_strings(symops);
+         if (s.first) return s;
       }
 
-      if (!s.first) {
-         mmdb::pstr S = NULL;
-         ierr = data->GetString(S, "", "_symmetry_space_group_name_H-Mxx");
-         if (! ierr) { 
-            std::string space_group_symbol = S;
-            clipper::Spgr_descr spgd(space_group_symbol);
-            s.first = true;
-            s.second = clipper::Spacegroup(spgd);
+      // No usable operator loop: let gemmi resolve a name or a number, and hand
+      // clipper the operators it decides on rather than the name -- clipper's
+      // own name parsing fails UNSAFE (measured: it turns "P212121" into P 1).
+      gemmi::SmallStructure st = gemmi::make_small_structure_from_block(block);
+      st.determine_and_set_spacegroup("S.H2n");
+      if (st.spacegroup) {
+         std::vector<std::string> ops;
+         for (const gemmi::Op &op : st.spacegroup->operations().all_ops_sorted())
+            ops.push_back(op.triplet());
+         std::pair<bool, clipper::Spacegroup> s = spacegroup_from_symop_strings(ops);
+         if (s.first) {
+            std::cout << "INFO:: data file space group " << st.spacegroup->xhm()
+                      << " (no operator loop)" << std::endl;
+            return s;
          }
       }
-   } else {
-      std::cout << "WARNING:: get_space_group():: error reading " << file_name << std::endl;
+      return std::pair<bool, clipper::Spacegroup>(false, clipper::Spacegroup());
    }
-   delete data;
-   return s;
-}
 
-// c.f. get_cell() from a coords file
-clipper::Cell
-coot::smcif::get_cell_for_data(const std::string &file_name) const {
+   // h k l, in file order. The resolution limit and the HKL list both come from
+   // this, so it is read once and used twice -- the old code read the same loop
+   // twice, in two functions, each re-parsing the file.
+   std::vector<clipper::HKL> hkl_list_from_block(gemmi::cif::Block &block,
+                                                const std::string &prefix) {
 
-   clipper::Cell c;
-   mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-   data->SetFlag (mmdb::mmcif::CIFFL_SuggestCategories);
-   int ierr = data->ReadMMCIFData (file_name.c_str());
-   if (! ierr) {
-      c = get_cell_for_data(data);
-   }
-   delete data;
-   return c;
-}
-
-
-void
-coot::smcif::setup_hkls(const std::string &file_name) {
-
-   mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-   data->SetFlag (mmdb::mmcif::CIFFL_SuggestCategories);
-
-   int ierr = data->ReadMMCIFData(file_name.c_str());
-   if (ierr) {
-      std::cout << "WARNING:: Error reading small-molecule cif \"" << file_name
-                << "\"" << std::endl;
-   } else {
-      std::string h_tag = "_refln_index_h";
-      std::string k_tag = "_refln_index_k";
-      std::string l_tag = "_refln_index_l";
-      const char *loopTag_data[4] = { "_refln_index_h",
-                                      "_refln_index_k",
-                                      "_refln_index_l",
-                                      ""};
-      
-      mmdb::mmcif::Loop *loop = data->FindLoop(loopTag_data);
-      if (! loop) {
-         const char *loopTag_data_pd[4] = { "_pd_refln_index_h",
-                                            "_pd_refln_index_k",
-                                            "_pd_refln_index_l",
-                                            ""};
-         loop = data->FindLoop(loopTag_data_pd);
-         if (loop) {
-            h_tag = "_pd_refln_index_h";
-            k_tag = "_pd_refln_index_k";
-            l_tag = "_pd_refln_index_l";
-         } 
-
-      } 
-      if (loop) {
-         clipper::HKL_data_base* f_sigf_input;
-         int ll = loop->GetLoopLength();
-         int h,k,l;
-         std::vector<clipper::HKL> hkls;
-         
-         clipper::xtype x1[2]; 
-         if (ll > 0) {
-            for (int il=0; il<ll; il++) {
-               ierr = loop->GetInteger(h, h_tag.c_str(), il);
-               if (! ierr) {
-                  ierr = loop->GetInteger(k, k_tag.c_str(), il);
-               }
-               if (! ierr) {
-                  ierr = loop->GetInteger(l, l_tag.c_str(), il);
-               }
-
-               if (! ierr) {
-                  clipper::HKL hkl(h,k,l);
-                  hkls.push_back(hkl);
-               } 
-            }
-         }
-         mydata.add_hkl_list(hkls);
+      std::vector<clipper::HKL> hkls;
+      for (auto row : block.find(prefix, {"index_h", "index_k", "index_l"})) {
+         if (gemmi::cif::is_null(row[0]) || gemmi::cif::is_null(row[1]) ||
+             gemmi::cif::is_null(row[2]))
+            continue;
+         hkls.push_back(clipper::HKL(gemmi::cif::as_int(row[0]),
+                                     gemmi::cif::as_int(row[1]),
+                                     gemmi::cif::as_int(row[2])));
       }
+      return hkls;
    }
-   delete data;
-} 
 
+   clipper::Resolution resolution_of_hkls(const std::vector<clipper::HKL> &hkls,
+                                          const clipper::Cell &cell) {
 
+      clipper::ftype slim = 0.0;
+      for (unsigned int i = 0; i < hkls.size(); i++)
+         slim = clipper::Util::max(slim, hkls[i].invresolsq(cell));
+      if (slim <= 0.0)
+         return clipper::Resolution();      // null
+      return clipper::Resolution(1.0 / sqrt(slim));
+   }
+
+   // A value from an OPTIONAL column: present, non-null and numeric, or nothing.
+   // This is the whole of trap D6's remedy -- ask, do not assume.
+   bool value_of(gemmi::cif::Table::Row &row, int i, double *out) {
+
+      if (! row.has(i) || gemmi::cif::is_null(row[i])) return false;
+      double v = gemmi::cif::as_number(row[i]);
+      if (std::isnan(v)) return false;
+      *out = v;
+      return true;
+   }
+}
 
 bool
 coot::smcif::read_data_sm_cif(const std::string &file_name) {
 
    bool status = false;
-   // These functions each open and close file_name.
-   // 
-   clipper::Cell cell_local = get_cell_for_data(file_name); // c.f. get_cell() from a coords file
-   std::pair<bool,clipper::Spacegroup> spg_pair = get_space_group(file_name);
-   clipper::Resolution reso = get_resolution(cell_local, file_name);
 
-   if (false) {
-      std::cout << "in read_data_sm_cif() cell is " << cell_local.format() << std::endl;
-      std::cout << "in read_data_sm_cif() spg is  " << spg_pair.second.descr().symbol_hm() << std::endl;
-      std::cout << "in read_data_sm_cif() reso-limit is  " << reso.limit() << " A" << std::endl;
-   }
+   try {
+      gemmi::cif::Document doc = gemmi::read_cif_gz(file_name);
+      refln_loop_t rl = find_refln_loop(doc);
+      if (! rl.ok()) {
+         std::cout << "WARNING:: no reflection loop in \"" << file_name << "\""
+                   << std::endl;
+         return false;
+      }
 
-   if (! cell_local.is_null()) {
-      // cell is good
-      if (! spg_pair.second.is_null()) {
-         // space group is good
-         if (! reso.is_null()) {
-            // resolution is good
+      clipper::Cell cell_local = cell_from_block(*rl.block);
+      std::pair<bool, clipper::Spacegroup> spg_pair = spacegroup_from_block(*rl.block);
+      std::vector<clipper::HKL> hkls = hkl_list_from_block(*rl.block, rl.prefix);
+      clipper::Resolution reso = resolution_of_hkls(hkls, cell_local);
 
-            data_spacegroup = spg_pair.second;
-            data_cell = cell_local;
-            data_resolution = reso;
+      if (cell_local.is_null()) {
+         std::cout << "WARNING:: no cell in \"" << file_name << "\"" << std::endl;
+         return false;
+      }
+      if (! spg_pair.first || spg_pair.second.is_null()) {
+         std::cout << "WARNING:: no space group in \"" << file_name << "\"" << std::endl;
+         return false;
+      }
+      if (reso.is_null()) {
+         std::cout << "WARNING:: no usable reflections in \"" << file_name << "\""
+                   << std::endl;
+         return false;
+      }
 
-            if (false) {
-               std::cout << "in read_data_sm_cif() init mydata with spacegroup "
-                         << data_spacegroup.descr().symbol_hm() << std::endl;
-               std::cout << "in read_data_sm_cif() init mydata with data_cell " << data_cell.format()
-                         << std::endl;
-               std::cout << "in read_data_sm_cif() init mydata with data_resolution limit "
-                         << reso.limit() << " A" << std::endl;
-            }
+      data_spacegroup = spg_pair.second;
+      data_cell       = cell_local;
+      data_resolution = reso;
 
-            clipper::HKL_sampling hkl_sampling(data_cell, data_resolution);
+      bool generate = true;
+      mydata.init(data_spacegroup, data_cell, data_resolution, generate);
+      mydata.add_hkl_list(hkls);
 
-            // c.f. mydata construction
-            bool generate = true;
-            mydata.init(data_spacegroup, data_cell, data_resolution, generate);
-            // c.f. import_hkl_info into mydata
-            setup_hkls(file_name);
+      // init with mydata so that cell, sampling and spacegroup are all set
+      my_fsigf.init(mydata, data_cell);
+      my_fphi.init( mydata, data_cell);
 
-            // to init my_fsigf so that cell_, hkl_sampling_ and spacegroup_ are set,
-            // we must init with init(spacegroup, cell, sampling)
-            
-            my_fsigf.init(mydata, data_cell);
-            my_fphi.init( mydata, data_cell);
+      // The value columns, all optional. Reading order is the order the old
+      // code used, and it matters where a file states more than one: a later
+      // import overwrites an earlier one for the same reflection.
+      enum { kH, kK, kL, kFmeas, kFsigma, kFsqMeas, kFsqSigma,
+             kAcalc, kBcalc, kFcalc, kPhaseCalc, kFsqCalc };
+      for (auto row : rl.block->find(rl.prefix, {"index_h", "index_k", "index_l",
+                                                 "?F_meas", "?F_sigma",
+                                                 "?F_squared_meas", "?F_squared_sigma",
+                                                 "?A_calc", "?B_calc",
+                                                 "?F_calc", "?phase_calc",
+                                                 "?F_squared_calc"})) {
 
-            // Enabling these causes a crash for fcf unit test.
-            // 
-            // These were initally added so that (I presumed) COD data can't be used to
-            // calculate structure factors.
-            // 
-            // my_fsigf.init(data_spacegroup, data_cell, hkl_sampling);
-            // my_fphi.init( data_spacegroup, data_cell, hkl_sampling); // these may not exist
-                                                                     // in the cif file.
-            mmdb::mmcif::Data *data = new mmdb::mmcif::Data();
-            data->SetFlag (mmdb::mmcif::CIFFL_SuggestCategories);
+         if (gemmi::cif::is_null(row[kH]) || gemmi::cif::is_null(row[kK]) ||
+             gemmi::cif::is_null(row[kL]))
+            continue;
+         clipper::HKL hkl(gemmi::cif::as_int(row[kH]),
+                          gemmi::cif::as_int(row[kK]),
+                          gemmi::cif::as_int(row[kL]));
 
-            int ierr = data->ReadMMCIFData (file_name.c_str());
-            if (ierr) {
-               std::cout << "WARNING:: Error reading small-molecule cif \"" << file_name
-                         << "\"" << std::endl;
+         double f, sig_f, fsq, fsq_sigma, a, b, phi;
+
+         if (value_of(row, kFmeas, &f) && value_of(row, kFsigma, &sig_f)) {
+            clipper::xtype fsigf[2] = { f, sig_f };
+            my_fsigf.data_import(hkl, fsigf);
+            status = true;
+         }
+
+         if (value_of(row, kFsqMeas, &fsq)) {
+            if (fsq < 0) fsq = 0;
+            clipper::xtype fsigf[2];
+            fsigf[0] = sqrt(fsq);
+            // The sigma is on F-squared, so it is propagated: sigma(F) =
+            // sigma(F^2) / 2F. A missing sigma is hacked in at 1% of F^2, as
+            // before -- and F == 0 is guarded, which it was not: the division
+            // gave inf for every unobserved reflection in the file.
+            if (fsigf[0] > 0.0) {
+               if (value_of(row, kFsqSigma, &fsq_sigma))
+                  fsigf[1] = 0.5 * fsq_sigma / fsigf[0];
+               else
+                  fsigf[1] = 0.5 * (0.01 * fsq) / fsigf[0];
             } else {
-
-               const char *loopTag_data[4] = { "_refln_index_h",
-                                               "_refln_index_k",
-                                               "_refln_index_l",
-//                                                 "_refln_F_meas",
-//                                                 "_refln_F_sigma",
-//                                                 "_refln_F_squared_meas",
-//                                                 "_refln_F_squared_sigma",
-//                                                 "_refln_F_calc",
-//                                                 "_refln_phase_calc",
-//                                                 "_refln_A_calc",
-//                                                 "_refln_B_calc",
-                                               ""};
-               std::string h_tag = "_refln_index_h";
-               std::string k_tag = "_refln_index_k";
-               std::string l_tag = "_refln_index_l";
-      
-               mmdb::mmcif::Loop *loop = data->FindLoop(loopTag_data);
-               if (!loop) {
-
-                  // Do these mean Powder?
-                  const char *loopTag_data_pd[4] = { "_pd_refln_index_h",
-                                                     "_pd_refln_index_k",
-                                                     "_pd_refln_index_l",
-                                                     ""};
-                  loop = data->FindLoop(loopTag_data_pd);
-                  if (loop) {
-                     h_tag = "_pd_refln_index_h";
-                     k_tag = "_pd_refln_index_k";
-                     l_tag = "_pd_refln_index_l";
-                  } 
-               }
-               if (loop) {
-                  clipper::HKL_data_base* f_sigf_input;
-                  int ll = loop->GetLoopLength();
-                  int h,k,l;
-                  mmdb::realtype F, sigF, A, B;
-                  mmdb::realtype Fsqm, Fsqs;
-                  mmdb::realtype fpc_f, fpc_p;
-                  clipper::xtype x1[2]; 
-                  if (ll > 0) {
-                     for (int il=0; il<ll; il++) {
-                        ierr = loop->GetInteger(h, h_tag.c_str(), il);
-                        if (! ierr) {
-                           ierr = loop->GetInteger(k, k_tag.c_str(), il);
-                        }
-                        if (! ierr) {
-                           ierr = loop->GetInteger(l, l_tag.c_str(), il);
-                        }
-
-                        int ierr_fsigf = 0;
-                        ierr_fsigf = loop->GetReal(F, "_refln_F_meas", il);
-                        if (! ierr_fsigf) {
-                           ierr_fsigf = loop->GetReal(sigF, "_refln_F_sigma", il);
-                        }
-
-                        if (! ierr && ! ierr_fsigf) {
-                           x1[0] = F;
-                           x1[1] = sigF;
-                           clipper::HKL hkl(h,k,l);
-                           my_fsigf.data_import(hkl, x1);
-                           status = true;
-                        }
-
-                        int ierr_f2_1 = loop->GetReal(Fsqm, "_refln_F_squared_meas",  il);
-                        int ierr_f2_2 = loop->GetReal(Fsqs, "_refln_F_squared_sigma", il);
-
-                        if (! ierr && ! ierr_f2_1) {
-                           clipper::xtype fsigf[2];
-                           if (Fsqm < 0) Fsqm = 0;
-                           fsigf[0] = sqrt(Fsqm);
-                           if (! ierr_f2_2) {
-                              fsigf[1] = 0.5 * Fsqs / fsigf[0];
-                           } else {
-                              // missing sigma. hack in a value
-                              fsigf[1] = 0.5 * (0.01* Fsqm) / fsigf[0];
-                           } 
-                           clipper::HKL hkl(h,k,l);
-                           my_fsigf.data_import(hkl, fsigf);
-                           status = true;
-                        }
-                        
-
-                        int ierr_AB_A = loop->GetReal(A, "_refln_A_calc", il);
-                        int ierr_AB_B = loop->GetReal(B, "_refln_B_calc", il);
-
-                        if (! ierr && ! ierr_AB_A && ! ierr_AB_B) {
-                           clipper::xtype fphi[2];
-                           clipper::xtype f = sqrt(A*A + B*B);
-                           clipper::xtype phi = atan2(B,A);
-                           fphi[0] = f;
-                           fphi[1] = phi;
-                           clipper::HKL hkl(h,k,l);
-                           my_fphi.data_import(hkl, fphi);
-                           status = true;
-                        }
-
-                        int ierr_f_phi_calc_1 = loop->GetReal(fpc_f, "_refln_F_calc",     il);
-                        int ierr_f_phi_calc_2 = loop->GetReal(fpc_p, "_refln_phase_calc", il);
-
-                        if (false) { 
-                           std::cout << "ierr " << ierr << " ";
-                           std::cout << "ierr_f_phi_calc_1 " << ierr_f_phi_calc_1 << " ";
-                           std::cout << "ierr_f_phi_calc_2 " << ierr_f_phi_calc_2 << std::endl;
-                        }
-                           
-                        if (! ierr && ! ierr_f_phi_calc_1 && ! ierr_f_phi_calc_2) {
-                           clipper::xtype fphi[2];
-                           fphi[0] = fpc_f;
-                           fphi[1] = clipper::Util::d2rad(fpc_p);
-                           clipper::HKL hkl(h,k,l);
-                           my_fphi.data_import(hkl, fphi);
-                           status = true;
-                        }
-
-                        ierr_f_phi_calc_1 = loop->GetReal(fpc_f, "_refln_F_squared_calc",     il);
-                        ierr_f_phi_calc_2 = loop->GetReal(fpc_p, "_refln_phase_calc", il);
-                        
-                        if (! ierr && ! ierr_f_phi_calc_1 && ! ierr_f_phi_calc_2) {
-                           clipper::xtype fphi[2];
-                           if (fpc_f < 0) fpc_f = 0;
-                           fphi[0] = sqrt(fpc_f);
-                           fphi[1] = clipper::Util::d2rad(fpc_p);
-                           clipper::HKL hkl(h,k,l);
-                           my_fphi.data_import(hkl, fphi);
-                           status = true;
-                        }
-                     }
-                  }
-               }
+               fsigf[1] = 0.0;
             }
+            my_fsigf.data_import(hkl, fsigf);
+            status = true;
+         }
+
+         if (value_of(row, kAcalc, &a) && value_of(row, kBcalc, &b)) {
+            clipper::xtype fphi[2];
+            fphi[0] = sqrt(a*a + b*b);
+            fphi[1] = atan2(b, a);
+            my_fphi.data_import(hkl, fphi);
+            status = true;
+         }
+
+         if (value_of(row, kFcalc, &f) && value_of(row, kPhaseCalc, &phi)) {
+            clipper::xtype fphi[2] = { f, clipper::Util::d2rad(phi) };
+            my_fphi.data_import(hkl, fphi);
+            status = true;
+         }
+
+         if (value_of(row, kFsqCalc, &fsq) && value_of(row, kPhaseCalc, &phi)) {
+            if (fsq < 0) fsq = 0;
+            clipper::xtype fphi[2] = { sqrt(fsq), clipper::Util::d2rad(phi) };
+            my_fphi.data_import(hkl, fphi);
+            status = true;
          }
       }
+
+      if (! status)
+         std::cout << "WARNING:: \"" << file_name << "\" states no structure "
+                   << "factors that this reader understands" << std::endl;
    }
 
-   if (false) { // debugging.
-      for (clipper::HKL_info::HKL_reference_index hri = my_fsigf.first();
-           !hri.last(); hri.next()) {
-         std::cout << "read_data_sm_cif():: obs " << my_fsigf[hri].f() << std::endl;
-      }
+   catch (const std::exception &e) {
+      std::cout << "ERROR:: reading small-molecule data cif \"" << file_name
+                << "\": " << e.what() << std::endl;
+      return false;
    }
-   
+
    return status;
 }
-
-clipper::Cell
-coot::smcif::get_cell_for_data(mmdb::mmcif::PData data) const {
-
-   clipper::Cell cell;
-
-   int ierr;
-   mmdb::realtype a, b, c;
-   mmdb::realtype alpha, beta, gamma;
-
-   ierr = data->GetReal (a, "", "_cell_length_a");
-   if (ierr) { 
-      std::cout << "Bad cell length a " << std::endl;
-   }
-
-   if (! ierr) { 
-      ierr = data->GetReal (b, "", "_cell_length_b");
-      if (ierr) { 
-         std::cout << "Bad cell length b " << std::endl;
-      }
-   }
-
-   if (! ierr) { 
-      ierr = data->GetReal (c, "", "_cell_length_c");
-      if (ierr) { 
-         std::cout << "Bad cell length c " << std::endl;
-      }
-   }
-   
-   if (! ierr) { 
-      ierr = data->GetReal (alpha, "", "_cell_angle_alpha");
-      if (ierr) { 
-         std::cout << "Bad cell angle alpha " << std::endl;
-      }
-   }
-
-   if (! ierr) { 
-      ierr = data->GetReal (beta, "", "_cell_angle_beta");
-      if (ierr) { 
-         std::cout << "Bad cell angle beta " << std::endl;
-      }
-   }
-   
-   if (! ierr) { 
-      ierr = data->GetReal (gamma, "", "_cell_angle_gamma");
-      if (ierr) { 
-         std::cout << "Bad cell angle gamma " << std::endl;
-      }
-   }
-
-   if (! ierr) {
-      clipper::Cell_descr cell_descr(a,b,c,
-                                     clipper::Util::d2rad(alpha),
-                                     clipper::Util::d2rad(beta),
-                                     clipper::Util::d2rad(gamma));
-      cell = clipper::Cell(cell_descr);
-   }
-   return cell;
-} 
-
-
-std::pair<bool,clipper::Spacegroup> 
-coot::smcif::get_space_group(mmdb::mmcif::Data *data) const {
-
-   // George is going to update shelxl (or may already have done so) to
-   // output _space_group_symop_operation_xyz instead of
-   // _symmetry_equiv_pos_as_xyz (in the fcf-file created with "LIST 6")
-
-   std::string    shelxl_style = "_space_group_symop_operation_xyz";
-   std::string       old_style = "_symmetry_equiv_pos_as_xyz";
-   
-   std::pair<bool,clipper::Spacegroup> s = get_space_group_from_loop(data, old_style);
-   if (! s.first) 
-      s = get_space_group_from_loop(data, shelxl_style);
-   return s;
-}
-
-std::pair<bool, clipper::Spacegroup> 
-coot::smcif::get_space_group(mmdb::mmcif::Data *data, const std::string &symm_tag) const {
-   
-   bool state = false;
-   clipper::Spacegroup spg;
-   mmdb::mmcif::Struct *structure = data->GetStructure(symm_tag.c_str());
-   if (structure) {
-      std::cout << "Hoooray! " << symm_tag << std::endl;
-   } else {
-      std::cout << "Failed to get structure from " << symm_tag << std::endl;
-   } 
-   
-   return std::pair<bool, clipper::Spacegroup> (state, spg);
-}
-
-std::pair<bool,clipper::Spacegroup> 
-coot::smcif::get_space_group_from_loop(mmdb::mmcif::Data *data, const std::string &symm_tag) const {
-
-   bool state = false;
-   clipper::Spacegroup spg;
-
-   int ierr;
-   mmdb::pstr S = NULL;
-   std::vector<std::string> symm_strings;
-      
-   const char *loopTag1[2] = { symm_tag.c_str(), ""};
-   int n_tags = 1;
-
-   mmdb::mmcif::PLoop loop = data->FindLoop(loopTag1);
-
-   if (loop) {
-      int ll = loop->GetLoopLength();
-      if (ll > 0) { 
-         for (int il=0; il<ll; il++) {
-            for (int itag=0; itag<n_tags; itag++) { 
-               S = loop->GetString(loopTag1[itag], il, ierr);
-               if (! ierr) {
-                  // std::cout << "-------- found S " << S << std::endl;
-                  symm_strings.push_back(S);
-               } else {
-                  std::cout << "error in " << loopTag1[itag] << " string.\n";
-               }
-            }
-         }
-      }
-
-      // debug
-      if (false) { 
-         std::cout << "got these symm strings: " << symm_strings.size() << std::endl;
-         for (unsigned int i=0; i<symm_strings.size(); i++) 
-            std::cout << "   " << symm_strings[i] << std::endl;
-      }
-      
-      if (symm_strings.size()) {
-         std::pair<bool, clipper::Spacegroup> spg_pair = get_space_group(symm_strings);
-         return spg_pair;
-      }
-   }
-   return std::pair<bool,clipper::Spacegroup> (state, spg);
-} 
-
 
 clipper::Xmap<float>
 coot::smcif::map() const {

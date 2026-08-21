@@ -5,20 +5,22 @@
 namespace coot {
 
    class smcif {
-      clipper::Cell get_cell(mmdb::mmcif::PData data) const;
-      clipper::Cell get_cell_for_data(mmdb::mmcif::PData data) const;
-      std::pair<bool,clipper::Spacegroup> get_space_group(const std::vector<std::string> &symm_strings) const;
-      std::vector<mmdb::Atom *> read_coordinates(mmdb::mmcif::PData data, const clipper::Cell &cell, const clipper::Spacegroup &spg) const;
-      std::pair<bool,clipper::Spacegroup> get_space_group(mmdb::mmcif::Data *data) const;
-      std::pair<bool,clipper::Spacegroup> get_space_group(mmdb::mmcif::Data *data, const std::string &symm_tag) const;
-      std::pair<bool,clipper::Spacegroup> get_space_group_from_loop(mmdb::mmcif::Data *data, const std::string &symm_tag) const;
-
-
-      // e.g. "O"    -> " O"
-      //      "V5+"  -> " V"
-      //      "Zn2+" -> "ZN"
-      //  return the oxidation state also in second - if possible. 0 if not.
-      std::pair<std::string, int> symbol_to_element(const std::string &symbol) const;
+      // BANDICOOT v0.2 Phase 4: the COORDINATE half of this reader is on gemmi
+      // and needs none of these -- gemmi::SmallStructure parses the cell, the
+      // symmetry (in the measured fallback order) and the element-plus-charge
+      // symbol itself, so get_cell(), get_space_group(symm_strings),
+      // read_coordinates() and symbol_to_element() are gone rather than ported.
+      // The gemmi types stay OUT of this header on purpose: src/ includes it,
+      // and coot-utils/mmcif-document.hh is meant to remain the only
+      // gemmi-aware header in the tree.
+      //
+      // The REFLECTION-DATA half is on gemmi too, and reads the file ONCE --
+      // the cell, space group, resolution limit, HKL list and structure
+      // factors all come out of one parsed document, where there used to be
+      // five separate opens through five private helpers. Those helpers
+      // (get_cell_for_data, get_space_group x3, get_resolution, setup_hkls)
+      // are gone with them; what they did now lives in file-static functions
+      // in read-sm-cif.cc, so that no gemmi type appears in this header.
 
 
       clipper::HKL_info mydata;
@@ -31,19 +33,6 @@ namespace coot {
       // and this (from the real and imaginary components)
       clipper::HKL_data<clipper::datatypes::F_phi<float> >  my_fphi;
       
-      // c.f. get_cell() from a coords file
-      clipper::Cell get_cell_for_data(const std::string &file_name) const;
-      
-      std::pair<bool,clipper::Spacegroup> get_space_group(const std::string &file_name) const;
-
-      clipper::Resolution get_resolution(const clipper::Cell &cell,
-					 const std::string &file_name) const;
-      void setup_hkls(const std::string &file_name);
-
-      // various ways in which the symmetry can be specified 
-      //
-      
-
    public:
       smcif() {};
       smcif(const std::string &file_name) {
@@ -63,6 +52,11 @@ namespace coot {
       std::pair<clipper::Xmap<float>, clipper::Xmap<float> > sigmaa_maps_by_calc_sfs(mmdb::Atom **atom_selection, int n_selected_atoms);
    };
 
+   // NOTE (Phase 4, 2026-08-20): this used to carry one aniso row of a
+   // small-molecule CIF between the reader's two loops. gemmi keeps the ADPs on
+   // the site itself, so nothing constructs one any more, and nothing else in
+   // the tree ever did. Kept rather than deleted only because it is a public
+   // type in the coot namespace.
    class simple_sm_u {
    public:
       std::string label; // atom name
