@@ -54,6 +54,10 @@
 // BANDICOOT: "Alt. Conf. Colour Scheme" (Preferences > Bond Colours), both in degrees
 #define PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET   43
 #define PREFERENCES_ALTLOC_COLOUR_DIFFERENCE      44
+// BANDICOOT: "Default Bond Display Scheme" (Preferences > Bond Colours) -- the
+// representation every newly-read molecule comes up in. Value is a
+// bonds_box_type (the coot:: enum in molecule-class-info.h), not a menu index.
+#define PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME   45
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

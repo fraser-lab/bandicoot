@@ -6610,6 +6610,17 @@ on_preferences_bond_colours_hscale_value_changed
   set_colour_map_rotation_on_read_pdb(fvalue);
 }
 
+/* BANDICOOT: Default Bond Display Scheme - the representation that newly-read
+   coordinates come up in. The row -> bonds_box_type mapping is in
+   c-interface-preferences.cc, which is also where the preference is recorded. */
+void
+on_preferences_default_bond_scheme_combobox_changed
+                                        (GtkComboBox     *combobox,
+                                        gpointer         user_data)
+{
+  bandicoot_set_default_bond_scheme_from_combo_index(gtk_combo_box_get_active(combobox));
+}
+
 /* BANDICOOT: Alt. Conf. Colour Scheme - hue offset of conf A from the bulk */
 void
 on_preferences_altloc_conf_a_offset_hscale_value_changed

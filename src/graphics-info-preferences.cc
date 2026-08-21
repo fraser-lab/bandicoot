@@ -153,6 +153,12 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
 					g.preferences_internal[i].fvalue1, il));
        break;
 
+     // BANDICOOT: "Default Bond Display Scheme"
+     case PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME:
+       commands.push_back(state_command("set-default-representation-type",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
 
      case PREFERENCES_MAP_RADIUS:
        commands.push_back(state_command("set-map-radius",
@@ -519,6 +525,11 @@ graphics_info_t::make_preferences_internal() {
   fvalue = graphics_info_t::altloc_colour_difference;
   p.preference_type = PREFERENCES_ALTLOC_COLOUR_DIFFERENCE;
   p.fvalue1 = fvalue;
+  ret.push_back(p);
+
+  // BANDICOOT: "Default Bond Display Scheme" -- a bonds_box_type value
+  p.preference_type = PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME;
+  p.ivalue1 = graphics_info_t::default_bonds_box_type;
   ret.push_back(p);
 
 

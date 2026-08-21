@@ -371,6 +371,10 @@ extern "C" int bandicoot_control_pressed(void) {
     return (f & NSEventModifierFlagControl) ? 1 : 0;
 }
 
+extern "C" int bandicoot_option_pressed(void) {
+    return ([NSEvent modifierFlags] & NSEventModifierFlagOption) ? 1 : 0;
+}
+
 extern "C" unsigned int bandicoot_make_text_texture(const char *text,
                                                     double point_size,
                                                     int *out_width,
@@ -620,12 +624,22 @@ extern "C" void bandicoot_set_dock_icon(const char *png_path) {
 
 // ---- Coot bridge declarations
 extern "C" void on_auto_open_mtz_activate(GtkMenuItem *menuitem, gpointer user_data);
+extern "C" void on_open_map1_activate(GtkMenuItem *menuitem, gpointer user_data);
 
 // ---- Bandicoot-specific actions (run as g_idle_add callbacks)
 
 // Auto-open MTZ: forward to Coot's existing File-menu handler.
 static gboolean bandicoot_action_auto_open_mtz(gpointer data) {
     on_auto_open_mtz_activate(NULL, NULL);
+    return G_SOURCE_REMOVE;
+}
+
+// Open Map: forward to File -> Open Map..., the pre-calculated-map (CCP4/MRC)
+// chooser. Cryo-EM work starts from a map file rather than from an MTZ, so
+// this is the one-click equivalent of Auto-open MTZ for that workflow
+// (GitHub #21).
+static gboolean bandicoot_action_open_map(gpointer data) {
+    on_open_map1_activate(NULL, NULL);
     return G_SOURCE_REMOVE;
 }
 
@@ -1087,7 +1101,7 @@ static void bandicoot_apply_toggle_bezel(NSButton *btn, int on) {
  willBeInsertedIntoToolbar:(BOOL)flag {
     return _itemsById[ident];
 }
-// Lock the first five default items so they can't be dragged out or
+// Lock the first six default items so they can't be dragged out or
 // reordered in the customize sheet. macOS 13+ (Sonoma) added this
 // delegate method specifically for "non-removable" toolbar items.
 - (NSSet<NSToolbarItemIdentifier> *)toolbarImmovableItemIdentifiers:(NSToolbar *)tb
@@ -1096,6 +1110,7 @@ static void bandicoot_apply_toggle_bezel(NSButton *btn, int on) {
     return [NSSet setWithArray:@[
         @"bandicoot.main.0",                // Open Coords
         @"bandicoot.extra.auto_open_mtz",
+        @"bandicoot.extra.open_map",
         @"bandicoot.extra.quicksave",
         @"bandicoot.main.2",                // Display Manager
         @"bandicoot.main.3",                // Go to Atom
@@ -1301,6 +1316,7 @@ struct bandicoot_extra {
 static const struct bandicoot_extra BANDICOOT_EXTRAS[] = {
     // File
     {"auto_open_mtz", "Auto-open MTZ", bandicoot_action_auto_open_mtz, NULL, NULL,             NULL, 0},
+    {"open_map",      "Open Map",      bandicoot_action_open_map,      NULL, "map.svg",        NULL, 0},
     {"quicksave",     "Quicksave",     bandicoot_action_quicksave,     NULL, "coot-save.png",  NULL, 0},
 
     // Refinement (C++ implementations live in bandicoot_refine.cc — they
@@ -1433,7 +1449,7 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     catalog_bandicoot_extras(delegate, fallback_icon);
 
     // --- 4) Default visible set, in user-requested order. The first
-    //         five are also locked via toolbarImmovableItemIdentifiers:
+    //         six are also locked via toolbarImmovableItemIdentifiers:
     //         in the delegate — keep this list and the locked set in
     //         sync if either changes.
     //
@@ -1444,15 +1460,16 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     //         Indices match Coot 0.9's frozen main_toolbar Glade layout
     //         — verified in the diagnostic build's catalog dump.
     [delegate.defaultIdentifiers addObjectsFromArray:@[
-        @"bandicoot.main.0",                  // 1. Open Coords         (locked)
-        @"bandicoot.extra.auto_open_mtz",     // 2. Auto-open MTZ       (locked)
-        @"bandicoot.extra.quicksave",         // 3. Quicksave           (locked)
-        @"bandicoot.main.2",                  // 4. Display Manager     (locked)
-        @"bandicoot.main.3",                  // 5. Go to Atom          (locked)
-        @"bandicoot.extra.sphere_refine",     // 6. Sphere Refine
-        @"bandicoot.extra.refine_tandem",     // 7. Tandem Refine
-        @"bandicoot.extra.local_probe_dots",  // 8. Local Probe Dots
-        @"bandicoot.extra.hydrogen_toggle",   // 9. Toggle Hydrogens
+        @"bandicoot.main.0",                  //  1. Open Coords        (locked)
+        @"bandicoot.extra.auto_open_mtz",     //  2. Auto-open MTZ      (locked)
+        @"bandicoot.extra.open_map",          //  3. Open Map           (locked)
+        @"bandicoot.extra.quicksave",         //  4. Quicksave          (locked)
+        @"bandicoot.main.2",                  //  5. Display Manager    (locked)
+        @"bandicoot.main.3",                  //  6. Go to Atom         (locked)
+        @"bandicoot.extra.sphere_refine",     //  7. Sphere Refine
+        @"bandicoot.extra.refine_tandem",     //  8. Tandem Refine
+        @"bandicoot.extra.local_probe_dots",  //  9. Local Probe Dots
+        @"bandicoot.extra.hydrogen_toggle",   // 10. Toggle Hydrogens
     ]];
 
     // --- 5) Always allow the standard system identifiers (spaces / customize).
@@ -1480,7 +1497,9 @@ extern "C" void bandicoot_install_native_toolbar(GtkWidget *gtk_toolbar,
     // "NSToolbar Configuration bandicoot.*" entry so the next NSToolbar
     // alloc starts fresh and applies our defaults. Bump the schema
     // integer whenever the catalog's identifier format changes.
-    static const int BANDICOOT_TOOLBAR_SCHEMA = 4;
+    // 5: added the locked "Open Map" item to the default set (GitHub #21) --
+    //    an install with a saved v4 layout would otherwise never see it.
+    static const int BANDICOOT_TOOLBAR_SCHEMA = 5;
     {
         NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
         NSInteger stored = [ud integerForKey:@"BandicootToolbarSchema"];

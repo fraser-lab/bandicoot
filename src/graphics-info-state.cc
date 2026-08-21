@@ -335,6 +335,22 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 // 			 << molecules[i].Bonds_box_type()
 // 			 << std::endl;
 	       
+	       // BANDICOOT: plain bonds used to need no command -- they were what
+	       // a molecule came up as anyway. The representation newly-read
+	       // coordinates come up in is now a preference (GitHub #22), so
+	       // "colour by atom" has to be written out like every other mode or
+	       // a restored session takes the preference instead of what was on
+	       // screen. BONDS_NO_HYDROGENS is the same mode with Draw Hydrogens
+	       // off (see makebonds()); set-draw-hydrogens is already written
+	       // above, so replaying plain bonds lands back on it.
+	       if (molecules[i].Bonds_box_type() == coot::NORMAL_BONDS ||
+		   molecules[i].Bonds_box_type() == coot::BONDS_NO_HYDROGENS) {
+		  active_strings.clear();
+		  active_strings.push_back("graphics-to-bonds-representation");
+		  active_strings.push_back(int_to_string(molecule_count));
+		  commands.push_back(state_command(active_strings, il));
+	       }
+
 	       if (molecules[i].Bonds_box_type() != coot::NORMAL_BONDS) {
 		  if (molecules[i].Bonds_box_type() == coot::CA_BONDS) {
 		     active_strings.clear();
@@ -381,6 +397,17 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_MOLECULE_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("set-colour-by-molecule");
+		     active_strings.push_back(int_to_string(molecule_count));
+		     commands.push_back(state_command(active_strings, il));
+		  }
+		  // BANDICOOT: "Bonds (Colour by Alt. Conf.)". Missing since the
+		  // mode was added in v0.1.4.12; it matters now that it is the
+		  // default for newly-read coordinates (GitHub #22), because a
+		  // saved session otherwise comes back in whatever the default
+		  // happens to be at restore time rather than what was on screen.
+		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_ALTLOC_BONDS) {
+		     active_strings.clear();
+		     active_strings.push_back("graphics-to-colour-by-altloc-representation");
 		     active_strings.push_back(int_to_string(molecule_count));
 		     commands.push_back(state_command(active_strings, il));
 		  }

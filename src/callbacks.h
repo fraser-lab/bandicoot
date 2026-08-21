@@ -2260,6 +2260,12 @@ on_preferences_bond_colours_hscale_value_changed
                                         (GtkRange        *range,
                                         gpointer         user_data);
 
+/* BANDICOOT: Default Bond Display Scheme */
+void
+on_preferences_default_bond_scheme_combobox_changed
+                                        (GtkComboBox     *combobox,
+                                        gpointer         user_data);
+
 /* BANDICOOT: Alt. Conf. Colour Scheme sliders */
 void
 on_preferences_altloc_conf_a_offset_hscale_value_changed

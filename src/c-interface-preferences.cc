@@ -829,6 +829,60 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// BANDICOOT: "Default Bond Display Scheme" (Preferences > Bond Colours).
+// The representation a set of coordinates comes up in when it is read.
+//
+// One row per entry of the Display Manager's per-molecule render dropdown, in
+// the same order and with the same labels. That menu is built by hand in
+// display_control_molecule_combo_box() (gtk-manual.cc), which also holds the
+// bond_type -> menu-index map; the two lists are separate on purpose (the menu
+// items each carry their own callback) so keep them in step by hand.
+// ---------------------------------------------------------------------------
+struct bandicoot_bond_scheme_t {
+   const char *label;
+   int bonds_box_type;   // the coot:: enum in molecule-class-info.h
+};
+
+static const bandicoot_bond_scheme_t bandicoot_bond_schemes[] = {
+   { "Bonds (Colour by Atom)",      coot::NORMAL_BONDS },
+   { "Bonds (Colour by Molecule)",  coot::COLOUR_BY_MOLECULE_BONDS },
+   { "Bonds (Colour by Chain)",     coot::COLOUR_BY_CHAIN_BONDS },
+   { "Bonds (Colour by Sec. Str.)", coot::BONDS_SEC_STRUCT_COLOUR },
+   { "Bonds (Colour by Alt. Conf.)", coot::COLOUR_BY_ALTLOC_BONDS },
+   { "C-alphas/Backbone",           coot::CA_BONDS },
+   { "CAs + Ligands",               coot::CA_BONDS_PLUS_LIGANDS },
+   { "CAs+Ligs SecStr Col",         coot::CA_BONDS_PLUS_LIGANDS_SEC_STRUCT_COLOUR },
+   { "Jones' Rainbow",              coot::COLOUR_BY_RAINBOW_BONDS },
+   { "Colour by Atom - No Waters",  coot::BONDS_NO_WATERS },
+   { "Colour by B-factors - CAs",   coot::CA_BONDS_PLUS_LIGANDS_B_FACTOR_COLOUR },
+   { "Colour by B-factors - All",   coot::COLOUR_BY_B_FACTOR_BONDS },
+   { "Colour by Occupancy",         coot::COLOUR_BY_OCCUPANCY_BONDS }
+};
+static const int bandicoot_n_bond_schemes =
+   sizeof(bandicoot_bond_schemes) / sizeof(bandicoot_bond_schemes[0]);
+
+// Which row holds this bonds_box_type? -1 if none does (a scheme that has no
+// Display Manager entry, e.g. the user-defined-colour modes).
+static int bandicoot_bond_scheme_index(int bonds_box_type) {
+   for (int i=0; i<bandicoot_n_bond_schemes; i++)
+      if (bandicoot_bond_schemes[i].bonds_box_type == bonds_box_type)
+         return i;
+   return -1;
+}
+
+// Called by the combobox "changed" handler in callbacks.c. Takes the row the
+// user picked, not a bonds_box_type, so the table stays the only place that
+// knows the mapping.
+void bandicoot_set_default_bond_scheme_from_combo_index(int index) {
+
+   if (index < 0 || index >= bandicoot_n_bond_schemes) return;
+   int bonds_box_type = bandicoot_bond_schemes[index].bonds_box_type;
+   preferences_internal_change_value_int(PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME,
+                                         bonds_box_type);
+   set_default_representation_type(bonds_box_type);
+}
+
 void show_preferences(){
 
   GtkWidget *w = create_preferences();
@@ -847,6 +901,10 @@ void show_preferences(){
 	std::string s = graphics_info_t::int_to_string(j);
 	gtk_combo_box_append_text(combobox, s.c_str());
      }
+     // BANDICOOT: fill the default-bond-display-scheme combobox
+     combobox = GTK_COMBO_BOX(lookup_widget(w, "preferences_default_bond_scheme_combobox"));
+     for (int j=0; j<bandicoot_n_bond_schemes; j++)
+	gtk_combo_box_append_text(combobox, bandicoot_bond_schemes[j].label);
      // fill the font combobox
      combobox = GTK_COMBO_BOX(lookup_widget(w, "preferences_font_size_combobox"));
      std::vector<std::string> fonts;  
@@ -1094,6 +1152,15 @@ void update_preference_gui() {
       fval1 = g.preferences_internal[i].fvalue1;
       adjustment = gtk_range_get_adjustment(GTK_RANGE(w));
       gtk_adjustment_set_value(adjustment, fval1);
+      break;
+
+    // BANDICOOT: "Default Bond Display Scheme". The stored value is a
+    // bonds_box_type; the combobox wants the row that holds it.
+    case PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME:
+      w = lookup_widget(dialog, "preferences_default_bond_scheme_combobox");
+      ivalue = bandicoot_bond_scheme_index(g.preferences_internal[i].ivalue1);
+      if (ivalue >= 0)
+	gtk_combo_box_set_active(GTK_COMBO_BOX(w), ivalue);
       break;
 
     case PREFERENCES_BOND_COLOUR_ROTATION_C_ONLY:

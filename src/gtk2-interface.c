@@ -19482,6 +19482,11 @@ create_preferences (void)
   GtkWidget *label497;
   GtkWidget *frame201;
   GtkWidget *preferences_bond_colours_checkbutton;
+  /* BANDICOOT: "Default Bond Display Scheme" frame */
+  GtkWidget *frame203_default_bond_scheme;
+  GtkWidget *hbox_default_bond_scheme;
+  GtkWidget *label_default_bond_scheme_frame;
+  GtkWidget *preferences_default_bond_scheme_combobox;
   /* BANDICOOT: "Alt. Conf. Colour Scheme" frame */
   GtkWidget *frame202_altloc;
   GtkWidget *vbox_altloc_colours;
@@ -20562,6 +20567,30 @@ create_preferences (void)
   gtk_widget_show (vbox212);
   gtk_container_add (GTK_CONTAINER (preferences_bond_colours), vbox212);
 
+  /* BANDICOOT: "Default Bond Display Scheme" -- the representation a set of
+     coordinates comes up in when it is read (GitHub #22). Packed first, so it
+     sits above everything else on the Bond Colours page. The dropdown is
+     filled from the scheme table in c-interface-preferences.cc, which mirrors
+     the Display Manager's per-molecule render dropdown. */
+
+  frame203_default_bond_scheme = gtk_frame_new (NULL);
+  gtk_widget_show (frame203_default_bond_scheme);
+  gtk_box_pack_start (GTK_BOX (vbox212), frame203_default_bond_scheme, FALSE, TRUE, 0);
+  gtk_container_set_border_width (GTK_CONTAINER (frame203_default_bond_scheme), 2);
+
+  hbox_default_bond_scheme = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox_default_bond_scheme);
+  gtk_container_add (GTK_CONTAINER (frame203_default_bond_scheme), hbox_default_bond_scheme);
+  gtk_container_set_border_width (GTK_CONTAINER (hbox_default_bond_scheme), 5);
+
+  preferences_default_bond_scheme_combobox = gtk_combo_box_text_new ();
+  gtk_widget_show (preferences_default_bond_scheme_combobox);
+  gtk_box_pack_start (GTK_BOX (hbox_default_bond_scheme), preferences_default_bond_scheme_combobox, FALSE, FALSE, 0);
+
+  label_default_bond_scheme_frame = gtk_label_new ("Default Bond Display Scheme");
+  gtk_widget_show (label_default_bond_scheme_frame);
+  gtk_frame_set_label_widget (GTK_FRAME (frame203_default_bond_scheme), label_default_bond_scheme_frame);
+
   frame200 = gtk_frame_new (NULL);
   gtk_widget_show (frame200);
   gtk_box_pack_start (GTK_BOX (vbox212), frame200, FALSE, TRUE, 0);
@@ -20669,9 +20698,14 @@ create_preferences (void)
   gtk_frame_set_label_widget (GTK_FRAME (frame202_altloc), label_altloc_frame);
   gtk_label_set_use_markup (GTK_LABEL (label_altloc_frame), TRUE);
 
+  /* BANDICOOT: this label used to head the whole page, which made every frame
+     added to it (Alt. Conf. Colour Scheme, Default Bond Display Scheme) read
+     as part of the colour-map rotation. It belongs to frame200, which is the
+     frame that actually holds the rotation slider; the notebook tab already
+     says "Bond Colours". */
   label498 = gtk_label_new ("Colour Map Rotation [Molecule Independent] ");
   gtk_widget_show (label498);
-  gtk_frame_set_label_widget (GTK_FRAME (preferences_bond_colours), label498);
+  gtk_frame_set_label_widget (GTK_FRAME (frame200), label498);
 
   label479 = gtk_label_new ("Bond Colours");
   gtk_widget_show (label479);
@@ -21583,6 +21617,10 @@ create_preferences (void)
   g_signal_connect ((gpointer) preferences_bond_width_combobox, "changed",
                     G_CALLBACK (on_preferences_bond_width_combobox_changed),
                     NULL);
+  /* BANDICOOT: Default Bond Display Scheme */
+  g_signal_connect ((gpointer) preferences_default_bond_scheme_combobox, "changed",
+                    G_CALLBACK (on_preferences_default_bond_scheme_combobox_changed),
+                    NULL);
   /* BANDICOOT: Alt. Conf. Colour Scheme sliders */
   g_signal_connect ((gpointer) preferences_altloc_conf_a_offset_hscale, "value_changed",
                     G_CALLBACK (on_preferences_altloc_conf_a_offset_hscale_value_changed),
@@ -21926,7 +21964,9 @@ create_preferences (void)
   GLADE_HOOKUP_OBJECT (preferences, hbox287, "hbox287");
   GLADE_HOOKUP_OBJECT (preferences, label496, "label496");
   GLADE_HOOKUP_OBJECT (preferences, preferences_bond_colours_hscale, "preferences_bond_colours_hscale");
-  /* BANDICOOT: looked up by c-interface-preferences.cc to show the stored values */
+  /* BANDICOOT: looked up by c-interface-preferences.cc to fill the dropdown
+     and to show the stored values */
+  GLADE_HOOKUP_OBJECT (preferences, preferences_default_bond_scheme_combobox, "preferences_default_bond_scheme_combobox");
   GLADE_HOOKUP_OBJECT (preferences, preferences_altloc_conf_a_offset_hscale, "preferences_altloc_conf_a_offset_hscale");
   GLADE_HOOKUP_OBJECT (preferences, preferences_altloc_colour_difference_hscale, "preferences_altloc_colour_difference_hscale");
   GLADE_HOOKUP_OBJECT (preferences, label497, "label497");

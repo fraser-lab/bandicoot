@@ -830,7 +830,12 @@ int graphics_info_t::imol_refinement_map = -1; // magic initial value "None set"
 graphical_bonds_container graphics_info_t::regularize_object_bonds_box;
 graphical_bonds_container graphics_info_t::environment_object_bonds_box;
 graphical_bonds_container graphics_info_t::symmetry_environment_object_bonds_box;
-int graphics_info_t::default_bonds_box_type = coot::NORMAL_BONDS; // Phil wants to change this.
+// BANDICOOT: was coot::NORMAL_BONDS ("Phil wants to change this"). Every
+// molecule now comes up as "Bonds (Colour by Alt. Conf.)" (GitHub #22) --
+// a model with no alt confs looks exactly as it did before, since the bulk
+// carbons take a +0 hue offset. Configurable in Preferences > Bond Colours
+// > Default Bond Display Scheme.
+int graphics_info_t::default_bonds_box_type = coot::COLOUR_BY_ALTLOC_BONDS;
 int graphics_info_t::mol_no_for_environment_distances = -1;
 
 int   graphics_info_t::bond_parameters_molecule = -1; // unset
@@ -2210,6 +2215,37 @@ debug_draw_rotation_axes(float y_x, float y_z, float x_y, float x_z) {
    graphics_info_t::printString("z", 0, 0.0, 12.0);
 }
 
+#ifdef __APPLE__
+// BANDICOOT: Option+click == middle click (GitHub #23).
+//
+// A Mac trackpad has no middle button, so the button-2 gestures (click to
+// recentre on an atom, drag to pan) were unreachable without a real mouse.
+// Option is free -- macOS gives it no meaning over a plain view -- so we
+// take it, mirroring the bargain the OS already makes with Control+click
+// for button 3.
+//
+// The translation is done in these three handlers rather than in GDK
+// because GTK-Quartz on Tahoe doesn't put the modifier bits into
+// event->state at all (see the bandicoot_shift_pressed() call in
+// glarea_button_press), so there is nothing in the event for a GDK-level
+// remap to key off. Instead: on press, ask AppKit whether Option is down
+// and, if so, rewrite the event to look like button 2. The flag latches
+// the gesture for the duration of the drag, because a user can release
+// Option mid-drag and would otherwise have the pan turn into a rotation
+// half-way through.
+static bool bandicoot_option_click_is_button_2 = false;
+
+// Rewrite `state` so the button-2 branches fire instead of the button-1
+// ones. Only when button 1 is actually down: a release event that never
+// arrives (drag ended off-window, say) leaves the latch set, and inventing
+// a button-2 mask out of nothing would then pan the view on plain hover.
+static GdkModifierType bandicoot_button_1_state_as_2(GdkModifierType state) {
+   if (! (state & GDK_BUTTON1_MASK))
+      return state;
+   return (GdkModifierType) ((state & ~GDK_BUTTON1_MASK) | GDK_BUTTON2_MASK);
+}
+#endif
+
 gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
 
    graphics_info_t info;
@@ -2265,6 +2301,13 @@ gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
       y = event->y;
       state = (GdkModifierType) event->state;
    }
+
+#ifdef __APPLE__
+   // BANDICOOT: this drag started as an Option+click, so it pans (button 2)
+   // rather than rotates (button 1). See glarea_button_press().
+   if (bandicoot_option_click_is_button_2)
+      state = bandicoot_button_1_state_as_2(state);
+#endif
 
    // Try to correct cntrl and shift anomalies:
    //
@@ -3932,6 +3975,13 @@ gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
 #ifdef __APPLE__
    info.shift_is_pressed   = bandicoot_shift_pressed();
    info.control_is_pressed = bandicoot_control_pressed();
+   // Option+click stands in for the middle button (see the comment above
+   // glarea_motion_notify). Decided once, on press, and latched for the drag.
+   bandicoot_option_click_is_button_2 = (event->button == 1 && bandicoot_option_pressed());
+   if (bandicoot_option_click_is_button_2) {
+      event->button = 2;
+      state = bandicoot_button_1_state_as_2(state);
+   }
 #else
    if (event->state & GDK_SHIFT_MASK)
       info.shift_is_pressed = 1;
@@ -4095,6 +4145,16 @@ gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
 gint glarea_button_release(GtkWidget *widget, GdkEventButton *event) {
 
    graphics_info_t g;
+
+#ifdef __APPLE__
+   // BANDICOOT: finish what glarea_button_press() started -- this release
+   // belongs to an Option+click, so let the button-2 recentre branch below
+   // see it as button 2. Cleared here: the gesture ends with the release.
+   if (bandicoot_option_click_is_button_2 && event->button == 1)
+      event->button = 2;
+   bandicoot_option_click_is_button_2 = false;
+#endif
+
    if (graphics_info_t::in_moving_atoms_drag_atom_mode_flag) {
       g.unset_moving_atoms_currently_dragged_atom_index();
       g.do_post_drag_refinement_maybe();

@@ -577,6 +577,12 @@ void display_control_molecule_combo_box(GtkWidget *display_control_window_glade,
   tmp_name = widget_name + strlen(widget_name); 
   snprintf(tmp_name, 4, "%-d", n); 
 
+  /* BANDICOOT: the entries built below -- their labels AND their order -- are
+     mirrored by bandicoot_bond_schemes[] in c-interface-preferences.cc, which
+     drives Preferences > Bond Colours > Default Bond Display Scheme. Adding,
+     removing or reordering an entry here means editing that table too (and the
+     bond_type -> menu-index map at the end of this function). */
+
   render_optionmenu_1 = gtk_option_menu_new ();
   gtk_widget_ref (render_optionmenu_1);
   gtk_object_set_data_full (GTK_OBJECT (display_control_window_glade), 

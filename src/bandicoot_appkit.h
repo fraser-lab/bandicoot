@@ -191,6 +191,11 @@ void bandicoot_register_persistent_dialog(GtkWidget *w, const char *role);
 int bandicoot_shift_pressed(void);
 int bandicoot_control_pressed(void);
 
+// Option (Alt) held? A Mac trackpad has no middle button, so Option+click
+// stands in for one (GitHub #23) -- the same bargain macOS already makes
+// with Control+click for the right button. See glarea_button_press().
+int bandicoot_option_pressed(void);
+
 // Render UTF-8 `text` at the given point size into a new GL_TEXTURE_2D
 // and return the texture name (0 on failure). The texture is white text
 // on a transparent background; tint via glColor before drawing. The

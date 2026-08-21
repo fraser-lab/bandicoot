@@ -7257,8 +7257,13 @@ molecule_class_info_t::read_shelx_ins_file(const std::string &filename) {
             // Generate bonds and save them in the graphical_bonds_container
             // which has static data members.
             //
+            // BANDICOOT: honour the Default Bond Display Scheme preference
+            // here too (GitHub #22). read_shelx_ins_file() doesn't come
+            // through c-interface's handle_read_draw_molecule(), which is
+            // where the default is normally applied, so a SHELX .ins used
+            // to be the one read path that ignored it.
             if (bonds_box_type == coot::UNSET_TYPE)
-               bonds_box_type = coot::NORMAL_BONDS;
+               bonds_box_type = g.default_bonds_box_type;
             make_bonds_type_checked();
          }
 

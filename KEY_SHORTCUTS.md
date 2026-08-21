@@ -25,6 +25,18 @@ override the built-in defaults.
 | `Keypad ↑ ↓ / PgUp / PgDn` | Translate along the screen Z axis |
 | `.` / `,` | Next / previous (rotamer, difference-map peak, or water) |
 
+## Mouse & trackpad
+
+A Mac trackpad has one button, so the middle and right buttons are reached by
+holding a modifier while clicking or dragging.
+
+| Gesture | Equivalent to | Function |
+|---------|---------------|----------|
+| Click / drag | Button 1 | Pick, or rotate the view |
+| `Option`+click | Button 2 (middle) | Centre on the atom under the pointer |
+| `Option`+drag | Button 2 (middle) | Pan the view |
+| `Control`+drag | Button 3 (right) | Zoom |
+
 ## Refinement & fitting
 
 | Key | Function |

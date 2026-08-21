@@ -82,6 +82,11 @@ void set_intermediate_pick_distance_cutoffs(float far_lo, float near_hi); /* dep
 void bandicoot_save_pick_atom_radius();
 void bandicoot_load_pick_atom_radius();       /* called at startup from main */
 
+/* Bandicoot: "Default Bond Display Scheme" (Preferences > Bond Colours).
+   Takes the row the user picked in preferences_default_bond_scheme_combobox --
+   the index -> bonds_box_type mapping lives in c-interface-preferences.cc. */
+void bandicoot_set_default_bond_scheme_from_combo_index(int index);
+
 END_C_DECLS
 
 #endif /* C_INTERFACE_PREFERENCES_H */
