@@ -395,10 +395,66 @@ make -j"${JOBS}"
 # staged tree to $PREFIX is safe.
 echo "==> make install (DESTDIR staging) -> ${PREFIX}"
 _bcoot_destdir="$(mktemp -d)"
+
+# v0.1.4.15: remove the staging tree on ANY exit, not just the success path.
+# It holds a complete copy of the install (~300 MB), so a build that died
+# between `make install` and the cleanup below -- a failed stage under `set -e`,
+# or Ctrl-C -- left the whole thing behind in /var/folders, invisibly and
+# forever. Found one dated eight days earlier while fixing GitHub #25.
+# INT/TERM re-exit rather than cleaning up in place, so the interrupt still
+# stops the build; the EXIT trap then does the removal exactly once.
+_bcoot_clean_staging() {
+    [ -n "${_bcoot_destdir:-}" ] && rm -rf "${_bcoot_destdir}"
+}
+trap _bcoot_clean_staging EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 make install DESTDIR="${_bcoot_destdir}"
-rm -rf "${PREFIX}"
-mkdir -p "$(dirname "${PREFIX}")"
-mv "${_bcoot_destdir}${BANDICOOT_COMPILE_PREFIX}" "${PREFIX}"
+# v0.1.4.15: relocate INTO the prefix, never replace the prefix itself.
+#
+# This used to be `rm -rf $PREFIX` + `mv <staged> $PREFIX`. Both of those
+# create or delete a directory ENTRY, which needs write+execute on the
+# prefix's PARENT -- not on the prefix. So a system location failed even when
+# the user owned the prefix outright (GitHub #25):
+#
+#   drwxr-xr-x root  wheel  /usr/local              <- not writable by the user
+#   drwxr-xr-x tony  staff  /usr/local/bandicoot    <- owned by the user
+#   rm: /usr/local/bandicoot: Permission denied
+#
+# rm had in fact emptied the directory and then failed on the final rmdir, so
+# the message names the prefix while the real obstacle is one level up.
+#
+# Working on the CONTENTS instead needs write on the prefix alone. Note both
+# steps use `find`, not a `*` glob: the install root carries dotfiles (e.g.
+# .bandicoot-coot-bin.entitlements) that a glob would silently leave behind.
+_bcoot_staged="${_bcoot_destdir}${BANDICOOT_COMPILE_PREFIX}"
+
+if [ ! -d "${PREFIX}" ]; then
+    if ! mkdir -p "${PREFIX}" 2>/dev/null; then
+        echo "!! build.sh: cannot create ${PREFIX}" >&2
+        echo "   Its parent ($(dirname "${PREFIX}")) is not writable by $(id -un)." >&2
+        echo "   Create it once with elevation, then re-run as yourself:" >&2
+        echo "     sudo mkdir -p \"${PREFIX}\"" >&2
+        echo "     sudo chown \"\$(id -u):\$(id -g)\" \"${PREFIX}\"" >&2
+        exit 1
+    fi
+fi
+if [ ! -w "${PREFIX}" ]; then
+    echo "!! build.sh: ${PREFIX} exists but is not writable by $(id -un)." >&2
+    echo "   fix: sudo chown \"\$(id -u):\$(id -g)\" \"${PREFIX}\"" >&2
+    exit 1
+fi
+
+# Empty it, keeping the directory itself (every build is a clean install tree).
+find "${PREFIX}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+# MOVE the staged contents in rather than copying them: a copy would leave a
+# second, identical set of binaries in the staging tree until it is deleted,
+# and two candidate copies of the same install is exactly what we do not want.
+# Same filesystem -> this is a rename per entry, so nothing is duplicated even
+# momentarily. (Roughly ten top-level entries, so one mv each is fine.)
+find "${_bcoot_staged}" -mindepth 1 -maxdepth 1 -exec mv -f {} "${PREFIX}/" \;
 rm -rf "${_bcoot_destdir}"
 
 # Bandicoot cleanup: Coot's `make install` ships build/dev artifacts an app never
