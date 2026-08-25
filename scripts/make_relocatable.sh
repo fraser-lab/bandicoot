@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Make a Bandicoot install tree relocatable by rewriting absolute
 # Mach-O paths to @rpath / @executable_path form. Run once after each
 # `make install`; build.sh does this automatically.

@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Copy conda-provided runtime libraries (clipper, mmdb2, ssm, ccp4c,
 # fftw2, libc++) into bandicoot's lib/ and rewrite their install_names
 # and inter-library references to @rpath/<basename>, so the install no
@@ -27,6 +33,21 @@ CANVAS_DEPS_PREFIX="${CANVAS_DEPS_PREFIX:-$HOME/sw/canvas-deps}"
 [ -d "$PREFIX/lib" ]              || { echo "error: $PREFIX/lib missing" >&2; exit 1; }
 [ -d "$CONDA_PREFIX_ARG/lib" ]    || { echo "error: $CONDA_PREFIX_ARG/lib missing" >&2; exit 1; }
 
+# v0.1.4.15: ASK the interpreter for its version instead of hard-coding one.
+# `libpython3.13.dylib` used to be a literal in TOPLEVEL_LIBS below, which meant
+# a builder whose conda was on any other minor version got no libpython bundled
+# at all and ~43 unresolved @rpath references (GitHub #24: current Miniforge
+# bases ship 3.14). It also forced them to create a 3.13 environment and pass
+# CONDA_PREFIX by hand, contradicting BUILD.md's "install into base".
+# Bandicoot does not care WHICH 3.x it embeds -- only that every path agrees.
+PY_VER="$("$CONDA_PREFIX_ARG/bin/python3" -c \
+    'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
+if [ -z "$PY_VER" ]; then
+    echo "error: cannot determine Python version from $CONDA_PREFIX_ARG/bin/python3" >&2
+    exit 1
+fi
+echo "==> embedded Python version: $PY_VER (from $CONDA_PREFIX_ARG/bin/python3)"
+
 # Libraries to copy from $CONDA_PREFIX/lib/ — the .dylib basenames
 # bandicoot's libcoot-*.dylib and coot-bin reference via @rpath/.
 TOPLEVEL_LIBS=(
@@ -47,11 +68,11 @@ TOPLEVEL_LIBS=(
     # v0.1.1.3: previously resolved only via the /opt/miniconda3/lib rpath,
     # so launch failed for any user whose conda isn't at that exact path
     # (beta-tester crash: dyld "Library not loaded: @rpath/libpng16.16.dylib").
-    # libpython3.13 (embedded Python, added v0.1.0.0) has no deps but libSystem;
+    # libpython3.X (embedded Python, added v0.1.0.0) has no deps but libSystem;
     # libpng16 / libfreetype6 only pull in libz (rewritten to system /usr/lib).
     libpng16.16.dylib
     libfreetype.6.dylib
-    libpython3.13.dylib
+    "libpython${PY_VER}.dylib"
     # v0.1.4.9: OpenSSL, needed by the stdlib _ssl and _hashlib C extensions
     # in lib-dynload/. Both record @rpath/libssl.3.dylib + @rpath/libcrypto.3.dylib
     # (lib-dynload's rpath is @loader_path/../../ = our lib/). Regression window:
@@ -438,5 +459,118 @@ else
     echo "    bundled into $PY_SITE: $(ls "$PY_SITE" | grep -viE '^coot|\.dist-info$|\.pth$' | tr '\n' ' ')"
 fi
 unset _d PY_SITE PIP_PY
+
+# ---------------------------------------------------------------------------
+# v0.1.4.15: transitive-closure sweep.
+#
+# TOPLEVEL_LIBS above is a HAND-MAINTAINED list, and every entry after the
+# original batch was added the same way: something failed on a user's machine
+# and the missing library was appended (libssl/libcrypto, libffi, libsqlite3,
+# libexpat, libmpdec, libbz2, the readline/ncurses closure...). GitHub #24 added
+# five more -- libncurses.6 + libtinfo.6 (conda-forge's readline links the NARROW
+# ncurses; the list only names the wide libncursesw/libtinfow) and the three ICU
+# libraries that conda-forge's sqlite pulls in but the defaults-channel build
+# does not.
+#
+# That last pair is the point: the correct set DEPENDS ON WHICH CONDA THE
+# BUILDER USES. On this machine (Miniconda, defaults) libsqlite3 needs no ICU at
+# all and libreadline wants libncursesw; on conda-forge/Miniforge both differ.
+# A static list cannot be right for both, and adding names as bug reports arrive
+# only ever fixes the last person's build.
+#
+# So: walk what is actually there. For every Mach-O in the install, any
+# dependency naming a library we have not bundled but conda has gets copied in,
+# and the walk repeats until nothing new appears (its dependencies count too).
+# The hand list is still the starting point -- it carries the deliberate
+# decisions (bundle conda's libsqlite3 rather than the system one, and so on) --
+# but it is no longer the whole truth.
+echo "==> sweeping up transitive conda dependencies"
+
+# Deps deliberately resolved to the OS copy rather than bundled (EXTERNAL_REWRITES
+# above already points them at /usr/lib) -- never drag them back in. libsqlite3 is
+# NOT here: it is genuinely bundled for the stdlib _sqlite3 extension and only
+# coot-bin's own reference is rewritten to the system copy.
+SWEEP_SKIP=( libcurl.4.dylib libz.1.dylib )
+
+# Point a referrer at the bundled copy when it names a library by full conda path.
+sweep_relink() {   # <referrer> <dep-as-recorded> <basename>
+    case "$2" in
+        "$CONDA_PREFIX_ARG"/lib/*)
+            chmod u+w "$1" 2>/dev/null || true
+            install_name_tool -change "$2" "@rpath/$3" "$1" 2>/dev/null || true
+            ;;
+    esac
+}
+
+# One pass over the install. Progress goes to stderr; the ONLY thing on stdout
+# is the number copied, so the caller can drive the fixed-point loop with it.
+sweep_round() {
+    local n=0 f dep name skip s
+    while IFS= read -r f; do
+        file -b "$f" 2>/dev/null | grep -q "Mach-O" || continue
+        while IFS= read -r dep; do
+            case "$dep" in
+                @rpath/*)                  name="${dep#@rpath/}" ;;
+                "$CONDA_PREFIX_ARG"/lib/*) name="${dep##*/}" ;;
+                *) continue ;;
+            esac
+            [ -n "$name" ] || continue
+            case "$name" in */*) continue ;; esac      # nested @rpath/../ form
+            if [ -e "$PREFIX/lib/$name" ]; then
+                sweep_relink "$f" "$dep" "$name"       # have it; just fix the ref
+                continue
+            fi
+            skip=0
+            for s in "${SWEEP_SKIP[@]}"; do [ "$name" = "$s" ] && skip=1; done
+            [ "$skip" = 1 ] && continue
+            [ -f "$CONDA_PREFIX_ARG/lib/$name" ] || continue   # not conda's to give
+            cp -f "$CONDA_PREFIX_ARG/lib/$name" "$PREFIX/lib/$name"
+            chmod u+w "$PREFIX/lib/$name"
+            install_name_tool -id "@rpath/$name" "$PREFIX/lib/$name" 2>/dev/null || true
+            # Strip any conda LC_RPATH the newcomer carries, or check_install.sh
+            # reports it as a HOST-RPATH leak.
+            while otool -l "$PREFIX/lib/$name" 2>/dev/null | \
+                  awk '/LC_RPATH/{i=1;next} i && /path /{print $2; i=0}' | \
+                  grep -qx "$CONDA_PREFIX_ARG/lib"; do
+                install_name_tool -delete_rpath "$CONDA_PREFIX_ARG/lib" \
+                                  "$PREFIX/lib/$name" 2>/dev/null || break
+            done
+            sweep_relink "$f" "$dep" "$name"
+            echo "    swept in $name  (needed by ${f#$PREFIX/})" >&2
+            n=$((n + 1))
+        done < <(otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}')
+    done < <(find "$PREFIX/lib" "$PREFIX/libexec" "$PREFIX/bin" \
+                  \( -name '*.dylib' -o -name '*.so' -o -perm -u+x \) \
+                  -type f 2>/dev/null)
+    echo "$n"
+}
+
+# Fixed point: a swept-in library brings its own dependencies, so repeat until a
+# round finds nothing. The bound is a runaway guard, not an expected limit --
+# the deepest real chain so far is readline -> ncurses -> tinfo (3 rounds).
+_sweep_total=0
+for _round in 1 2 3 4 5 6 7 8; do
+    _added="$(sweep_round)"
+    case "$_added" in ''|*[!0-9]*) _added=0 ;; esac
+    _sweep_total=$((_sweep_total + _added))
+    [ "$_added" = "0" ] && break
+done
+if [ "$_sweep_total" = "0" ]; then
+    echo "    nothing missing -- the hand list already covered this conda"
+else
+    echo "    swept in $_sweep_total transitive lib(s) the hand list did not name"
+fi
+unset _sweep_total _added _round
+
+# v0.1.4.15: strip foreign LC_RPATHs. The pip step above re-fetches the
+# numpy/matplotlib wheels on EVERY run, and Pillow's arm64 wheel carries its CI
+# machine's rpath (/Users/runner/work/Pillow/...) on the vendored
+# .dylibs/libjpeg -- so re-running this script alone (while adding a missing
+# library to TOPLEVEL_LIBS, say) re-introduces it. build.sh runs the same pass
+# later over the whole tree; running it here as well means the bundler leaves a
+# clean install whether or not build.sh drives it. Same script both times, so
+# there is one implementation of the rule.
+echo "==> stripping foreign rpaths from the bundled tree"
+"$(dirname "$0")/strip_host_rpaths.sh" "$PREFIX" || true
 
 echo "==> bundle_conda_deps: done"

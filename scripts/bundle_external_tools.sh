@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Bundle external command-line tools that Bandicoot's C++ shims fork/exec
 # at runtime (`probe` and `reduce` for Local Probe Dots). Without these
 # in <install>/bin/, the action degrades to "tool not found on PATH" on

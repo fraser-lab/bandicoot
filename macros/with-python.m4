@@ -27,9 +27,22 @@ AC_DEFUN([AM_WITH_PYTHON],
 AC_MSG_CHECKING([for Python])
 
 
+dnl BANDICOOT (v0.1.4.15): the variable below used to be called
+dnl `with_python_prefix`, which COLLIDES with automake's AM_PATH_PYTHON.
+dnl automake >= 1.11 declares AC_ARG_WITH([python_prefix]), and AC_ARG_WITH
+dnl tests whether the shell VARIABLE is set rather than whether the option was
+dnl passed -- so our writing it here made automake take its "explicit prefix"
+dnl branch and set PYTHON_PREFIX to whatever --with-python said (the conda
+dnl prefix, via build.sh), instead of ${prefix}.  pythondir then pointed into
+dnl conda, -DPKGPYTHONDIR baked a build-host path into the binary, and the coot
+dnl Python module was never installed into the tree.  The repo worked around it
+dnl by vendoring a pre-2011 macros/python.m4 that shadowed automake's; renaming
+dnl the variable removes the collision, so that shadow copy could be deleted.
+dnl Nothing reads this value -- AC_ARG_WITH's own `with_python` is what the rest
+dnl of this macro uses -- so the name is free to change.
 AC_ARG_WITH(python, [  --with-python=PFX Prefix where PYTHON has been installed],
- with_python_prefix="$withval",
- with_python_prefix="")
+ coot_with_python_prefix="$withval",
+ coot_with_python_prefix="")
 
 
 saved_LIBS="$LIBS"

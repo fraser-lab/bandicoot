@@ -71,8 +71,13 @@ require "reduce het dictionary"                    has_file "$I/share/coot/reduc
 require "rama-data/"                               has_dir  "$I/share/coot/rama-data"
 
 # --- embedded Python (scripting + Phenix interface) ------------------------
-require "coot Python module"                       has_file "$I/lib/python3.13/site-packages/coot/coot_utils.py"
-require "python stdlib (encodings/)"               has_dir  "$I/lib/python3.13/encodings"
+# BANDICOOT v0.1.4.15: match python3.* rather than a pinned python3.13. The
+# embedded interpreter's minor version is whatever the build host's conda
+# supplies, so pinning it here made this gate report both assets MISSING on any
+# builder whose conda was not on 3.13 (GitHub #24, a Miniforge base on 3.14).
+# has_glob matches any single version dir, which is all this needs to assert.
+require "coot Python module"                       has_glob "$I/lib/python3.*/site-packages/coot/coot_utils.py"
+require "python stdlib (encodings/)"               has_glob "$I/lib/python3.*/encodings"
 
 # --- GUI assets (icons / theme / fonts) ------------------------------------
 require "pixmaps/ (icons)"                         has_dir  "$I/share/coot/pixmaps"

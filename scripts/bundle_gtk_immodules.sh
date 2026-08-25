@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Copy Homebrew's GTK2 input-method modules into bandicoot's lib/ and repoint
 # them at the bundled GTK, so the app never dlopens anything out of /opt/homebrew.
 #

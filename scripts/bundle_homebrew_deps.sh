@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Bundle the Homebrew-provided runtime libraries into bandicoot's lib/ and
 # rewrite every /opt/homebrew reference to @rpath/<basename>, so the install
 # no longer depends on Homebrew at runtime. This removes the LAST external
@@ -23,9 +29,11 @@
 # versioned symlink) and /opt/homebrew/Cellar/<f>/<v>/lib (the real path).
 # Both are rewritten, by reading each Mach-O's actual load commands.
 #
-# Run AFTER make_relocatable.sh + bundle_conda_deps.sh + bundle_pixbuf_loaders.sh
-# (so the pixbuf loaders' Homebrew deps are closed over too), and BEFORE the
-# codesign step (which re-signs everything this rewrites). build.sh does this.
+# ORDERING (build.sh already arranges all of this -- recorded here only so the
+# constraint is not lost if the pipeline is ever rearranged): this pass has to
+# follow make_relocatable.sh, bundle_conda_deps.sh and bundle_pixbuf_loaders.sh,
+# so the pixbuf loaders' Homebrew dependencies are closed over too, and it has to
+# precede the codesign step, which re-signs everything this rewrites.
 #
 # Usage:  ./scripts/bundle_homebrew_deps.sh <install-prefix> [brew-prefix]
 # Default brew-prefix: BREW_PREFIX env, else `brew --prefix`, else /opt/homebrew.
@@ -163,4 +171,14 @@ if [ "$leaks" -gt 0 ]; then
     echo "error: $leaks Mach-O file(s) still reference Homebrew after bundling" >&2
     exit 1
 fi
+
+# v0.1.4.15: the leak check above inspects DEPENDENCIES; a copied Homebrew dylib
+# can still carry its own Cellar LC_RPATH (libdbus, libguile and libjpeg all do),
+# which check_install.sh reports as HOST-RPATH. build.sh runs this same pass over
+# the whole tree afterwards, so the normal path was always covered -- running it
+# here too means the bundler leaves a clean install when invoked on its own.
+# Same script both times, so there is one implementation of the rule.
+echo "==> stripping foreign rpaths from the bundled tree"
+"$(dirname "$0")/strip_host_rpaths.sh" "$PREFIX" || true
+
 echo "==> Homebrew bundling complete: install is now Homebrew-independent"

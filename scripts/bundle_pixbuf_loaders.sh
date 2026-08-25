@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Copy Homebrew's gdk-pixbuf image loaders (PNG/JPEG/SVG/...) into
 # bandicoot's lib/ so the install can render every icon Coot ships,
 # independent of whether the user has librsvg installed via Homebrew.
