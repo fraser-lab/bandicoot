@@ -3,8 +3,9 @@
 Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/) 0.9.8.95, the structural biology macromolecular model-building program. It
 keeps Coot 0.9's full functionality while changing several UI elements in order for the app to function in MacOS Tahoe (26.x) on Apple Silicon.
 
-**NOTE:** Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not
-built or tested on other macOS releases, Linux, or Windows.
+**RELEASES**: Tarballs of binary releases are found at https://github.com/fraser-lab/bandicoot/releases
+
+**NOTE:** Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not built or tested on other macOS releases, Linux, or Windows.
 
 **NOTE** Bandicoot is a work in progress; users are welcome to log issues and issue pull requests.
 
@@ -16,9 +17,7 @@ While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it h
 
 ## Quick start
 
-If you have a prebuilt binary tarball
-(`bandicoot-0.0.0.1-darwin-arm64.tar.gz`), see [INSTALL.md](INSTALL.md):
-untar it anywhere and launch `<extracted>/bin/bcoot`.
+If you have a prebuilt binary tarball (https://github.com/fraser-lab/bandicoot/releases), see [INSTALL.md](INSTALL.md): untar it anywhere and launch `<extracted>/bin/bcoot`.
 
 To build from source instead, see [BUILD.md](BUILD.md). You'll need a
 handful of Homebrew packages and a Miniconda environment that supplies
@@ -54,6 +53,7 @@ Clipper, MMDB2, FFTW2, and a few others.
   `bandicoot_shift_pressed` / `bandicoot_control_pressed`) because
   GTK-Quartz on Tahoe never populates `event->state` with modifier
   bits.
+- **Bonds colored by alt. conf.** There's now an option in Display Manager to render residues with alternate conformations in different colors; the difference between bulk model and the alternate conformers can be adjusted in Preferences -> Colours -> Bond Colours
 
 The executable on disk is called `bcoot` (a symlink to the existing
 `coot` wrapper script).
