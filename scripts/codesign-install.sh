@@ -1,4 +1,10 @@
 #!/bin/bash
+# ---------------------------------------------------------------------------
+# INVOKED AUTOMATICALLY BY scripts/build.sh -- you do NOT need to run this by
+# hand. (GitHub #24: a builder read these headers cold, concluded they were a
+# manual sequence, and ran them individually -- which is what kept
+# re-introducing a stale rpath.)
+# ---------------------------------------------------------------------------
 # Bandicoot: ad-hoc codesign the installed Mach-O tree.
 #
 #   codesign-install.sh <INSTALL_DIR>

@@ -131,6 +131,52 @@ if [ "${_preflight_fail}" != "0" ]; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# v0.1.4.15: embedded-Python version advisory.
+#
+# Bandicoot embeds whichever python3 $CONDA_PREFIX provides -- nothing pins it,
+# and nothing should: the bundler follows the interpreter (it used to hard-code
+# "3.13", which is what broke GitHub #24 for a builder on a 3.14 base). But
+# "any version builds" is not "any version is tested". A Python minor release
+# can remove a stdlib module the tree still uses -- 3.12 removing distutils
+# broke configure exactly that way -- and such a break can surface at RUNTIME,
+# long after a clean build.
+#
+# So: warn, never fail. An untested version is a reason to test, not a reason to
+# refuse to build. ADD A VERSION HERE ONLY AFTER ACTUALLY BUILDING AND RUNNING
+# AGAINST IT -- ideally when each new Python is released, so the list stays
+# ahead of the problem rather than behind a bug report.
+# 3.13: the version releases are built against (conda base).
+# 3.14: GUI-tested by Art 2026-08-24 on 0.1.4.15-u1 -- launch, mmCIF read, EDS
+#       fetch of 2GEW + map, Sphere Refine with undo, and pandda.inspect on a
+#       PanDDA output folder all behaved normally.
+BANDICOOT_TESTED_PYTHON="${BANDICOOT_TESTED_PYTHON:-3.13 3.14}"
+_py_ver="$("${CONDA_PREFIX}/bin/python3" -c \
+    'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
+if [ -n "${_py_ver}" ]; then
+    case " ${BANDICOOT_TESTED_PYTHON} " in
+        *" ${_py_ver} "*) ;;   # tested; say nothing
+        *)
+            echo "==  build.sh: embedded Python is ${_py_ver}; tested versions are:" \
+                 "${BANDICOOT_TESTED_PYTHON}" >&2
+            echo "    The build should still work -- the bundler follows whatever" >&2
+            echo "    \$CONDA_PREFIX provides -- but nothing has been verified on" >&2
+            echo "    ${_py_ver}." >&2
+            echo "" >&2
+            echo "    To build against a tested version instead:" >&2
+            echo "      conda create -n bandicoot python=${BANDICOOT_TESTED_PYTHON%% *}" >&2
+            echo "      conda activate bandicoot" >&2
+            echo "      conda install -c bioconda clipper libccp4 mmdb2 ssm" >&2
+            echo "      CONDA_PREFIX=\"\$CONDA_PREFIX\" ./scripts/build.sh" >&2
+            echo "" >&2
+            echo "    To silence this after testing ${_py_ver} yourself, add it to" >&2
+            echo "    BANDICOOT_TESTED_PYTHON in this script." >&2
+            echo "" >&2
+            ;;
+    esac
+fi
+unset _py_ver
+
 # Homebrew on macOS supplies version-specific pkg-config dirs to fill in
 # entries that the system SDK provides (e.g. bzip2.pc lives under
 # $BREW_PREFIX/Library/Homebrew/os/mac/pkgconfig/<macOS_major>/).
@@ -376,17 +422,33 @@ fi
 
 # Rewrite hard-coded Mach-O paths to @rpath / @executable_path form so
 # the install can be moved or packaged into a portable tarball.
-echo "==> make_relocatable.sh ${PREFIX}"
+# v0.1.4.15: every helper script below is run BY THIS SCRIPT, automatically.
+# run_stage prints an explicit "running"/"finished with no errors" pair around
+# each one so that scanning the build output -- by a human, or by an assistant
+# summarising it -- makes that unmistakable. GitHub #24's reporter concluded
+# from those scripts' own headers that they were a manual post-build sequence,
+# ran them individually, and so kept re-introducing a stale rpath that build.sh
+# strips on its own. A stage that fails prints "FAILED" and aborts the build, so
+# a missing "finished" line is itself the signal.
+run_stage() {           # <script-name> [args...]
+    local _s="$1"; shift
+    echo "==> running scripts/${_s}"
+    if ! "${REPO_ROOT}/scripts/${_s}" "$@"; then
+        echo "!! scripts/${_s} FAILED" >&2
+        return 1
+    fi
+    echo "==> scripts/${_s} finished with no errors"
+}
+
 # Pass BANDICOOT_COMPILE_PREFIX so the coot dylibs' install-names/deps (baked
 # with the generic compile prefix, not the real install path) get rewritten to
 # @rpath too -- otherwise the app can't find its own libraries.
-"${REPO_ROOT}/scripts/make_relocatable.sh" "${PREFIX}" "${BANDICOOT_COMPILE_PREFIX}"
+run_stage make_relocatable.sh "${PREFIX}" "${BANDICOOT_COMPILE_PREFIX}"
 
 # Copy clipper / mmdb2 / ssm / ccp4c / fftw2 / libc++ out of the conda
 # prefix into the install tree so the tarball stands alone — users don't
 # need to install those packages via conda after extracting.
-echo "==> bundle_conda_deps.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_conda_deps.sh" "${PREFIX}" "${CONDA_PREFIX}"
+run_stage bundle_conda_deps.sh "${PREFIX}" "${CONDA_PREFIX}"
 
 # Libraries built by scripts/build_deps.sh into <repo>/deps. libtool copies these
 # into lib/ at `make install` but leaves consumers pointing at the absolute build
@@ -394,36 +456,31 @@ echo "==> bundle_conda_deps.sh ${PREFIX}"
 # copies link Homebrew's GTK absolutely, pulling in a second complete GTK stack
 # ("Class GdkQuartzView is implemented in both ..."). Runs before
 # bundle_homebrew_deps.sh so that pass closes over their Homebrew dependencies.
-echo "==> bundle_local_deps.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_local_deps.sh" "${PREFIX}" \
+run_stage bundle_local_deps.sh "${PREFIX}" \
     "${CANVAS_PREFIX}" "${FFTW_PREFIX}" "${REPO_ROOT}/deps"
 
 # Bundle the gdk-pixbuf SVG loader (from Homebrew's librsvg) + all
 # raster loaders so Coot's .svg toolbar icons render on testers'
 # machines without requiring `brew install librsvg`. See
 # scripts/bundle_pixbuf_loaders.sh header.
-echo "==> bundle_pixbuf_loaders.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_pixbuf_loaders.sh" "${PREFIX}" "${BREW_PREFIX}"
+run_stage bundle_pixbuf_loaders.sh "${PREFIX}" "${BREW_PREFIX}"
 
 # GTK2 input-method modules. Must run BEFORE bundle_homebrew_deps.sh so that
 # script closes over whatever these modules pull in. Without them, the bundled
 # libgtk dlopens Homebrew's im-quartz.so from its compiled-in module directory
 # and loads a SECOND copy of gtk/gdk/gio -- see the script header.
-echo "==> bundle_gtk_immodules.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_gtk_immodules.sh" "${PREFIX}" "${BREW_PREFIX}"
+run_stage bundle_gtk_immodules.sh "${PREFIX}" "${BREW_PREFIX}"
 
 # Bundle the Homebrew GTK2-Quartz stack (+ transitive deps) into lib/ and
 # rewrite every /opt/homebrew reference to @rpath. After this the install has
 # NO external runtime dependency -- it runs on a Mac with no Homebrew at all.
 # Runs after the pixbuf loaders so their Homebrew deps are closed over too.
-echo "==> bundle_homebrew_deps.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_homebrew_deps.sh" "${PREFIX}" "${BREW_PREFIX}"
+run_stage bundle_homebrew_deps.sh "${PREFIX}" "${BREW_PREFIX}"
 
 # Bundle external CLI tools (currently: `probe` for Local Probe Dots).
 # Override the probe source via PROBE_SRC=<path>; default targets the
 # CCP4 9.0.014_arm install path.
-echo "==> bundle_external_tools.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/bundle_external_tools.sh" "${PREFIX}" "${PROBE_SRC:-}"
+run_stage bundle_external_tools.sh "${PREFIX}" "${PROBE_SRC:-}"
 
 # Rename the main executable coot-bin -> Bandicoot. macOS derives the
 # application-menu name and Dock identity from the executable's filename
@@ -480,43 +537,14 @@ if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
     echo "    stripped ${_stripped} Mach-O files"
 fi
 
-# v0.1.4.13: strip LC_RPATH entries that point into a build-only prefix.
-#
-# Bundling rewrites DEPENDENCIES to @rpath but leaves each library's own rpath
-# list alone, so a copied Homebrew dylib can arrive carrying e.g.
-#   LC_RPATH /opt/homebrew/Cellar/jpeg-turbo/3.1.4.1/lib
-# That makes dyld search the builder's Homebrew first when resolving any @rpath
-# dependency of that file -- on a machine with a different version installed
-# there, the app silently binds to it instead of to the copy we ship. Same class
-# of failure as GitHub #8, different route. Runs before codesign because
+# v0.1.4.13: strip LC_RPATH entries pointing into a build-only prefix.
+# v0.1.4.15: the implementation moved to scripts/strip_host_rpaths.sh so
+# bundle_conda_deps.sh can run it too (it re-fetches wheels on every run, which
+# re-introduces Pillow's CI rpath). Runs before codesign because
 # install_name_tool invalidates signatures.
-echo "==> stripping build-host rpaths"
-_stripped_rp=0
-while IFS= read -r _m; do
-    file -b "$_m" 2>/dev/null | grep -q "Mach-O" || continue
-    while IFS= read -r _rp; do
-        # Allowlist, not denylist: keep @loader_path/@executable_path forms, the
-        # OS, and the install itself; strip every other absolute search path.
-        # A denylist misses paths nobody anticipated -- e.g. PyPI wheels ship
-        # dylibs carrying the CI machine's rpath
-        # (/Users/runner/work/Pillow/Pillow/build/deps/darwin/lib).
-        case "$_rp" in
-            @*)                 continue ;;
-            "${PREFIX}"|"${PREFIX}"/*)   continue ;;
-            /usr/lib|/usr/lib/*|/System|/System/*|/Library/Apple/*) continue ;;
-            /*)
-                chmod u+w "$_m" 2>/dev/null || true
-                if install_name_tool -delete_rpath "$_rp" "$_m" 2>/dev/null; then
-                    _stripped_rp=$((_stripped_rp + 1))
-                fi
-                ;;
-        esac
-    done < <(otool -l "$_m" 2>/dev/null | awk '/LC_RPATH/{i=1;next} i&&/path /{print $2;i=0}')
-done < <(find "${PREFIX}" -type f \( -name '*.dylib' -o -name '*.so' -o -perm -u+x \) 2>/dev/null)
-echo "    removed ${_stripped_rp} build-host rpath(s)"
+run_stage strip_host_rpaths.sh "${PREFIX}"
 
-echo "==> codesign-install.sh ${PREFIX}"
-"${REPO_ROOT}/scripts/codesign-install.sh" "${PREFIX}"
+run_stage codesign-install.sh "${PREFIX}"
 
 # Seed the gdk-pixbuf loaders.cache so a build.sh install shows its SVG toolbar
 # icons immediately, without first running the end-user setup.sh. Uses the
@@ -645,22 +673,18 @@ echo "==> monomer dictionary OK: $(find "${PREFIX}/share/coot/lib/data/monomers"
 if [ -f "${REPO_ROOT}/scripts/setup-install.sh" ]; then
     cp "${REPO_ROOT}/scripts/setup-install.sh" "${PREFIX}/setup.sh"
     chmod +x "${PREFIX}/setup.sh"
-    echo "==> copied setup.sh to ${PREFIX}/setup.sh"
 fi
 # Ship the signing helper next to setup.sh so the extracted tarball can
 # re-sign itself (setup.sh delegates to it when present).
 if [ -f "${REPO_ROOT}/scripts/codesign-install.sh" ]; then
     cp "${REPO_ROOT}/scripts/codesign-install.sh" "${PREFIX}/codesign-install.sh"
     chmod +x "${PREFIX}/codesign-install.sh"
-    echo "==> copied codesign-install.sh to ${PREFIX}/codesign-install.sh"
 fi
 if [ -f "${REPO_ROOT}/INSTALL.md" ]; then
     cp "${REPO_ROOT}/INSTALL.md" "${PREFIX}/INSTALL.md"
-    echo "==> copied INSTALL.md to ${PREFIX}/INSTALL.md"
 fi
 if [ -f "${REPO_ROOT}/KEY_SHORTCUTS.md" ]; then
     cp "${REPO_ROOT}/KEY_SHORTCUTS.md" "${PREFIX}/KEY_SHORTCUTS.md"
-    echo "==> copied KEY_SHORTCUTS.md to ${PREFIX}/KEY_SHORTCUTS.md"
 fi
 
 # Hard gate: dependency closure. Same spirit as the monomer-dictionary gate
@@ -686,8 +710,7 @@ fi
 # on a different machine trips over it. Set BUILD_SKIP_CHECKS=1 for a knowingly
 # partial tree; do not make it a habit.
 if [ "${BUILD_SKIP_CHECKS:-0}" != "1" ]; then
-    echo "==> dependency-closure gate: check_install.sh ${PREFIX}"
-    if ! "${REPO_ROOT}/scripts/check_install.sh" "${PREFIX}"; then
+    if ! run_stage check_install.sh "${PREFIX}"; then
         echo "!! build.sh ERROR: the install has an unresolved or build-host" >&2
         echo "   dependency (see the UNRESOLVED / HOST-LEAK lines above)." >&2
         echo "   UNRESOLVED means a shipped Mach-O names a library we do not ship." >&2

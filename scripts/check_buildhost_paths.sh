@@ -79,6 +79,70 @@ done < <(
     find "$INSTALL_DIR/bin" -type f 2>/dev/null
 )
 
+# ---------------------------------------------------------------------------
+# v0.1.4.15: also flag a BUILD-TOOL prefix (conda / Homebrew) compiled into
+# BANDICOOT'S OWN binaries.
+#
+# The $HOME check above cannot see this class: a path like
+#   -DPKGPYTHONDIR='"/opt/miniconda3/lib/python3.13/site-packages/coot"'
+# is a build-host path, is baked into libexec/Bandicoot, and contains no
+# /Users/<name> at all. That exact leak happened while fixing GitHub #24 (an
+# autoconf macro collision sent pythondir into conda) and EVERY gate passed --
+# check_install.sh only inspects dependencies, and this script only looked for
+# $HOME. Compile-time path constants are supposed to be generic
+# (BANDICOOT_COMPILE_PREFIX, /opt/bandicoot), so any build-tool prefix in them
+# is a bug.
+#
+# Scope: only Mach-O files BANDICOOT ITSELF produces. The conda/Homebrew
+# libraries we copy in legitimately carry their own build prefixes internally
+# (conda's libpython embeds /opt/miniconda3 in _sysconfigdata, Homebrew dylibs
+# embed Cellar paths) -- those are not ours to strip and flagging them would
+# make this gate useless noise.
+#
+# "Ours" is decided by LINKAGE, not by a list of filenames: anything we built
+# links against libcoot-*.dylib, and nothing we merely copied does. libexec/
+# holds both kinds (Bandicoot and dynarama-bin are ours; gdk-pixbuf-query-loaders
+# and reduce are Homebrew's and CCP4's), so a directory-based rule flags the
+# wrong files -- it did, on the first run of this check.
+BUILD_TOOL_PREFIXES=""
+for _p in "${CONDA_PREFIX:-/opt/miniconda3}" \
+          "$(brew --prefix 2>/dev/null || echo /opt/homebrew)"; do
+    case "$_p" in /|"") continue ;; esac
+    BUILD_TOOL_PREFIXES="$BUILD_TOOL_PREFIXES ${_p%/}"
+done
+
+is_ours() {   # built here == links libcoot; copied in == does not
+    case "${1##*/}" in libcoot-*.dylib) return 0 ;; esac
+    otool -L "$1" 2>/dev/null | grep -q "libcoot-"
+}
+
+toolleaks=0
+while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    file -b "$f" 2>/dev/null | grep -q "Mach-O" || continue
+    is_ours "$f" || continue
+    for _p in $BUILD_TOOL_PREFIXES; do
+        hits="$(tr -c '[:print:]' '\n' < "$f" 2>/dev/null | grep -F "$_p/" | sort -u | head -3)"
+        if [ -n "$hits" ]; then
+            echo "  TOOL-PREFIX LEAK: ${f#$INSTALL_DIR/}" >&2
+            printf '%s\n' "$hits" | sed 's/^/         /' >&2
+            toolleaks=$((toolleaks + 1))
+        fi
+    done
+done < <(
+    find "$INSTALL_DIR/libexec" -type f 2>/dev/null
+    find "$INSTALL_DIR/lib" -maxdepth 1 -name 'libcoot-*.dylib' 2>/dev/null
+)
+
+if [ "$toolleaks" -ne 0 ]; then
+    echo "!! check_buildhost_paths: FAIL — $toolleaks Bandicoot binary/binaries embed a" >&2
+    echo "   build-tool prefix (conda / Homebrew). Compile-time paths must be generic:" >&2
+    echo "   check configure's --prefix and the pythondir/pkgpythondir it derives." >&2
+    echo "   NOTE this check is meaningful on a RELEASE build; a dev build keeps debug" >&2
+    echo "   info, whose DWARF/stabs legitimately reference the build tools." >&2
+    exit 1
+fi
+
 if [ "$leaks" -ne 0 ]; then
     echo "!! check_buildhost_paths: FAIL — $leaks shipped file(s) embed a builder home path." >&2
     echo "   Rebuild clean (BANDICOOT_RELEASE=1 forces 'make clean' + a generic" >&2
