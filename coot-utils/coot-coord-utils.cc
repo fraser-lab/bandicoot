@@ -7611,15 +7611,16 @@ coot::write_coords_pdb(mmdb::Manager *mol, const std::string &file_name) {
    return r;
 }
 
-// Perhaps this should be a class function of a class derived from mmdb::Manager?
-int
-coot::write_coords_cif(mmdb::Manager *mol, const std::string &file_name) {
-
-   util::remove_wrong_cis_peptides(mol);
-   // util::correct_link_distances(mol);  // this duplicates the molecule.  Needs investigation - GetLink()?
-   int r = mol->WriteCIFASCII(file_name.c_str());
-   return r;
-}
+// coot::write_coords_cif() was REMOVED for BANDICOOT v0.2.
+//
+// It wrapped mmdb's WriteCIFASCII, which re-synthesises an mmCIF from a
+// hard-coded tag list and so wrote 24 categories in mmdb's obsolete NDB
+// dialect. Every mmCIF Bandicoot writes now goes through
+// coot::write_coords_with_gemmi() (see coot-utils/gemmi-write.hh), reached via
+// write_atom_selection_file() in coords/mmdb.cc. Removed rather than left in
+// place as a fallback: the charter is that mmdb performs NO mmCIF output.
+//
+// write_coords_pdb() above stays -- PDB output is not in that charter.
 
 
 // convert atoms in residue to HETATMs

@@ -46,11 +46,30 @@ namespace coot {
    //!        necessarily thinner: nothing can be preserved that was never read.
    //!
    //! \return true on success. On failure \a *message, when non-null, explains
-   //!         why and the caller should fall back to the previous writer
-   //!         rather than leave the user with no file.
+   //!         why.
    //!
-   //! NOTE the document is updated IN PLACE when supplied, so a molecule saved
-   //! twice writes the same categories both times.
+   //! There is NO fallback writer to reach for: this is the only mmCIF write
+   //! path. A caller that cannot write must FAIL, and say so to the user --
+   //! reporting success for a file written in some other format is the bug
+   //! this replaced. Note the failure may leave a partial file behind, since
+   //! the write can fail after the output is opened.
+   //!
+   //! NOTE \a doc is NOT modified. A COPY of it is updated and written, so the
+   //! molecule's retained document keeps its read-time content -- in particular
+   //! it stays free of _atom_site, which is what makes "wrote the stale
+   //! coordinates" an unwritable bug (see mmcif-document.hh).
+   //!
+   //! This comment used to say the document was updated IN PLACE. That was true
+   //! until 2026-08-17, when Art found in GUI testing that a single save or
+   //! make_backup() put the whole coordinate loop back into the retained
+   //! document (5E1N: 476 items -> 478), giving back the memory the strip exists
+   //! for and re-arming the stale-copy bug. Corrected 2026-08-25.
+   //!
+   //! CONSEQUENCE, and the reason this is worth stating: a caller may safely
+   //! pass ANOTHER molecule's retained document. That is exactly what writing a
+   //! symmetry mate wants -- it is an exact duplicate of its parent differing
+   //! only in coordinates, so it should carry the parent's metadata rather than
+   //! the thin synthesised document that passing nullptr would give it.
    bool write_coords_with_gemmi(mmdb::Manager *mol,
                                 const std::string &file_name,
                                 mmcif_document_t *doc,

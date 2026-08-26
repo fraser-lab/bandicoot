@@ -64,7 +64,9 @@ namespace coot {
 
    // Perhaps this should be a class function of a class derived from mmdb::Manager?
    int write_coords_pdb(mmdb::Manager *mol, const std::string &file_name);
-   int write_coords_cif(mmdb::Manager *mol, const std::string &file_name);
+   // write_coords_cif() REMOVED for BANDICOOT v0.2 -- mmdb writes no mmCIF.
+   // Use write_atom_selection_file(..., write_as_cif_flag = true, ...) from
+   // coords/mmdb.h, which routes to coot::write_coords_with_gemmi().
 
    std::string pad_atom_name(const std::string &atom_name_in,
 			     const std::string &element);

@@ -91,6 +91,16 @@ fi
 echo "==> pre-ship gate: clean, pushed tree"
 "$SCRIPT_DIR/check_clean_tree.sh" "a release tarball"
 
+# Same provenance argument, one layer down: a clean tree still ships the wrong
+# thing if ./configure was generated from a DIFFERENT configure.ac than the one
+# committed. That is invisible to check_clean_tree.sh -- the tree is clean, the
+# generated files are simply out of date with it. build.sh bootstraps
+# automatically now, so this only fires when a tarball is cut from a tree where
+# make was driven by hand; it is cheap and the failure mode it guards against
+# (v0.2 sources compiled at -std=c++14, 2026-08-25) was completely silent.
+echo "==> pre-ship gate: build system current with configure.ac"
+"$SCRIPT_DIR/check_build_system_fresh.sh"
+
 # --- pre-ship dependency gates ---------------------------------------------
 # These catch the class of bug that shipped v0.1.4.2..v0.1.4.8 with a broken
 # _ssl (a bundled Mach-O naming a dependency that isn't in the tree, which

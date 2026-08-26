@@ -183,9 +183,27 @@ unset _py_ver
 MAC_MAJOR="${MAC_MAJOR:-$(sw_vers -productVersion | cut -d. -f1)}"
 BREW_PC_OSDIR="${BREW_PC_OSDIR:-${BREW_PREFIX}/Library/Homebrew/os/mac/pkgconfig/${MAC_MAJOR}}"
 
+# The generated build system (configure, Makefile.in) has to match the sources
+# it came from (configure.ac, the Makefile.am tree, macros/*.m4).
+#
+# This used to be `if [ ! -x ./configure ]`, an EXISTENCE test -- it can see
+# absence but never staleness. On 2026-08-25 that let through a ./configure
+# generated before the C++17 bump, and a v0.2 build was silently configured at
+# -std=c++14. An mtime comparison would not have been reliable either: git
+# stamps checked-out files with the checkout time, so a rebase or branch switch
+# can leave the PRODUCT looking newer than its SOURCE, in which case make
+# believes a stale configure is current and reports nothing.
+#
+# check_build_system_fresh.sh compares a content HASH instead, which is immune
+# to that in both directions. See the long comment at the top of it.
 if [ ! -x ./configure ]; then
     echo "==> ./configure not found; running bootstrap"
     ./scripts/bootstrap.sh
+    ./scripts/check_build_system_fresh.sh --write-stamp
+elif ! ./scripts/check_build_system_fresh.sh --quiet; then
+    echo "==> build system is stale or unverified; re-running bootstrap"
+    ./scripts/bootstrap.sh
+    ./scripts/check_build_system_fresh.sh --write-stamp
 fi
 
 # v0.1.0.3: per-build unreleased-version counter. Each call to build.sh

@@ -169,24 +169,36 @@ write_atom_selection_file(atom_selection_container_t asc,
       // a PDB record type with no mmCIF equivalent (connectivity lives in
       // struct_conn, which is passed through), so there is nothing to strip.
       //
-      // On failure we fall back to the old writer rather than leave the user
-      // with no file at all -- a save that silently does nothing is far worse
-      // than a save in a poorer format.
+      // There is NO fallback to mmdb's WriteCIFASCII, deliberately.
+      //
+      // This used to fall back to the old writer on failure, reasoning that a
+      // save doing nothing was worse than a save in a poorer format. That was
+      // a false choice: any save that silently does something other than what
+      // the user asked for is bad, and the fallback is exactly that -- it
+      // reports SUCCESS while writing 24 categories in mmdb's obsolete NDB
+      // dialect where this path writes 77 faithfully. The user is told their
+      // file is saved; it is saved as something else.
+      //
+      // The third road is to fail LOUDLY. Return non-zero and let the caller
+      // say so: save_coordinates() and make_backup() both already raise a
+      // dialog on a non-zero return, and the fallback is precisely what kept
+      // those from ever firing.
+      //
+      // The gemmi message goes to stdout rather than being plumbed upwards:
+      // the dialog says the save failed, the terminal says why.
       std::string gemmi_message;
       if (coot::write_coords_with_gemmi(mol, filename, mmcif_doc, &gemmi_message)) {
          ierr = 0;
       } else {
-         std::cout << "WARNING:: gemmi could not write " << filename << " ("
-                   << gemmi_message << "); falling back to the mmdb writer"
+         // Not "no file was written": the writer can fail after opening the
+         // output (a gzclose() error, say), so what is on disk may be absent,
+         // truncated or complete-but-unflushed. None of those is a saved copy.
+         std::cout << "ERROR:: mmCIF write FAILED for " << filename << ": "
+                   << gemmi_message << std::endl;
+         std::cout << "ERROR:: " << filename << " must not be relied on as a "
+                   << "saved copy -- it may be missing or incomplete."
                    << std::endl;
-
-         // WriteCIFASCII() seems to duplicate the atoms (maybe related to aniso?)
-         // So let's copy the molecule and throw away the copy, that way we don't
-         // duplicate teh atoms in the original molecule.
-         mmdb::Manager *mol_copy  = new mmdb::Manager;
-         mol_copy->Copy(mol, mmdb::MMDBFCM_All);
-         ierr = mol_copy->WriteCIFASCII(filename.c_str());
-         delete mol_copy;
+         ierr = 1;
       }
 
    } else {

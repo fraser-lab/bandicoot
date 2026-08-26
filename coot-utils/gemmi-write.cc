@@ -15,7 +15,11 @@
 #include <gemmi/mmdb.hpp>       // copy_from_mmdb
 #include <gemmi/to_mmcif.hpp>   // update_mmcif_block, make_mmcif_document
 #include <gemmi/to_cif.hpp>     // write_cif_to_stream
-#include <gemmi/polyheur.hpp>   // setup_entities
+// <gemmi/polyheur.hpp> was included here for setup_entities(). That approach
+// was tried and REJECTED 2026-08-12 (see the comment further down, by the
+// entity handling), the call went, and the include outlived it. Nothing in this
+// file uses polyheur, and gemmi/mmdb.hpp includes it anyway for
+// assign_subchains -- so removing it changes nothing, not even preprocessing.
 
 #include <zlib.h>
 

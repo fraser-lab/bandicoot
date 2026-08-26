@@ -6811,10 +6811,15 @@ molecule_class_info_t::save_coordinates(const std::string filename,
    }
 
    if (ierr) {
-      std::cout << "WARNING:: Coordinates write to " << filename
-                << " failed!" << std::endl;
-      std::string ws = "WARNING:: export coords: There was an error ";
-      ws += "in writing ";
+      // BANDICOOT v0.2: say plainly that nothing was saved. This dialog existed
+      // before but was effectively unreachable for mmCIF, because the writer
+      // fell back to mmdb and reported success. With no fallback left, a failed
+      // save has to be unmistakable: the molecule still has unsaved changes
+      // (have_unsaved_changes_flag is only cleared on the success branch below)
+      // and the file on disk must not be trusted.
+      std::cout << "ERROR:: Coordinates write to " << filename
+                << " FAILED (status " << ierr << ")" << std::endl;
+      std::string ws = "SAVE FAILED\n\n";
       ws += filename;
       GtkWidget *w = graphics_info_t::wrapped_nothing_bad_dialog(ws);
       gtk_widget_show(w);
@@ -7262,11 +7267,21 @@ molecule_class_info_t::make_backup() { // changes history details
                istat = write_atom_selection_file(atom_sel, backup_file_name, write_as_cif, gz,
                                                  1, 1, 0, mmcif_doc.get());
 
-               // WriteMMDBF returns 0 on success, else mmdb:Error_CantOpenFile (15)
+               // write_atom_selection_file() returns 0 on success, non-zero on
+               // failure (mmdb::Error_CantOpenFile is 15).
+               //
+               // BANDICOOT v0.2: this branch is REACHABLE for mmCIF now that the
+               // mmdb fallback writer is gone, so it has to be correct. Two bugs
+               // fixed here: it named WritePDBASCII whichever format was being
+               // written, and `warn += istat` appended the int as a CHARACTER
+               // (status 15 became a control code), so the number never showed.
                if (istat) {
-                  std::string warn;
-                  warn = "WARNING:: WritePDBASCII failed! Return status ";
-                  warn += istat;
+                  std::cout << "ERROR:: backup write to " << backup_file_name
+                            << " FAILED (" << (write_as_cif ? "mmCIF" : "PDB")
+                            << " writer, status " << istat
+                            << "); Undo cannot recover this state" << std::endl;
+                  std::string warn = "BACKUP FAILED\n\n";
+                  warn += backup_file_name;
                   g.info_dialog_and_text(warn);
                }
             } else {
@@ -7933,8 +7948,20 @@ molecule_class_info_t::write_cif_file(const std::string &filename) {
    int err = 1; // fail
    if (atom_sel.n_selected_atoms > 0) {
       mmdb::byte bz = mmdb::io::GZM_NONE;
-      // err = write_atom_selection_file(atom_sel, filename, bz);
-      err = coot::write_coords_cif(atom_sel.mol, filename);
+
+      // BANDICOOT v0.2: this is the scripting API (write_cif_file(imol, name)),
+      // and it used to call coot::write_coords_cif() -> mmdb's WriteCIFASCII,
+      // which re-synthesised the file from a hard-coded tag list: 24 categories
+      // in mmdb's obsolete NDB dialect where this path writes 77 faithfully. So
+      // a script got a materially worse file than File -> Save Coordinates did,
+      // with nothing to say so. That gap is what prompted the v0.2 charter.
+      //
+      // It now goes through the SAME writer as the save and backup paths,
+      // retained document and all. remove_wrong_cis_peptides() is not lost in
+      // the move: write_atom_selection_file() calls it too, on entry.
+      err = write_atom_selection_file(atom_sel, filename, true /* as mmCIF */, bz,
+                                      1 /* hydrogens */, 1 /* aniso */,
+                                      0 /* conect: PDB-only */, mmcif_doc.get());
    }
    return err;
 }

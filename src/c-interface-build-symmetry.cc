@@ -241,7 +241,39 @@ void save_symmetry_coords(int imol,
 	       asc.atom_selection[i]->x = trans_pos.x();
 	       asc.atom_selection[i]->y = trans_pos.y();
 	       asc.atom_selection[i]->z = trans_pos.z();
-	    } 
+
+	       // BANDICOOT v0.2: rotate the anisotropic U tensor as well.
+	       //
+	       // Coot 0.9 transformed only x/y/z, so a symmetry mate related by a
+	       // ROTATION carried its parent's thermal ellipsoids in the PARENT's
+	       // orientation -- silently, in a file that looks entirely plausible.
+	       // U is a tensor: it must transform as U' = R U R^T. For a 2-fold
+	       // about b that flips the signs of U12 and U23.
+	       //
+	       // ONLY rtop is applied. to_origin_rtop is built above with an
+	       // explicit IDENTITY rotation, so it is a pure translation, and a
+	       // translation leaves U unchanged. That is also why a mate related
+	       // by a lattice translation was already correct -- so do NOT use one
+	       // to test this: it passes either way. Use a mate related by a
+	       // rotation (2GEW in P 1 21 1 has the 2-1 screw).
+	       //
+	       // SIGUIJ (su11..su23, ASET_Anis_tFSigma) is deliberately NOT
+	       // touched: those are uncertainties, and they do not propagate under
+	       // rotation as R S R^T. Rare in practice; left alone rather than
+	       // transformed wrongly.
+	       mmdb::Atom *at = asc.atom_selection[i];
+	       if (at->WhatIsSet & mmdb::ASET_Anis_tFac) {
+		  clipper::U_aniso_orth u(at->u11, at->u22, at->u33,
+					  at->u12, at->u13, at->u23);
+		  clipper::U_aniso_orth ut = u.transform(rtop);
+		  at->u11 = ut.mat00();
+		  at->u22 = ut.mat11();
+		  at->u33 = ut.mat22();
+		  at->u12 = ut.mat01();
+		  at->u13 = ut.mat02();
+		  at->u23 = ut.mat12();
+	       }
+	    }
 	    asc.mol->PDBCleanup(mmdb::PDBCLEAN_SERIAL|mmdb::PDBCLEAN_INDEX);
 	    asc.mol->FinishStructEdit();
 	    
