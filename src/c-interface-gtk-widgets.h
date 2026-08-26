@@ -144,7 +144,17 @@ GtkWidget *coot_run_script_chooser();
 
 GtkWidget *coot_save_state_chooser();
 
-GtkWidget *coot_save_symmetry_chooser();
+/* BANDICOOT v0.2: the merged Save Coordinates chooser, C entry points.
+
+   coot_save_symmetry_chooser() is GONE -- "Save Coordinates" and "Save Symmetry
+   Coordinates" now share one dialog, which is how the symmetry save finally
+   gets the Save Hydrogens / Save ANISO Records options and the "Save in Format"
+   menu. The symmetry caller lives in C++ (graphics-info-defines.cc) and uses the
+   richer coot_save_coords_chooser_new() in save-coords-gui.hh; these exist
+   because callbacks.c is C and cannot see a C++ options object. */
+GtkWidget *coot_save_coords_chooser_for_molecule(int imol);
+int coot_save_coords_chooser_execute_widget(GtkWidget *chooser);
+void coot_save_coords_chooser_sync_name_widget(GtkWidget *chooser);
 
 GtkWidget *coot_screendump_chooser();
 

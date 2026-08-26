@@ -302,6 +302,10 @@ coot_bin_SOURCES = \
 	c-interface-build-main-chain.cc	 \
 	c-interface-build-side-chain.cc	 \
 	c-interface-build-symmetry.cc	 \
+	save-coords-options.hh   \
+	save-coords-options.cc   \
+	save-coords-gui.hh       \
+	save-coords-gui.cc       \
 	c-interface-build-gui.cc \
 	c-interface-curlew.cc    \
 	c-interface-curlew.hh    \

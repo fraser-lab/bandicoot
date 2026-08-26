@@ -6822,7 +6822,14 @@ molecule_class_info_t::save_coordinates(const std::string filename,
       std::string ws = "SAVE FAILED\n\n";
       ws += filename;
       GtkWidget *w = graphics_info_t::wrapped_nothing_bad_dialog(ws);
-      gtk_widget_show(w);
+      // NULL when running --no-graphics: wrapped_nothing_bad_dialog() returns
+      // early on !use_graphics_interface_flag (graphics-info.cc). Showing it
+      // unguarded SEGFAULTS, which is how a headless save-failure test crashed
+      // the whole interpreter on 2026-08-26. The pattern predates this work, but
+      // removing the mmdb fallback made the failure path reachable in earnest.
+      // NOTE the same unguarded pair is at molecule-class-info-maps.cc:1961.
+      if (w)
+         gtk_widget_show(w);
    } else {
       std::cout << "INFO:: saved coordinates " << filename << std::endl;
       have_unsaved_changes_flag = 0;

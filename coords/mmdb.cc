@@ -123,7 +123,7 @@ write_atom_selection_file(atom_selection_container_t asc,
 			  bool write_hydrogens,     // optional arg
 			  bool write_aniso_records, // optional arg
 			  bool write_conect_records, // optional arg
-			  coot::mmcif_document_t *mmcif_doc // optional arg
+			  const coot::mmcif_document_t *mmcif_doc // optional arg
 			  ) {
 
    int ierr = 0;
@@ -159,9 +159,13 @@ write_atom_selection_file(atom_selection_container_t asc,
 
       // BANDICOOT v0.2 (Phase 3): mmCIF is written by gemmi.
       //
-      // copy_from_mmdb -> update_mmcif_block -> write. The retained document
-      // is updated IN PLACE, so every category Bandicoot does not regenerate
-      // reaches the file exactly as it was read. mmdb's own WriteCIFASCII
+      // copy_from_mmdb -> update_mmcif_block -> write. A COPY of the retained
+      // document is updated -- the retained one is const and untouched -- so
+      // every category Bandicoot does not regenerate reaches the file exactly
+      // as it was read. (This comment said "updated IN PLACE" until 2026-08-26;
+      // that stopped being true on 2026-08-17, when in-place editing was found
+      // to be putting _atom_site back into the retained document on every
+      // backup.) mmdb's own WriteCIFASCII
       // re-synthesised from a hard-coded tag list and turned 65 categories
       // into 15; that is what this replaces.
       //

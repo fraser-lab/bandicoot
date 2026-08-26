@@ -507,7 +507,7 @@ static bool write_doc(const gemmi::cif::Document &doc, const std::string &file_n
 bool
 coot::write_coords_with_gemmi(mmdb::Manager *mol,
                               const std::string &file_name,
-                              coot::mmcif_document_t *doc,
+                              const coot::mmcif_document_t *doc,
                               std::string *message) {
 
    if (! mol) {

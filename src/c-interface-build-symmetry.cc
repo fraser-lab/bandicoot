@@ -69,6 +69,8 @@
 
 #include "graphics-info.h"
 
+#include "save-coords-options.hh"   // the toolkit-free Save Coordinates options
+
 #include "coot-utils/coot-coord-utils.hh"
 #include "utils/coot-fasta.hh"
 
@@ -188,21 +190,45 @@ void setup_save_symmetry_coords() {
 }
 
 
-void save_symmetry_coords(int imol, 
-			  const char *filename,
-			  int symop_no, 
-			  int shift_a, 
-			  int shift_b, 
-			  int shift_c,
-			  int pre_shift_to_origin_na,
-			  int pre_shift_to_origin_nb,
-			  int pre_shift_to_origin_nc) {
+// BANDICOOT v0.2: the option-aware symmetry save.
+//
+// The long-standing scripting entry point save_symmetry_coords() below
+// delegates here with today's defaults, so its behaviour is unchanged.
+//
+// Two things this gained over the old body:
+//   - it honours the hydrogens / anisotropic / File Type options, which the
+//     symmetry save never had because it was built from a SEPARATE glade widget
+//     from Save Coordinates -- the merge is what makes them available here;
+//   - it writes through write_atom_selection_file(), so an mmCIF symmetry mate
+//     goes out via gemmi instead of mmdb's obsolete WriteCIFASCII (24
+//     categories in the NDB dialect, against 77 faithful ones).
+//
+// It also passes the PARENT molecule's retained mmCIF document. A symmetry mate
+// is an exact duplicate of its parent differing only in coordinates, so it
+// should carry the parent's metadata; passing nullptr would synthesise a thin
+// document and silently drop entity/struct_conf/citation/refine and the rest.
+// This is safe -- write_coords_with_gemmi() updates a COPY, never the retained
+// document itself (see the note in gemmi-write.hh).
+int
+coot::save_symmetry_coords_with_options(const coot::save_coords_options_t &opts,
+                                        const std::string &file_name) {
+
+   const int imol                   = opts.imol;
+   const int symop_no               = opts.symop;
+   const int shift_a                = opts.shift_a;
+   const int shift_b                = opts.shift_b;
+   const int shift_c                = opts.shift_c;
+   const int pre_shift_to_origin_na = opts.pre_shift_a;
+   const int pre_shift_to_origin_nb = opts.pre_shift_b;
+   const int pre_shift_to_origin_nc = opts.pre_shift_c;
+   const char *filename             = file_name.c_str();
+   int status = 1;  // fail unless we get all the way through
 
    // Copy the coordinates molecule manager
    // Transform them
    // write them out
 
-   if (imol >= 0) { 
+   if (imol >= 0) {
       if (imol < graphics_info_t::n_molecules()) { 
 	 if (graphics_info_t::molecules[imol].has_model()) { 
 	    mmdb::Manager *mol2 = new mmdb::Manager;
@@ -278,14 +304,25 @@ void save_symmetry_coords(int imol,
 	    asc.mol->FinishStructEdit();
 	    
 	    mmdb_manager_delete_conect(mol2);
-	    int ierr = -1;
-	    if (coot::is_mmcif_filename(filename))
-	       ierr = mol2->WriteCIFASCII(filename);
-	    else
-	       ierr = mol2->WritePDBASCII(filename);
+
+	    // The File Type menu decides the format now, not the extension.
+	    const bool as_cif = (opts.format == coot::coord_file_format_t::MMCIF);
+
+	    // Writes through the SAME path as Save Coordinates, so mmCIF goes via
+	    // gemmi and the hydrogens/aniso options are honoured. The parent's
+	    // retained document is passed so the mate keeps the parent's metadata.
+	    int ierr = write_atom_selection_file(asc, file_name, as_cif,
+						 mmdb::io::GZM_NONE,
+						 opts.hydrogens,
+						 opts.aniso,
+						 opts.conect,
+						 graphics_info_t::molecules[imol].get_mmcif_document());
+	    status = ierr;
 	    if (ierr) {
-	       std::cout << "WARNING:: WritePDBASCII to " << filename << " failed." << std::endl;
-	       std::string s = "WARNING:: WritePDBASCII to file ";
+	       // This used to say "WritePDBASCII" whichever branch had run.
+	       std::cout << "WARNING:: writing symmetry coordinates to " << filename
+			 << " failed." << std::endl;
+	       std::string s = "WARNING:: writing symmetry coordinates to file ";
 	       s += filename;
 	       s += " failed.";
 	       graphics_info_t g;
@@ -314,10 +351,44 @@ void save_symmetry_coords(int imol,
 	 }
       }
    }
+   return status;
+}
+
+
+// The scripting entry point, unchanged in signature and behaviour: today's
+// defaults are hydrogens and anisotropic records ON, CONECT off, and the format
+// taken from the filename -- which is exactly what this function did before the
+// options object existed.
+void save_symmetry_coords(int imol,
+			  const char *filename,
+			  int symop_no,
+			  int shift_a,
+			  int shift_b,
+			  int shift_c,
+			  int pre_shift_to_origin_na,
+			  int pre_shift_to_origin_nb,
+			  int pre_shift_to_origin_nc) {
+
+   coot::save_coords_options_t opts;
+   opts.imol        = imol;
+   opts.is_symmetry = true;
+   opts.symop       = symop_no;
+   opts.shift_a     = shift_a;
+   opts.shift_b     = shift_b;
+   opts.shift_c     = shift_c;
+   opts.pre_shift_a = pre_shift_to_origin_na;
+   opts.pre_shift_b = pre_shift_to_origin_nb;
+   opts.pre_shift_c = pre_shift_to_origin_nc;
+   opts.hydrogens   = true;
+   opts.aniso       = true;
+   opts.conect      = false;
+   opts.format      = coot::save_coords_options_t::format_from_filename(filename);
+
+   coot::save_symmetry_coords_with_options(opts, std::string(filename));
 }
 
 /*! \brief create a new molecule (molecule number is the return value)
-  from imol. 
+  from imol.
 
 The rotation/translation matrix components are given in *orthogonal*
 coordinates.

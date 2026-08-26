@@ -51,7 +51,7 @@ int write_atom_selection_file(atom_selection_container_t asc,
 			      bool write_hydrogens = 1,  // optional arg
 			      bool write_aniso_records = 1,  // optional arg
 			      bool write_conect_records = 0,  // optional arg
-			      coot::mmcif_document_t *mmcif_doc = nullptr);
+			      const coot::mmcif_document_t *mmcif_doc = nullptr);
 
 class access_mol : public mmdb::Manager {
  public:

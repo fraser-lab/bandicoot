@@ -70,9 +70,13 @@ namespace coot {
    //! symmetry mate wants -- it is an exact duplicate of its parent differing
    //! only in coordinates, so it should carry the parent's metadata rather than
    //! the thin synthesised document that passing nullptr would give it.
+   //! \a doc is const BECAUSE the writer copies it. That is not decoration: it
+   //! makes "a write mutated another molecule's retained document" a compile
+   //! error rather than something to be careful about -- which matters now that
+   //! saving a symmetry mate deliberately passes its PARENT's document.
    bool write_coords_with_gemmi(mmdb::Manager *mol,
                                 const std::string &file_name,
-                                mmcif_document_t *doc,
+                                const mmcif_document_t *doc,
                                 std::string *message = nullptr);
 }
 
