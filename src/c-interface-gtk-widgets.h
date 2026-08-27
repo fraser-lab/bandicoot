@@ -363,11 +363,6 @@ GtkWidget *wrapped_create_skeleton_dialog();
 void set_on_off_skeleton_radio_buttons(GtkWidget *skeleton_frame);
 void set_on_off_single_map_skeleton_radio_buttons(GtkWidget *skeleton_frame, int imol);
 
-void save_coordinates_using_widget(GtkWidget *widget); /* do a get_user_data for
-					     the molecule and a lookup
-					     of the entry? to find the
-					     filename in c-interface,
-					     not in the callback.c  */
 
 /* not really a button select, its a menu item select */
 /* not productive */

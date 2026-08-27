@@ -36,6 +36,7 @@
 #include "coot-utils/coot-coord-utils.hh"   // normalise_link_blank_fields()
 #include "coords/mmdb.h"       // write_atom_selection_file -- the PRODUCTION writer
 
+#include <gemmi/symmetry.hpp>  // find_spacegroup_by_name, for name equivalence
 #include <gemmi/read_cif.hpp>   // read_cif_gz, for the write-side re-read
 #include <gemmi/mmread_gz.hpp> // read_structure_gz -- header-check reads the .cif itself
 
@@ -697,6 +698,12 @@ static void ensure_syminfo() {
 // "Unknown format"), so including it would add a permanent "failed to load"
 // line to every run and push the baseline further from "all lines explained".
 // See TRAPS.md A6 -- that trap wants its own check, not a noisy default.
+// RECURSES into subdirectories. The corpus is grouped -- compact/ for small fast
+// structures, small_molecules/ for the read-sm-cif.cc and chem_comp paths,
+// heterogeneity/ for the diffUSE encoding -- and a non-recursive walk skipped
+// every one of them SILENTLY, because a directory has no extension and fell out
+// at the `dot == npos` test. Eleven files vanished from all four gates without a
+// single line of output saying so.
 static std::vector<std::string> corpus_files(const std::string &dir) {
    std::vector<std::string> out;
    DIR *d = opendir(dir.c_str());
@@ -704,15 +711,24 @@ static std::vector<std::string> corpus_files(const std::string &dir) {
    while (struct dirent *e = readdir(d)) {
       std::string n = e->d_name;
       if (n.empty() || n[0] == '.') continue;      // skips .DS_Store too
+      const std::string path = dir + "/" + n;
+
+      struct stat st;
+      if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+         std::vector<std::string> sub = corpus_files(path);
+         out.insert(out.end(), sub.begin(), sub.end());
+         continue;
+      }
+
       size_t dot = n.rfind('.');
       if (dot == std::string::npos) continue;
       std::string ext = n.substr(dot);
       for (char &c : ext) c = std::tolower(static_cast<unsigned char>(c));
       if (ext == ".cif" || ext == ".ent" || ext == ".pdb")
-         out.push_back(dir + "/" + n);
+         out.push_back(path);
    }
    closedir(d);
-   std::sort(out.begin(), out.end());
+   std::sort(out.begin(), out.end());   // full path, so groups stay together
    return out;
 }
 
@@ -799,6 +815,44 @@ static bool value_less(const std::string &a, const std::string &b) {
       if (pa == a.size() && pb == b.size()) return da < db;
    } catch (...) {}
    return a < b;
+}
+
+// Two space-group NAMES that denote the same group.
+//
+// A file may spell a group in a setting the writer does not use -- "H 3 2" is
+// the hexagonal setting of "R 3 2", which gemmi canonicalises to "R 3 2:H" on
+// the way out. That is a rename, not a loss, and the gate must not read it as
+// one. Resolving both names through gemmi is preferred to a hand-kept table of
+// equivalent spellings: the table would be one more thing to get right, and
+// wrong entries in it would be invisible.
+static bool spacegroup_names_equivalent(const std::string &a, const std::string &b) {
+   auto strip = [](std::string v) {
+      while (!v.empty() && (v.front() == '\'' || v.front() == '"')) v.erase(v.begin());
+      while (!v.empty() && (v.back()  == '\'' || v.back()  == '"')) v.pop_back();
+      return v;
+   };
+   const gemmi::SpaceGroup *sa = gemmi::find_spacegroup_by_name(strip(a));
+   const gemmi::SpaceGroup *sb = gemmi::find_spacegroup_by_name(strip(b));
+   if (!sa || !sb) return false;          // unrecognised: fall back to a plain compare
+   return std::string(sa->hall) == std::string(sb->hall);
+}
+
+// Is this column a SYNTHETIC ROW KEY rather than data?
+//
+// _atom_site.id and _atom_site_anisotrop.id label rows; they carry no meaning
+// beyond joining the two categories together. mmdb rebuilds its own
+// model/chain/residue ordering on read, so the same atom can legitimately land
+// at a different row and take a different id -- comparing those numbers across
+// files then reports hundreds of "differences" that describe nothing.
+//
+// The association they encode is still checked, by the round-trip mode that
+// compares whole models rather than columns.
+static bool is_synthetic_row_key(const std::string &category, const std::string &tag) {
+   // The category key carries its leading underscore ("_atom_site_anisotrop"),
+   // so accept either spelling rather than depending on which one the caller has.
+   std::string c = category;
+   if (!c.empty() && c.front() == '_') c.erase(c.begin());
+   return tag == "id" && (c == "atom_site" || c == "atom_site_anisotrop");
 }
 
 static bool values_equal(const std::string &a, const std::string &b) {
@@ -944,7 +998,22 @@ static int write_check(const std::vector<std::string> &files, const std::string 
                // the convention rather than breaking it, and the gate must not
                // fail on it or it stays permanently red on the SC1 files.
                bool element_col = (t->first == "type_symbol" || t->first == "symbol");
+
+               // ACCEPTED DEVIATION: a synthetic row key. See
+               // is_synthetic_row_key() -- these number rows, they are not data,
+               // and mmdb's re-ordering makes their values differ without
+               // anything being lost.
+               if (is_synthetic_row_key(c->first, t->first)) continue;
+
+               // ACCEPTED DEVIATION: the same space group under another name.
+               bool spacegroup_col = (t->first == "space_group_name_H-M" ||
+                                      t->first == "name_H-M_alt" ||
+                                      t->first == "space_group_name_Hall" ||
+                                      t->first == "name_Hall");
+
                for (size_t r = 0; r < col_b.size(); r++) {
+                  if (spacegroup_col &&
+                      spacegroup_names_equivalent(col_b[r], col_a[r])) continue;
                   if (element_col) {
                      std::string x = col_b[r], y = col_a[r];
                      for (char &ch : x) ch = std::toupper((unsigned char) ch);
