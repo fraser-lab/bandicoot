@@ -119,6 +119,15 @@ def get_url_str(id, url_string, data_type, imol_coords_arg_list):
        imol_coords = handle_read_draw_molecule(pdb_file_name)
        return imol_coords
 
+    if (data_type == "cif_gz"):
+       # Keep the .gz on the saved name. The reader decides how to open a file
+       # from its extension (gemmi read_cif_gz / read_structure_gz), so a
+       # compressed file saved as plain ".cif" is unreadable.
+       pdb_file_name = coot_download_dir + "/" + id + ".cif.gz"
+       check_dir_and_get_url(coot_download_dir, pdb_file_name, url_string)
+       imol_coords = handle_read_draw_molecule(pdb_file_name)
+       return imol_coords
+
     if (data_type == "sfs"):
        sfs_file_name = coot_download_dir + "/" + id + ".cif"
 #       print "BL DEBUG:: cif output file is: ",sfs_file_name
@@ -142,8 +151,83 @@ def get_ebi_pdb_and_sfs(id):
        print("failed to read coordinates.")
     else:
        down_id = id.lower()
+       # Structure factors are indexed by the legacy code, as the coordinates
+       # are. get_ebi_pdb() above has already reduced the id for its own fetch;
+       # do the same here or the sf request goes out with the extended form.
+       legacy = extended_pdb_id_to_legacy(down_id)
+       if legacy:
+           down_id = legacy
        url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + "r" + down_id + "sf." + pdbe_file_name_tail
-       get_url_str(id, url_str, "sfs", imol_coords)
+       get_url_str(down_id, url_str, "sfs", imol_coords)
+
+
+# --- wwPDB extended accession codes ----------------------------------------
+#
+# The archive is moving from 4-character entry ids (5RSH) to 12-character
+# extended ones (pdb_00005rsh). Two cases need different handling, because the
+# CURRENTLY LIVE servers only know the short form:
+#
+#   pdb_0000XXXX   the entry also has a legacy 4-character id, XXXX. Reduce to
+#                  it and use the existing endpoints, which work today.
+#   pdb_????XXXX   the eight characters do not begin with 0000, so there is no
+#                  4-character equivalent and no client-side trick invents one.
+#                  These exist only in the new archive.
+#
+# ==========================================================================
+#  REVISIT ON OR AFTER 2027-07-21, when the new archive goes live.
+#
+#  The new-archive host below is the BETA one, and the word "beta" is in the
+#  hostname, so the address is expected to change at go-live -- plausibly to
+#  files.wwpdb.org. The beta address is documented as redirecting for three
+#  years after go-live, so this keeps working until roughly 2030; it should
+#  not be left that long.
+#
+#  Download protocols: https://www.wwpdb.org/ftp/pdb-beta-ftp-sites
+# ==========================================================================
+
+wwpdb_new_archive_server = "https://files-beta.wwpdb.org/download"
+
+
+def is_extended_pdb_id(code):
+
+    """True for a 12-character wwPDB extended accession code, e.g. pdb_00005rsh."""
+
+    c = str(code).strip().lower()
+    return len(c) == 12 and c.startswith("pdb_")
+
+
+def extended_pdb_id_to_legacy(code):
+
+    """pdb_00005rsh -> 5rsh. None when the code has no 4-character equivalent.
+
+    Only ids whose eight characters begin with 0000 carry a legacy code; for
+    any other extended id the short form does not exist."""
+
+    c = str(code).strip().lower()
+    if is_extended_pdb_id(c) and c.startswith("pdb_0000"):
+        return c[8:]
+    return None
+
+
+def get_wwpdb_new_archive_pdb(extended_id):
+
+    """Fetch an extended-id entry from the new wwPDB archive.
+
+    Used only for extended ids with no legacy 4-character equivalent -- those
+    exist nowhere else. The archive serves gzipped mmCIF; there is no PDB-format
+    equivalent, and for many such entries there could not be one.
+
+    See the REVISIT note by wwpdb_new_archive_server: this currently points at
+    the beta host."""
+
+    url = wwpdb_new_archive_server + "/" + extended_id + ".cif.gz"
+    print("INFO:: extended accession code", extended_id,
+          "has no legacy code; fetching from the new wwPDB archive")
+    status = get_url_str(extended_id, url, "cif_gz", None)
+    if not valid_model_molecule_qm(status):
+        print("WARNING:: could not fetch", extended_id, "from", url)
+    return status
+
 
 # Return a molecule number on success
 # or not a number (False) or -1 on error.
@@ -153,21 +237,42 @@ def get_ebi_pdb(id):
 
     # print "======= id:", id
     down_id = id.lower()
-    pdb_url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + down_id + ".ent"
+
+    if is_extended_pdb_id(down_id):
+        legacy = extended_pdb_id_to_legacy(down_id)
+        if legacy:
+            # The live servers index by the 4-character code only, so an
+            # extended id reaches them as a 404 even though the entry is there.
+            print("INFO:: extended accession code", down_id,
+                  "reduced to its legacy code", legacy, "for download")
+            down_id = legacy
+        else:
+            # No legacy equivalent: only the new archive has this entry.
+            return get_wwpdb_new_archive_pdb(down_id)
+
+    # mmCIF is the format we ask for first. The PDB format has been frozen
+    # since 2012 and mmCIF is the archive standard, so the up-to-date file is
+    # the one to prefer; PDB remains only as a fallback for the rare entry that
+    # has no mmCIF. Anyone wanting the original PDB file can take it from the
+    # archive directly.
+    #
+    # Note the PDB-format file is named "pdb<code>.ent" at PDBe, not
+    # "<code>.ent". This used to be built without the prefix, so the PDB
+    # request 404'd for every entry and the mmCIF fallback did all the work
+    # unnoticed.
     cif_url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + down_id + ".cif"
+    pdb_url_str = pdbe_server + "/" + pdbe_pdb_file_dir + "/" + "pdb" + down_id + ".ent"
+
+    cif_url_status = get_url_str(id, cif_url_str, "cif", None)
+    if valid_model_molecule_qm(cif_url_status):
+        pdb_validate(down_id, cif_url_status)
+        return cif_url_status
+
+    print("INFO:: no mmCIF for", down_id, "- falling back to PDB format")
     url_status = get_url_str(id, pdb_url_str, "pdb", None)
-    # e.g. http://ftp.ebi.ac.uk/pub/databases/pdb +
-    #      /validation_reports/cb/1cbs/1cbs_validation.xml.gz
-    print("BL DEBUG:: get-ebi-pdb ======= url-status", url_status)
     if valid_model_molecule_qm(url_status):
         pdb_validate(down_id, url_status)
         return url_status
-    else:
-        cif_url_status = get_url_str(id, cif_url_str, "cif", None)
-        if valid_model_molecule_qm(cif_url_status):
-            print("BL DEBUG:: get-ebi-pdb ======= cif_url_status", cif_url_status)
-            pdb_validate(down_id, cif_url_status)
-            return cif_url_status
 
     return False
 
@@ -205,32 +310,51 @@ def get_eds_pdb_and_mtz(id):
 
     def get_cached_eds_files(accession_code):
         down_code = accession_code.lower()
+        # Reduce here too, or the cache looks for a name the download never
+        # writes: the fetch below saves <legacy>.cif while this would look
+        # for <extended>.cif, so a cached entry would never be found.
+        if is_extended_pdb_id(down_code):
+            legacy = extended_pdb_id_to_legacy(down_code)
+            if not legacy:
+                # No legacy code means EDS has no entry, so nothing was ever
+                # cached under any name. Say so here rather than building the
+                # nonsense "pdbpdb_0001...ent" and testing for it.
+                return False
+            down_code = legacy
         dir_name = get_directory("coot-download")
+        # mmCIF is what the download writes now; the .ent is only still
+        # consulted so caches predating that change keep working.
+        cif_file_name = os.path.join(dir_name,
+                                     down_code + ".cif")
         pdb_file_name = os.path.join(dir_name,
                                      "pdb" + down_code + ".ent")
         mtz_file_name = os.path.join(dir_name,
                                      down_code + "_map.mtz")
 
-        print("::::::::: pdb_file_name:", pdb_file_name)
-        print("::::::::: mtz_file_name:", mtz_file_name)
-        if not os.path.isfile(pdb_file_name):
+        if os.path.isfile(cif_file_name):
+            model_file_name = cif_file_name
+        elif os.path.isfile(pdb_file_name):
+            model_file_name = pdb_file_name
+        else:
+            return False
+
+        if not os.path.isfile(mtz_file_name):
+            return False
+
+        print("INFO:: using cached EDS files:", model_file_name,
+              "and", mtz_file_name)
+        imol = read_pdb(model_file_name)
+        imol_map = make_and_draw_map(mtz_file_name, "FWT", "PHWT", "", 0, 0)
+        imol_map_d = make_and_draw_map(mtz_file_name, "DELFWT", "PHDELWT", "", 0, 1)
+        if not (valid_model_molecule_qm(imol) and
+                valid_map_molecule_qm(imol_map) and
+                valid_map_molecule_qm(imol_map_d)):
+            close_molecule(imol)
+            close_molecule(imol_map)
+            close_molecule(imol_map_d)
             return False
         else:
-            if not os.path.isfile(mtz_file_name):
-                return False
-            else:
-                imol = read_pdb(pdb_file_name)
-                imol_map = make_and_draw_map(mtz_file_name, "FWT", "PHWT", "", 0, 0)
-                imol_map_d = make_and_draw_map(mtz_file_name, "DELFWT", "PHDELWT", "", 0, 1)
-                if not (valid_model_molecule_qm(imol) and
-                        valid_map_molecule_qm(imol_map) and
-                        valid_map_molecule_qm(imol_map_d)):
-                    close_molecule(imol)
-                    close_molecule(imol_map)
-                    close_molecule(imol_map_d)
-                    return False
-                else:
-                    return [imol, imol_map, imol_map_d]
+            return [imol, imol_map, imol_map_d]
 
     eds_site = "https://www.ebi.ac.uk/pdbe/coordinates"
     # https://www.ebi.ac.uk/pdbe/entry/pdb/6tje
@@ -261,6 +385,21 @@ def get_eds_pdb_and_mtz(id):
 
         if (r):
             down_id = id.lower()
+
+            # EDS indexes by the legacy 4-character code. An extended id passed
+            # through verbatim produces "pdbpdb_00005rsh.ent" here, because this
+            # path prefixes "pdb" to the code.
+            if is_extended_pdb_id(down_id):
+                legacy = extended_pdb_id_to_legacy(down_id)
+                if not legacy:
+                    print("WARNING:: EDS has no entry for", down_id,
+                          "- extended accession codes without a legacy",
+                          "4-character equivalent are not in this service")
+                    return False
+                print("INFO:: extended accession code", down_id,
+                      "reduced to its legacy code", legacy, "for EDS")
+                down_id = legacy
+
             target_pdb_file = "pdb" + down_id + ".ent"
             target_cif_file = down_id + ".cif"
             dir_target_pdb_file = coot_tmp_dir + "/" + target_pdb_file
@@ -291,7 +430,10 @@ def get_eds_pdb_and_mtz(id):
                 # we probably wont get anything else, so bail out.
                 return False
 
-            s1 = coot_urlretrieve(model_url, dir_target_pdb_file)
+            # mmCIF first, for the reason given in get_ebi_pdb(): it is the
+            # current archive format and the PDB one is frozen legacy. PDB is
+            # tried only if the mmCIF is missing or unreadable.
+            s1 = coot_urlretrieve(model_cif_url, dir_target_cif_file)
             s2 = coot_urlretrieve(mtz_url, dir_target_mtz_file)
 
             if bad_map_status:
@@ -300,15 +442,20 @@ def get_eds_pdb_and_mtz(id):
 
             # maybe should then not load the map!?
 
-            print("INFO:: read pdb model status: ",s1)
+            print("INFO:: read cif model status: ",s1)
             print("INFO:: read mtz data  status: ",s2)
 
             if (s1 and os.path.isfile(s1)):
-                r_imol = handle_read_draw_molecule(dir_target_pdb_file)
+                r_imol = handle_read_draw_molecule(dir_target_cif_file)
                 if not valid_model_molecule_qm(r_imol):
-                    s1_cif = coot_urlretrieve(model_cif_url, dir_target_cif_file)
-                    print("INFO:: read cif model status: ",s1_cif)
-                    if (s1_cif == 0):
+                    # No usable mmCIF - try the legacy PDB file. The previous
+                    # version of this fallback downloaded one file and then
+                    # read the other, so it could never succeed.
+                    print("INFO:: no usable mmCIF for", down_id,
+                          "- falling back to PDB format")
+                    s1_pdb = coot_urlretrieve(model_url, dir_target_pdb_file)
+                    print("INFO:: read pdb model status: ",s1_pdb)
+                    if (s1_pdb and os.path.isfile(s1_pdb)):
                         r_imol = handle_read_draw_molecule(dir_target_pdb_file)
                         if not valid_model_molecule_qm(r_imol):
                             return False
@@ -338,6 +485,20 @@ def get_pdb_redo(text):
     if not isinstance(text, str):
         print("BL WARNING:: No string. No accession code.")
     else:
+        # PDB-REDO is keyed on the legacy 4-character code, so reduce an
+        # extended id before the length check rather than rejecting it.
+        if is_extended_pdb_id(text):
+            legacy = extended_pdb_id_to_legacy(text)
+            if legacy:
+                print("INFO:: extended accession code", text.strip().lower(),
+                      "reduced to its legacy code", legacy, "for PDB-REDO")
+                text = legacy
+            else:
+                print("WARNING:: PDB-REDO has no entry for", text.strip().lower(),
+                      "- extended accession codes without a legacy",
+                      "4-character equivalent are not in this service")
+                return
+
         if not (len(text) == 4):
             print("BL WARNING:: Accession code not 4 chars.")
         else:

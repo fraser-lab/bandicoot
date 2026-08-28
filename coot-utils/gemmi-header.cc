@@ -169,6 +169,43 @@ namespace {
       return std::string();
    }
 
+   // The 4-character entry id a PDB record can hold.
+   //
+   // wwPDB is moving to 12-character extended accession codes. For an entry
+   // that also has a legacy id, the extended form carries it in the TAIL:
+   //
+   //     pdb_00001bna  ->  1bna
+   //
+   // so truncating from the head gives "pdb_", which is identical for every
+   // extended entry and identifies nothing. Take the tail instead.
+   //
+   // An extended code whose eight characters do NOT begin with 0000 has no
+   // 4-character equivalent at all, and the PDB format cannot express it. That
+   // case is reported rather than fudged -- inventing four characters would
+   // produce a plausible-looking id belonging to some other entry.
+   std::string pdb_four_char_id(const std::string &entry_id) {
+
+      std::string lower = entry_id;
+      for (char &c : lower) c = std::tolower(static_cast<unsigned char>(c));
+
+      if (lower.size() == 12 && lower.compare(0, 4, "pdb_") == 0) {
+         if (lower.compare(4, 4, "0000") == 0) {
+            // The legacy id, upper-cased. Extended codes are written lower case
+            // (pdb_00005rsh), but a PDB entry id is upper case by convention, so
+            // passing the tail through as-is would emit "1bna" where every
+            // deposited file has "1BNA".
+            std::string id = lower.substr(8);
+            for (char &c : id) c = std::toupper(static_cast<unsigned char>(c));
+            return id;
+         }
+         std::cout << "WARNING:: extended accession code " << entry_id
+                   << " has no 4-character equivalent; the PDB header cannot "
+                   << "carry it" << std::endl;
+         return std::string();
+      }
+      return entry_id.substr(0, 4);
+   }
+
    // "2015-09-29" -> "29-SEP-15", which is what HEADER's columns 51-59 want and
    // what mmdb's Date9to11 parses. Anything else is left out rather than
    // guessed at.
@@ -211,7 +248,7 @@ namespace {
       pdb_line_t l("HEADER");
       l.put(11, classification.substr(0, 40));
       l.put(51, date);
-      l.put(63, id.substr(0, 4));
+      l.put(63, pdb_four_char_id(id));
       out.push_back(l.str());
    }
 
@@ -582,7 +619,7 @@ namespace {
       if (! block) return;
       gemmi::cif::Block *b = const_cast<gemmi::cif::Block *>(block);
 
-      std::string id = st.get_info("_entry.id").substr(0, 4);
+      std::string id = pdb_four_char_id(st.get_info("_entry.id"));
 
       struct rev_t { int num; std::string date; int type; };
       std::vector<rev_t> revisions;
@@ -647,7 +684,7 @@ namespace {
       if (! block) return;
       gemmi::cif::Block *b = const_cast<gemmi::cif::Block *>(block);
 
-      std::string id = st.get_info("_entry.id").substr(0, 4);
+      std::string id = pdb_four_char_id(st.get_info("_entry.id"));
 
       // ref id -> the database it points into. _struct_ref_seq carries the
       // alignment, _struct_ref the database identity.
