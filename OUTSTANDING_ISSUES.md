@@ -11,6 +11,33 @@ worth fixing. Newest info at the top of each entry.
 
 ---
 
+## P2 — visible bug, workaround exists
+
+### GitHub #28 — Side toolbar style is not preserved between sessions
+Reported by alyubimov, 2026-08-28. Every other preference persists in
+`~/.coot-preferences/coot_preferences.py`, but the model ("side") toolbar always comes back
+as **Icons and Text**, whatever was last chosen from the sidebar's settings popup.
+
+- **Root cause: the style state and the widget are wired in one direction only.**
+  `set_model_toolbar_style()` (`src/c-interface-gui.cc:3162`) writes
+  `graphics_info_t::model_toolbar_style_state` and then activates the matching check menu
+  item, whose handler applies the style to the toolbar. But when a style is chosen directly
+  from the sidebar popup, those handlers — `on_model_toolbar_icons_and_text1_activate`
+  (`src/callbacks.c:10502`), `on_model_toolbar_icons1_activate` (`:10520`) and
+  `on_model_toolbar_text1_activate` (`:10537`) — call `gtk_toolbar_set_style()` and **never
+  write back** to `model_toolbar_style_state`. There is no widget → state path.
+- **Why it is always "Icons and Text" specifically:** the state variable keeps its
+  compiled-in default of `2` (`src/globjects.cc:235`), the preference writer stores that
+  value (`src/graphics-info-preferences.cc:453`), and startup replays
+  `set-model-toolbar-style 2`. The saved setting is therefore the default, never the choice.
+- **Workaround:** set the style from **Preferences > Refinement Toolbar** rather than the
+  sidebar popup. That path goes through `set_model_toolbar_style()`
+  (`src/callbacks.c:7872/7885/7898`), so it updates the state and does persist.
+- Inherited from Coot 0.9 rather than introduced here, but more visible in Bandicoot because
+  the sidebar's own settings popup is the natural place to change the style.
+
+---
+
 ## P3 — cosmetic / minor
 
 ### GitHub #15 — Model toolbar cannot be repositioned (partially addressed)

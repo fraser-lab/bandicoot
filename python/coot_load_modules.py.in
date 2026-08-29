@@ -303,6 +303,9 @@ pre_list = [
     "clear_backup.py",
     "3d_generator_import.py",
     "dictionary_generators.py",
+    "bandicoot_restraints.py",  # elbow-based restraint generation for ligands
+                                # with no dictionary; defines only functions,
+                                # so loading it early has no side effects.
     "jligand.py",
     "americanisms.py",
     "group_settings.py",

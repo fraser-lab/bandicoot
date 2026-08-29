@@ -884,10 +884,21 @@ int handle_read_draw_molecule_with_recentre(const char *filename,
 	    //
 	    // The components listed here are exactly the ones refinement will
 	    // refuse, so this is the honest place to report them.
+	    // Name each component as "<RES> (<file>)". The comp id alone is
+	    // enough when the file IS the ligand, but for a whole structure it
+	    // says nothing about where the component came from, and the file name
+	    // alone is no better -- a structure file is not descriptive of one
+	    // residue in it. The pair is what a user recognises.
+	    std::string mol_name = g.molecules[imol].name_for_display_manager();
 	    std::string m = "This molecule loaded WITHOUT restraints for:\n\n";
 	    for (unsigned int i=0; i<types_with_no_dictionary.size(); i++) {
 	       m += "    ";
 	       m += types_with_no_dictionary[i];
+	       if (! mol_name.empty()) {
+		  m += " (";
+		  m += mol_name;
+		  m += ")";
+	       }
 	       m += "\n";
 	    }
 	    m += "\nIt will display, but refinement (RSR) cannot restrain those\n"
