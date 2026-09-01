@@ -510,6 +510,7 @@ int graphics_info_t::auto_read_do_difference_map_too_flag = 1;
 
 // nomenclature errors
 coot::nomenclature_error_handle_type graphics_info_t::nomenclature_errors_mode = coot::PROMPT;
+short int graphics_info_t::show_ligand_restraint_warnings_flag = 1;
 
 
 

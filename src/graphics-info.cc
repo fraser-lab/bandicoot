@@ -401,6 +401,33 @@ graphics_info_t::draw_anti_aliasing() {
   }
 }
 
+namespace {
+   // Does model molecule imol hold a residue of this type? Early-exits on the
+   // first hit, so it costs nothing on the usual case of the ligand being near
+   // the end of the chain list.
+   bool molecule_contains_comp_id(int imol, const std::string &comp_id) {
+
+      if (! graphics_info_t::is_valid_model_molecule(imol)) return false;
+      mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+      if (! mol) return false;
+
+      for (int imod=1; imod<=mol->GetNumberOfModels(); imod++) {
+	 mmdb::Model *model_p = mol->GetModel(imod);
+	 if (! model_p) continue;
+	 for (int ich=0; ich<model_p->GetNumberOfChains(); ich++) {
+	    mmdb::Chain *chain_p = model_p->GetChain(ich);
+	    if (! chain_p) continue;
+	    for (int ires=0; ires<chain_p->GetNumberOfResidues(); ires++) {
+	       mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+	       if (! residue_p) continue;
+	       if (comp_id == residue_p->GetResName()) return true;
+	    }
+	 }
+      }
+      return false;
+   }
+}
+
 // This addresses the "everything is an INH" problem.
 //
 // imol_enc can be a specific model molecule number or
@@ -409,9 +436,13 @@ graphics_info_t::draw_anti_aliasing() {
 //
 // if imol_enc_in is IMOL_ENC_AUTO, then try to find to which
 // molecule this dictionary refers.
-// If the residue type is on the non-auto load list, simply go through
-// the molecule list backwards, starting from the hightest molecule number looking for
-// a molecule that is a valid model molecule - that's the one.
+// If the residue type is on the non-auto load list, go through the molecule
+// list backwards, starting from the highest molecule number, looking for a
+// valid model molecule THAT CONTAINS THE COMPONENT - that's the one. If none
+// does, the dictionary is unscoped (IMOL_ENC_ANY), because scoping it to a
+// molecule without the component would put it out of reach of every molecule.
+// (Bandicoot v0.2: the containment test was missing, though this comment block
+// always claimed it. See the note at the loop.)
 // If the residue type is not in the non-auto list, then
 // it is a dictionary for all molecules, i.e. IMOL_ENC_ANY.
 //
@@ -438,12 +469,37 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
 	    //
 	    is_non_auto_load_comp_id = true;
 
+	    // BANDICOOT v0.2 (2026-08-31): honour the line above -- it says
+	    // "that CONTAINS this comp_id" and the loop never checked.
+	    //
+	    // It took the highest-numbered valid model molecule, whatever was in
+	    // it. Load a ligand structure as molecule 0, open anything else as
+	    // molecule 1, and a LIG dictionary bound to molecule 1 -- which need
+	    // not contain LIG at all, in which case the dictionary can never be
+	    // found by the molecule that does.
+	    //
+	    // Worse, it diverged silently from dropping the same file: a drop
+	    // always reads at IMOL_ENC_ANY. And because mon_lib_add_chem_comp()
+	    // only replaces an entry within the SAME imol_enc, importing after
+	    // dropping did not supersede the dropped dictionary -- it added a
+	    // second entry at a different scope, leaving which one a molecule got
+	    // to depend on their order in dict_res_restraints.
 	    for (int ii=(n_molecules()-1); ii>=0; ii--){
 	       if (is_valid_model_molecule(ii)) {
-		  imol_enc = ii;
-		  break;
+		  if (molecule_contains_comp_id(ii, comp_ids[i])) {
+		     imol_enc = ii;
+		     break;
+		  }
 	       }
 	    }
+
+	    // Nothing loaded contains it -- the dictionary has most likely been
+	    // read ahead of its coordinates. Scoping it to some molecule that
+	    // does not have the component would mean it could never be found, so
+	    // leave it unscoped and let it apply when the ligand arrives. This is
+	    // also what dropping the file does.
+	    if (imol_enc == coot::protein_geometry::IMOL_ENC_AUTO)
+	       imol_enc = coot::protein_geometry::IMOL_ENC_ANY;
 	    break;
 	 }
       }

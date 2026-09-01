@@ -146,19 +146,42 @@ def elbow_from_smiles(smiles, comp_id):
 def generate_restraints_for_comp_id(imol, comp_id):
     """Generate and load restraints for comp_id as it appears in molecule imol.
 
-    Extracts the component from imol, hands the coordinates to elbow, and reads
-    the resulting dictionary back in. Returns (ok, message); message is None on
-    success.
+    Extracts ONE copy of the component from imol, hands the coordinates to
+    elbow, and reads the resulting dictionary back in. Returns (ok, message);
+    message is None on success.
 
-    Note the extracted molecule may hold several copies of the component --
-    elbow treats them as one chemical entity and emits a single dictionary,
-    which is what we want, since restraints are per comp id and not per copy.
+    Two things guard against a comp id that covers more than one chemistry,
+    which restraints keyed by comp id cannot represent:
+
+      * a refusal, when the residues sharing this comp id have atom names that
+        do not match each other; and
+      * deriving from a SINGLE representative residue, so that several residues
+        can never reach the generator as though they were one molecule. That is
+        also correct for genuine copies, which need only one dictionary.
+
+    The earlier version extracted every residue of the type at once. For real
+    copies elbow does the right thing with that -- it recognises them as one
+    entity -- but for two different molecules under one name it silently
+    described only one of them.
     """
     comp_id = (comp_id or "").strip()
     if not comp_id:
         return (False, "no component id given")
 
-    imol_lig = new_molecule_by_residue_type_selection(imol, comp_id)
+    clash = comp_id_collision_message(imol, comp_id)
+    if clash:
+        print("WARNING:: " + clash)
+        return (False,
+                "%s names more than one molecule in this structure.\n"
+                "Restraints are stored by component id, so only one of them\n"
+                "could be described. Rename one of them and try again."
+                % comp_id)
+
+    selection = most_complete_residue_selection(imol, comp_id)
+    if not selection:
+        return (False, "could not find %s in molecule %s" % (comp_id, imol))
+
+    imol_lig = new_molecule_by_atom_selection(imol, selection)
     if not valid_model_molecule_qm(imol_lig):
         return (False, "could not extract %s from molecule %s"
                 % (comp_id, imol))
@@ -179,4 +202,19 @@ def generate_restraints_for_comp_id(imol, comp_id):
 
     print("INFO:: generated restraints for %s -> %s" % (comp_id, cif))
     read_cif_dictionary(cif)
+
+    # The restraints were derived from one residue. If another residue shares
+    # this comp id but is a different molecule -- and did so in a way the
+    # collision test above could not see, because its atom names happened to be
+    # a subset -- the new dictionary will not cover it. That is the last place
+    # the mismatch can be caught before the user meets it as a refinement
+    # failure, so say so rather than reporting a clean success.
+    mismatch = dictionary_coverage_message(imol, comp_id)
+    if mismatch:
+        print("WARNING:: " + mismatch)
+        return (True,
+                "Restraints were generated, but they do not cover every copy\n"
+                "of %s in this molecule. The copies are probably not the same\n"
+                "chemistry. Rename them apart and generate for each." % comp_id)
+
     return (True, None)

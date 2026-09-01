@@ -2363,7 +2363,105 @@ coot::protein_geometry::delete_mon_lib(const std::string &comp_id, int imol_enc)
    }
    
    return deleted;
-} 
+}
+
+// BANDICOOT v0.2: rename a loaded dictionary's comp id in place. See the
+// header for why this exists and why it is as small as it is.
+bool
+coot::protein_geometry::rename_comp_id(const std::string &old_comp_id,
+				       const std::string &new_comp_id,
+				       int imol_enc) {
+
+   if (old_comp_id.empty() || new_comp_id.empty()) return false;
+   if (old_comp_id == new_comp_id) return false;
+
+   // Refuse if the target is already in use at this scope. Two entries under
+   // one comp id is the collision this function is meant to repair, so it must
+   // not be the thing that creates one.
+   std::vector<std::pair<int, coot::dictionary_residue_restraints_t> >::iterator it;
+   for (it=dict_res_restraints.begin(); it!=dict_res_restraints.end(); it++)
+      if (it->second.residue_info.comp_id == new_comp_id)
+	 if (it->first == imol_enc)
+	    return false;
+
+   bool renamed = false;
+   for (it=dict_res_restraints.begin(); it!=dict_res_restraints.end(); it++) {
+      if (it->second.residue_info.comp_id == old_comp_id) {
+	 if (it->first == imol_enc) {
+	    it->second.residue_info.comp_id = new_comp_id;
+	    // three_letter_code is what the PDB-side code reads; keep it in step
+	    // when the new code can be held in it, and clear it when it cannot,
+	    // rather than leaving a stale three-letter name behind.
+	    if (new_comp_id.length() <= 3)
+	       it->second.residue_info.three_letter_code = new_comp_id;
+	    else
+	       it->second.residue_info.three_letter_code.clear();
+	    renamed = true;
+	    break;
+	 }
+      }
+   }
+
+   // The minimal-description store IS keyed by comp id, so it needs re-keying
+   // rather than a field assignment.
+   std::map<std::string, coot::dictionary_residue_restraints_t>::iterator its =
+      simple_monomer_descriptions.find(old_comp_id);
+   if (its != simple_monomer_descriptions.end()) {
+      if (simple_monomer_descriptions.find(new_comp_id) == simple_monomer_descriptions.end()) {
+	 coot::dictionary_residue_restraints_t d = its->second;
+	 d.residue_info.comp_id = new_comp_id;
+	 if (new_comp_id.length() <= 3)
+	    d.residue_info.three_letter_code = new_comp_id;
+	 else
+	    d.residue_info.three_letter_code.clear();
+	 simple_monomer_descriptions.erase(its);
+	 simple_monomer_descriptions[new_comp_id] = d;
+      }
+   }
+
+   if (renamed)
+      std::cout << "INFO:: renamed dictionary \"" << old_comp_id << "\" to \""
+		<< new_comp_id << "\"" << std::endl;
+
+   return renamed;
+}
+
+// BANDICOOT v0.2: copy a loaded dictionary to a second comp id. See the header.
+bool
+coot::protein_geometry::duplicate_comp_id(const std::string &from_comp_id,
+					  const std::string &to_comp_id,
+					  int imol_enc) {
+
+   if (from_comp_id.empty() || to_comp_id.empty()) return false;
+   if (from_comp_id == to_comp_id) return false;
+
+   int idx_from = -1;
+   std::vector<std::pair<int, coot::dictionary_residue_restraints_t> >::size_type i;
+   for (i=0; i<dict_res_restraints.size(); i++) {
+      if (dict_res_restraints[i].first != imol_enc) continue;
+      if (dict_res_restraints[i].second.residue_info.comp_id == to_comp_id)
+	 return false; // already served at this scope; do not make a second entry
+      if (dict_res_restraints[i].second.residue_info.comp_id == from_comp_id)
+	 if (idx_from < 0)
+	    idx_from = static_cast<int>(i);
+   }
+   if (idx_from < 0) return false;
+
+   // Copy the whole entry, then re-name the copy. The restraint vectors are
+   // atom-name based and carry no comp id, so nothing else needs adjusting.
+   coot::dictionary_residue_restraints_t d = dict_res_restraints[idx_from].second;
+   d.residue_info.comp_id = to_comp_id;
+   if (to_comp_id.length() <= 3)
+      d.residue_info.three_letter_code = to_comp_id;
+   else
+      d.residue_info.three_letter_code.clear();
+
+   dict_res_restraints.push_back(std::pair<int, coot::dictionary_residue_restraints_t>(imol_enc, d));
+
+   std::cout << "INFO:: dictionary \"" << from_comp_id << "\" also applied to \""
+	     << to_comp_id << "\"" << std::endl;
+   return true;
+}
 
 bool
 coot::protein_geometry::OXT_in_residue_restraints_p(const std::string &residue_type) const {

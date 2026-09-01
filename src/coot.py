@@ -2585,6 +2585,12 @@ def fix_nomenclature_errors(imol):
 def set_nomenclature_errors_on_read(mode):
     return _coot.set_nomenclature_errors_on_read(mode)
 
+def set_show_ligand_restraint_warnings(state):
+    return _coot.set_show_ligand_restraint_warnings(state)
+
+def show_ligand_restraint_warnings_state():
+    return _coot.show_ligand_restraint_warnings_state()
+
 def output_atom_info_as_text(imol, chain_id, resno, ins_code, atname, altconf):
     return _coot.output_atom_info_as_text(imol, chain_id, resno, ins_code, atname, altconf)
 
@@ -4704,6 +4710,9 @@ def bandicoot_save_pick_atom_radius():
 def bandicoot_load_pick_atom_radius():
     return _coot.bandicoot_load_pick_atom_radius()
 
+def bandicoot_set_default_bond_scheme_from_combo_index(index):
+    return _coot.bandicoot_set_default_bond_scheme_from_combo_index(index)
+
 def add_initial_position_restraints(imol, residue_specs, weight):
     return _coot.add_initial_position_restraints(imol, residue_specs, weight)
 
@@ -5525,6 +5534,30 @@ def key_sym_code_py(po):
 
 def py_symop_strings_to_space_group(symop_string_list):
     return _coot.py_symop_strings_to_space_group(symop_string_list)
+
+def comp_id_collision_message(imol, comp_id):
+    return _coot.comp_id_collision_message(imol, comp_id)
+
+def bandicoot_native_question_dialog(msg):
+    return _coot.bandicoot_native_question_dialog(msg)
+
+def resolve_placeholder_collisions_on_load(imol):
+    return _coot.resolve_placeholder_collisions_on_load(imol)
+
+def dictionary_coverage_message(imol, comp_id):
+    return _coot.dictionary_coverage_message(imol, comp_id)
+
+def most_complete_residue_selection(imol, comp_id):
+    return _coot.most_complete_residue_selection(imol, comp_id)
+
+def is_reserved_placeholder_comp_id(comp_id):
+    return _coot.is_reserved_placeholder_comp_id(comp_id)
+
+def suggest_free_placeholder_comp_id(imol):
+    return _coot.suggest_free_placeholder_comp_id(imol)
+
+def rename_comp_id_with_dictionary(imol, old_comp_id, new_comp_id):
+    return _coot.rename_comp_id_with_dictionary(imol, old_comp_id, new_comp_id)
 
 def text_png_as_string(text_info_dict):
     return _coot.text_png_as_string(text_info_dict)

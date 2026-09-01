@@ -65,6 +65,7 @@
 #include "graphics-info.h"
 
 #include "coot-utils/coot-coord-utils.hh"
+#include "coot-utils/comp-id-collision.hh" // distinct molecules under one comp id
 #include "utils/coot-fasta.hh"
 
 #include "skeleton/BuildCas.h"
@@ -4632,3 +4633,140 @@ void  do_edit_replace_fragment() {
 #endif // GUILE
 }
 
+
+
+/* ------------------------------------------------------------------------ */
+/*   BANDICOOT v0.2: distinct molecules sharing a reserved placeholder name  */
+/* ------------------------------------------------------------------------ */
+
+// Modal yes/no. Returns true for Yes. Modal because the answer decides what
+// the freshly-loaded molecule IS, and later code must not run against a model
+// whose component names are still undecided.
+bool bandicoot_native_question_dialog(const char *msg) {
+
+   if (! graphics_info_t::use_graphics_interface_flag) return false;
+   GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   // The OR of two GtkDialogFlags is an int, and C++ will not convert that back
+   // to the enum on its own.
+   GtkDialogFlags flags =
+      static_cast<GtkDialogFlags>(GTK_DIALOG_DESTROY_WITH_PARENT | GTK_DIALOG_MODAL);
+   GtkWidget *d = gtk_message_dialog_new(mw ? GTK_WINDOW(mw) : NULL, flags,
+                                         GTK_MESSAGE_WARNING, GTK_BUTTONS_YES_NO,
+                                         "%s", msg ? msg : "");
+   gint response = gtk_dialog_run(GTK_DIALOG(d));
+   gtk_widget_destroy(d);
+   return (response == GTK_RESPONSE_YES);
+}
+
+int resolve_placeholder_collisions_on_load(int imol) {
+
+   int n_renamed = 0;
+   if (! is_valid_model_molecule(imol)) return n_renamed;
+
+   graphics_info_t g;
+   mmdb::Manager *mol = g.molecules[imol].atom_sel.mol;
+
+   // Only the reserved codes. A real CCD code naming two different molecules is
+   // a different problem (somebody used a code that was already taken) and
+   // renaming is not obviously the right repair for it.
+   std::vector<coot::comp_id_collision::collision_t> all =
+      coot::comp_id_collision::find_collisions(mol);
+   std::vector<std::string> comp_ids;
+   for (unsigned int i=0; i<all.size(); i++)
+      if (coot::comp_id_collision::is_reserved_placeholder(all[i].comp_id))
+         comp_ids.push_back(all[i].comp_id);
+
+   if (comp_ids.empty()) return n_renamed;
+
+   std::string names;
+   for (unsigned int i=0; i<comp_ids.size(); i++) {
+      if (i) names += ", ";
+      names += "\"" + comp_ids[i] + "\"";
+   }
+
+   // NOTE: this dialog deliberately breaks the house rule that dialogs stay
+   // terse and detail goes to stdout. Art, 2026-08-31: the consequence of
+   // answering No has to be stated where the choice is made, because the
+   // failure it leads to appears much later and looks like something else.
+   std::string m = "WARNING: multiple distinct molecules named ";
+   m += names;
+   m += " detected!\n\nRename them?\n\n";
+   m += "(NOTE: choosing \"No\" will result in unexpected behavior!)";
+
+   std::cout << "WARNING:: " << comp_ids.size()
+             << " reserved placeholder name(s) each naming more than one molecule"
+             << std::endl;
+   for (unsigned int i=0; i<all.size(); i++)
+      std::cout << "WARNING:: " << all[i].message() << std::endl;
+
+   // With the warnings turned off, do not ask -- and therefore do not rename.
+   // This dialog is MODAL, so in the case the flag exists for (stepping through
+   // many ligand-bearing structures) it would not merely stack up, it would
+   // halt the run waiting for a click. Declining is the safe reading: never
+   // change a model because nobody was there to answer.
+   if (! graphics_info_t::show_ligand_restraint_warnings_flag) {
+      std::cout << "INFO:: ligand restraint warnings are off; leaving the "
+                << "placeholder names as they are" << std::endl;
+      return n_renamed;
+   }
+
+   if (! bandicoot_native_question_dialog(m.c_str())) {
+      // The user's call, and a real one. See the design principle recorded for
+      // v0.2: if the user insists on being silly, let them -- this is science,
+      // and there may be no alternative route to what they are doing.
+      std::cout << "INFO:: leaving the placeholder names as they are, at the "
+                << "user's request" << std::endl;
+      return n_renamed;
+   }
+
+   for (unsigned int i=0; i<comp_ids.size(); i++) {
+
+      const std::string &comp_id = comp_ids[i];
+      std::vector<std::vector<coot::comp_id_collision::residue_ref_t> > groups =
+         coot::comp_id_collision::distinct_chemistry_groups(mol, comp_id);
+      if (groups.size() < 2) continue;
+
+      // Numeric codes only for the new names. 01-99 are reserved by the wwPDB
+      // and, being bare numbers, imply nothing at all about the chemistry --
+      // which DRG and INH do, possibly untruthfully.
+      std::vector<std::string> pool;
+      {
+         std::vector<std::string> free_codes =
+            coot::comp_id_collision::free_placeholder_codes(mol);
+         for (unsigned int k=0; k<free_codes.size(); k++)
+            if (free_codes[k].size() == 2)
+               pool.push_back(free_codes[k]);
+      }
+
+      // EVERY group is renamed, including the first -- Art, 2026-08-31:
+      // "rename *all* LIGs, rather than starting with the second one. Tidier
+      // that way." Leaving one with the original name would also imply that
+      // one of them is the "real" LIG, which is not something we know.
+      unsigned int next = 0;
+      for (unsigned int gi=0; gi<groups.size(); gi++) {
+
+         if (next >= pool.size()) {
+            std::cout << "WARNING:: ran out of reserved placeholder codes; "
+                      << "leaving the rest of " << comp_id << " as it is"
+                      << std::endl;
+            break;
+         }
+         const std::string new_id = pool[next++];
+
+         for (unsigned int r=0; r<groups[gi].size(); r++) {
+            const coot::comp_id_collision::residue_ref_t &res = groups[gi][r];
+            g.molecules[imol].set_residue_name(res.chain_id, res.res_no,
+                                               res.ins_code, new_id);
+            std::cout << "INFO:: renamed " << comp_id << " " << res.label()
+                      << " to " << new_id << std::endl;
+         }
+         n_renamed++;
+      }
+   }
+
+   if (n_renamed > 0) {
+      g.molecules[imol].make_bonds_type_checked();
+      graphics_draw();
+   }
+   return n_renamed;
+}

@@ -106,6 +106,8 @@
 
 #include "utils/coot-utils.hh"
 #include "coot-utils/coot-map-utils.hh"
+#include "coot-utils/comp-id-collision.hh" // a resolved dictionary that describes
+                                           // a different molecule
 #include "coot-database.hh"
 #include "coot-fileselections.h"
 
@@ -846,7 +848,20 @@ int handle_read_draw_molecule_with_recentre(const char *filename,
 	 // description (should be fast) and if found, rerun the bonding
 	 // algorithm.
 
-      
+	 // BANDICOOT v0.2 (2026-08-31): distinct molecules sharing a reserved
+	 // placeholder name are separated FIRST, before anything looks a
+	 // dictionary up.
+	 //
+	 // Order matters and is the whole reason this sits here rather than
+	 // with the other checks below: renaming changes which component ids
+	 // exist, so doing it afterwards would leave every message underneath
+	 // naming components the molecule no longer has.
+	 //
+	 // The user may decline. That is a real answer, not a failure to
+	 // decide -- see the v0.2 design principle: if the user insists on
+	 // being silly, let them.
+	 resolve_placeholder_collisions_on_load(imol);
+
 	 std::vector<std::string> types_with_no_dictionary =
 	    g.molecules[imol].no_dictionary_for_residue_type_as_yet(*g.Geom_p());
 
@@ -907,16 +922,103 @@ int handle_read_draw_molecule_with_recentre(const char *filename,
 		 "or phenix.elbow).";
 	    std::cout << "WARNING:: " << m << std::endl;
 	    if (graphics_info_t::use_graphics_interface_flag)
-	       info_dialog(m.c_str());
+	       if (graphics_info_t::show_ligand_restraint_warnings_flag)
+		  info_dialog(m.c_str());
 	 } else {
 	    // perhaps we have read dictionaries for everything (but
 	    // first check that there had been dictionaries to read.
 	    if (first_n_types_with_no_dictionary > 0) {
 	       g.molecules[imol].make_bonds_type_checked();
-	    } 
-	 } 
+	    }
+	 }
 
-	 
+	 // BANDICOOT v0.2 (2026-08-31): a file that arrives ALREADY collided.
+	 //
+	 // The merge guard only sees molecules being combined in Bandicoot. A
+	 // structure read from disk can already hold two different molecules
+	 // under one comp id, and then nothing above says so: the no-dictionary
+	 // warning names the comp id ONCE, because it is one comp id, which
+	 // reads as a single unrestrained ligand rather than as two that can
+	 // never both be restrained. Reported here, on the same load, so the
+	 // user learns it before generating restraints that can only describe
+	 // one of them.
+	 {
+	    std::vector<coot::comp_id_collision::collision_t> all_collisions =
+	       coot::comp_id_collision::find_collisions(g.molecules[imol].atom_sel.mol);
+
+	    // Reserved placeholder names were offered a rename above. Whatever is
+	    // still colliding under one of those was DECLINED, and saying so a
+	    // second time would be nagging about a decision already made.
+	    std::vector<coot::comp_id_collision::collision_t> collisions;
+	    for (unsigned int i=0; i<all_collisions.size(); i++)
+	       if (! coot::comp_id_collision::is_reserved_placeholder(all_collisions[i].comp_id))
+		  collisions.push_back(all_collisions[i]);
+
+	    if (! collisions.empty()) {
+	       std::string m = "These component ids name more than one molecule\n"
+		               "in this structure:\n\n";
+	       for (unsigned int i=0; i<collisions.size(); i++) {
+		  std::cout << "WARNING:: " << collisions[i].message() << std::endl;
+		  m += "    " + collisions[i].comp_id + "\n";
+	       }
+	       m += "\nRestraints are stored by component id, so one dictionary\n"
+		    "cannot describe both. Rename one of each pair (Modelling ->\n"
+		    "Rename Residue) before importing or generating restraints.";
+	       if (graphics_info_t::use_graphics_interface_flag)
+		  if (graphics_info_t::show_ligand_restraint_warnings_flag)
+		     info_dialog(m.c_str());
+	    }
+	 }
+
+	 // BANDICOOT v0.2 (2026-08-31): a dictionary that RESOLVES but describes
+	 // a different molecule.
+	 //
+	 // The check above asks "is there a dictionary". That question is
+	 // satisfied by any entry with the right comp id, and most 3-letter codes
+	 // resolve: naming a novel ligand with a code that happens to exist in
+	 // the CCD -- easy to do, since nearly all of them do -- silently fetches
+	 // somebody else's chemistry. Because a dictionary IS found, nothing
+	 // above warns, and the user meets it later as an inexplicable refinement
+	 // failure.
+	 //
+	 // Coot binds restraints to atoms BY NAME, so the honest test is whether
+	 // the dictionary covers the atom names the model actually uses.
+	 {
+	    // imol, not IMOL_ENC_ANY: a query made with the molecule's own number
+	    // finds the unscoped dictionaries AND the ones scoped to it, which is
+	    // what this molecule will really be given. See the note in
+	    // dictionary_coverage_message().
+	    std::vector<coot::comp_id_collision::coverage_t> bad =
+	       coot::comp_id_collision::dictionary_coverage_failures(
+		  g.molecules[imol].atom_sel.mol, *g.Geom_p(), imol);
+
+	    if (! bad.empty()) {
+	       std::string mol_name = g.molecules[imol].name_for_display_manager();
+	       std::string m = "Restraints were found for these components, but\n"
+		               "they do not describe the atoms in the model:\n\n";
+	       for (unsigned int i=0; i<bad.size(); i++) {
+		  // Detail to stdout, short form in the dialog.
+		  std::cout << "WARNING:: " << bad[i].message() << std::endl;
+		  m += "    ";
+		  m += bad[i].comp_id;
+		  if (! mol_name.empty()) {
+		     m += " (";
+		     m += mol_name;
+		     m += ")";
+		  }
+		  m += "\n";
+	       }
+	       m += "\nThis usually means the component id is already used by a\n"
+		    "different molecule in the CCD. Refinement will not restrain\n"
+		    "these correctly until the component is renamed or a matching\n"
+		    "dictionary is read in.";
+	       if (graphics_info_t::use_graphics_interface_flag)
+		  if (graphics_info_t::show_ligand_restraint_warnings_flag)
+		     info_dialog(m.c_str());
+	    }
+	 }
+
+
 	 if (graphics_info_t::nomenclature_errors_mode == coot::PROMPT) { 
 	    // Now, did that PDB file contain nomenclature errors?
 	    std::vector<std::pair<std::string,coot::residue_spec_t> > nomenclature_errors = 
