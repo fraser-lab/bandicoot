@@ -3029,6 +3029,9 @@ static const char *bandicoot_pandda_conf_values[] = {
 // --- pandda.inspect-style UI: shared dialog/mode state + extra widgets ---
 // The dialog holds a swappable body; mode selects which builder fills it.
 static GtkWidget *bandicoot_pandda_dialog_widget = NULL;   // the top dialog
+// The ligand-restraint-warning state to restore when Inspect closes; see
+// bandicoot_pandda_dialog().
+static int bandicoot_pandda_saved_restraint_warnings = 1;
 static GtkWidget *bandicoot_pandda_body = NULL;            // swappable content vbox
 static int        bandicoot_pandda_mode = 0;   // 0 = pandda.inspect-style, 1 = basic
 // inspect-only widgets (left NULL in basic mode; all callers NULL-check):
@@ -3775,6 +3778,9 @@ static void bandicoot_pandda_dialog_destroy(GtkObject *o, gpointer u) {
    bandicoot_pandda_null_widgets();
    bandicoot_pandda_body = NULL;
    bandicoot_pandda_dialog_widget = NULL;
+   // Give the ligand restraint dialogs back whatever state they had before
+   // Inspect suppressed them -- see the note where it is set.
+   set_show_ligand_restraint_warnings(bandicoot_pandda_saved_restraint_warnings);
 }
 static void bandicoot_pandda_dialog_response(GtkDialog *d, gint r, gpointer u) {
    gtk_widget_destroy(GTK_WIDGET(d));
@@ -4439,6 +4445,24 @@ extern "C" void bandicoot_pandda_dialog() {
    // over-restrained against the protein (mirrors the shim's startup default;
    // Coot 0.9 exposes only a global epsilon). Applied once when Inspect opens.
    set_refinement_lennard_jones_epsilon(BANDICOOT_PANDDA_LJ_EPSILON);
+   // BANDICOOT v0.2 (2026-09-01): silence the per-molecule ligand restraint
+   // dialogs while Inspect is up.
+   //
+   // Inspect loads a model per dataset, unattended, and nearly every one of
+   // them carries a ligand with no restraints -- that is what a PanDDA hit IS.
+   // So the load-time dialogs fire once per dataset and the user clicks through
+   // dozens of them. Art hit exactly this on a folder of ligand-bearing models.
+   //
+   // Turning the dialogs off does NOT turn the reporting off: the same detail
+   // still goes to stdout, so a session still leaves a record of every
+   // component that arrived unrestrained. Only the interruption stops.
+   //
+   // The PREVIOUS state is saved rather than assuming it was on, so a user who
+   // had already switched the warnings off does not get them back at close.
+   if (! bandicoot_pandda_dialog_widget)
+      bandicoot_pandda_saved_restraint_warnings = show_ligand_restraint_warnings_state();
+   set_show_ligand_restraint_warnings(0);
+
    // Already open? Just raise it.
    if (bandicoot_pandda_dialog_widget) {
       gtk_window_present(GTK_WINDOW(bandicoot_pandda_dialog_widget));

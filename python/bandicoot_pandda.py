@@ -144,33 +144,92 @@ def _acedrg_build(smiles, tlc):
     tlc = ((tlc or "").strip() or "LIG")[:3]
     if not smiles:
         return (None, None, "empty SMILES string")
+    # resolve_tool() rather than shutil.which(): launched from the Dock the
+    # process has a bare PATH, and for a wrapper such as SBGrid's the path
+    # alone is not enough to run it. See bandicoot_restraints.
     try:
-        from shutil import which
+        import bandicoot_restraints
+        acedrg, env = bandicoot_restraints.resolve_tool("acedrg")
     except Exception:
-        which = None
-    acedrg = (which("acedrg") if which else None)
+        acedrg, env = (None, None)
     if not acedrg:
-        return (None, None, "acedrg not on PATH "
-                "(launch Bandicoot from a shell with SBGrid/CCP4 active)")
+        return (None, None, "acedrg not found "
+                "(is SBGrid/CCP4 set up in your shell?)")
     workdir = tempfile.mkdtemp(prefix="bcoot_acedrg_")
     smi = os.path.join(workdir, "ligand.smi")
     with open(smi, "w") as f:
         f.write(smiles + "\n")
     stub = os.path.join(workdir, tlc)
+    if env is not None:
+        env = dict(env)
+        env["PWD"] = workdir
+    # Output to a FILE, not a pipe: stdout=PIPE waits for EOF, and SBGrid leaves
+    # a background process holding an inherited copy of the write end for about
+    # five seconds after the tool finishes. See the note in
+    # bandicoot_restraints._run(), where this was measured.
+    log_path = os.path.join(workdir, "acedrg-output.txt")
     try:
-        proc = subprocess.run([acedrg, "-i", smi, "-r", tlc, "-o", stub],
-                              cwd=workdir, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        with open(log_path, "w") as log_file:
+            proc = subprocess.run([acedrg, "-i", smi, "-r", tlc, "-o", stub],
+                                  cwd=workdir, env=env, stdin=subprocess.DEVNULL,
+                                  stdout=log_file, stderr=subprocess.STDOUT)
     except Exception as e:
         return (None, None, "could not run acedrg (%s)" % e)
     pdb, cif = stub + ".pdb", stub + ".cif"
     if proc.returncode != 0 or not os.path.isfile(pdb):
-        if proc.stdout:
-            print("acedrg output (tail):\n"
-                  + proc.stdout.decode("utf-8", "replace")[-500:])
+        try:
+            with open(log_path, "rb") as fh:
+                tail = fh.read().decode("utf-8", "replace")[-500:]
+        except Exception:
+            tail = ""
+        if tail:
+            print("acedrg output (tail):\n" + tail)
         return (None, None, "acedrg could not build %s from that SMILES "
                 "(see terminal)" % tlc)
     return (pdb, cif, None)
+
+
+def _build_ligand_from_smiles(smiles, tlc):
+    """Build a 3D ligand (.pdb + .cif) from SMILES. Returns
+    (pdb_path, cif_path, error_message); error_message is None on success.
+
+    ELBOW FIRST, ACEDRG AS FALLBACK, AND THE REASON IS NOT SPEED.
+
+    elbow serves both of the ways a ligand reaches Bandicoot -- a SMILES
+    string and bare coordinates -- and acedrg serves only the first, because
+    it cannot perceive chemistry from coordinates. Generating with elbow on
+    both routes means a given molecule gets THE SAME dictionary whichever door
+    it came through. Split the generator per route and the same ligand
+    silently acquires different restraints depending on how it was read in.
+
+    (It is also faster: measured 8 s against about 20 s for acedrg on the same
+    kind of task. That is the lesser reason.)
+
+    acedrg remains the fallback because a machine may have CCP4 and not
+    Phenix. Both are wanted: nothing here should require either one.
+    """
+    smiles = (smiles or "").strip()
+    tlc = ((tlc or "").strip() or "LIG")[:3]
+    if not smiles:
+        return (None, None, "empty SMILES string")
+
+    try:
+        import bandicoot_restraints
+    except Exception as e:
+        print("WARNING:: bandicoot_restraints unavailable (%s)" % e)
+        return _acedrg_build(smiles, tlc)
+
+    name, path = bandicoot_restraints.find_restraint_generator()
+    if name == "elbow":
+        pdb, cif, err = bandicoot_restraints.elbow_from_smiles(smiles, tlc)
+        if not err:
+            return (pdb, cif, None)
+        # Detail is on stdout already. Say in the terminal that we are falling
+        # back, so a user comparing two dictionaries can tell which tool made
+        # which.
+        print("WARNING:: elbow could not build %s from SMILES; trying acedrg" % tlc)
+
+    return _acedrg_build(smiles, tlc)
 
 
 class PanddaInspect(object):
@@ -929,20 +988,20 @@ class PanddaInspect(object):
         return self.status()
 
     def ligand_from_smiles(self, smiles, tlc):
-        """Build a 3D ligand from a SMILES string via acedrg (see _acedrg_build)
+        """Build a 3D ligand from a SMILES string (see _build_ligand_from_smiles)
         and load it as the current PanDDA ligand: occupancy from BDC, dropped on
-        the event. The acedrg core is shared with the standalone
+        the event. The builder is shared with the standalone
         ligand_from_smiles_standalone() behind Other Modelling Tools."""
         if not self.elist:
             return self._msg("PanDDA: load a PanDDA folder and pick an event first")
-        pdb, cif, err = _acedrg_build(smiles, tlc)
+        pdb, cif, err = _build_ligand_from_smiles(smiles, tlc)
         if err:
             return self._msg("PanDDA: " + err)
         if cif and os.path.isfile(cif):
             coot.read_cif_dictionary(cif)
         imol = self._read_model(pdb, 0, self.LIGAND_BOND_COLOUR)
         if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
-            return self._msg("PanDDA: acedrg built %s but Coot could not read it"
+            return self._msg("PanDDA: built %s but Coot could not read it"
                              % os.path.basename(pdb))
         self.mol["ligand"] = imol
         self._set_ligand_occupancy(imol)
@@ -1716,18 +1775,19 @@ def ligand_from_smiles(smiles, tlc):
     return _get().ligand_from_smiles(smiles, tlc)
 
 def ligand_from_smiles_standalone(smiles, tlc):
-    """Build a 3D ligand from SMILES via acedrg and load it at the current view
-    centre, with no PanDDA session required. Backs the 'Ligand from SMILES...'
-    button in Other Modelling Tools. Returns a one-line status string."""
+    """Build a 3D ligand from SMILES (elbow, else acedrg -- see
+    _build_ligand_from_smiles) and load it at the current view centre, with no
+    PanDDA session required. Backs the 'Ligand from SMILES...' button in Other
+    Modelling Tools. Returns a one-line status string."""
     tlc = ((tlc or "").strip() or "LIG")[:3]
-    pdb, cif, err = _acedrg_build(smiles, tlc)
+    pdb, cif, err = _build_ligand_from_smiles(smiles, tlc)
     if err:
         return "Ligand from SMILES: " + err
     if cif and os.path.isfile(cif):
         coot.read_cif_dictionary(cif)
     imol = coot.handle_read_draw_molecule_with_recentre(pdb, 0)
     if imol is None or imol < 0 or not coot.is_valid_model_molecule(imol):
-        return ("Ligand from SMILES: acedrg built %s but Coot could not read it"
+        return ("Ligand from SMILES: built %s but Coot could not read it"
                 % os.path.basename(pdb))
     try:
         coot.set_molecule_bonds_colour_map_rotation(imol,

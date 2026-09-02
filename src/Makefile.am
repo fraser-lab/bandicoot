@@ -306,6 +306,8 @@ coot_bin_SOURCES = \
 	save-coords-options.cc   \
 	save-coords-gui.hh       \
 	save-coords-gui.cc       \
+	restraints-gui.hh        \
+	restraints-gui.cc        \
 	c-interface-build-gui.cc \
 	c-interface-curlew.cc    \
 	c-interface-curlew.hh    \

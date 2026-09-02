@@ -168,6 +168,68 @@ static gboolean bandicoot_pandda_idle_open(gpointer data) {
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// BANDICOOT v0.2 (2026-09-01): make Ctrl-C in the launching terminal actually
+// shut Bandicoot down.
+//
+// WHY IT DID NOTHING BEFORE. setup_python() calls plain Py_Initialize(), which
+// installs Python's SIGINT handler. That handler does not raise anything: it
+// sets a flag which the BYTECODE EVAL LOOP checks between instructions.
+// gtk_main() is C and never returns to that loop, so while the GUI sits idle
+// the flag is set and never read. Nothing in src/ installed a handler of its
+// own, so Ctrl-C was swallowed whole. (Confirmed on a standalone
+// CPython + gtk_main() reproduction, not inferred.)
+//
+// WHY g_unix_signal_add AND NOT signal(2) DIRECTLY. A real signal handler runs
+// in async context, where almost nothing is legal -- certainly not GTK, not
+// malloc, and not Coot's exit path. g_unix_signal_add defers the callback to
+// the main loop, where all of that is safe again. glib is 2.86 here and
+// glib-unix.h is present.
+//
+// WARNING: THE SECOND Ctrl-C CANNOT BE ANOTHER MAIN-LOOP CALLBACK, and this is the
+// part that is easy to get wrong. The whole point of a second Ctrl-C is to
+// escape a shutdown that has wedged -- and coot_save_state_and_exit() really
+// can wedge: it spins on graphics_info_t::restraints_lock waiting for a
+// refinement to finish. But a wedged stage 1 is OCCUPYING the main loop, so a
+// second glib callback would never be dispatched. Measured: written that way,
+// the second Ctrl-C does nothing at all.
+//
+// So stage 2 is a genuine async handler, installed by stage 1 BEFORE it starts
+// the slow part, and it does only what is async-signal-safe: write(2) and
+// _exit(2).
+// ---------------------------------------------------------------------------
+#ifndef _WIN32
+#include <glib-unix.h>
+#include <signal.h>
+
+extern "C" void bandicoot_signal_exit_now(int sig) {
+   static const char msg[] = "\nBandicoot: interrupted again - exiting immediately.\n";
+   ssize_t ignored = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+   (void) ignored;   // nothing useful to do if even this fails
+   // 128 + signal number, the shell's convention for "terminated by this
+   // signal". src/coot.in maps 130/143 back to 0 so the launcher does not
+   // announce a crash at a user who asked it to stop.
+   _exit(128 + sig);
+}
+
+static gboolean bandicoot_signal_quit(gpointer data) {
+
+   std::cout << "\nBandicoot: interrupted - saving state and shutting down."
+             << "\n           (interrupt again to exit at once)" << std::endl;
+
+   // Arm the escape hatch before doing anything slow -- see above.
+   signal(SIGINT,  bandicoot_signal_exit_now);
+   signal(SIGTERM, bandicoot_signal_exit_now);
+
+   // coot_real_exit(), not coot_checked_exit(): the latter RETURNS without
+   // exiting when there are unsaved changes, which is right for a menu item
+   // and wrong for an interrupt. Ctrl-C must always terminate. This saves the
+   // state and history and closes the molecules, as the Exit menu item does.
+   coot_real_exit(0);
+   return FALSE;   // not reached; coot_real_exit() calls exit()
+}
+#endif // ! _WIN32
+
 // This main is used for both python/guile useage and unscripted.
 int
 main (int argc, char *argv[]) {
@@ -645,6 +707,31 @@ main (int argc, char *argv[]) {
    remove_file_curlew_menu_item_maybe();
 
    setup_python(argc, argv);
+
+#if defined(USE_PYTHON) && ! defined(_WIN32)
+   // Ctrl-C, and `kill` / Activity Monitor's Quit, now shut Bandicoot down.
+   // See the note above bandicoot_signal_quit().
+   //
+   // WARNING: IT MUST GO AFTER setup_python(), BECAUSE Py_Initialize() INSTALLS ITS
+   // OWN SIGINT HANDLER and would overwrite ours. And it wants to be as soon
+   // after as possible: startup is not instant -- loading the python modules
+   // and the monomer library takes seconds -- and every one of those seconds
+   // before this line is a second in which Ctrl-C does the old, useless thing.
+   // (Measured: an interrupt 14 s into startup landed on Python's handler,
+   // printed a KeyboardInterrupt traceback, and left the app running.)
+   //
+   // WARNING: GRAPHICS PATH ONLY, DELIBERATELY. This replaces Python's SIGINT
+   // handler, and on --no-graphics that handler is the one thing that works:
+   // there is no gtk_main there, the eval loop IS running, and Ctrl-C
+   // correctly raises KeyboardInterrupt in a running script (measured).
+   // Installing ours everywhere would take that away to fix a problem the
+   // scripting path does not have.
+   if (graphics_info_t::use_graphics_interface_flag) {
+      g_unix_signal_add(SIGINT,  bandicoot_signal_quit, NULL);
+      g_unix_signal_add(SIGTERM, bandicoot_signal_quit, NULL);
+   }
+#endif
+
 #ifdef USE_PYTHON
    setup_python_classes();
    // Bandicoot v0.1.0.0: trigger the socket listener (--port + --hostname

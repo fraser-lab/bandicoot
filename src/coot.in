@@ -339,6 +339,15 @@ else
       $PYTHON $coot_py_dir/coot_output_to_window.py "$@"
       status=$?
    fi
+   # BANDICOOT v0.2: 130 and 143 are "interrupted", not "crashed".
+   #
+   # Ctrl-C twice (or `kill` twice) makes Bandicoot take its escape hatch and
+   # _exit with the conventional 128+signal status. That is a non-zero exit and
+   # would otherwise print the crash banner below at the user who just asked it
+   # to stop, which reads as though something went wrong.
+   if [ $status = 130 ] || [ $status = 143 ] ; then
+      status=0
+   fi
    if [ $status != 0 ] ; then
       echo . ------ Coot crashed - trying to diagnose -----
       #./guile -s $COOT_PREFIX/share/coot/scheme/coot-crash-catcher.scm $coot_real

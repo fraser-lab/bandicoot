@@ -108,6 +108,8 @@
 #include "coot-utils/coot-map-utils.hh"
 #include "coot-utils/comp-id-collision.hh" // a resolved dictionary that describes
                                            // a different molecule
+#include "restraints-gui.hh"               // the load-time offer to generate
+                                           // restraints for what has none
 #include "coot-database.hh"
 #include "coot-fileselections.h"
 
@@ -921,9 +923,19 @@ int handle_read_draw_molecule_with_recentre(const char *filename,
 		 "(File -> Import CIF dictionary..., or generate one with acedrg\n"
 		 "or phenix.elbow).";
 	    std::cout << "WARNING:: " << m << std::endl;
-	    if (graphics_info_t::use_graphics_interface_flag)
-	       if (graphics_info_t::show_ligand_restraint_warnings_flag)
-		  info_dialog(m.c_str());
+
+	    // BANDICOOT v0.2 (2026-09-01): the same information, but as an OFFER.
+	    //
+	    // This used to be an info_dialog of the text above, which told the
+	    // user what was wrong and left them to do something about it from
+	    // the scripting console. The notification dialog lists the same
+	    // components and can generate the restraints.
+	    //
+	    // It deliberately does not block or ask: see the note at the top of
+	    // restraints-gui.cc on why a coordinate load must feel like a
+	    // coordinate load. The stdout warning above is unchanged and is
+	    // still the whole record for a headless or silenced session.
+	    bandicoot_restraints_notify(imol, types_with_no_dictionary);
 	 } else {
 	    // perhaps we have read dictionaries for everything (but
 	    // first check that there had been dictionaries to read.
