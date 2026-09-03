@@ -91,6 +91,24 @@ namespace coot {
       // replacement code that is guaranteed not to be a real component.
       std::vector<std::string> free_placeholder_codes(mmdb::Manager *mol);
 
+      // The reserved placeholder comp ids actually present in mol, sorted and
+      // unique. What a rename needs in order to ask "does this chemistry
+      // already have a code somewhere in the session?" -- see the reuse step
+      // in resolve_placeholder_collisions_on_load().
+      std::vector<std::string> placeholder_comp_ids(mmdb::Manager *mol);
+
+      // The same, but free across SEVERAL molecules -- which is what a rename
+      // on load actually needs.
+      //
+      // WHY: restraints are global and keyed by comp id, so "unused" has to
+      // mean unused in the whole session, not in one molecule. Asking a single
+      // molecule was a real bug (Art, 2026-09-01): two different models were
+      // loaded, each was independently renamed against its own free list, and
+      // both came out holding "01" and "02" for chemically different ligands.
+      // The rename meant to prevent collisions created one.
+      std::vector<std::string>
+      free_placeholder_codes(const std::vector<mmdb::Manager *> &mols);
+
       // ------------------------------------------------------------ residues
 
       // A heavy atom's name, element and position -- what the connectivity

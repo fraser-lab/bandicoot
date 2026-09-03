@@ -6389,13 +6389,29 @@ void res_tracer(int imol_map, const std::string &pir_file_name) {
 std::string comp_id_collision_message(int imol, const std::string &comp_id) {
 
    std::string m;
-   if (is_valid_model_molecule(imol)) {
-      mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
-      coot::comp_id_collision::collision_t c =
-	 coot::comp_id_collision::find_collision(mol, comp_id);
-      if (c.ok())
-	 m = c.message();
-   }
+   if (! is_valid_model_molecule(imol)) return m;
+
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+
+   coot::comp_id_collision::collision_t c =
+      coot::comp_id_collision::find_collision(mol, comp_id);
+   if (c.ok())
+      m = c.message();
+
+   // NOTE: deliberately WITHIN this molecule only.
+   //
+   // A briefly-lived version (2026-09-01) also compared against every other
+   // loaded molecule, because restraints were global and generating for "LIG"
+   // here would overwrite the dictionary another molecule's differently-shaped
+   // "LIG" depended on. Generated restraints are now stored PER MOLECULE
+   // (see the scoped read in bandicoot_restraints.py), so that is no longer
+   // true: two loaded models can each have their own LIG, each with its own
+   // dictionary, and refinement finds the right one. Comparing across
+   // molecules now refuses a case that works perfectly well.
+   //
+   // What remains genuinely impossible is two different chemistries under one
+   // comp id INSIDE ONE MOLECULE -- the scope is the molecule, so it cannot
+   // separate them. That is what this still checks.
    return m;
 }
 
@@ -6443,11 +6459,28 @@ std::string suggest_free_placeholder_comp_id(int imol) {
 
    std::string s;
    if (is_valid_model_molecule(imol)) {
-      mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+      // Every loaded molecule, not just imol: a code already used elsewhere in
+      // the session is not free, because the dictionary it would need is
+      // already spoken for. See the note on the overload in
+      // comp-id-collision.hh.
+      std::vector<mmdb::Manager *> mols;
+      for (int im=0; im<graphics_info_t::n_molecules(); im++)
+	 if (is_valid_model_molecule(im))
+	    if (graphics_info_t::molecules[im].atom_sel.mol)
+	       mols.push_back(graphics_info_t::molecules[im].atom_sel.mol);
       std::vector<std::string> free_codes =
-	 coot::comp_id_collision::free_placeholder_codes(mol);
-      if (! free_codes.empty())
-	 s = free_codes[0];
+	 coot::comp_id_collision::free_placeholder_codes(mols);
+      // Two-digit codes only, matching what the load-time rename hands out.
+      // Art keeps LIG, DRG and INH back for renaming by hand, and a bare
+      // number implies nothing about the chemistry -- which DRG and INH do,
+      // possibly untruthfully. 99 codes, all of them shapes the CCD will never
+      // issue (all 938 numeric CCD ids are three characters).
+      for (unsigned int i=0; i<free_codes.size(); i++) {
+	 if (free_codes[i].size() == 2) {
+	    s = free_codes[i];
+	    break;
+	 }
+      }
    }
    return s;
 }

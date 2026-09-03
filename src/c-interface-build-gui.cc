@@ -97,6 +97,7 @@
 #include "cc-interface.hh"
 #include "cc-interface-scripting.hh"
 #include "c-interface-ligands-swig.hh"  // coot_reduce, invert_chiral_centre (Modelling menu)
+#include "restraints-gui.hh"           // Modelling -> Generate Ligand Restraints
 #include "rotamer-search-modes.hh"   // ROTAMERSEARCHLOWRES / HIGHRES (Modelling menu)
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
@@ -1956,6 +1957,9 @@ static void bandicoot_imol_chooser(const char *title, const char *label_text,
 }
 
 // Tier 2 per-molecule ops (run after the chooser picks imol).
+static void bmod_op_generate_ligand_restraints(int imol) {
+   bandicoot_generate_restraints_for_molecule(imol);
+}
 static void bmod_op_arrange_waters(int imol)   { move_waters_to_around_protein(imol); }
 static void bmod_op_assign_hetatm(int imol)    { assign_hetatms(imol); }
 static void bmod_op_fix_nomenclature(int imol) { fix_nomenclature_errors(imol); }
@@ -2737,6 +2741,11 @@ extern "C" void bandicoot_modelling_dispatch(int op_id) {
                              "Fetch PDBe Ligand Description for comp-id:",
                              "", bmod_op_fetch_pdbe_ligand); break;
    case BMOD_FETCH_PDBE_THIS_LIGAND:  bmod_fetch_pdbe_this_ligand(); break;
+   case BMOD_GENERATE_LIGAND_RESTRAINTS:
+      bandicoot_imol_chooser("Generate Ligand Restraints",
+                             "Generate restraints for ligands in:",
+                             bmod_op_generate_ligand_restraints);
+      break;
    // ---- Tier 4 (custom result windows) ------------------------------------
    case BMOD_RENAME_RESIDUE:
       bandicoot_single_entry("Rename Residue",
@@ -4682,6 +4691,123 @@ bool bandicoot_native_question_dialog(const char *msg) {
    return (response == GTK_RESPONSE_YES);
 }
 
+void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
+                                    int *auto_generate, int *show_generate);
+
+// The rename itself, factored out (2026-09-02) so the automatic path from
+// Preferences -> Others -> Ligands and the ask-first path run exactly the same
+// code. Nothing here decides WHETHER to rename; that is the caller's business.
+static int bandicoot_rename_placeholder_collisions(
+                int imol,
+                const std::vector<std::string> &comp_ids,
+                const std::vector<mmdb::Manager *> &other_mols) {
+
+   int n_renamed = 0;
+   if (! is_valid_model_molecule(imol)) return n_renamed;
+
+   graphics_info_t g;
+   mmdb::Manager *mol = g.molecules[imol].atom_sel.mol;
+   if (! mol) return n_renamed;
+
+   for (unsigned int i=0; i<comp_ids.size(); i++) {
+
+      const std::string &comp_id = comp_ids[i];
+      std::vector<std::vector<coot::comp_id_collision::residue_ref_t> > groups =
+         coot::comp_id_collision::distinct_chemistry_groups(mol, comp_id);
+      if (groups.size() < 2) continue;
+
+      // Numeric codes only for the new names. 01-99 are reserved by the wwPDB
+      // and, being bare numbers, imply nothing at all about the chemistry --
+      // which DRG and INH do, possibly untruthfully. Art also keeps LIG, DRG
+      // and INH back for renaming by hand, which leaves 99 automatic codes;
+      // measured 2026-09-02 against the 35,649-entry CCP4 monomer library, all
+      // 938 purely-numeric CCD ids are THREE characters ("001", never "01"),
+      // so two-digit codes are safe and three-digit ones would not be.
+      //
+      // Free across the whole SESSION, not just this molecule -- see the note
+      // on the overload in comp-id-collision.hh. Recomputed per comp id,
+      // because the renames for the previous one have already been applied and
+      // must not be handed out twice.
+      std::vector<std::string> pool;
+      {
+         std::vector<mmdb::Manager *> all_mols = other_mols;
+         all_mols.push_back(mol);
+         std::vector<std::string> free_codes =
+            coot::comp_id_collision::free_placeholder_codes(all_mols);
+         for (unsigned int k=0; k<free_codes.size(); k++)
+            if (free_codes[k].size() == 2)
+               pool.push_back(free_codes[k]);
+      }
+
+      // EVERY group is renamed, including the first -- Art, 2026-08-31:
+      // "rename *all* LIGs, rather than starting with the second one. Tidier
+      // that way." Leaving one with the original name would also imply that
+      // one of them is the "real" LIG, which is not something we know.
+      unsigned int next = 0;
+      for (unsigned int gi=0; gi<groups.size(); gi++) {
+
+         if (groups[gi].empty()) continue;
+
+         // BANDICOOT v0.2 (2026-09-02): REUSE the code this chemistry already
+         // has, if some other loaded molecule is holding it under a placeholder
+         // name.
+         //
+         // Art's case: load a model, its two ligands become 01 and 02, then
+         // load the SAME model again. Minting 03 and 04 for chemistries that
+         // already have 01 and 02 would be correct but wasteful -- two comp ids
+         // for one chemistry, and each needing its own generated dictionary.
+         // Reusing the code means the dictionaries already in the session apply
+         // to the new copy immediately.
+         //
+         // Matching is the same three-test decider used for detection, so
+         // "same chemistry" here means exactly what "no collision" means
+         // everywhere else in this file, subset tolerance included.
+         std::string new_id;
+         for (unsigned int k=0; k<other_mols.size() && new_id.empty(); k++) {
+            std::vector<std::string> theirs =
+               coot::comp_id_collision::placeholder_comp_ids(other_mols[k]);
+            for (unsigned int t=0; t<theirs.size(); t++) {
+               coot::comp_id_collision::residue_ref_t rep =
+                  coot::comp_id_collision::most_complete_residue(other_mols[k], theirs[t]);
+               if (! rep.ok()) continue;
+               if (! coot::comp_id_collision::chemistries_conflict(groups[gi][0], rep)) {
+                  new_id = theirs[t];
+                  std::cout << "INFO:: " << comp_id << " " << groups[gi][0].label()
+                            << " is the same chemistry as " << theirs[t]
+                            << " already loaded; reusing that name" << std::endl;
+                  break;
+               }
+            }
+         }
+
+         if (new_id.empty()) {
+            if (next >= pool.size()) {
+               std::cout << "WARNING:: ran out of reserved placeholder codes; "
+                         << "leaving the rest of " << comp_id << " as it is"
+                         << std::endl;
+               break;
+            }
+            new_id = pool[next++];
+         }
+
+         for (unsigned int r=0; r<groups[gi].size(); r++) {
+            const coot::comp_id_collision::residue_ref_t &res = groups[gi][r];
+            g.molecules[imol].set_residue_name(res.chain_id, res.res_no,
+                                               res.ins_code, new_id);
+            std::cout << "INFO:: renamed " << comp_id << " " << res.label()
+                      << " to " << new_id << std::endl;
+         }
+         n_renamed++;
+      }
+   }
+
+   if (n_renamed > 0) {
+      g.molecules[imol].make_bonds_type_checked();
+      graphics_draw();
+   }
+   return n_renamed;
+}
+
 int resolve_placeholder_collisions_on_load(int imol) {
 
    int n_renamed = 0;
@@ -4690,15 +4816,43 @@ int resolve_placeholder_collisions_on_load(int imol) {
    graphics_info_t g;
    mmdb::Manager *mol = g.molecules[imol].atom_sel.mol;
 
+   // The other loaded molecules. Used ONLY for the code pool below -- a clash
+   // with another molecule is not a problem any more.
+   //
+   // It briefly was (2026-09-01): while generated restraints were global, a LIG
+   // here and a chemically different LIG in molecule 1 could not both be
+   // described, and this function detected that and offered a rename. Generated
+   // restraints are now stored per molecule, so each gets its own LIG and
+   // neither needs renaming. Detecting it now would demand a rename to fix
+   // something that is not broken.
+   //
+   // What still cannot work is two different chemistries under one comp id
+   // WITHIN one molecule -- the scope is the molecule -- which is what
+   // find_collisions() below looks for, and what this dialog is for.
+   std::vector<mmdb::Manager *> other_mols;
+   for (int im=0; im<graphics_info_t::n_molecules(); im++) {
+      if (im == imol) continue;
+      if (! is_valid_model_molecule(im)) continue;
+      if (g.molecules[im].atom_sel.mol)
+         other_mols.push_back(g.molecules[im].atom_sel.mol);
+   }
+
    // Only the reserved codes. A real CCD code naming two different molecules is
    // a different problem (somebody used a code that was already taken) and
    // renaming is not obviously the right repair for it.
    std::vector<coot::comp_id_collision::collision_t> all =
       coot::comp_id_collision::find_collisions(mol);
+
    std::vector<std::string> comp_ids;
-   for (unsigned int i=0; i<all.size(); i++)
-      if (coot::comp_id_collision::is_reserved_placeholder(all[i].comp_id))
+   for (unsigned int i=0; i<all.size(); i++) {
+      if (! coot::comp_id_collision::is_reserved_placeholder(all[i].comp_id))
+         continue;
+      bool seen = false;
+      for (unsigned int j=0; j<comp_ids.size(); j++)
+         if (comp_ids[j] == all[i].comp_id) { seen = true; break; }
+      if (! seen)
          comp_ids.push_back(all[i].comp_id);
+   }
 
    if (comp_ids.empty()) return n_renamed;
 
@@ -4723,6 +4877,26 @@ int resolve_placeholder_collisions_on_load(int imol) {
    for (unsigned int i=0; i<all.size(); i++)
       std::cout << "WARNING:: " << all[i].message() << std::endl;
 
+   // Preferences -> Others -> Ligands decides whether we ask at all.
+   //   auto_rename Yes -> rename without asking
+   //   auto_rename No, show_rename Yes -> the dialog below (the default)
+   //   both No -> leave the names alone; the user will rename by hand
+   {
+      int auto_rename = 0, show_rename = 1;
+      bandicoot_load_ligand_behaviour(&auto_rename, &show_rename, NULL, NULL);
+
+      if (! auto_rename && ! show_rename) {
+         std::cout << "INFO:: not renaming placeholder names (Preferences -> "
+                   << "Others -> Ligands)" << std::endl;
+         return n_renamed;
+      }
+      if (auto_rename) {
+         std::cout << "INFO:: renaming placeholder names without asking "
+                   << "(Preferences -> Others -> Ligands)" << std::endl;
+         return bandicoot_rename_placeholder_collisions(imol, comp_ids, other_mols);
+      }
+   }
+
    // With the warnings turned off, do not ask -- and therefore do not rename.
    // This dialog is MODAL, so in the case the flag exists for (stepping through
    // many ligand-bearing structures) it would not merely stack up, it would
@@ -4743,54 +4917,5 @@ int resolve_placeholder_collisions_on_load(int imol) {
       return n_renamed;
    }
 
-   for (unsigned int i=0; i<comp_ids.size(); i++) {
-
-      const std::string &comp_id = comp_ids[i];
-      std::vector<std::vector<coot::comp_id_collision::residue_ref_t> > groups =
-         coot::comp_id_collision::distinct_chemistry_groups(mol, comp_id);
-      if (groups.size() < 2) continue;
-
-      // Numeric codes only for the new names. 01-99 are reserved by the wwPDB
-      // and, being bare numbers, imply nothing at all about the chemistry --
-      // which DRG and INH do, possibly untruthfully.
-      std::vector<std::string> pool;
-      {
-         std::vector<std::string> free_codes =
-            coot::comp_id_collision::free_placeholder_codes(mol);
-         for (unsigned int k=0; k<free_codes.size(); k++)
-            if (free_codes[k].size() == 2)
-               pool.push_back(free_codes[k]);
-      }
-
-      // EVERY group is renamed, including the first -- Art, 2026-08-31:
-      // "rename *all* LIGs, rather than starting with the second one. Tidier
-      // that way." Leaving one with the original name would also imply that
-      // one of them is the "real" LIG, which is not something we know.
-      unsigned int next = 0;
-      for (unsigned int gi=0; gi<groups.size(); gi++) {
-
-         if (next >= pool.size()) {
-            std::cout << "WARNING:: ran out of reserved placeholder codes; "
-                      << "leaving the rest of " << comp_id << " as it is"
-                      << std::endl;
-            break;
-         }
-         const std::string new_id = pool[next++];
-
-         for (unsigned int r=0; r<groups[gi].size(); r++) {
-            const coot::comp_id_collision::residue_ref_t &res = groups[gi][r];
-            g.molecules[imol].set_residue_name(res.chain_id, res.res_no,
-                                               res.ins_code, new_id);
-            std::cout << "INFO:: renamed " << comp_id << " " << res.label()
-                      << " to " << new_id << std::endl;
-         }
-         n_renamed++;
-      }
-   }
-
-   if (n_renamed > 0) {
-      g.molecules[imol].make_bonds_type_checked();
-      graphics_draw();
-   }
-   return n_renamed;
+   return bandicoot_rename_placeholder_collisions(imol, comp_ids, other_mols);
 }

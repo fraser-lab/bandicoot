@@ -313,11 +313,15 @@ def generate_restraints_for_comp_id(imol, comp_id):
     clash = comp_id_collision_message(imol, comp_id)
     if clash:
         print("WARNING:: " + clash)
+        # Deliberately does NOT say "in this structure": since 2026-09-01 the
+        # clash may be with a DIFFERENT loaded molecule, and restraints are
+        # global, so that case is just as fatal and needs the same repair. The
+        # terminal has the detail, including which molecule.
         return (False,
-                "%s names more than one molecule in this structure.\n"
-                "Restraints are stored by component id, so only one of them\n"
-                "could be described. Rename one of them and try again."
-                % comp_id)
+                "%s names more than one distinct molecule (see the terminal\n"
+                "for which). Restraints are stored by component id, so only\n"
+                "one of them could be described. Rename them apart and try\n"
+                "again." % comp_id)
 
     selection = most_complete_residue_selection(imol, comp_id)
     if not selection:
@@ -343,7 +347,27 @@ def generate_restraints_for_comp_id(imol, comp_id):
         return (False, err)
 
     print("INFO:: generated restraints for %s -> %s" % (comp_id, cif))
-    read_cif_dictionary(cif)
+
+    # SCOPED TO THIS MOLECULE, not global -- and that is the whole design.
+    #
+    # Restraints in Coot can be stored per molecule (the imol_enc field), and
+    # refinement looks them up that way: make_restraints() passes the molecule
+    # number and get_monomer_restraints_internal() tries an EXACT scope match
+    # before falling back to the unscoped ones.
+    #
+    # Reading these restraints globally, as this used to, meant one dictionary
+    # for "LIG" across the whole session -- so two loaded models each holding a
+    # chemically different LIG could not both be described, and the only repair
+    # was to rename one of them. Scoped to the molecule they were derived from,
+    # both are fine and nothing has to be renamed: molecule 0 gets its LIG,
+    # molecule 1 gets its own.
+    #
+    # mon_lib_add_chem_comp() only supersedes an entry at the SAME scope, so
+    # these cannot clobber each other either.
+    #
+    # The third argument is "make a new molecule from the dictionary", which we
+    # never want here -- the molecule already exists.
+    handle_cif_dictionary_for_molecule(cif, imol, 0)
 
     # The restraints were derived from one residue. If another residue shares
     # this comp id but is a different molecule -- and did so in a way the

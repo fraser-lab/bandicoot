@@ -121,8 +121,41 @@ namespace coot {
 
       std::vector<std::string> free_placeholder_codes(mmdb::Manager *mol) {
 
-         std::set<std::string> used;
+         std::vector<mmdb::Manager *> mols;
+         if (mol) mols.push_back(mol);
+         return free_placeholder_codes(mols);
+      }
+
+      std::vector<std::string> placeholder_comp_ids(mmdb::Manager *mol) {
+
+         std::set<std::string> found;
          if (mol) {
+            for (int imod=1; imod<=mol->GetNumberOfModels(); imod++) {
+               mmdb::Model *model_p = mol->GetModel(imod);
+               if (! model_p) continue;
+               for (int ich=0; ich<model_p->GetNumberOfChains(); ich++) {
+                  mmdb::Chain *chain_p = model_p->GetChain(ich);
+                  if (! chain_p) continue;
+                  for (int ires=0; ires<chain_p->GetNumberOfResidues(); ires++) {
+                     mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+                     if (! residue_p) continue;
+                     const std::string name = trim(residue_p->GetResName());
+                     if (is_reserved_placeholder(name))
+                        found.insert(name);
+                  }
+               }
+            }
+         }
+         return std::vector<std::string>(found.begin(), found.end());
+      }
+
+      std::vector<std::string>
+      free_placeholder_codes(const std::vector<mmdb::Manager *> &mols) {
+
+         std::set<std::string> used;
+         for (unsigned int im=0; im<mols.size(); im++) {
+            mmdb::Manager *mol = mols[im];
+            if (! mol) continue;
             for (int imod=1; imod<=mol->GetNumberOfModels(); imod++) {
                mmdb::Model *model_p = mol->GetModel(imod);
                if (! model_p) continue;

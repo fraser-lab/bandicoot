@@ -282,7 +282,7 @@ class PanddaInspect(object):
         self.slist = []               # rows of the sites CSV (incl. header)
         self.scol = {}                # sites-CSV column name -> index
         self._sites_backed_up = False
-        # ligand auto-loader config (from ~/.coot-preferences/bandicoot-ligands)
+        # ligand auto-loader config (from ~/.coot-preferences/bandicoot-pandda)
         self._lig_index = {}          # dtag -> ligand_id
         self._lig_cifs_dir = None     # root of per-ligand isomer directories
         self._split_on_load = False   # split fitted models into protein+ligand mols
@@ -774,7 +774,7 @@ class PanddaInspect(object):
         self._split_on_load = False
         # prefs file lines: 0 index(unused) | 1 cifs dir | 2 split flag "1"/"0"
         cfg_index = ""
-        cfg = os.path.expanduser("~/.coot-preferences/bandicoot-ligands")
+        cfg = os.path.expanduser("~/.coot-preferences/bandicoot-pandda")
         try:
             with open(cfg) as f:
                 lines = f.read().splitlines()

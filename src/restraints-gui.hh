@@ -33,6 +33,14 @@
 //! keeps its record.
 void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_ids);
 
+//! Generate restraints for whatever \a imol still lacks them, on demand.
+//
+//! Backs Modelling -> Generate Ligand Restraints. Needs no dialog to be open,
+//! and says so plainly when the molecule has nothing missing -- an explicit
+//! request deserves an answer either way, unlike the load-time path where
+//! silence is the good news.
+void bandicoot_generate_restraints_for_molecule(int imol);
+
 //! Open (or raise) the notification dialog on demand.
 //
 //! Same dialog, same live contents; it simply does not wait for a load. There

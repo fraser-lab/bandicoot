@@ -498,7 +498,7 @@ static void bandicoot_add_pick_atom_tab(GtkWidget *prefs) {
 //   * a dataset->ligand index CSV (columns "dataset id","ligand id")
 //   * a root directory of per-ligand .pdb/.cif subdirectories
 // They are stored as two lines (index path, cifs dir) in
-// ~/.coot-preferences/bandicoot-ligands and read DIRECTLY by the Python driver
+// ~/.coot-preferences/bandicoot-pandda and read DIRECTLY by the Python driver
 // (python/bandicoot_pandda.py) — no SWIG / C<->Python plumbing. This tab is the
 // editor. Designed to grow (more ligand settings later, e.g. a "starting state").
 static GtkWidget *bcoot_ligands_index_entry = NULL;
@@ -508,7 +508,7 @@ static GtkWidget *bcoot_ligands_split_yes   = NULL;   // "Ligand Splitting" Yes 
 static std::string bandicoot_ligands_config_path() {
    std::string dir = bandicoot_pick_radius_dir();   // ~/.coot-preferences
    if (dir.empty()) return "";
-   return dir + "/bandicoot-ligands";
+   return dir + "/bandicoot-pandda";
 }
 // File: line0 = index path (now unused/empty), line1 = cifs dir,
 //       line2 = "1"/"0" split-on-fitted-model-load flag. Read by the driver.
@@ -621,6 +621,168 @@ static void bcoot_ligands_add_row(GtkWidget *tbl, int row, const char *label_tex
    *entry_out = e;
 }
 
+// ---- Bandicoot "Ligands" preferences tab (v0.2) ---------------------------
+//
+// What a coordinate load should DO about ligands, rather than where PanDDA
+// finds them (that is the PanDDA tab, which this file used to call "Ligands").
+//
+// Four settings, stored as four ints in
+// ~/.coot-preferences/bandicoot-ligand-behaviour:
+//
+//   line 0   rename placeholder comp ids automatically?
+//   line 1   if not automatic, offer the rename dialog at all?
+//   line 2   generate missing restraints automatically?
+//   line 3   if not automatic, offer the restraints dialog at all?
+//
+// Defaults 0/1/0/1 -- ask about both, which is exactly the behaviour before
+// this tab existed, so an existing user notices no change.
+//
+// The point of the "No/No" combinations is to get the OLD, quiet behaviour
+// back: load the coordinates, touch nothing, and let the user rename and
+// generate by hand (Modelling -> Generate Ligand Restraints).
+
+static GtkWidget *bcoot_lig_auto_rename_yes   = NULL;
+static GtkWidget *bcoot_lig_show_rename_yes   = NULL;
+static GtkWidget *bcoot_lig_auto_generate_yes = NULL;
+static GtkWidget *bcoot_lig_show_generate_yes = NULL;
+static GtkWidget *bcoot_lig_show_rename_box   = NULL;   // greyed when moot
+static GtkWidget *bcoot_lig_show_generate_box = NULL;
+
+static std::string bandicoot_ligand_behaviour_path() {
+   std::string dir = bandicoot_pick_radius_dir();   // ~/.coot-preferences
+   if (dir.empty()) return "";
+   return dir + "/bandicoot-ligand-behaviour";
+}
+
+void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
+                                     int *auto_generate, int *show_generate) {
+   // Defaults first, so a missing or short file still yields sane values.
+   if (auto_rename)   *auto_rename   = 0;
+   if (show_rename)   *show_rename   = 1;
+   if (auto_generate) *auto_generate = 0;
+   if (show_generate) *show_generate = 1;
+
+   std::string fn = bandicoot_ligand_behaviour_path();
+   if (fn.empty()) return;
+   std::ifstream f(fn.c_str());
+   if (!f) return;
+   int v = 0;
+   if (f >> v) { if (auto_rename)   *auto_rename   = v ? 1 : 0; }
+   if (f >> v) { if (show_rename)   *show_rename   = v ? 1 : 0; }
+   if (f >> v) { if (auto_generate) *auto_generate = v ? 1 : 0; }
+   if (f >> v) { if (show_generate) *show_generate = v ? 1 : 0; }
+}
+
+static int bcoot_yes(GtkWidget *w) {
+   return (w && gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))) ? 1 : 0;
+}
+
+static void bandicoot_save_ligand_behaviour() {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f(bandicoot_ligand_behaviour_path().c_str());
+   if (!f) return;
+   f << bcoot_yes(bcoot_lig_auto_rename_yes)   << "\n"
+     << bcoot_yes(bcoot_lig_show_rename_yes)   << "\n"
+     << bcoot_yes(bcoot_lig_auto_generate_yes) << "\n"
+     << bcoot_yes(bcoot_lig_show_generate_yes) << "\n";
+}
+
+// GREY OUT rather than hide the dependent setting when it cannot apply.
+// Art's rule from the SHELX save options (2026-08-26): manipulate the widget
+// "so the user will know it's a moot point". Hiding it would also make the
+// dialog jump about as the answer above it changes.
+static void bcoot_lig_update_sensitivity() {
+   if (bcoot_lig_show_rename_box)
+      gtk_widget_set_sensitive(bcoot_lig_show_rename_box,
+                               bcoot_yes(bcoot_lig_auto_rename_yes) ? FALSE : TRUE);
+   if (bcoot_lig_show_generate_box)
+      gtk_widget_set_sensitive(bcoot_lig_show_generate_box,
+                               bcoot_yes(bcoot_lig_auto_generate_yes) ? FALSE : TRUE);
+}
+
+static void bcoot_lig_behaviour_toggled(GtkToggleButton *b, gpointer u) {
+   bcoot_lig_update_sensitivity();
+   bandicoot_save_ligand_behaviour();
+}
+
+// One "<question>  (o) Yes  ( ) No" frame. Returns the frame; *yes_out is the
+// Yes radio, which is what the save function reads.
+static GtkWidget *bcoot_lig_yes_no_frame(const char *question, bool yes_now,
+                                         GtkWidget **yes_out) {
+   GtkWidget *frame = gtk_frame_new(question);
+   GtkWidget *box = gtk_hbox_new(FALSE, 12);
+   gtk_container_set_border_width(GTK_CONTAINER(box), 6);
+   GtkWidget *yes = gtk_radio_button_new_with_label(NULL, "Yes");
+   GtkWidget *no  = gtk_radio_button_new_with_label_from_widget(
+                       GTK_RADIO_BUTTON(yes), "No");
+   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(yes_now ? yes : no), TRUE);
+   g_signal_connect(yes, "toggled", G_CALLBACK(bcoot_lig_behaviour_toggled), NULL);
+   gtk_box_pack_start(GTK_BOX(box), yes, FALSE, FALSE, 0);
+   gtk_box_pack_start(GTK_BOX(box), no,  FALSE, FALSE, 0);
+   gtk_container_add(GTK_CONTAINER(frame), box);
+   *yes_out = yes;
+   return frame;
+}
+
+static void bandicoot_add_ligand_behaviour_tab(GtkWidget *prefs) {
+
+   GtkWidget *nb = lookup_widget(prefs, "preferences_notebook");
+   if (!nb || !GTK_IS_NOTEBOOK(nb)) return;
+
+   int auto_rename = 0, show_rename = 1, auto_generate = 0, show_generate = 1;
+   bandicoot_load_ligand_behaviour(&auto_rename, &show_rename,
+                                   &auto_generate, &show_generate);
+
+   GtkWidget *page = gtk_vbox_new(FALSE, 8);
+   gtk_container_set_border_width(GTK_CONTAINER(page), 12);
+
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_lig_yes_no_frame("Rename LIG / DRG / INH automatically?",
+                             auto_rename != 0, &bcoot_lig_auto_rename_yes),
+      FALSE, FALSE, 0);
+
+   bcoot_lig_show_rename_box =
+      bcoot_lig_yes_no_frame("Ask before renaming?", show_rename != 0,
+                             &bcoot_lig_show_rename_yes);
+   gtk_box_pack_start(GTK_BOX(page), bcoot_lig_show_rename_box, FALSE, FALSE, 0);
+
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_lig_yes_no_frame("Generate missing ligand restraints automatically?",
+                             auto_generate != 0, &bcoot_lig_auto_generate_yes),
+      FALSE, FALSE, 0);
+
+   bcoot_lig_show_generate_box =
+      bcoot_lig_yes_no_frame("Ask before generating restraints?",
+                             show_generate != 0, &bcoot_lig_show_generate_yes);
+   gtk_box_pack_start(GTK_BOX(page), bcoot_lig_show_generate_box, FALSE, FALSE, 0);
+
+   {
+      GtkWidget *note = gtk_label_new(
+         "Answering No to both questions in a pair loads the coordinates and\n"
+         "leaves the ligands alone. Rename by hand with Modelling -> Rename\n"
+         "Residue, and generate with Modelling -> Generate Ligand Restraints.");
+      gtk_misc_set_alignment(GTK_MISC(note), 0.0, 0.5);
+      gtk_box_pack_start(GTK_BOX(page), note, FALSE, FALSE, 6);
+   }
+
+   bcoot_lig_update_sensitivity();
+
+   GtkWidget *tab_label = gtk_label_new("Ligands");
+   gtk_notebook_append_page(GTK_NOTEBOOK(nb), page, tab_label);
+   gtk_widget_show(tab_label);
+   gtk_widget_show_all(page);
+
+   GtkWidget *other_btn = lookup_widget(prefs, "preferences_other_radiotoolbutton");
+   if (other_btn && GTK_IS_TOGGLE_TOOL_BUTTON(other_btn)) {
+      g_signal_connect(other_btn, "toggled",
+                       G_CALLBACK(bandicoot_pick_atom_follow_other), page);
+      if (!gtk_toggle_tool_button_get_active(GTK_TOGGLE_TOOL_BUTTON(other_btn)))
+         gtk_widget_hide(page);
+   }
+}
+
 static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
    GtkWidget *nb = lookup_widget(prefs, "preferences_notebook");
    if (!nb || !GTK_IS_NOTEBOOK(nb)) return;
@@ -681,7 +843,16 @@ static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
       gtk_box_pack_start(GTK_BOX(page), uf, FALSE, FALSE, 0);
    }
 
-   GtkWidget *tab_label = gtk_label_new("Ligands");
+   // Renamed from "Ligands" to "PanDDA" (Art, 2026-09-02): everything on this
+   // tab is PanDDA project configuration, and "Ligands" now names the tab that
+   // governs what a load does about ligands generally.
+   //
+   // The config file was renamed to bandicoot-pandda at the same time (Art,
+   // 2026-09-02): "bandicoot-ligands" was misleading for PanDDA project paths.
+   // This DOES orphan any previously-saved paths -- accepted deliberately,
+   // since the only user so far is the developer. Anyone affected just sets
+   // the directory again.
+   GtkWidget *tab_label = gtk_label_new("PanDDA");
    gtk_notebook_append_page(GTK_NOTEBOOK(nb), page, tab_label);
    gtk_widget_show(tab_label);
    gtk_widget_show_all(page);
@@ -761,8 +932,10 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
    // 3. Add the "Pick Atom" tab (atom-pick radius control).
    bandicoot_add_pick_atom_tab(prefs);
 
-   // 4. Add the "Ligands" tab (PanDDA ligand-source paths).
+   // 4. Add the "PanDDA" tab (PanDDA ligand-source paths) and the "Ligands"
+   //    tab (what a coordinate load does about ligands).
    bandicoot_add_ligands_tab(prefs);
+   bandicoot_add_ligand_behaviour_tab(prefs);
 
    // 5. Add a "Dock Sequence View Dialog?" Yes/No frame in the Dialogs section,
    //    beside the "Dock Accept/Reject Dialog?" frame. Persists to

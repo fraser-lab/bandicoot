@@ -337,7 +337,16 @@ namespace {
       return s;
    }
 
-   void run_generation(const std::vector<std::string> &wanted) {
+   // imol_forced >= 0: these components all come from that molecule and are to
+   // be generated whether or not they already have restraints (the Modelling
+   // menu entry point). -1: the dialog's case -- re-validate each against what
+   // is still MISSING, and silently drop anything that no longer needs doing.
+   //
+   // The distinction matters because the re-validation below asks live_rows(),
+   // which by construction lists only components WITHOUT a dictionary. Running
+   // the forced path through it would drop every component the user explicitly
+   // asked to replace, i.e. all of them.
+   void run_generation(const std::vector<std::string> &wanted, int imol_forced) {
 
       generation_running = true;
 
@@ -365,20 +374,30 @@ namespace {
 
       for (unsigned int i=0; i<wanted.size(); i++) {
 
-         // RE-VALIDATE, one component at a time and immediately before running.
-         // The list was read off widgets that may have been sitting there for
-         // an hour, and the previous component's dictionary may even have
-         // covered this one.
-         std::vector<row_t> rows = live_rows();
-         int imol = -1;
-         for (unsigned int j=0; j<rows.size(); j++)
-            if (rows[j].comp_id == wanted[i] && ! rows[j].imols.empty()) {
-               imol = rows[j].imols[0];
-               break;
+         int imol = imol_forced;
+         if (imol_forced < 0) {
+            // RE-VALIDATE, one component at a time and immediately before
+            // running. The list was read off widgets that may have been sitting
+            // there for an hour, and the previous component's dictionary may
+            // even have covered this one.
+            std::vector<row_t> rows = live_rows();
+            imol = -1;
+            for (unsigned int j=0; j<rows.size(); j++)
+               if (rows[j].comp_id == wanted[i] && ! rows[j].imols.empty()) {
+                  imol = rows[j].imols[0];
+                  break;
+               }
+            if (imol < 0) {
+               dropped++;
+               continue;
             }
-         if (imol < 0) {
-            dropped++;
-            continue;
+         } else {
+            // Forced: the only thing that could have changed under us is the
+            // molecule going away.
+            if (! is_valid_model_molecule(imol)) {
+               dropped++;
+               continue;
+            }
          }
 
          std::string m = "Generating restraints for " + wanted[i];
@@ -477,7 +496,7 @@ namespace {
          return;
       }
 
-      run_generation(wanted);
+      run_generation(wanted, -1);
 
       // Whatever is left still has no dictionary; if nothing is, the dialog has
       // nothing to say and should not sit there empty.
@@ -590,11 +609,100 @@ namespace {
    }
 }
 
+// Preferences -> Others -> Ligands. Declared here in the house style used for
+// the other preference readers rather than dragging in the preferences header.
+void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
+                                     int *auto_generate, int *show_generate);
+
+void bandicoot_generate_restraints_for_molecule(int imol) {
+
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   if (! is_valid_model_molecule(imol)) return;
+
+   // EVERY ligand, whether or not it already has restraints -- Art, 2026-09-02.
+   //
+   // This is the difference between this entry point and the load-time dialog.
+   // The dialog offers what is MISSING; asking for it from the menu is a
+   // deliberate act, and its purpose includes REPLACING restraints the user
+   // does not like with ones derived from their own coordinates. Filtering to
+   // what lacks a dictionary would make the menu item do nothing in exactly the
+   // case someone reaches for it.
+   //
+   // No confirmation, also his call: "that doesn't seem to be the Coot way.
+   // Those who know about that function will know what they're getting into."
+   //
+   // Water is skipped. So are the standard residue types, by
+   // non_standard_residue_types_in_molecule() -- generating a self-derived
+   // dictionary for ALA would be actively harmful.
+   graphics_info_t g;
+   std::vector<std::string> wanted;
+   {
+      std::vector<std::string> types =
+         coot::util::non_standard_residue_types_in_molecule(g.molecules[imol].atom_sel.mol);
+      for (unsigned int i=0; i<types.size(); i++) {
+         const std::string &t = types[i];
+         if (t.empty()) continue;
+         if (t == "HOH" || t == "WAT" || t == "DOD") continue;
+         wanted.push_back(t);
+      }
+   }
+
+   if (wanted.empty()) {
+      // The one thing worth saying: an explicit request that finds nothing to
+      // work on needs an answer, or it looks like the menu item is broken.
+      std::string m = "No ligands found in ";
+      m += g.molecules[imol].name_for_display_manager();
+      m += ".\n\nNo restraints were generated.";
+      std::cout << "INFO:: no ligands in molecule " << imol << std::endl;
+      info_dialog(m.c_str());
+      return;
+   }
+
+   std::cout << "INFO:: generating restraints for " << wanted.size()
+             << " component(s) in molecule " << imol
+             << " (replacing any they already have)" << std::endl;
+
+   // The dialog need not be open, and must not be required: this is the
+   // on-demand entry point. run_generation() re-validates every component
+   // against live state anyway, and set_busy() is a no-op with no dialog up.
+   run_generation(wanted, imol);
+   rebuild_on_idle(NULL);
+}
+
 void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_ids) {
 
    if (! graphics_info_t::use_graphics_interface_flag) return;
-   if (! graphics_info_t::show_ligand_restraint_warnings_flag) return;
    if (comp_ids.empty()) return;
+
+   // Preferences -> Others -> Ligands:
+   //   auto_generate Yes -> generate now, no dialog
+   //   auto_generate No, show_generate Yes -> the notification dialog (default)
+   //   both No -> load quietly; the user generates from the Modelling menu
+   //
+   // NOTE the automatic path deliberately reintroduces the wait on the load
+   // that the whole notify-don't-prompt design exists to avoid. That is fine
+   // BECAUSE THE USER ASKED FOR IT in preferences: the cost is attached to an
+   // action they chose, which is the actual content of the latency rule. There
+   // is no progress dialog -- generation blocks, so the beach ball says "wait"
+   // exactly as it does for Ligand from SMILES.
+   {
+      int auto_generate = 0, show_generate = 1;
+      bandicoot_load_ligand_behaviour(NULL, NULL, &auto_generate, &show_generate);
+
+      if (auto_generate) {
+         std::cout << "INFO:: generating restraints without asking "
+                   << "(Preferences -> Others -> Ligands)" << std::endl;
+         run_generation(comp_ids, -1);
+         return;
+      }
+      if (! show_generate) {
+         std::cout << "INFO:: not offering restraint generation (Preferences -> "
+                   << "Others -> Ligands)" << std::endl;
+         return;
+      }
+   }
+
+   if (! graphics_info_t::show_ligand_restraint_warnings_flag) return;
 
    // A load that contributes a component the user had switched off gets it
    // back: the row is being offered again about a different file, and silently
