@@ -347,10 +347,19 @@ carbohydrate_list = [
     "add_linked_cho.py",
 ]
 
+# Session recorder (SESSION_RECORDING.md): defines start_session_recording()
+# and friends in __main__ and installs its hooks only when recording is on
+# (BANDICOOT_RECORD=1 or an explicit start_session_recording() call).
+# Loaded after coot_utils.py, which sets the hook variables it wraps.
+bandicoot_list = [
+    "bandicoot_session_recorder.py",
+]
+
 python_list = list(pre_list)
 if os.name != 'nt':
     python_list += non_win_list
 python_list += carbohydrate_list
+python_list += bandicoot_list
 
 # Skip the GUI module list for now (pygtk2 is Py2-only; PyGObject port
 # is a separate effort). Set BANDICOOT_LOAD_GUI_MODULES=1 to attempt.
