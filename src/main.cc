@@ -168,6 +168,51 @@ static gboolean bandicoot_pandda_idle_open(gpointer data) {
 }
 #endif
 
+// Bandicoot v0.2 (2026-09-01): make Ctrl-C shut Bandicoot down.
+//
+// It previously did nothing: initialising the embedded interpreter installs a
+// SIGINT handler that only sets a flag for the bytecode loop, and the GTK main
+// loop never returns there. A real signal handler cannot be used either, since
+// almost nothing is legal in async context. glib's unix signal source defers
+// the callback to the main loop, where the exit path is safe.
+//
+// A second interrupt cannot be another main-loop callback: the point of it is
+// to escape a shutdown that has wedged, and a wedged first handler is
+// occupying the loop the second would be dispatched from. Stage two is
+// therefore a genuine async handler doing only what is async-signal-safe.
+// ---------------------------------------------------------------------------
+#ifndef _WIN32
+#include <glib-unix.h>
+#include <signal.h>
+
+extern "C" void bandicoot_signal_exit_now(int sig) {
+   static const char msg[] = "\nBandicoot: interrupted again - exiting immediately.\n";
+   ssize_t ignored = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+   (void) ignored;   // nothing useful to do if even this fails
+   // 128 + signal number, the shell's convention for "terminated by this
+   // signal". src/coot.in maps 130/143 back to 0 so the launcher does not
+   // announce a crash at a user who asked it to stop.
+   _exit(128 + sig);
+}
+
+static gboolean bandicoot_signal_quit(gpointer data) {
+
+   std::cout << "\nBandicoot: interrupted - saving state and shutting down."
+             << "\n           (interrupt again to exit at once)" << std::endl;
+
+   // Arm the escape hatch before doing anything slow -- see above.
+   signal(SIGINT,  bandicoot_signal_exit_now);
+   signal(SIGTERM, bandicoot_signal_exit_now);
+
+   // coot_real_exit(), not coot_checked_exit(): the latter RETURNS without
+   // exiting when there are unsaved changes, which is right for a menu item
+   // and wrong for an interrupt. Ctrl-C must always terminate. This saves the
+   // state and history and closes the molecules, as the Exit menu item does.
+   coot_real_exit(0);
+   return FALSE;   // not reached; coot_real_exit() calls exit()
+}
+#endif // ! _WIN32
+
 // This main is used for both python/guile useage and unscripted.
 int
 main (int argc, char *argv[]) {
@@ -645,6 +690,24 @@ main (int argc, char *argv[]) {
    remove_file_curlew_menu_item_maybe();
 
    setup_python(argc, argv);
+
+#if defined(USE_PYTHON) && ! defined(_WIN32)
+   // Ctrl-C, and `kill` / Activity Monitor's Quit, now shut Bandicoot down.
+   // See the note above bandicoot_signal_quit().
+   //
+   // Must go after the interpreter is initialised, which installs its own
+   // handler, and as soon after as possible: startup takes seconds and Ctrl-C
+   // is inert until this runs.
+   //
+   // Graphics path only. Without a GUI there is no GTK loop, the bytecode loop
+   // IS running, and the interpreter's own handler correctly interrupts a
+   // running script.
+   if (graphics_info_t::use_graphics_interface_flag) {
+      g_unix_signal_add(SIGINT,  bandicoot_signal_quit, NULL);
+      g_unix_signal_add(SIGTERM, bandicoot_signal_quit, NULL);
+   }
+#endif
+
 #ifdef USE_PYTHON
    setup_python_classes();
    // Bandicoot v0.1.0.0: trigger the socket listener (--port + --hostname

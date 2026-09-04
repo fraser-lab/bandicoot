@@ -64,7 +64,9 @@ namespace coot {
 
    // Perhaps this should be a class function of a class derived from mmdb::Manager?
    int write_coords_pdb(mmdb::Manager *mol, const std::string &file_name);
-   int write_coords_cif(mmdb::Manager *mol, const std::string &file_name);
+   // write_coords_cif() REMOVED for BANDICOOT v0.2 -- mmdb writes no mmCIF.
+   // Use write_atom_selection_file(..., write_as_cif_flag = true, ...) from
+   // coords/mmdb.h, which routes to coot::write_coords_with_gemmi().
 
    std::string pad_atom_name(const std::string &atom_name_in,
 			     const std::string &element);
@@ -1448,6 +1450,14 @@ namespace coot {
 
       // remove 1555 links between atoms that are more than dist_min
       void remove_long_links(mmdb::Manager *mol, mmdb::realtype dist_min);
+
+      // Bandicoot v0.2: rewrite all-blank insCode/altLoc fields in the LINK and
+      // LINKR records to "". mmdb's own mmCIF writer emits a quoted single space
+      // for a null single-character field and its reader hands that back
+      // literally, while the residues and atoms it builds carry "" -- so every
+      // consumer that compares those fields with an exact std::string == fails.
+      // Call after any mmdb coordinate read. See the comment at the definition.
+      void normalise_link_blank_fields(mmdb::Manager *mol);
 
       // LINKs now have distances - let's make sure that they are correct
       //

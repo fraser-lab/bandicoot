@@ -779,7 +779,7 @@ static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
     set_do_probe_dots_post_refine(on);
     set_do_probe_dots_on_rotamers_and_chis(on);
     // Toggling OFF clears the currently-drawn dots (both Local Probe
-    // Dots and Interactive Dots families). This is Art's longstanding
+    // Dots and Interactive Dots families). This is a longstanding
     // wishlist item — upstream Coot has no clear-dots UI, just toggles
     // that affect FUTURE refinements but leave current dots on screen.
     // Toggling ON does nothing extra; new dots arrive on the next

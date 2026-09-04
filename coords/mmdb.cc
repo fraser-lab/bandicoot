@@ -46,6 +46,7 @@
 #include "coot-utils/coot-shelx.hh"
 
 #include "coot-utils/read-sm-cif.hh"
+#include "coot-utils/gemmi-write.hh"   // Bandicoot v0.2: the gemmi mmCIF write path
 
 
 
@@ -121,43 +122,94 @@ write_atom_selection_file(atom_selection_container_t asc,
 			  mmdb::byte gz,
 			  bool write_hydrogens,     // optional arg
 			  bool write_aniso_records, // optional arg
-			  bool write_conect_records // optional arg
+			  bool write_conect_records, // optional arg
+			  const coot::mmcif_document_t *mmcif_doc // optional arg
 			  ) {
 
-   int ierr = 0; 
+   int ierr = 0;
    coot::util::remove_wrong_cis_peptides(asc.mol);
    mmdb::Manager *mol = asc.mol;
    bool mol_needs_deleting = false; // unless mol is reassigned...
 
+   // BANDICOOT v0.2 (Phase 3): the three write options below used to apply to
+   // the PDB branch ONLY -- the mmCIF branch ignored all of them. Two of them
+   // are user-facing checkboxes in the write-file dialog, so ticking "no
+   // hydrogens" and saving as mmCIF silently wrote the hydrogens anyway.
+   // Predates the gemmi work; fixed here by hoisting the stripping out of the
+   // PDB branch so both formats honour it.
+   if (! write_hydrogens) {
+      mmdb::Manager *n = new mmdb::Manager;
+      n->Copy(mol, mmdb::MMDBFCM_All);
+      coot::delete_hydrogens_from_mol(n);
+      if (mol_needs_deleting) delete mol;
+      mol = n;
+      mol_needs_deleting = true;
+   }
+
+   if (! write_aniso_records) {
+      mmdb::Manager *n = new mmdb::Manager;
+      n->Copy(mol, mmdb::MMDBFCM_All);
+      coot::delete_aniso_records_from_atoms(n);
+      if (mol_needs_deleting) delete mol;
+      mol = n;
+      mol_needs_deleting = true;
+   }
+
    if (write_as_cif_flag) {
 
-      // WriteCIFASCII() seems to duplicate the atoms (maybe related to aniso?)
-      // So let's copy the molecule and throw away the copy, that way we don't
-      // duplicate teh atoms in the original molecule.
-
-      mmdb::Manager *mol_copy  = new mmdb::Manager;
-      mol_copy->Copy(mol, mmdb::MMDBFCM_All);
-      ierr = mol_copy->WriteCIFASCII(filename.c_str());
-      delete mol_copy;
+      // BANDICOOT v0.2 (Phase 3): mmCIF is written by gemmi.
+      //
+      // copy_from_mmdb -> update_mmcif_block -> write. A COPY of the retained
+      // document is updated -- the retained one is const and untouched -- so
+      // every category Bandicoot does not regenerate reaches the file exactly
+      // as it was read. (This comment said "updated IN PLACE" until 2026-08-26;
+      // that stopped being true on 2026-08-17, when in-place editing was found
+      // to be putting _atom_site back into the retained document on every
+      // backup.) mmdb's own WriteCIFASCII
+      // re-synthesised from a hard-coded tag list and turned 65 categories
+      // into 15; that is what this replaces.
+      //
+      // Note write_conect_records is deliberately NOT honoured here: CONECT is
+      // a PDB record type with no mmCIF equivalent (connectivity lives in
+      // struct_conn, which is passed through), so there is nothing to strip.
+      //
+      // There is NO fallback to mmdb's WriteCIFASCII, deliberately.
+      //
+      // This used to fall back to the old writer on failure, reasoning that a
+      // save doing nothing was worse than a save in a poorer format. That was
+      // a false choice: any save that silently does something other than what
+      // the user asked for is bad, and the fallback is exactly that -- it
+      // reports SUCCESS while writing 24 categories in mmdb's obsolete NDB
+      // dialect where this path writes 77 faithfully. The user is told their
+      // file is saved; it is saved as something else.
+      //
+      // The third road is to fail LOUDLY. Return non-zero and let the caller
+      // say so: save_coordinates() and make_backup() both already raise a
+      // dialog on a non-zero return, and the fallback is precisely what kept
+      // those from ever firing.
+      //
+      // The gemmi message goes to stdout rather than being plumbed upwards:
+      // the dialog says the save failed, the terminal says why.
+      std::string gemmi_message;
+      if (coot::write_coords_with_gemmi(mol, filename, mmcif_doc, &gemmi_message)) {
+         ierr = 0;
+      } else {
+         // Not "no file was written": the writer can fail after opening the
+         // output (a gzclose() error, say), so what is on disk may be absent,
+         // truncated or complete-but-unflushed. None of those is a saved copy.
+         std::cout << "ERROR:: mmCIF write FAILED for " << filename << ": "
+                   << gemmi_message << std::endl;
+         std::cout << "ERROR:: " << filename << " must not be relied on as a "
+                   << "saved copy -- it may be missing or incomplete."
+                   << std::endl;
+         ierr = 1;
+      }
 
    } else {
 
-      if (! write_hydrogens) {
-	 mmdb::Manager *n = new mmdb::Manager;
-	 n->Copy(mol, mmdb::MMDBFCM_All);
-	 coot::delete_hydrogens_from_mol(n);
-	 mol = n;
-	 mol_needs_deleting = true;
-      }
-
-      if (! write_aniso_records) {
-	 mmdb::Manager *n = new mmdb::Manager;
-	 n->Copy(mol, mmdb::MMDBFCM_All);
-	 coot::delete_aniso_records_from_atoms(n);
-	 mol = n;
-	 mol_needs_deleting = true;
-      }
-
+      // write_hydrogens and write_aniso_records are handled above, before the
+      // format branch, so that mmCIF honours them too. write_conect_records is
+      // PDB-only: CONECT has no mmCIF equivalent.
       if (! write_conect_records) {
 	 mmdb::Manager *n = new mmdb::Manager;
 	 n->Copy(mol, mmdb::MMDBFCM_All);
@@ -264,7 +316,14 @@ coot::delete_aniso_records_from_atoms(mmdb::Manager *mol) {
 	    int n_atoms = residue_p->GetNumberOfAtoms();
 	    for (int iat=0; iat<n_atoms; iat++) {
 	       at = residue_p->GetAtom(iat);
+	       // BOTH flags, not just ASET_Anis_tFac. gemmi's copy_to_mmdb marks
+	       // anisotropic atoms with ASET_Anis_tFSigma (see adjustment 10 in
+	       // gemmi-coords.cc), and copy_from_mmdb reads that flag back when
+	       // writing mmCIF -- so clearing only tFac would strip ANISOU from a
+	       // PDB save while still emitting _atom_site_anisotrop on an mmCIF
+	       // save, from the same "no anisotropic records" checkbox.
 	       at->WhatIsSet &=  ~mmdb::ASET_Anis_tFac;
+	       at->WhatIsSet &=  ~mmdb::ASET_Anis_tFSigma;
 	    }
 	 }
       }

@@ -38,6 +38,7 @@
 #endif
 
 #include <iostream>
+#include <memory>
 
 #include "math.h"
 
@@ -169,10 +170,28 @@ public:
 
 atom_selection_container_t make_asc(mmdb::Manager *mol, bool transfer_atom_indices_flag=false);
 
+namespace coot {
+   // Forward declaration only -- defined in coot-utils/mmcif-document.hh, the
+   // one header that includes gemmi. This file is included by 22 others and
+   // must not pull gemmi into any of them.
+   struct mmcif_document_t;
+}
+
+//! \param mmcif_doc_out when non-null and the file was mmCIF read by gemmi,
+//!        receives the parsed document (without _atom_site) for the caller to
+//!        keep alive alongside the molecule; the write path needs it to
+//!        preserve every category Bandicoot does not regenerate.
+//!
+//! It is an OUT-PARAMETER rather than a member of atom_selection_container_t
+//! deliberately: atom_sel is reassigned wholesale in the running application
+//! (c-interface-build.cc), so a document carried on it would be silently
+//! dropped by an ordinary edit. It lives on molecule_class_info_t instead.
+//! Defaulting to nullptr keeps all ~25 existing call sites unchanged.
 atom_selection_container_t get_atom_selection(std::string t,
                                               bool allow_duplseqnum,
                                               bool verbose_mode,
-                                              bool convert_to_v2_name_flag);
+                                              bool convert_to_v2_name_flag,
+                                              std::shared_ptr<coot::mmcif_document_t> *mmcif_doc_out = nullptr);
 
 // put these in coot namespace? -- FIXME
 

@@ -2125,9 +2125,15 @@ on_save_coords_dialog_save_button_clicked (GtkButton       *button,
     printf("on_save_coords_dialog_save_button_clicked: bad combobox\n");
   } else {
     imol = my_combobox_get_imol(GTK_COMBO_BOX(combobox));
-    chooser = coot_save_coords_chooser();
-    g_object_set_data(G_OBJECT(chooser), "imol", GINT_TO_POINTER(imol));
+    /* BANDICOOT v0.2: the chooser carries a full options object now (imol, the
+       hydrogens/anisotropic flags and the File Type), not a bare "imol" data
+       pointer, so the same dialog can also serve Save Symmetry Coordinates. */
+    chooser = coot_save_coords_chooser_for_molecule(imol);
     set_file_for_save_fileselection(chooser); /* chooser */
+    /* set_file_for_save_fileselection() suggests a name from the molecule; make
+       its extension agree with the format menu before the dialog is shown, so
+       the two never contradict each other on sight. */
+    coot_save_coords_chooser_sync_name_widget(chooser);
     gtk_widget_show(chooser);
     set_transient_and_position(COOT_UNDEFINED_WINDOW, chooser);
   }
@@ -2147,7 +2153,7 @@ on_save_coord_ok_button_clicked        (GtkButton       *button,
   widget = lookup_widget(GTK_WIDGET(button), "save_coords_fileselection1");
   save_directory_for_saving_from_fileselection(fileselection);
   stuff = gtk_object_get_user_data(GTK_OBJECT(widget));
-  save_coordinates_using_widget(widget);
+  coot_save_coords_chooser_execute_widget(widget);
   free(stuff);
   gtk_widget_destroy(widget);
 }
@@ -4745,7 +4751,7 @@ on_edit_backbone_torsions_dialog_destroy
      silent no-ops, so following OK (which has already written the coordinates via
      replace_coords by this point) it simply tears down.
 
-     Net effect, per Art: accept/reject now applies to the WHOLE phi/psi adjustment,
+     Net effect: accept/reject now applies to the WHOLE phi/psi adjustment,
      including any drag, rather than leaving a half-live fragment behind. */
   clear_up_moving_atoms();
   /* Drop the dialog handle so glarea_motion_notify() stops suppressing the
@@ -11002,7 +11008,9 @@ on_save_coords_filechooserdialog1_response
 
     save_directory_for_saving_from_filechooser(fileselection);
     stuff = gtk_object_get_user_data(GTK_OBJECT(fileselection));
-    save_coordinates_using_widget(fileselection);
+    /* BANDICOOT v0.2: one execute path, whether this is a plain save or a
+       symmetry mate -- the chooser's options object says which. */
+    coot_save_coords_chooser_execute_widget(fileselection);
     free(stuff);
     gtk_widget_destroy(fileselection);
   } else {

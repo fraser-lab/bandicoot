@@ -16086,6 +16086,29 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_mmcif_header_dialog(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "mmcif_header_dialog" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  mmcif_header_dialog(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_print_header_secondary_structure_info(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -33815,6 +33838,43 @@ SWIGINTERN PyObject *_wrap_set_nomenclature_errors_on_read(PyObject *self, PyObj
   return resultobj;
 fail:
   if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_set_show_ligand_restraint_warnings(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_show_ligand_restraint_warnings" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  set_show_ligand_restraint_warnings(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_show_ligand_restraint_warnings_state(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "show_ligand_restraint_warnings_state", 0, 0, 0)) SWIG_fail;
+  result = (int)show_ligand_restraint_warnings_state();
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
   return NULL;
 }
 
@@ -54324,6 +54384,29 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_set_default_bond_scheme_from_combo_index(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "bandicoot_set_default_bond_scheme_from_combo_index" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  bandicoot_set_default_bond_scheme_from_combo_index(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_add_initial_position_restraints(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -64571,6 +64654,279 @@ SWIGINTERN PyObject *_wrap_py_symop_strings_to_space_group(PyObject *self, PyObj
   resultobj = SWIG_NewPointerObj((new clipper::Spacegroup(result)), SWIGTYPE_p_clipper__Spacegroup, SWIG_POINTER_OWN |  0 );
   return resultobj;
 fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_comp_id_collision_message(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  std::string *arg2 = 0 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  int res2 = SWIG_OLDOBJ ;
+  PyObject *swig_obj[2] ;
+  std::string result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "comp_id_collision_message", 2, 2, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "comp_id_collision_message" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  {
+    std::string *ptr = (std::string *)0;
+    res2 = SWIG_AsPtr_std_string(swig_obj[1], &ptr);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "comp_id_collision_message" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "comp_id_collision_message" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    arg2 = ptr;
+  }
+  result = comp_id_collision_message(arg1,(std::string const &)*arg2);
+  resultobj = SWIG_From_std_string(static_cast< std::string >(result));
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_native_question_dialog(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  char *arg1 = 0 ;
+  int res1 ;
+  char *buf1 = 0 ;
+  int alloc1 = 0 ;
+  PyObject *swig_obj[1] ;
+  bool result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_AsCharPtrAndSize(swig_obj[0], &buf1, NULL, &alloc1);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "bandicoot_native_question_dialog" "', argument " "1"" of type '" "char const *""'");
+  }
+  arg1 = reinterpret_cast< char * >(buf1);
+  result = (bool)bandicoot_native_question_dialog((char const *)arg1);
+  resultobj = SWIG_From_bool(static_cast< bool >(result));
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  return resultobj;
+fail:
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_resolve_placeholder_collisions_on_load(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "resolve_placeholder_collisions_on_load" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  result = (int)resolve_placeholder_collisions_on_load(arg1);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_dictionary_coverage_message(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  std::string *arg2 = 0 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  int res2 = SWIG_OLDOBJ ;
+  PyObject *swig_obj[2] ;
+  std::string result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "dictionary_coverage_message", 2, 2, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "dictionary_coverage_message" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  {
+    std::string *ptr = (std::string *)0;
+    res2 = SWIG_AsPtr_std_string(swig_obj[1], &ptr);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "dictionary_coverage_message" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "dictionary_coverage_message" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    arg2 = ptr;
+  }
+  result = dictionary_coverage_message(arg1,(std::string const &)*arg2);
+  resultobj = SWIG_From_std_string(static_cast< std::string >(result));
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_most_complete_residue_selection(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  std::string *arg2 = 0 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  int res2 = SWIG_OLDOBJ ;
+  PyObject *swig_obj[2] ;
+  std::string result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "most_complete_residue_selection", 2, 2, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "most_complete_residue_selection" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  {
+    std::string *ptr = (std::string *)0;
+    res2 = SWIG_AsPtr_std_string(swig_obj[1], &ptr);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "most_complete_residue_selection" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "most_complete_residue_selection" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    arg2 = ptr;
+  }
+  result = most_complete_residue_selection(arg1,(std::string const &)*arg2);
+  resultobj = SWIG_From_std_string(static_cast< std::string >(result));
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_is_reserved_placeholder_comp_id(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  std::string *arg1 = 0 ;
+  int res1 = SWIG_OLDOBJ ;
+  PyObject *swig_obj[1] ;
+  int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  {
+    std::string *ptr = (std::string *)0;
+    res1 = SWIG_AsPtr_std_string(swig_obj[0], &ptr);
+    if (!SWIG_IsOK(res1)) {
+      SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "is_reserved_placeholder_comp_id" "', argument " "1"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "is_reserved_placeholder_comp_id" "', argument " "1"" of type '" "std::string const &""'"); 
+    }
+    arg1 = ptr;
+  }
+  result = (int)is_reserved_placeholder_comp_id((std::string const &)*arg1);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  if (SWIG_IsNewObj(res1)) delete arg1;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res1)) delete arg1;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_suggest_free_placeholder_comp_id(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::string result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "suggest_free_placeholder_comp_id" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  result = suggest_free_placeholder_comp_id(arg1);
+  resultobj = SWIG_From_std_string(static_cast< std::string >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_rename_comp_id_with_dictionary(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  std::string *arg2 = 0 ;
+  std::string *arg3 = 0 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  int res2 = SWIG_OLDOBJ ;
+  int res3 = SWIG_OLDOBJ ;
+  PyObject *swig_obj[3] ;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "rename_comp_id_with_dictionary", 3, 3, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "rename_comp_id_with_dictionary" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  {
+    std::string *ptr = (std::string *)0;
+    res2 = SWIG_AsPtr_std_string(swig_obj[1], &ptr);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "rename_comp_id_with_dictionary" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "rename_comp_id_with_dictionary" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    arg2 = ptr;
+  }
+  {
+    std::string *ptr = (std::string *)0;
+    res3 = SWIG_AsPtr_std_string(swig_obj[2], &ptr);
+    if (!SWIG_IsOK(res3)) {
+      SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "rename_comp_id_with_dictionary" "', argument " "3"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "rename_comp_id_with_dictionary" "', argument " "3"" of type '" "std::string const &""'"); 
+    }
+    arg3 = ptr;
+  }
+  result = (int)rename_comp_id_with_dictionary(arg1,(std::string const &)*arg2,(std::string const &)*arg3);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  if (SWIG_IsNewObj(res3)) delete arg3;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  if (SWIG_IsNewObj(res3)) delete arg3;
   return NULL;
 }
 
@@ -76967,6 +77323,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "sort_chains", _wrap_sort_chains, METH_O, NULL},
 	 { "sort_residues", _wrap_sort_residues, METH_O, NULL},
 	 { "remarks_dialog", _wrap_remarks_dialog, METH_O, NULL},
+	 { "mmcif_header_dialog", _wrap_mmcif_header_dialog, METH_O, NULL},
 	 { "print_header_secondary_structure_info", _wrap_print_header_secondary_structure_info, METH_O, NULL},
 	 { "add_header_secondary_structure_info", _wrap_add_header_secondary_structure_info, METH_O, NULL},
 	 { "write_header_secondary_structure_info", _wrap_write_header_secondary_structure_info, METH_VARARGS, NULL},
@@ -77591,6 +77948,8 @@ static PyMethodDef SwigMethods[] = {
 	 { "score_residue_range_fit_to_map", _wrap_score_residue_range_fit_to_map, METH_VARARGS, NULL},
 	 { "fix_nomenclature_errors", _wrap_fix_nomenclature_errors, METH_O, NULL},
 	 { "set_nomenclature_errors_on_read", _wrap_set_nomenclature_errors_on_read, METH_O, NULL},
+	 { "set_show_ligand_restraint_warnings", _wrap_set_show_ligand_restraint_warnings, METH_O, NULL},
+	 { "show_ligand_restraint_warnings_state", _wrap_show_ligand_restraint_warnings_state, METH_NOARGS, NULL},
 	 { "output_atom_info_as_text", _wrap_output_atom_info_as_text, METH_VARARGS, NULL},
 	 { "do_residue_info_dialog", _wrap_do_residue_info_dialog, METH_NOARGS, NULL},
 	 { "output_residue_info_dialog", _wrap_output_residue_info_dialog, METH_VARARGS, NULL},
@@ -78296,6 +78655,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "set_intermediate_pick_distance_cutoffs", _wrap_set_intermediate_pick_distance_cutoffs, METH_VARARGS, NULL},
 	 { "bandicoot_save_pick_atom_radius", _wrap_bandicoot_save_pick_atom_radius, METH_NOARGS, NULL},
 	 { "bandicoot_load_pick_atom_radius", _wrap_bandicoot_load_pick_atom_radius, METH_NOARGS, NULL},
+	 { "bandicoot_set_default_bond_scheme_from_combo_index", _wrap_bandicoot_set_default_bond_scheme_from_combo_index, METH_O, NULL},
 	 { "add_initial_position_restraints", _wrap_add_initial_position_restraints, METH_VARARGS, NULL},
 	 { "remove_initial_position_restraints", _wrap_remove_initial_position_restraints, METH_VARARGS, NULL},
 	 { "use_unimodal_ring_torsion_restraints", _wrap_use_unimodal_ring_torsion_restraints, METH_O, NULL},
@@ -78591,6 +78951,14 @@ static PyMethodDef SwigMethods[] = {
 	 { "py_to_residue_specs", _wrap_py_to_residue_specs, METH_O, NULL},
 	 { "key_sym_code_py", _wrap_key_sym_code_py, METH_O, NULL},
 	 { "py_symop_strings_to_space_group", _wrap_py_symop_strings_to_space_group, METH_O, NULL},
+	 { "comp_id_collision_message", _wrap_comp_id_collision_message, METH_VARARGS, NULL},
+	 { "bandicoot_native_question_dialog", _wrap_bandicoot_native_question_dialog, METH_O, NULL},
+	 { "resolve_placeholder_collisions_on_load", _wrap_resolve_placeholder_collisions_on_load, METH_O, NULL},
+	 { "dictionary_coverage_message", _wrap_dictionary_coverage_message, METH_VARARGS, NULL},
+	 { "most_complete_residue_selection", _wrap_most_complete_residue_selection, METH_VARARGS, NULL},
+	 { "is_reserved_placeholder_comp_id", _wrap_is_reserved_placeholder_comp_id, METH_O, NULL},
+	 { "suggest_free_placeholder_comp_id", _wrap_suggest_free_placeholder_comp_id, METH_O, NULL},
+	 { "rename_comp_id_with_dictionary", _wrap_rename_comp_id_with_dictionary, METH_VARARGS, NULL},
 	 { "text_png_as_string", _wrap_text_png_as_string, METH_O, NULL},
 	 { "safe_scheme_command", _wrap_safe_scheme_command, METH_O, NULL},
 	 { "safe_python_command", _wrap_safe_python_command, METH_O, NULL},

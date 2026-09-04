@@ -32,7 +32,7 @@ inline Cartesian lerp(const double &t, const double &a0, const double &a1, const
 
 Cartesian DialASpline(double t, const std::vector<double> &a,  const std::vector<Cartesian> &p, int Cn, int interp)
 {
-    register int i, j, k, h, lo, hi;
+    int i, j, k, h, lo, hi;   // was `register` - removed in C++17
     Cartesian val;
     std::vector<Cartesian> work(p.size());
 

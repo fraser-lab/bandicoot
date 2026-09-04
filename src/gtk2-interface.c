@@ -1012,6 +1012,7 @@ create_window1 (void)
       { "Residue Type Selection...",                BMOD_RESIDUE_TYPE_SEL },
       { "Fetch PDBe Ligand Description...",         BMOD_FETCH_PDBE_LIGAND },
       { "Fetch PDBe description for this ligand",   BMOD_FETCH_PDBE_THIS_LIGAND },
+      { "Generate Ligand Restraints...",            BMOD_GENERATE_LIGAND_RESTRAINTS },
       { NULL, 0 },
       { "Rename Residue...",                        BMOD_RENAME_RESIDUE },
       { "Add Other Solvent Molecules...",           BMOD_ADD_SOLVENT },

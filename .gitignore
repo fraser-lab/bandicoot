@@ -78,9 +78,14 @@ cootrc
 .build-counter
 src/bandicoot-build-id.h
 
+# v0.2.0.0 build-system freshness stamp (scripts/check_build_system_fresh.sh).
+# Content hash of configure.ac + Makefile.am tree + macros/*.m4, so build.sh can
+# tell a stale ./configure from a current one without trusting mtimes, which git
+# rewrites on every checkout. Machine-local state, like .build-counter.
+.build-system-stamp
+
 # Standalone diagnostics under tools/ -- built by their own build.sh, not by
-# make, so nothing else ignores their binaries. The sources live on the
-# v0.2-gemmi branch; only the build products can survive a switch to main.
+# make, so nothing else ignores their binaries.
 tools/gemmi-diff/gemmi-mmdb-diff
 
 # Debug-symbol bundles left by any -g build on macOS

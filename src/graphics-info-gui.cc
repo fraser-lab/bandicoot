@@ -694,7 +694,7 @@ graphics_info_t::set_transient_and_position(int widget_type, GtkWidget *window) 
 
    // Bandicoot: free-floating dialogs, NOT transient-for the main window. On
    // GTK-Quartz transient_for glues a dialog into the main window's WM group so
-   // it moves/minimizes in lockstep (Art, 2026-07-17: dialogs were "pinned to
+   // it moves/minimizes in lockstep (2026-07-17: dialogs were "pinned to
    // the main window"). keep_above keeps it above the GL window (so it can't
    // open behind it) without the grouping -- same rationale as
    // bandicoot_float_widget_in_window() in bandicoot_appkit.mm.
