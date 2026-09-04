@@ -53,6 +53,11 @@ Clipper, MMDB2, FFTW2, and a few others.
   `bandicoot_shift_pressed` / `bandicoot_control_pressed`) because
   GTK-Quartz on Tahoe never populates `event->state` with modifier
   bits.
+- **Session recorder.** Optional event log of a modelling session: where
+  the user looked and what the maps showed there, every command Coot echoes,
+  and residue-level model edits (waters, alt confs, mutations, moves). Start
+  with `BANDICOOT_RECORD=1 bcoot` or `start_session_recording()` in the
+  scripting console. See [SESSION_RECORDING.md](SESSION_RECORDING.md).
 - **Bonds colored by alt. conf.** There's now an option in Display Manager to render residues with alternate conformations in different colors; the difference between bulk model and the alternate conformers can be adjusted in Preferences -> Colours -> Bond Colours
 
 The executable on disk is called `bcoot` (a symlink to the existing
