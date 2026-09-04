@@ -6,9 +6,12 @@
 #
 #   1. Coot's command echo. Every GUI action that goes through a scripting-API
 #      function is printed to stdout by add_to_history() (src/c-interface-info.cc,
-#      on by default). We tee file descriptor 1 through a pipe, forward every
-#      byte to the original stdout, and log those lines as "command" events.
-#      The same lines are what Coot writes to 0-coot-history.py at exit.
+#      on by default). We point file descriptor 1 at a child `tee` process that
+#      forwards every byte to the original stdout and appends a copy to
+#      <session>.stdout.log; the recorder reads that file incrementally and logs
+#      the echoed commands as "command" events. The same lines are what Coot
+#      writes to 0-coot-history.py at exit. (A reader *thread* inside the
+#      process deadlocks: Coot writes to stdout while holding the GIL.)
 #   2. The Python hooks Coot 0.9 already calls (src/graphics-info.cc):
 #      post_set_rotation_centre_script  -- every recentre, including Space /
 #                                          Shift-Space, which the history skips
@@ -19,13 +22,21 @@
 #      (molecule_class_info_t::make_backup). A new backup, a manipulation hook,
 #      or a periodic timer triggers a residue-level diff of the live model
 #      against the previous snapshot: "edit" events such as add_water,
-#      add_altloc, delete_residue, mutate, move.
+#      add_altloc, delete_residue, mutate, move. A snapshot is one call,
+#      molecule_to_pdb_string_py, parsed here.
 #
 # A main-loop timer (gobject.timeout_add, which Bandicoot routes to GLib via
-# bandicoot_python_timeout_add) polls the rotation centre so that drag-panning,
-# which fires no hook, is recorded too. Everything that touches the coot API
-# runs on the main thread. The only extra thread reads the stdout pipe and
-# never calls coot.
+# bandicoot_python_timeout_add) polls the nearest residue so that drag-panning,
+# which fires no hook, is recorded too. Everything runs on the main thread;
+# there are no threads.
+#
+# Most scripting calls in Coot 0.9 are themselves added to the history and
+# echoed, so the recorder uses the ones that are not (active_residue_py,
+# residue_info_py, map_sigma_py, density_at_point, map_peaks_around_molecule_py,
+# molecule_to_pdb_string_py, zoom_factor, is_valid_*). The exceptions it cannot
+# avoid, rotation_centre_position (three calls per view) and molecule_name
+# (once per molecule), are filtered out of the command stream but do land in
+# 0-coot-history.py.
 #
 # Start recording (any one of):
 #   BANDICOOT_RECORD=1 bcoot                          environment variable
@@ -45,10 +56,10 @@ import datetime as _bsr_datetime
 import json
 import math
 import os
-import queue
 import re
+import shutil
+import subprocess
 import sys
-import threading
 import time
 import traceback
 
@@ -73,12 +84,42 @@ _BSR_MODIFICATION = re.compile(r"_modification_(\d+)\.(?:pdb|cif|res)(?:\.gz)?$"
 _BSR_PY_CMD = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", re.S)
 _BSR_SCM_CMD = re.compile(r"^\(([^\s()]+)\s*(.*)\)\s*$", re.S)
 
-_BSR_HOOK_NAMES = (
-    "post_set_rotation_centre_script",
-    "post_manipulation_script",
-    "post_read_model_hook",
-    "graphics_general_key_press_hook",
-)
+# scripting functions the recorder itself calls that Coot echoes; dropped from
+# the command stream so the log shows only what the user did
+_BSR_INTERNAL_COMMANDS = {"rotation_centre_position", "molecule_name"}
+
+# state queries Coot's own Python code issues at startup and on redraws; kept in
+# the log with "noise": true and hidden from the summary
+_BSR_NOISE_COMMANDS = {"use_graphics_interface_state", "filter_fileselection_filenames_state",
+                       "get_active_map_drag_flag", "set_display_intro_string"}
+
+
+def _bsr_parse_pdb_string(text):
+    """ATOM/HETATM records -> {(chain, resno, ins): (resname, {(atom, alt): (x, y, z, occ, b)})}."""
+    res = {}
+    for line in text.splitlines():
+        if not (line.startswith("ATOM") or line.startswith("HETATM")) or len(line) < 54:
+            continue
+        try:
+            name = line[12:16].strip()
+            alt = line[16].strip()
+            rname = line[17:20].strip()
+            chain = line[20:22].strip()
+            try:
+                resno = int(line[22:26])
+            except ValueError:
+                resno = line[22:26].strip()
+            ins = line[26].strip()
+            x, y, z = float(line[30:38]), float(line[38:46]), float(line[46:54])
+            occ = float(line[54:60]) if len(line) >= 60 and line[54:60].strip() else 1.0
+            b = float(line[60:66]) if len(line) >= 66 and line[60:66].strip() else 0.0
+        except ValueError:
+            continue
+        key = (chain, resno, ins)
+        if key not in res:
+            res[key] = (rname, {})
+        res[key][1][(name, alt)] = (x, y, z, occ, b)
+    return res
 
 
 def _bsr_now_iso():
@@ -209,92 +250,83 @@ def _bsr_diff_snapshots(old, new, max_list=20):
 # ---------------------------------------------------------------- stdout tee
 
 class _BsrStdoutTee:
-    """Tee file descriptor 1 through a pipe.
+    """Point file descriptor 1 at a child `tee` process.
 
     Coot's C++ (std::cout) and Python's sys.stdout both write to fd 1, so both
-    land in the pipe. A daemon thread forwards every byte to the original
-    stdout unchanged and hands complete lines to `on_line`. The thread never
-    calls the coot API."""
+    reach tee, which forwards every byte to the original stdout and appends a
+    copy to the sidecar file. The recorder reads the sidecar incrementally from
+    the main thread (poll()). No thread is involved: a reader thread in this
+    process would deadlock, because Coot writes to stdout while holding the GIL
+    and blocks once the pipe is full."""
 
-    def __init__(self, on_line):
-        self._on_line = on_line
+    def __init__(self, sidecar):
+        self.sidecar = sidecar
         self._saved = None
-        self._read_fd = None
-        self._thread = None
+        self._proc = None
+        self._fh = None
+        self._buf = b""
 
     def start(self):
+        tee = shutil.which("tee")
+        if not tee:
+            raise RuntimeError("no `tee` executable on PATH")
         try:
             sys.stdout.flush()
         except Exception:
             pass
-        saved = os.dup(1)
-        r, w = os.pipe()
-        os.dup2(w, 1)
-        os.close(w)
-        self._saved = saved
-        self._read_fd = r
+        d = os.path.dirname(self.sidecar)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        open(self.sidecar, "ab").close()
+        self._fh = open(self.sidecar, "rb")
+        self._saved = os.dup(1)
+        self._proc = subprocess.Popen([tee, "-a", self.sidecar], stdin=subprocess.PIPE,
+                                      stdout=self._saved, stderr=subprocess.DEVNULL, close_fds=True)
+        os.dup2(self._proc.stdin.fileno(), 1)
+        self._proc.stdin.close()            # fd 1 is now the only write end we hold
         try:
             sys.stdout.reconfigure(line_buffering=True)
         except Exception:
             pass
-        self._thread = threading.Thread(target=self._run, args=(r, saved),
-                                        name="bandicoot-session-recorder-stdout", daemon=True)
-        self._thread.start()
+
+    def poll(self):
+        """Complete new lines written since the last call."""
+        if self._fh is None:
+            return []
+        try:
+            data = self._fh.read()
+        except OSError:
+            return []
+        if not data:
+            return []
+        self._buf += data
+        parts = self._buf.split(b"\n")
+        self._buf = parts.pop()
+        return [p.decode("utf-8", "replace") for p in parts]
 
     def stop(self):
         if self._saved is None:
-            return
+            return []
         try:
             sys.stdout.flush()
         except Exception:
             pass
-        os.dup2(self._saved, 1)        # fd 1 leaves the pipe; the reader sees EOF
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-        for fd in (self._read_fd, self._saved):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        self._saved = self._read_fd = self._thread = None
-
-    @staticmethod
-    def _forward(fd, data):
-        view = memoryview(data)
-        while len(view):
-            try:
-                n = os.write(fd, view)
-            except OSError:
-                return
-            view = view[n:]
-
-    def _run(self, read_fd, saved_fd):
-        buf = b""
+        os.dup2(self._saved, 1)              # fd 1 leaves the pipe; tee sees EOF
         try:
-            while True:
-                try:
-                    chunk = os.read(read_fd, 65536)
-                except OSError:
-                    break
-                if not chunk:
-                    break
-                self._forward(saved_fd, chunk)
-                buf += chunk
-                while True:
-                    i = buf.find(b"\n")
-                    if i < 0:
-                        break
-                    line, buf = buf[:i], buf[i + 1:]
-                    try:
-                        self._on_line(line.decode("utf-8", "replace"))
-                    except Exception:
-                        pass
+            self._proc.wait(timeout=2.0)
         except Exception:
-            # Never leave Bandicoot writing into a pipe that nobody drains.
             try:
-                os.dup2(saved_fd, 1)
-            except OSError:
+                self._proc.terminate()
+            except Exception:
                 pass
+        lines = self.poll()
+        for closer in (self._fh.close, lambda: os.close(self._saved)):
+            try:
+                closer()
+            except Exception:
+                pass
+        self._saved = self._proc = self._fh = None
+        return lines
 
 
 # ---------------------------------------------------------------- recorder
@@ -307,6 +339,7 @@ class _BsrRecorder:
         self.coot = coot_api
         self._main = main_ns
         self.path = path or _bsr_default_session_path()
+        self.stdout_path = os.path.splitext(self.path)[0] + ".stdout.log"
         self.capture_stdout = capture_stdout
         self.rank_peaks = rank_peaks
         self.use_timer = use_timer
@@ -320,8 +353,6 @@ class _BsrRecorder:
 
         self.running = False
         self._fh = None
-        self._lock = threading.Lock()
-        self._queue = queue.Queue()
         self._seq = 0
         self._t0 = None
         self._timer_id = 0
@@ -330,10 +361,13 @@ class _BsrRecorder:
         self._prev_hooks = {}
         self._snapshots = {}
         self._mol_seen = {}
+        self._names = {}
         self._last_view_xyz = None
+        self._last_view_residue = None
         self._backup_dirs = []
         self._backup_seen = set()
         self._backup_last_scan = 0.0
+        self._pending_backups = []
         self._peak_cache = {}
         self._last_periodic = 0.0
         self._snapshot_cost = 0.0
@@ -365,8 +399,9 @@ class _BsrRecorder:
         self._scan_molecules()
         if self.capture_stdout:
             try:
-                self._tee = _BsrStdoutTee(self._on_stdout_line)
+                self._tee = _BsrStdoutTee(self.stdout_path)
                 self._tee.start()
+                self._emit("stdout_capture", file=self.stdout_path)
             except Exception:
                 self._tee = None
                 self._error("stdout_tee_start")
@@ -382,25 +417,25 @@ class _BsrRecorder:
         if not self.running:
             return
         try:
-            self._drain_queue()
+            self._service()
             self._diff_all(trigger="stop")
         except Exception:
             self._error("stop_diff")
+        if self._tee is not None:
+            try:
+                for line in self._tee.stop():
+                    self._on_stdout_line(line)
+            except Exception:
+                self._error("stdout_tee_stop")
+            self._tee = None
         self._emit("session_end", events=self._seq, errors=self._errors)
         self.running = False            # the timer callback returns False on its next call
         self._restore_hooks()
-        if self._tee is not None:
-            try:
-                self._tee.stop()
-            except Exception:
-                pass
-            self._tee = None
-        with self._lock:
-            try:
-                self._fh.close()
-            except Exception:
-                pass
-            self._fh = None
+        try:
+            self._fh.close()
+        except Exception:
+            pass
+        self._fh = None
 
     def _atexit(self):
         if self.running:
@@ -412,7 +447,8 @@ class _BsrRecorder:
     def status(self):
         return {"running": self.running, "path": self.path, "started": self._started_at,
                 "events": self._seq, "errors": self._errors, "timer": bool(self._timer_id),
-                "stdout_capture": self._tee is not None, "backup_dirs": list(self._backup_dirs),
+                "stdout_capture": self._tee is not None, "stdout_file": self.stdout_path,
+                "backup_dirs": list(self._backup_dirs),
                 "models_tracked": sorted(self._snapshots), "molecules": dict(self._mol_seen)}
 
     def note(self, text):
@@ -421,20 +457,19 @@ class _BsrRecorder:
     # ---- output
 
     def _emit(self, event, **fields):
-        with self._lock:
-            if self._fh is None:
-                return
-            self._seq += 1
-            rec = {"t": _bsr_now_iso(), "dt": round(time.time() - self._t0, 3), "seq": self._seq,
-                   "event": event}
-            rec.update(fields)
-            try:
-                line = json.dumps(rec, default=str, ensure_ascii=False)
-            except Exception:
-                line = json.dumps({"t": rec["t"], "dt": rec["dt"], "seq": rec["seq"],
-                                   "event": "error", "where": "json", "text": repr(rec)[:2000]})
-            self._fh.write(line + "\n")
-            self._fh.flush()
+        if self._fh is None:
+            return
+        self._seq += 1
+        rec = {"t": _bsr_now_iso(), "dt": round(time.time() - self._t0, 3), "seq": self._seq,
+               "event": event}
+        rec.update(fields)
+        try:
+            line = json.dumps(rec, default=str, ensure_ascii=False)
+        except Exception:
+            line = json.dumps({"t": rec["t"], "dt": rec["dt"], "seq": rec["seq"],
+                               "event": "error", "where": "json", "text": repr(rec)[:2000]})
+        self._fh.write(line + "\n")
+        self._fh.flush()
 
     def _error(self, where):
         self._errors += 1
@@ -490,6 +525,7 @@ class _BsrRecorder:
     def _hook_recentre(self):
         try:
             if self.running:
+                self._service()
                 self._record_view("hook")
         except Exception:
             self._error("recentre")
@@ -498,6 +534,7 @@ class _BsrRecorder:
     def _hook_manipulation(self, imol, mode):
         try:
             if self.running:
+                self._service()
                 mode_name = _BSR_MODES.get(mode, mode)
                 self._emit("manipulation", imol=imol, mode=mode_name, molecule=self._mol_name(imol))
                 self._diff_molecule(imol, trigger="hook", mode=mode_name)
@@ -508,6 +545,7 @@ class _BsrRecorder:
     def _hook_read_model(self, imol):
         try:
             if self.running:
+                self._service()
                 info = self._mol_info(imol)
                 self._emit("read_model", imol=imol, molecule=info[1] if info else None)
                 if info and info[0] == "model":
@@ -520,6 +558,7 @@ class _BsrRecorder:
     def _hook_key(self, key, control_flag=0):
         try:
             if self.running:
+                self._service()
                 k = chr(key) if isinstance(key, int) and 32 <= key < 127 else key
                 self._emit("key", key=k, keyval=key, ctrl=int(bool(control_flag)))
         except Exception:
@@ -545,18 +584,29 @@ class _BsrRecorder:
             self._emit("warning", text="no main-loop timer available: drag-panning and edits that fire "
                                        "no hook are recorded at the next hook event instead")
 
+    def _service(self):
+        # Cheap upkeep, run from every hook and every tick: re-wrap hooks that a
+        # later script replaced, process backup notices from the stdout reader,
+        # and notice new or closed molecules. This keeps hook-only mode (no
+        # main-loop timer, e.g. --no-graphics) current without polling.
+        self._ensure_hooks()
+        if self._tee is not None:
+            for line in self._tee.poll():
+                self._on_stdout_line(line)
+        self._scan_molecules()
+        self._flush_pending_backups()
+
     def _tick(self):
         if not self.running:
             return False
         try:
-            self._ensure_hooks()
-            self._drain_queue()
+            self._service()
             self._poll_view()
-            self._scan_molecules()
             now = time.time()
             if now - self._backup_last_scan >= self.backup_scan_s:
                 self._backup_last_scan = now
                 self._scan_backup_dirs()
+                self._flush_pending_backups()
             if self._periodic_due(now):
                 self._last_periodic = now
                 self._diff_all(trigger="periodic")
@@ -573,13 +623,19 @@ class _BsrRecorder:
     # ---- views
 
     def _poll_view(self):
-        c = self.coot
-        xyz = [float(c.rotation_centre_position(i)) for i in range(3)]
-        if self._last_view_xyz is None:
-            self._last_view_xyz = xyz
+        # active_residue_py is silent; rotation_centre_position is echoed, so
+        # only read the centre once the nearest atom has changed.
+        try:
+            ar = self.coot.active_residue_py()
+        except Exception:
             return
-        if _bsr_dist(xyz, self._last_view_xyz) > 0.25:
-            self._record_view("poll", xyz=xyz)
+        key = tuple(ar[:6]) if isinstance(ar, (list, tuple)) and len(ar) >= 6 else None
+        if key == self._last_view_residue:
+            return
+        if self._last_view_residue is None and self._last_view_xyz is None:
+            self._last_view_residue = key
+            return
+        self._record_view("poll")
 
     def _record_view(self, source, xyz=None):
         c = self.coot
@@ -598,6 +654,7 @@ class _BsrRecorder:
             rec["maps"] = maps
         self._emit("view", **rec)
         self._last_view_xyz = xyz
+        self._last_view_residue = (res["imol"], res["chain"], res["resno"], res["ins"], res["atom_raw"], res["alt"]) if res else None
 
     def _active_residue(self):
         try:
@@ -608,7 +665,7 @@ class _BsrRecorder:
             return None
         imol, chain, resno, ins, atom, alt = ar[:6]
         d = {"imol": imol, "chain": chain, "resno": resno, "ins": ins,
-             "atom": (atom or "").strip(), "alt": alt}
+             "atom": (atom or "").strip(), "atom_raw": atom, "alt": alt}
         try:
             rn = self.coot.residue_name_py(imol, chain, resno, ins)
             if isinstance(rn, str):
@@ -706,12 +763,17 @@ class _BsrRecorder:
 
     # ---- molecules and snapshots
 
-    def _mol_name(self, imol):
+    def _mol_name(self, imol, refresh=False):
+        # molecule_name is echoed by Coot, so ask once per molecule slot.
+        if not refresh and imol in self._names:
+            return self._names[imol]
         try:
             n = self.coot.molecule_name(imol)
-            return n if isinstance(n, str) else str(n)
+            n = n if isinstance(n, str) else str(n)
         except Exception:
-            return None
+            n = None
+        self._names[imol] = n
+        return n
 
     def _program_version(self):
         try:
@@ -723,12 +785,17 @@ class _BsrRecorder:
         c = self.coot
         try:
             if c.is_valid_model_molecule(imol):
-                return ("model", self._mol_name(imol), False)
-            if c.is_valid_map_molecule(imol):
-                return ("map", self._mol_name(imol), bool(c.map_is_difference_map(imol)))
+                kind = ("model", False)
+            elif c.is_valid_map_molecule(imol):
+                kind = ("map", bool(c.map_is_difference_map(imol)))
+            else:
+                return None
         except Exception:
             self._error("mol_info")
-        return None
+            return None
+        old = self._mol_seen.get(imol)
+        refresh = old is None or old[0] != kind[0] or old[2] != kind[1]
+        return (kind[0], self._mol_name(imol, refresh=refresh), kind[1])
 
     def _scan_molecules(self):
         c = self.coot
@@ -757,12 +824,28 @@ class _BsrRecorder:
                 info = self._mol_seen.pop(imol)
                 self._snapshots.pop(imol, None)
                 self._peak_cache.pop(imol, None)
+                self._names.pop(imol, None)
                 self._emit("molecule_closed", imol=imol, kind=info[0], name=info[1])
 
     def _snapshot(self, imol):
         c = self.coot
-        res = {}
         t = time.time()
+        if hasattr(c, "molecule_to_pdb_string_py"):
+            try:
+                text = c.molecule_to_pdb_string_py(imol)
+            except Exception:
+                text = None
+            if isinstance(text, str):
+                res = _bsr_parse_pdb_string(text)
+                self._snapshot_cost = max(self._snapshot_cost * 0.8, time.time() - t)
+                return res
+        return self._snapshot_by_residue(imol, t)
+
+    def _snapshot_by_residue(self, imol, t):
+        # Fallback for builds without molecule_to_pdb_string_py. These
+        # enumerators are echoed by Coot (four history lines per residue).
+        c = self.coot
+        res = {}
         try:
             n_ch = int(c.n_chains(imol))
         except Exception:
@@ -891,11 +974,31 @@ class _BsrRecorder:
         hist = int(m.group(1)) if m else None
         imols = self._models_for_backup(base)
         self._emit("backup", file=base, history_index=hist, imols=imols)
-        if imols:
-            for imol in imols:
-                self._diff_molecule(imol, trigger="backup", backup_file=base, history_index=hist)
-        else:
-            self._diff_all(trigger="backup", backup_file=base, history_index=hist)
+        self._pending_backups.append((base, hist, imols))
+
+    def _flush_pending_backups(self):
+        # One diff per model for all backups seen since the last flush. Several
+        # edits inside one tick (or, without a timer, between two hooks) then
+        # give one edit event that lists every backup it covers.
+        if not self._pending_backups:
+            return
+        pending, self._pending_backups = self._pending_backups, []
+        per_imol = {}
+        unattributed = []
+        for base, hist, imols in pending:
+            if imols:
+                for imol in imols:
+                    per_imol.setdefault(imol, []).append((base, hist))
+            else:
+                unattributed.append((base, hist))
+        if unattributed:
+            for imol in list(self._snapshots):
+                per_imol.setdefault(imol, []).extend(unattributed)
+        for imol, items in per_imol.items():
+            files = [b for b, _h in items]
+            hists = [h for _b, h in items if h is not None]
+            self._diff_molecule(imol, trigger="backup", backup_files=files,
+                                history_index=(hists[0] if len(hists) == 1 else hists))
 
     def _models_for_backup(self, base):
         # make_backup names the file from the molecule name with '/' and ' '
@@ -911,7 +1014,7 @@ class _BsrRecorder:
                     break
         return out
 
-    # ---- stdout lines (reader thread)
+    # ---- stdout lines (main thread, from the tee sidecar)
 
     def _on_stdout_line(self, raw):
         clean = _BSR_ANSI.sub("", raw).rstrip("\r")
@@ -925,30 +1028,24 @@ class _BsrRecorder:
             cmd = clean[len(_BSR_CMD_PREFIX):].strip()
         if cmd:
             name, args, syntax = _bsr_parse_command(cmd)
-            self._emit("command", text=cmd, name=name, args=args, syntax=syntax)
+            if name in _BSR_INTERNAL_COMMANDS:
+                return
+            if name in _BSR_NOISE_COMMANDS:
+                self._emit("command", text=cmd, name=name, args=args, syntax=syntax, noise=True)
+            else:
+                self._emit("command", text=cmd, name=name, args=args, syntax=syntax)
             return
         m = _BSR_BACKUP_LINE.match(clean)
         if m:
-            self._queue.put(("backup", m.group(1)))
+            try:
+                self._add_backup_dir(os.path.dirname(m.group(1)))
+                self._handle_backup(m.group(1))
+            except Exception:
+                self._error("backup_notice")
             return
         m = _BSR_BACKUP_DIR_LINE.match(clean)
         if m:
-            self._queue.put(("backup_dir", m.group(1)))
-
-    def _drain_queue(self):
-        while True:
-            try:
-                kind, value = self._queue.get_nowait()
-            except queue.Empty:
-                return
-            try:
-                if kind == "backup":
-                    self._add_backup_dir(os.path.dirname(value))
-                    self._handle_backup(value)
-                elif kind == "backup_dir":
-                    self._add_backup_dir(value)
-            except Exception:
-                self._error("queue_" + kind)
+            self._add_backup_dir(m.group(1))
 
 
 # ---------------------------------------------------------------- public API (scripting console)
@@ -1080,7 +1177,8 @@ def _bsr_format_event(ev):
         if ev.get("near"):
             extra.append("near " + ev["near"])
         if ev.get("history_index") is not None:
-            extra.append("backup #%s" % ev["history_index"])
+            h = ev["history_index"]
+            extra.append("backup #%s" % (",".join(str(x) for x in h) if isinstance(h, list) else h))
         extra.append("via " + str(ev.get("trigger")))
         return "%s  edit      %s  [%s]" % (t, s, ", ".join(extra))
     if kind == "note":
@@ -1090,6 +1188,8 @@ def _bsr_format_event(ev):
             t, ev.get("imol_map"), ev.get("n_positive"), ev.get("n_negative"), ev.get("sigma"), ev.get("cost_s", 0.0))
     if kind in ("error", "warning"):
         return "%s  %-9s %s" % (t, kind, ev.get("text") or ev.get("where"))
+    if kind == "stdout_capture":
+        return "%s  stdout    copied to %s" % (t, ev.get("file"))
     if kind == "stdout":
         return "%s  stdout    %s" % (t, ev.get("text"))
     return "%s  %-9s %s" % (t, kind, json.dumps(ev, default=str))
@@ -1112,11 +1212,11 @@ def _bsr_read_events(path):
 def _bsr_summarize(path, show_all=False, out=None):
     out = out or sys.stdout
     events = _bsr_read_events(path)
-    quiet = () if show_all else ("key", "manipulation", "peak_list", "backup", "stdout")
+    quiet = () if show_all else ("key", "manipulation", "peak_list", "backup", "stdout", "stdout_capture")
     lines = []
     for i, ev in enumerate(events):
         kind = ev.get("event")
-        if kind in quiet:
+        if kind in quiet or (kind == "command" and ev.get("noise") and not show_all):
             continue
         if kind == "view" and not show_all:
             # collapse a run of views: keep the last one within one second
@@ -1199,6 +1299,18 @@ class _BsrFakeCoot:
     def residue_name_py(self, imol, chain, resno, ins):
         r = self.models[imol][1].get((chain, resno, ins))
         return r[0] if r else False
+
+    def molecule_to_pdb_string_py(self, imol):
+        lines = []
+        serial = 0
+        for (chain, resno, ins), (rname, atoms) in sorted(self.models[imol][1].items()):
+            for (an, alt), v in atoms.items():
+                serial += 1
+                rec = "HETATM" if rname == "HOH" else "ATOM  "
+                lines.append("%s%5d %-4s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f           C" % (
+                    rec, serial, (" " + an) if len(an) < 4 else an, alt or " ", rname, chain, resno, ins or " ",
+                    v[0], v[1], v[2], v[3], v[4]))
+        return "\n".join(lines) + "\nEND\n"
 
     def rotation_centre_position(self, i):
         return self.centre[i]
@@ -1323,8 +1435,11 @@ def _bsr_selftest():
     fake.centre = [10.6, 0.0, 0.0]
     rec._tick()
 
-    time.sleep(0.2)
+    # an echoed call the recorder makes itself must not become a command event
+    os.write(1, b"\x1b[1m\x1b[34mrotation_centre_position (0)\x1b[0m\n")
+    time.sleep(0.3)
     rec.stop()
+    assert os.path.exists(rec.stdout_path) and os.path.getsize(rec.stdout_path) > 0, "sidecar missing"
     assert ns.graphics_general_key_press_hook is original_key_hook
     assert ns.post_manipulation_script is False
     assert key_calls == [ord("w")], key_calls
@@ -1343,7 +1458,7 @@ def _bsr_selftest():
     check(kinds[0] == "session_start" and kinds[-1] == "session_end", "start/end missing: %s" % kinds)
     check("read_model" in kinds and "molecule" in kinds, "molecule events missing")
     check(len(cmds) == 1 and cmds[0]["name"] == "place_typed_atom_at_pointer"
-          and cmds[0]["args"] == '"Water"', "command capture failed: %s" % cmds)
+          and cmds[0]["args"] == '"Water"', "command capture failed: %s" % [(c["name"], c["args"]) for c in cmds])
     check(views and views[0]["source"] == "hook" and views[0]["residue"]["spec"] == "A/2 ALA",
           "first view wrong: %s" % views[:1])
     diff_maps = [m for m in views[0]["maps"] if m["difference"]]

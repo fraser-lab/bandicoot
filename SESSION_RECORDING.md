@@ -69,11 +69,13 @@ Three sources, merged by timestamp into one file.
 **Coot's command echo.** Every GUI action that goes through a scripting-API
 function is printed to the terminal by Coot itself (`add_to_history` in
 `src/c-interface-info.cc`; these are the same lines Coot writes to
-`0-coot-history.py` when it exits). The recorder tees the process's stdout
-through a pipe, forwards every byte to the terminal unchanged, and logs those
-lines as `command` events. Examples: `set_rotation_centre`, `refine_zone`,
-`add_alt_conf`, `place_typed_atom_at_pointer`, `set_contour_level_in_sigma`,
-`delete_residue`.
+`0-coot-history.py` when it exits). The recorder points the process's stdout
+at a child `tee` process, which forwards every byte to the terminal unchanged
+and appends a copy to `<session>.stdout.log` next to the JSON file. The
+recorder reads that copy and logs the echoed lines as `command` events.
+Examples: `set_rotation_centre`, `refine_zone`, `add_alt_conf`,
+`place_typed_atom_at_pointer`, `set_contour_level_in_sigma`, `delete_residue`.
+The full terminal output of the session is therefore also kept.
 
 **Hooks Coot 0.9 already provides** (`src/graphics-info.cc`):
 
@@ -92,9 +94,10 @@ lines as `command` events. Examples: `set_rotation_centre`, `refine_zone`,
 **Model snapshots.** Coot writes a backup file before every model edit
 (`make_backup` in `src/molecule-class-info.cc`, into `coot-backup/` or
 `$COOT_BACKUP_DIR`). A new backup file, a manipulation hook, or a periodic
-timer (every 60 s, longer for very large models) makes the recorder compare
-the live model with its previous snapshot residue by residue and write an
-`edit` event. Edit types:
+timer (every 60 s, longer for very large models) makes the recorder take a
+snapshot (one call, `molecule_to_pdb_string`, parsed in Python), compare it
+with the previous one residue by residue, and write an `edit` event. Edit
+types:
 
 | Type | Meaning |
 |------|---------|
@@ -106,8 +109,9 @@ the live model with its previous snapshot residue by residue and write an
 | `add_atoms`, `delete_atoms` | atom count changed without an altloc change (side chain, hydrogens) |
 | `occupancy`, `bfactor` | occupancy or B factor changed |
 
-A main-loop timer (500 ms) also polls the rotation centre, so drag-panning,
-which fires no hook, produces `view` events tagged `[poll]`.
+A main-loop timer (500 ms) also polls the nearest residue, so drag-panning,
+which fires no hook, produces `view` events tagged `[poll]` whenever the
+nearest atom changes.
 
 ## Difference-map peak rank
 
@@ -134,7 +138,8 @@ turn ranking off.
 | `BANDICOOT_RECORD_PEAKS` | `1` | `0` disables difference-peak ranking |
 | `BANDICOOT_RECORD_ALL_STDOUT` | `0` | `1` stores every terminal line as a `stdout` event (large files) |
 
-Log file names: `bandicoot-session-<YYYYMMDD-HHMMSS>-<pid>.jsonl`.
+Log file names: `bandicoot-session-<YYYYMMDD-HHMMSS>-<pid>.jsonl`, with the
+terminal copy in `bandicoot-session-<YYYYMMDD-HHMMSS>-<pid>.stdout.log`.
 
 ## Event schema
 
@@ -144,6 +149,7 @@ session started), `seq` (running number), and `event`. Other fields by event:
 | event | fields |
 |-------|--------|
 | `session_start` | `recorder_version`, `program_version`, `pid`, `argv`, `cwd`, `python`, `backup_dirs`, `options` |
+| `stdout_capture` | `file` (the `.stdout.log` sidecar) |
 | `molecule` | `imol`, `kind` (`model`/`map`), `name`, `difference`, `replaced` |
 | `molecule_closed` | `imol`, `kind`, `name` |
 | `read_model` | `imol`, `molecule` |
@@ -152,7 +158,7 @@ session started), `seq` (running number), and `event`. Other fields by event:
 | `key` | `key`, `keyval`, `ctrl` |
 | `manipulation` | `imol`, `mode` (`MOVINGATOMS`/`DELETED`/`MUTATED`), `molecule` |
 | `backup` | `file`, `history_index`, `imols` |
-| `edit` | `imol`, `molecule`, `trigger` (`backup`/`hook`/`periodic`/`stop`), `summary` {type: count}, `changes` [...], `near`, `backup_file`, `history_index`, `mode` |
+| `edit` | `imol`, `molecule`, `trigger` (`backup`/`hook`/`periodic`/`stop`), `summary` {type: count}, `changes` [...], `near`, `backup_files`, `history_index` (a list when one event covers several backups), `mode` |
 | `peak_list` | `imol_map`, `imol_model`, `sigma`, `n_positive`, `n_negative`, `cost_s` |
 | `note` | `text` |
 | `warning`, `error` | `text` or `where`, `traceback` |
@@ -170,15 +176,26 @@ Residue specs are written `chain/resno[ins] NAME`, for example `A/45 SER`.
 - The reason for a move is inferred (peak rank at 3 sigma), not stored by
   Coot. Treat `peak` as a hint, not a record of what the user saw.
 - Edits are detected after the fact by diffing residues. Two edits inside one
-  500 ms tick appear as one `edit` event. Backups must be on (they are by
+  500 ms tick appear as one `edit` event listing both backups. Without
+  graphics there is no timer, so edits are grouped up to the next hook call. Backups must be on (they are by
   default) for edits to be timestamped precisely; with backups off, edits are
   still caught by the manipulation hook or the periodic diff.
-- The stdout tee changes where the process's file descriptor 1 points. Child
-  programs started by Bandicoot inherit the pipe and their output is forwarded
-  too. If the tee ever fails it restores the original stdout and stops.
-- Snapshots call `residue_info` for every residue. Each diff takes tens of
-  milliseconds for a typical protein; the periodic diff backs off
+- The stdout capture changes where the process's file descriptor 1 points.
+  Programs started by Bandicoot inherit it and their output is forwarded and
+  copied too. `<session>.stdout.log` grows with everything Coot prints; a long
+  session can reach tens of megabytes.
+- A snapshot is one `molecule_to_pdb_string` call plus a parse; a diff takes
+  a few milliseconds for a typical protein. The periodic diff backs off
   automatically for large models.
+- Coot 0.9 adds most scripting calls to its history, including calls made by
+  scripts. The recorder uses the silent ones (`active_residue`,
+  `residue_info`, `map_sigma`, `density_at_point`, `map_peaks_around_molecule`,
+  `molecule_to_pdb_string`, `zoom_factor`). Two it cannot avoid are echoed:
+  `rotation_centre_position` (three calls per `view`) and `molecule_name`
+  (once per molecule). They are filtered out of the `command` stream, but they
+  do appear in `0-coot-history.py`.
+- The stdout capture starts a `tee` child process; if `tee` is not on the
+  PATH, recording continues without `command` events and logs a warning.
 - File paths of models and maps are recorded. Nothing else leaves the machine;
   the log is a local file.
 
@@ -190,5 +207,15 @@ The module can test itself without Bandicoot, using a fake `coot` module:
 python3 python/bandicoot_session_recorder.py selftest
 ```
 
-It exercises the stdout tee, the hooks, backup detection, the snapshot diff
-(water, alt conf, mutation, deletion, move), polling, notes, and the summary.
+It exercises the stdout capture (a real `tee` child), the hooks, backup
+detection, the snapshot diff (water, alt conf, mutation, deletion, move),
+polling, notes, and the summary.
+
+Headless runs work too and are a quick way to check a build:
+
+```
+BANDICOOT_RECORD=1 bcoot --no-graphics --no-state-script --script my_script.py
+```
+
+There is no main-loop timer without graphics, so drag-pan polling is off and
+backup notices are processed at the next hook call or at stop.
