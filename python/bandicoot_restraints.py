@@ -19,30 +19,17 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # ---------------------------------------------------------------------------
-# WHY phenix.elbow IS TRIED FIRST, AND WHY acedrg CANNOT REPLACE IT
+# elbow is used for every pathway.
 #
-# A component with no dictionary usually reaches us as COORDINATES ONLY --
-# element types and positions, no bonds. Deposited files rarely carry usable
-# CONECT records for a ligand.
+# A component with no dictionary usually arrives as coordinates and elements
+# only. elbow perceives connectivity, bond orders and aromaticity from that;
+# acedrg cannot, since all of its input modes require the chemistry already
+# worked out. Using elbow for the SMILES pathway too means a molecule gets the
+# same dictionary whichever way it was read in.
 #
-#   * acedrg cannot start from that. Every one of its input modes wants the
-#     chemistry already worked out: -c (mmCIF "coordinates and bonds"),
-#     -m (MOL), -g (MOL2), -i (SMILES).
-#   * phenix.elbow perceives connectivity, bond orders and aromaticity from
-#     the coordinates itself, and preserves the input atom names.
-#
-# Atom names are not a detail: Coot binds restraints to atoms by name string,
-# so a dictionary whose atom ids do not match the model is inert. That is also
-# why we never route coordinates through SMILES -- SMILES carries no names, and
-# recovering them is a graph-isomorphism problem that molecular symmetry makes
-# ambiguous.
-#
-# Measured on this design (2026-08-28): a 17-heavy-atom ligand stripped of all
-# CONECT records and all hydrogens gave connectivity, bond orders and
-# aromaticity identical to a reference elbow run, in about 7 seconds.
-#
-# elbow is used for the SMILES pathway too, so that a given molecule yields the
-# same dictionary whether it arrived as coordinates or as SMILES.
+# Atom names matter: restraints bind to atoms by name, so a dictionary whose
+# ids do not match the model is inert. That is also why coordinates are never
+# routed through SMILES, which carries no names.
 # ---------------------------------------------------------------------------
 
 import os
@@ -56,33 +43,17 @@ DEFAULT_COMP_ID = "LIG"
 
 
 # ---------------------------------------------------------------------------
-# FINDING THE GENERATOR WHEN BANDICOOT WAS NOT LAUNCHED FROM A SHELL
+# Finding the generator when Bandicoot was not launched from a shell.
 #
-# Launched from a terminal, phenix.elbow and acedrg are on PATH and there is
-# nothing to do. Launched from the Dock or the Finder, the process inherits a
-# bare PATH (/usr/bin:/bin:/usr/sbin:/sbin) and neither tool is visible, so
-# the whole feature silently does nothing.
+# From the Dock or Finder the process inherits a bare PATH and neither tool is
+# visible. Searching known install directories is not enough: a wrapper found
+# that way still needs its vendor's environment, and without it exits zero
+# having done nothing. So the user's own shell is asked instead -- it is the
+# one thing that knows how the machine is set up, whatever the vendor.
 #
-# Searching a list of known install directories does NOT fix this, and that is
-# worth stating because it is the obvious fix. Measured on this machine: the
-# SBGrid wrapper /programs/i386-mac/system/sbgrid_bin/phenix.elbow IS found by
-# such a search, and calling it by absolute path in a bare environment prints
-#
-#     SBGrid shell environment is not initialized! Please source
-#     /programs/sbgrid.shrc ... to use the software.
-#
-# and exits 0 having done nothing. The tools need an ENVIRONMENT, not just a
-# location -- SBGrid's dispatch variables, or phenix_env.sh, or ccp4.setup-sh.
-#
-# So we ask the user's own shell instead. It is the one thing that knows how
-# this machine is set up, whatever the vendor and wherever it is installed,
-# and it needs no per-vendor list to maintain.
-#
-# The shell must be INTERACTIVE (-i), not merely a login shell: SBGrid's
-# installer writes "source /programs/sbgrid.shrc" into ~/.zshrc, and zsh reads
-# .zshrc for interactive shells only. Measured: `zsh -lc` finds nothing,
-# `zsh -ic` finds elbow. Cost is about 2 s, paid once per session and only
-# when the direct lookup has already failed.
+# The shell must be INTERACTIVE, not merely a login shell, or vendor setup
+# sourced from an interactive rc file is missed. Costs a second or so, paid
+# once per session and only after the direct lookup has failed.
 # ---------------------------------------------------------------------------
 
 # None = not looked yet; {} = looked and got nothing (do not look again).
@@ -188,23 +159,10 @@ def find_restraint_generator():
 def _run(args, workdir, env=None):
     """Run args in workdir. Returns (returncode, combined_output_text).
 
-    WARNING: OUTPUT GOES TO A FILE, NOT A PIPE, AND THAT IS WORTH 5 SECONDS A CALL.
-
-    subprocess.run(stdout=PIPE) does not wait for the child; it waits for EOF
-    on the pipe, which arrives only when EVERY copy of the write end is closed.
-    SBGrid's dispatcher leaves a background process holding an inherited copy
-    for about five seconds after the tool itself is done, so the pipe stays
-    open long after there is anything to read.
-
-    Measured on phenix.elbow --version:
-
-        child exited after     1.26 s
-        pipe reached EOF at    6.27 s      -> 5.01 s of pure waiting
-
-    A regular file has no such reader, so the wait disappears: the same call
-    with stdout redirected to a file takes 1.37 s. (This is also why the tools
-    feel instant when run by hand -- a terminal is a tty, not a pipe, so nobody
-    ever notices.)
+    Output goes to a FILE, not a pipe. A pipe is not closed when the child
+    exits but when every inherited copy of it is, and some vendor wrappers
+    leave a background process holding one for several seconds -- so reading
+    through a pipe waits long after there is anything to read.
     """
     if env is not None:
         # A copy, because PWD is ours to set: it came from the shell we asked
@@ -268,46 +226,19 @@ def elbow_from_coordinates(pdb_file_name, comp_id):
     # --name sets the dictionary's comp id. Without it elbow writes LIG and the
     # restraints silently fail to bind to a residue called anything else.
     #
-    # --opt (AM1) IS WHAT MAKES THE RESTRAINTS USABLE ON AN UNREFINED LIGAND.
-    #
-    # Without it elbow perceives the chemistry correctly but its TARGET
-    # DISTANCES partly track the input coordinates, and on a ligand that has not
-    # been refined yet -- which is exactly when restraints are generated -- the
-    # aromatic ring targets come out mutually inconsistent. Measured on a real
-    # ligand against a 0.25 A RMS perturbation of itself:
-    #
-    #                          how much the dictionary moves with input quality
-    #                          overall        aromatic bonds
-    #     plain elbow          0.0135 A       0.0575 A mean, 0.0910 A max
-    #     elbow --opt          0.0248 A       0.0105 A mean, 0.0190 A max
-    #
-    # Plain elbow gave one ring C-N a target of 1.265 A and a ring C-C 1.476 A.
-    # A six-membered aromatic ring cannot satisfy that at esd 0.02, so real-space
-    # refinement buckles it -- which is the distortion Art reported (2026-09-03),
-    # and why regenerating AFTER a good dictionary had fixed the geometry
-    # produced better restraints.
-    #
-    # THE COST IS REAL BUT SMALL, and worth stating: AM1 inflates X-H bonds
-    # (about 1.11 A against a true 1.08) and some C-C singles, so the OVERALL
-    # mean error is slightly worse. An X-H that is 1.5 sigma long is a far
-    # cheaper error than a ring whose targets contradict each other.
-    # Timing was 5.5 s against 5.0 s on a 17-heavy-atom ligand -- negligible
-    # here, though AM1 scales worse than perception does, so a much larger
-    # ligand may cost more.
-    # WARNING: AND IT MUST FALL BACK, because --opt can fail outright.
-    #
-    # Measured on a real 11-atom PanDDA ligand: the AM1 optimisation wrote an
-    # empty trajectory and elbow's OWN parser then raised
-    # "IndexError: list index out of range" in xyz_parser.movie(), exit 1, no
-    # dictionary at all. Plain elbow handles the same ligand fine.
-    #
-    # No dictionary is worse than a geometry-sensitive one, so a failed --opt
-    # retries without it rather than giving up.
+    # --opt (AM1) optimises the geometry before the targets are derived.
+    # Without it the target distances partly track the input coordinates, and on
+    # a ligand that has not been refined yet -- which is when restraints are
+    # generated -- the aromatic ring targets can come out mutually inconsistent
+    # and refinement then distorts the ring. AM1 costs little here, but inflates
+    # X-H and some single bonds, which is the cheaper error.
     args = ["--file=" + pdb_file_name, "--name=" + comp_id]
     pdb, cif, err = _elbow(args + ["--opt"], workdir, comp_id, comp_id)
     if not err:
         return (pdb, cif, None)
 
+    # Falls back rather than giving up: the optimisation fails to converge on
+    # some ligands, and a geometry-sensitive dictionary beats none at all.
     print("WARNING:: optimised restraint generation failed for %s; retrying "
           "without --opt. The targets will be more sensitive to the ligand's "
           "current geometry." % comp_id)

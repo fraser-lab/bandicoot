@@ -21,7 +21,7 @@
  *
  * save_coords_filechooserdialog1 already contains "Save Hydrogens" and "Save
  * ANISO Records" in hbox413. An earlier version of this file built a second
- * pair, which Art rightly reported as a duplicated set. We read the originals
+ * pair, which was rightly reported as a duplicated set. We read the originals
  * and pack the format menu into that same row.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -157,7 +157,7 @@ namespace {
    //
    // Without this the entry keeps saying "saved.cif" while the menu says PDB,
    // and the file lands as saved.pdb -- which also makes the overwrite
-   // confirmation fire against the wrong name. Art reported all three as one
+   // confirmation fire against the wrong name. All three were reported as one
    // problem, and they are.
    void sync_name_to_format(GtkWidget *chooser) {
 
@@ -214,7 +214,7 @@ namespace {
          // children out from the right edge in the order they appear in the
          // child list -- so anything packed later lands FURTHER LEFT. Packing
          // alone therefore put the menu to the left of the checkboxes, which is
-         // what Art saw and called funky (2026-08-26).
+         // what was seen and called funky (2026-08-26).
          //
          // gtk_box_reorder_child() moves a child within that list, and for
          // pack-end children earlier in the list means nearer the right edge.
@@ -341,7 +341,7 @@ extern "C" GtkWidget *coot_save_coords_chooser_for_molecule(int imol) {
    opts.is_symmetry = false;
 
    // Default the menu to the format the molecule came IN as. Same reasoning as
-   // the backup-format policy (Art, 2026-08-12): a user working in mmCIF who
+   // the backup-format policy (2026-08-12): a user working in mmCIF who
    // saves without looking at the menu should not be silently downgraded to PDB
    // and lose the metadata the retained document is carrying.
    if (graphics_info_t::is_valid_model_molecule(imol))

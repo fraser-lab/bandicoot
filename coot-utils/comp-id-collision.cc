@@ -383,8 +383,8 @@ namespace coot {
          // Sensitivity is not lost: with the band, the real two-different-
          // ligands case is still caught and the real two-copies case is still
          // quiet. Past about 0.3 A RMSD the ligand is genuinely distorted and
-         // reading as "different" is acceptable -- Art, 2026-08-31: it "serves
-         // as a round-about warning that something is off".
+         // reading as "different" is acceptable: it serves as a round-about
+         // warning that something is off.
          const double BOND_AMBIGUOUS_BAND = 0.35;
 
          // Below this the centre is effectively planar and the sign is noise.

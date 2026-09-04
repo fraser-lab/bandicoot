@@ -4751,7 +4751,7 @@ on_edit_backbone_torsions_dialog_destroy
      silent no-ops, so following OK (which has already written the coordinates via
      replace_coords by this point) it simply tears down.
 
-     Net effect, per Art: accept/reject now applies to the WHOLE phi/psi adjustment,
+     Net effect: accept/reject now applies to the WHOLE phi/psi adjustment,
      including any drag, rather than leaving a half-live fragment behind. */
   clear_up_moving_atoms();
   /* Drop the dialog handle so glarea_motion_notify() stops suppressing the

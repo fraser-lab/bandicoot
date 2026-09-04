@@ -1658,7 +1658,7 @@ void coot::transfer_pdb_header_to_gemmi(mmdb::Manager *mol, gemmi::Structure &st
 //
 // So the u80 fix covered wwPDB files and missed every phenix one: converting a
 // phenix PDB to mmCIF still produced a file with no resolution anywhere. Found
-// 2026-08-20 by Art, in the Header Browser, on the converted file -- "you can
+// 2026-08-20 in the Header Browser, on the converted file -- "you can
 // see resolution bins in refinement information" is that REMARK 3, preserved as
 // text in _pdbx_database_remark while the typed value was missing.
 //

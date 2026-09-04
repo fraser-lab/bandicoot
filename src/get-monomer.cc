@@ -64,7 +64,7 @@ int get_monomer_molecule_by_network_and_dict_gen(const std::string &text) {
 	 // models and maps share one numbering, so with a map loaded (i.e. any
 	 // time you are about to refine) 1 is the map.
 	 //
-	 // Symptom Art hit: Get Monomer fetched the dictionary, built the
+	 // The symptom: Get Monomer fetched the dictionary, built the
 	 // molecule, RSR worked on it -- and the dialog claimed it had failed.
 	 imol = retval.i;
       }

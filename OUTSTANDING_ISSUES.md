@@ -59,7 +59,7 @@ the left as the issue text says — `bandicoot_reposition_sidebar()` pins it to
 - **STILL OPEN — the same dead UI in Preferences.** `Preferences > Refinement Toolbar`
   still offers a Model Toolbar Position radio group (`src/callbacks.c:7765-7800`) calling
   the same `set_model_toolbar_docked_position()`, and it is equally inert. **Decision
-  (Art, 2026-08-06): leave it.** If a user reports it we explain or remove it then; the wx
+  (2026-08-06): leave it.** If a user reports it we explain or remove it then; the wx
   interface rework may land first, and it is unclear how many users move the toolbar at
   all.
 - **Actual repositioning is deferred to the wx interface work.** Supporting left/right on

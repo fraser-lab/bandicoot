@@ -5,7 +5,7 @@
  *
  * WHY THIS EXISTS
  *
- * Art's requirement for the v0.2 write path: "whatever comes in also comes
+ * The requirement for the v0.2 write path: "whatever comes in also comes
  * out, with the only changes being those made by the user during the editing
  * session." mmdb cannot meet that -- it shreds a file into fixed-field PDB-era
  * structs, discards everything that has nowhere to live, and deletes the

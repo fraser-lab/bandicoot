@@ -34,7 +34,7 @@
 
 // THE PER-CATEGORY POLICY.
 //
-// Art's vocabulary for this, which is more precise than gemmi's booleans:
+// The project's vocabulary for this, more precise than gemmi's booleans:
 //
 //   EDIT   written out from the edited mmdb model, overwriting what was read
 //   REGEN  regenerated from Bandicoot's own stored objects, not from mmdb
@@ -42,7 +42,7 @@
 //   FORCE  affected by editing but passed through anyway because no mechanism
 //          exists to update it. Names a known defect, not a choice.
 //
-// The governing rule (Art): anything editable in Bandicoot is EDIT or REGEN;
+// The governing rule: anything editable in Bandicoot is EDIT or REGEN;
 // anything non-editable is PASS. With one precondition bolted on, which is
 // where the subtlety lives: EDIT REQUIRES THAT copy_from_mmdb ACTUALLY HAS THE
 // DATA. Where mmdb holds nothing, "regenerate" does not mean recompute -- it
@@ -69,7 +69,7 @@ static gemmi::MmcifOutputGroups bandicoot_output_groups() {
    // column was silently dropped -- 13 of them, including the Cromer-Mann
    // coefficients and the dispersion corrections (measured on 3K0N and 1FFK).
    //
-   // This is Art's own rule catching a mistake of mine: EDIT requires that
+   // This is that governing rule catching an implementation mistake: EDIT requires that
    // copy_from_mmdb actually HAS the data. mmdb has no scattering factors, so
    // there "regenerate" means DELETE.
    //
@@ -562,7 +562,7 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
       //     _atom_site.label_atom_id  ' N  '
       // where the input said  N. Legal CIF, but a name of literally " N  " is
       // not what any downstream tool expects, and it is not what was read in.
-      // Found by Art in GUI testing 2026-08-12, on a save after undo.
+      // Found in GUI testing 2026-08-12, on a save after undo.
       auto trim_name = [](std::string &s) {
          size_t b = s.find_first_not_of(' ');
          size_t e = s.find_last_not_of(' ');
@@ -606,7 +606,7 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
       // THE INVALIDATION POLICY IS FREE, and that is the point of keying it
       // this way. If the user renumbered a residue or moved it to another
       // chain, its key no longer matches, the lookup misses, and the label_*
-      // columns come out null for that residue. Agreed with Art 2026-08-13:
+      // columns come out null for that residue. Settled 2026-08-13:
       // drop for edited residues rather than write a stale second opinion
       // about what the residue is. Partially-populated columns are normal --
       // phenix.refine writes a null label_entity_id for every atom.
@@ -692,7 +692,7 @@ coot::write_coords_with_gemmi(mmdb::Manager *mol,
          //   - D3's reasoning was that not holding a second _atom_site makes
          //     "wrote the stale copy" an unwritable bug. In-place editing put
          //     the stale copy back, a snapshot from the previous write.
-         // Found by Art in GUI testing 2026-08-17: the header browser showed the
+         // Found in GUI testing 2026-08-17: the header browser showed the
          // coordinates, which is what a second copy looks like from outside.
          //
          // The copy is cheap precisely because of the strip: the retained

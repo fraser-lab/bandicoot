@@ -21,7 +21,7 @@ CONDA_PREFIX="${CONDA_PREFIX:-/opt/miniconda3}"
 BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
 
 # The test corpus. It lives OUTSIDE the repository, one level up beside it, and
-# that is deliberate (Art, 2026-08-12): these files would bloat git history
+# that is deliberate (2026-08-12): these files would bloat git history
 # permanently and have no business in a shipped release. Baked in here so that
 # running the catalogue is `gemmi-mmdb-diff` with no arguments rather than a
 # remembered list of filenames -- the list going stale is exactly how the wrong

@@ -6494,7 +6494,7 @@ std::string suggest_free_placeholder_comp_id(int imol) {
       std::vector<std::string> free_codes =
 	 coot::comp_id_collision::free_placeholder_codes(mols);
       // Two-digit codes only, matching what the load-time rename hands out.
-      // Art keeps LIG, DRG and INH back for renaming by hand, and a bare
+      // LIG, DRG and INH are kept back for renaming by hand, and a bare
       // number implies nothing about the chemistry -- which DRG and INH do,
       // possibly untruthfully. 99 codes, all of them shapes the CCD will never
       // issue (all 938 numeric CCD ids are three characters).

@@ -4453,7 +4453,7 @@ extern "C" void bandicoot_pandda_dialog() {
    // Inspect loads a model per dataset, unattended, and nearly every one of
    // them carries a ligand with no restraints -- that is what a PanDDA hit IS.
    // So the load-time dialogs fire once per dataset and the user clicks through
-   // dozens of them. Art hit exactly this on a folder of ligand-bearing models.
+   // dozens of them. Hit exactly this way on a folder of ligand-bearing models.
    //
    // Turning the dialogs off does NOT turn the reporting off: the same detail
    // still goes to stdout, so a session still leaves a record of every
@@ -4712,7 +4712,7 @@ static int bandicoot_rename_placeholder_collisions(
 
       // Numeric codes only for the new names. 01-99 are reserved by the wwPDB
       // and, being bare numbers, imply nothing at all about the chemistry --
-      // which DRG and INH do, possibly untruthfully. Art also keeps LIG, DRG
+      // which DRG and INH do, possibly untruthfully. LIG, DRG
       // and INH back for renaming by hand, which leaves 99 automatic codes;
       // measured 2026-09-02 against the 35,649-entry CCP4 monomer library, all
       // 938 purely-numeric CCD ids are THREE characters ("001", never "01"),
@@ -4733,7 +4733,7 @@ static int bandicoot_rename_placeholder_collisions(
                pool.push_back(free_codes[k]);
       }
 
-      // EVERY group is renamed, including the first -- Art, 2026-08-31:
+      // EVERY group is renamed, including the first (2026-08-31):
       // "rename *all* LIGs, rather than starting with the second one. Tidier
       // that way." Leaving one with the original name would also imply that
       // one of them is the "real" LIG, which is not something we know.
@@ -4746,7 +4746,7 @@ static int bandicoot_rename_placeholder_collisions(
          // has, if some other loaded molecule is holding it under a placeholder
          // name.
          //
-         // Art's case: load a model, its two ligands become 01 and 02, then
+         // The case that prompted it: load a model, its two ligands become 01 and 02, then
          // load the SAME model again. Minting 03 and 04 for chemistries that
          // already have 01 and 02 would be correct but wasteful -- two comp ids
          // for one chemistry, and each needing its own generated dictionary.
@@ -4857,7 +4857,7 @@ int resolve_placeholder_collisions_on_load(int imol) {
    }
 
    // NOTE: this dialog deliberately breaks the house rule that dialogs stay
-   // terse and detail goes to stdout. Art, 2026-08-31: the consequence of
+   // terse and detail goes to stdout. 2026-08-31: the consequence of
    // answering No has to be stated where the choice is made, because the
    // failure it leads to appears much later and looks like something else.
    std::string m = "WARNING: multiple distinct molecules named ";

@@ -992,7 +992,7 @@ static int write_check(const std::vector<std::string> &files, const std::string 
                std::sort(col_a.begin(), col_a.end(), value_less);
                // ACCEPTED DEVIATION: element symbol case. mmdb preserves the
                // file's spelling ("Cl"), gemmi normalises to upper ("CL").
-               // Art's decision 2026-08-13: keep the normalisation, because it
+               // Decided 2026-08-13: keep the normalisation, because it
                // is what wwPDB itself writes -- CA, SE, MG throughout the
                // corpus -- while mixed case comes from phenix. So it follows
                // the convention rather than breaking it, and the gate must not

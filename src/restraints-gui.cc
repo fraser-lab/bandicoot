@@ -1,59 +1,19 @@
 /* src/restraints-gui.cc
  *
- * Bandicoot v0.2: the load-time ligand restraints notification. See the header.
+ * Bandicoot v0.2: the load-time ligand restraints notification.
  *
- * WHY THIS NOTIFIES AND DOES NOT PROMPT
+ * The load never blocks and never asks: generating restraints takes seconds,
+ * and a coordinate load should feel like a coordinate load. This dialog offers
+ * the work instead, and can be ignored indefinitely.
  *
- * Generating restraints takes seconds, not milliseconds. Attaching that to a
- * coordinate load would be wrong even if it were fast, because the cost a user
- * will accept is set by what they believe they asked for: the same wait is
- * unremarkable in "build me a ligand from SMILES" and infuriating in "open a
- * file". So the load never blocks and never asks. The coordinates appear at
- * normal speed and this dialog then sits there, ignorable indefinitely, until
- * the user decides to spend the time.
+ * Rows are component ids, never molecule numbers, and their contents are
+ * recomputed from live state rather than stored. A long-lived dialog is a
+ * request, not a transaction: by the time it is acted on, molecules may have
+ * been deleted or dictionaries imported, and re-deriving makes all of that
+ * harmless.
  *
- * The rejected alternative was a modal Yes/No on load. It still interrupts an
- * action the user thinks of as opening a file; it merely swaps a wait for an
- * unasked-for decision.
- *
- * WHY THE ROWS ARE COMPONENT IDS AND NEVER MOLECULE NUMBERS
- *
- * Restraints in Coot are GLOBAL and keyed by comp id -- one dictionary for
- * "LIG", whichever molecules contain it. A row that named a molecule would go
- * stale the moment that molecule was deleted, which is the flaw in the
- * "fix nomenclature errors" dialog this one is otherwise modelled on: leave it
- * open long enough and it offers to fix molecules that no longer exist.
- *
- * Keying on comp ids removes the whole class of problem. A deleted molecule
- * cannot invalidate a row, because a row was never about a molecule.
- *
- * WHY THE CONTENTS ARE RECOMPUTED AND NEVER STORED
- *
- * The rows, the file names on them, and the decision to generate at all are
- * derived from live state every time they are needed -- on a new load, when
- * the dialog regains focus, and again inside the OK handler before anything
- * runs. Nothing about which components need restraints is remembered between
- * those moments.
- *
- * A long-lived non-modal dialog is a REQUEST, not a transaction: by the time
- * it is acted on, the user may have deleted the molecule, imported a
- * dictionary by hand, or loaded three more files. Re-deriving is what makes
- * all of those harmless. The one thing carried across a rebuild is which rows
- * the user has UNCHECKED, because that is a decision of theirs and not a fact
- * about the molecules.
- *
- * WHY THE DIALOG IS NON-BLOCKING BUT THE GENERATION IS NOT
- *
- * Real-space refinement started while a generator is halfway through writing
- * that ligand's dictionary would be entertaining and useless. So generation
- * blocks: the main loop stops, the draw window goes unresponsive, and the
- * cursor becomes the spinning beach ball, which is the platform's own way of
- * saying "wait".
- *
- * The dialog itself goes modal for the duration and reports progress in its
- * own header. It does NOT open a second window to do that -- see the note on
- * set_busy() for why, and for the reason the modality is the half that must
- * not be dropped.
+ * Generation itself blocks, so that refinement cannot start against a
+ * half-written dictionary.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -103,7 +63,7 @@ namespace {
    // Show every ligand (Modelling menu) rather than only what lacks a
    // dictionary (a coordinate load). One dialog instance serves both: the menu
    // switches it into show-all, a later load ADDS rows without changing the
-   // mode, and closing the dialog resets it. Art, 2026-09-03.
+   // mode, and closing the dialog resets it (2026-09-03).
    bool show_all_mode = false;
 
    // Rows the user has switched OFF. Carried across a rebuild; everything else
@@ -112,21 +72,13 @@ namespace {
 
    const char *COMP_ID_KEY = "bandicoot-comp-id";
 
-   // What already describes a component. The three states are Art's ladder
-   // (2026-09-03): generate silently only when nothing describes it, and
-   // otherwise make the user say so.
+   // What already describes a component. Generate silently only when nothing
+   // does; otherwise make the user ask for it.
    //
-   // THE STATE IS READ OFF THE STORAGE SCOPE, which is the provenance:
-   // protein-geometry.cc:535 states that try_dynamic_add() -- the monomer
-   // library path -- adds at IMOL_ENC_ANY, while a generated dictionary is
-   // stored against its own molecule. So:
-   //
-   //   scoped entry for this molecule -> we generated (or scoped-imported) it
-   //   entry at IMOL_ENC_ANY          -> the library, or a global import
-   //   neither                        -> nothing describes it
-   //
-   // A global import is indistinguishable from a library entry, and that is
-   // fine: not silently overwriting the user's own CIF is what we want anyway.
+   // The storage scope IS the provenance: the monomer library loads unscoped,
+   // while a generated dictionary is stored against its own molecule. A global
+   // import is indistinguishable from a library entry, which is acceptable --
+   // neither should be overwritten without being asked.
    enum row_state_t { ROW_NEEDS, ROW_LIBRARY, ROW_GENERATED };
 
    // One row: a component, where it was found, and what already describes it.
@@ -144,12 +96,11 @@ namespace {
       graphics_info_t g;
       const coot::protein_geometry &geom = *g.Geom_p();
 
+      // Scanned directly rather than through the index lookup, which stops at
+      // the first scope match and so cannot tell whether a scoped entry also
+      // exists alongside an unscoped one.
       bool scoped = false, global = false;
       for (unsigned int i=0; i<geom.size(); i++) {
-         // Scanned directly rather than through get_monomer_restraints_index():
-         // that stops at the FIRST match by matches_imol(), which accepts an
-         // IMOL_ENC_ANY entry, so it cannot tell us whether a scoped one also
-         // exists. The distinction is the whole point here.
          const std::pair<int, coot::dictionary_residue_restraints_t> &e = geom[i];
          if (e.second.residue_info.comp_id != comp_id) continue;
          if (e.second.is_bond_order_data_only()) continue;   // minimal, not restraints
@@ -163,16 +114,13 @@ namespace {
       return ROW_NEEDS;
    }
 
-   // Is this component a LIGAND, i.e. something it makes sense to derive
-   // restraints for?
+   // Is this component a ligand, i.e. worth deriving restraints for?
    //
-   // Uses mmdb's own tables rather than coot::util::standard_residue_types(),
-   // which is the twenty amino acids plus MSE and nothing else -- so it calls
-   // every nucleotide non-standard. Deriving self-made restraints for a DNA
-   // backbone is exactly the harm this filter exists to prevent, and
-   // PDB_standard_residue_types() does not fix it either (it lists DA/DC/DG/DT
-   // but omits RNA C and U). mmdb's tables are maintained upstream and answer
-   // the question directly.
+   // Uses mmdb's tables rather than Coot's standard-residue list, which covers
+   // only the amino acids and so treats every nucleotide as a ligand. Deriving
+   // self-made restraints for a nucleic acid backbone is the harm this filter
+   // exists to prevent. Modified bases are not in mmdb's tables either, but
+   // they have library dictionaries, so they arrive unticked.
    bool is_ligand_comp_id(const std::string &comp_id) {
 
       if (comp_id.empty()) return false;
@@ -316,15 +264,9 @@ namespace {
       return v;
    }
 
-   // WARNING: BARE NAMES, NOT "bandicoot_restraints.something()".
-   //
-   // safe_python_command_with_return() evaluates in __main__'s globals, and
-   // coot_load_modules.py.in does not IMPORT the python files -- it compiles
-   // and exec()s each one into those same globals. So there is no module
-   // object called bandicoot_restraints to reach through; its functions are
-   // already top-level names here. (That is also why the module may use bare
-   // coot scripting calls at all: it is running inside the namespace that did
-   // "from coot import *".)
+   // Python functions are called by BARE name, with no module prefix: the
+   // loader exec()s these modules into __main__ rather than importing them, so
+   // there is no module object to reach through.
 
    // "elbow", "acedrg", or empty. Asked afresh each time the dialog is built,
    // so a user who sets their environment up and reopens the dialog is not told
@@ -362,7 +304,7 @@ namespace {
                                 g_strdup(rows[i].comp_id.c_str()), g_free);
          // Ticked only when nothing describes it. A component that already
          // has restraints arrives UNTICKED, so ticking it is the user saying
-         // "yes, replace them" -- Art's ladder, expressed as the default state
+         // "yes, replace them" -- that ladder, expressed as the default state
          // rather than as a confirmation dialog per component. On a structure
          // with several ligands a modal each would be a storm.
          bool want = (rows[i].state == ROW_NEEDS) &&
@@ -382,29 +324,12 @@ namespace {
          gtk_main_iteration();
    }
 
-   // WARNING: PROGRESS IS REPORTED IN THIS DIALOG'S OWN HEADER, NOT IN A SECOND WINDOW.
+   // Progress is reported in this dialog's own header rather than in a separate
+   // window: the blocked draw window and the wait cursor already say "wait".
    //
-   // There WAS a separate modal progress window naming the component and its
-   // position, with a Cancel that was honoured between components. Art removed
-   // it after testing (2026-09-01): it opened tiny in the corner of a large
-   // monitor where he could barely see it, and it was not telling him anything
-   // the spinning-beach-ball cursor and the dead draw window had not already
-   // said. His comparison was "Ligand from SMILES", which waits far longer with
-   // no progress window at all and is perfectly clear.
-   //
-   // The dialog the user is already looking at says it instead. Cancellation
-   // goes with the window -- his ruling, since a run is usually one component
-   // and each takes a few seconds.
-   //
-   // WARNING: BUT THE MODALITY MUST NOT GO WITH IT, and this is the subtle part.
-   // pump_events() below is what lets the message repaint between components,
-   // and it also DELIVERS whatever the user clicked during the previous one.
-   // The progress window used to absorb those clicks. Without it, a click made
-   // during component 1 of 3 would reach the main window mid-run -- which is
-   // exactly the "user runs RSR while the generator is halfway through" case
-   // that made generation blocking in the first place. So this dialog goes
-   // modal for the duration, with its own buttons insensitive, and the clicks
-   // land on a window that ignores them.
+   // The modality is not cosmetic. Pumping events repaints the message between
+   // components and also delivers whatever was clicked during the previous one,
+   // so without a modal grab a click could start refinement mid-run.
    const char *HEADER_IDLE = "These components loaded without restraints:";
 
    void set_busy(bool busy) {

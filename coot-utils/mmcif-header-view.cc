@@ -57,7 +57,7 @@ namespace {
    // all" so this is a default, not a censor.
    //
    // WARNING: A BY-NAME LIST IS THE WEAK PART OF THIS DESIGN, and there is a
-   // promising rule hiding in it (Art, 2026-08-17: "a solid idea and worth
+   // promising rule hiding in it (2026-08-17: "a solid idea and worth
    // revisiting when we touch header browser again"). Nearly every category
    // below has a row count that SCALES WITH THE MODEL -- per atom, per
    // residue, per shell, per revision -- while nearly everything shown has a
@@ -96,7 +96,7 @@ namespace {
       // Per-residue and per-atom ANNOTATION. Real header information in the PDB
       // sense (HELIX/SHEET/SITE/REMARK 465 all live in a PDB header), but one
       // row per residue or atom, so in a browser they are bulk rather than
-      // summary. Hidden at Art's request 2026-08-17 after reading the real
+      // summary. Hidden 2026-08-17 after reading the real
       // thing; the "show all" checkbox reaches them.
       "_struct_conf",              // helices
       "_struct_conf_type",
@@ -112,7 +112,7 @@ namespace {
       // DEPOSITION MACHINERY. True of the entry, not of the structure: which
       // dictionary version the file conforms to, when it was received, how many
       // times it has been revised and which categories each revision touched.
-      // Hidden at Art's request 2026-08-17 after reading the real thing.
+      // Hidden 2026-08-17 after reading the real thing.
       "_entry",
       "_audit_conform",
       "_pdbx_database_status",
@@ -263,7 +263,7 @@ namespace {
       { "_chem_comp_bond",              "Component bonds" },
       { "_database_2",                  "Database references" },
       // wwPDB's holding category for PDB REMARK text that has no typed mmCIF
-      // home. Shown, not hidden (Art, 2026-08-17): it is where the PDB -> mmCIF
+      // home. Shown, not hidden (2026-08-17): it is where the PDB -> mmCIF
       // conversion parks REMARK 3, 200, 280 and the rest, and hiding it would
       // preserve them in the file while making them invisible in the one window
       // anyone would look for them.

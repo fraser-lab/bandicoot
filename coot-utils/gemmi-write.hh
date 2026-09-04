@@ -60,7 +60,7 @@ namespace coot {
    //! coordinates" an unwritable bug (see mmcif-document.hh).
    //!
    //! This comment used to say the document was updated IN PLACE. That was true
-   //! until 2026-08-17, when Art found in GUI testing that a single save or
+   //! until 2026-08-17, when GUI testing found that a single save or
    //! make_backup() put the whole coordinate loop back into the retained
    //! document (5E1N: 476 items -> 478), giving back the memory the strip exists
    //! for and re-arming the stale-copy bug. Corrected 2026-08-25.

@@ -147,7 +147,7 @@ fi
 # AGAINST IT -- ideally when each new Python is released, so the list stays
 # ahead of the problem rather than behind a bug report.
 # 3.13: the version releases are built against (conda base).
-# 3.14: GUI-tested by Art 2026-08-24 on 0.1.4.15-u1 -- launch, mmCIF read, EDS
+# 3.14: GUI-tested 2026-08-24 on 0.1.4.15-u1 -- launch, mmCIF read, EDS
 #       fetch of 2GEW + map, Sphere Refine with undo, and pandda.inspect on a
 #       PanDDA output folder all behaved normally.
 BANDICOOT_TESTED_PYTHON="${BANDICOOT_TESTED_PYTHON:-3.13 3.14}"
@@ -376,7 +376,7 @@ echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time
 # stays inert and pandda.inspect can't launch — see
 # [[bandicoot-coot-py-broken]] for the full backstory.
 
-# EVERY BUILD RECOMPILES FROM CLEAN (Art, 2026-08-14). Slower is fine; a build
+# EVERY BUILD RECOMPILES FROM CLEAN (2026-08-14). Slower is fine; a build
 # that might be part-stale is not.
 #
 # Two ways this has already cost real time:
@@ -584,7 +584,7 @@ fi
 # (and shrinks the binaries) while keeping the exported symbols dylibs need.
 # MUST run before codesign (stripping invalidates signatures; codesign re-signs).
 #
-# NIGHTLIES ARE STRIPPED TOO (Art, 2026-08-14). A nightly is a user-facing
+# NIGHTLIES ARE STRIPPED TOO (2026-08-14). A nightly is a user-facing
 # artifact, so it must not carry the builder's home path -- measured on an
 # unstripped 0.2 install: 46 of 271 Mach-O files held /Users/<builder>, 487
 # N_OSO stabs in total. Note strings(1) reports ZERO on those same files; only

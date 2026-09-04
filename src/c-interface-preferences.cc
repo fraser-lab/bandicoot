@@ -696,7 +696,7 @@ static void bandicoot_save_ligand_behaviour() {
 }
 
 // GREY OUT rather than hide the dependent setting when it cannot apply.
-// Art's rule from the SHELX save options (2026-08-26): manipulate the widget
+// The rule from the SHELX save options (2026-08-26): manipulate the widget
 // "so the user will know it's a moot point". Hiding it would also make the
 // dialog jump about as the answer above it changes.
 static void bcoot_lig_update_sensitivity() {
@@ -855,12 +855,12 @@ static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
       gtk_box_pack_start(GTK_BOX(page), uf, FALSE, FALSE, 0);
    }
 
-   // Renamed from "Ligands" to "PanDDA" (Art, 2026-09-02): everything on this
+   // Renamed from "Ligands" to "PanDDA" (2026-09-02): everything on this
    // tab is PanDDA project configuration, and "Ligands" now names the tab that
    // governs what a load does about ligands generally.
    //
-   // The config file was renamed to bandicoot-pandda at the same time (Art,
-   // 2026-09-02): "bandicoot-ligands" was misleading for PanDDA project paths.
+   // The config file was renamed to bandicoot-pandda at the same time
+   // (2026-09-02): "bandicoot-ligands" was misleading for PanDDA project paths.
    // This DOES orphan any previously-saved paths -- accepted deliberately,
    // since the only user so far is the developer. Anyone affected just sets
    // the directory again.

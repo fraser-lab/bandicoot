@@ -102,7 +102,7 @@ namespace coot {
       //
       // WHY: restraints are global and keyed by comp id, so "unused" has to
       // mean unused in the whole session, not in one molecule. Asking a single
-      // molecule was a real bug (Art, 2026-09-01): two different models were
+      // molecule was a real bug (2026-09-01): two different models were
       // loaded, each was independently renamed against its own free list, and
       // both came out holding "01" and "02" for chemically different ligands.
       // The rename meant to prevent collisions created one.
@@ -254,7 +254,7 @@ namespace coot {
       // LIG.cif no longer matches anything. The dictionary is then bound to
       // nothing at all.
       //
-      // NOTE: THAT IS THE BETTER FAILURE, and the reason is worth keeping: Art,
+      // NOTE: THAT IS THE BETTER FAILURE, and the reason is worth keeping:
       // 2026-08-31 -- "sometimes binding to nothing is better than binding to
       // the wrong thing. This way, I noticed the problem." A dictionary bound
       // to the wrong ligand is silently wrong; one bound to nothing announces
@@ -278,7 +278,7 @@ namespace coot {
       //
       // May legitimately return more than one: two components that a dictionary
       // matches equally well are chemically indistinguishable, and are
-      // therefore very likely the same molecule under two names. Art's ruling,
+      // therefore very likely the same molecule under two names. Ruled
       // 2026-08-31: apply it to all of them.
       std::vector<std::string>
       comp_ids_matching_dictionary(mmdb::Manager *mol,

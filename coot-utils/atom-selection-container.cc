@@ -191,7 +191,7 @@ get_atom_selection(std::string pdb_name,
           // corpus, so running them here would test something other than what
           // was validated.
           //
-          // This also RETIRES the GitHub #9 _struct_ncs_oper workaround (Art,
+          // This also RETIRES the GitHub #9 _struct_ncs_oper workaround (
           // 2026-08-10). mmdb2 cannot read a coordinate CIF containing that
           // category -- phenix.refine writes it whenever NCS restraints were
           // used -- so Bandicoot used to rewrite the file without it and retry.

@@ -227,7 +227,7 @@ gemmi normalises to `CL` (trap B10). Chain C's two are the same SC1 pair, whose 
 hydrogen-bond connections PDB cannot carry (trap C2). **A new unattributed line is the
 signal.**
 
-**It earned its place a third time the same day**, after Art tested the fix below and found
+**It earned its place a third time the same day**, after GUI testing of the fix below found
 the half it could not see: `GetResolution()` reads only REMARK 2, which phenix PDB output does
 not write, so a phenix PDB still converted to an mmCIF with no resolution while every wwPDB
 one now kept it. The check that replaced it is a **post-condition against the input file**,

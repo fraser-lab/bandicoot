@@ -168,35 +168,18 @@ static gboolean bandicoot_pandda_idle_open(gpointer data) {
 }
 #endif
 
-// ---------------------------------------------------------------------------
-// BANDICOOT v0.2 (2026-09-01): make Ctrl-C in the launching terminal actually
-// shut Bandicoot down.
+// Bandicoot v0.2 (2026-09-01): make Ctrl-C shut Bandicoot down.
 //
-// WHY IT DID NOTHING BEFORE. setup_python() calls plain Py_Initialize(), which
-// installs Python's SIGINT handler. That handler does not raise anything: it
-// sets a flag which the BYTECODE EVAL LOOP checks between instructions.
-// gtk_main() is C and never returns to that loop, so while the GUI sits idle
-// the flag is set and never read. Nothing in src/ installed a handler of its
-// own, so Ctrl-C was swallowed whole. (Confirmed on a standalone
-// CPython + gtk_main() reproduction, not inferred.)
+// It previously did nothing: initialising the embedded interpreter installs a
+// SIGINT handler that only sets a flag for the bytecode loop, and the GTK main
+// loop never returns there. A real signal handler cannot be used either, since
+// almost nothing is legal in async context. glib's unix signal source defers
+// the callback to the main loop, where the exit path is safe.
 //
-// WHY g_unix_signal_add AND NOT signal(2) DIRECTLY. A real signal handler runs
-// in async context, where almost nothing is legal -- certainly not GTK, not
-// malloc, and not Coot's exit path. g_unix_signal_add defers the callback to
-// the main loop, where all of that is safe again. glib is 2.86 here and
-// glib-unix.h is present.
-//
-// WARNING: THE SECOND Ctrl-C CANNOT BE ANOTHER MAIN-LOOP CALLBACK, and this is the
-// part that is easy to get wrong. The whole point of a second Ctrl-C is to
-// escape a shutdown that has wedged -- and coot_save_state_and_exit() really
-// can wedge: it spins on graphics_info_t::restraints_lock waiting for a
-// refinement to finish. But a wedged stage 1 is OCCUPYING the main loop, so a
-// second glib callback would never be dispatched. Measured: written that way,
-// the second Ctrl-C does nothing at all.
-//
-// So stage 2 is a genuine async handler, installed by stage 1 BEFORE it starts
-// the slow part, and it does only what is async-signal-safe: write(2) and
-// _exit(2).
+// A second interrupt cannot be another main-loop callback: the point of it is
+// to escape a shutdown that has wedged, and a wedged first handler is
+// occupying the loop the second would be dispatched from. Stage two is
+// therefore a genuine async handler doing only what is async-signal-safe.
 // ---------------------------------------------------------------------------
 #ifndef _WIN32
 #include <glib-unix.h>
@@ -712,20 +695,13 @@ main (int argc, char *argv[]) {
    // Ctrl-C, and `kill` / Activity Monitor's Quit, now shut Bandicoot down.
    // See the note above bandicoot_signal_quit().
    //
-   // WARNING: IT MUST GO AFTER setup_python(), BECAUSE Py_Initialize() INSTALLS ITS
-   // OWN SIGINT HANDLER and would overwrite ours. And it wants to be as soon
-   // after as possible: startup is not instant -- loading the python modules
-   // and the monomer library takes seconds -- and every one of those seconds
-   // before this line is a second in which Ctrl-C does the old, useless thing.
-   // (Measured: an interrupt 14 s into startup landed on Python's handler,
-   // printed a KeyboardInterrupt traceback, and left the app running.)
+   // Must go after the interpreter is initialised, which installs its own
+   // handler, and as soon after as possible: startup takes seconds and Ctrl-C
+   // is inert until this runs.
    //
-   // WARNING: GRAPHICS PATH ONLY, DELIBERATELY. This replaces Python's SIGINT
-   // handler, and on --no-graphics that handler is the one thing that works:
-   // there is no gtk_main there, the eval loop IS running, and Ctrl-C
-   // correctly raises KeyboardInterrupt in a running script (measured).
-   // Installing ours everywhere would take that away to fix a problem the
-   // scripting path does not have.
+   // Graphics path only. Without a GUI there is no GTK loop, the bytecode loop
+   // IS running, and the interpreter's own handler correctly interrupts a
+   // running script.
    if (graphics_info_t::use_graphics_interface_flag) {
       g_unix_signal_add(SIGINT,  bandicoot_signal_quit, NULL);
       g_unix_signal_add(SIGTERM, bandicoot_signal_quit, NULL);

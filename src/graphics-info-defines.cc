@@ -1916,7 +1916,7 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	 // Open in the directory the user last saved into, the same one Save
 	 // Coordinates uses. Without this the symmetry save starts wherever the
 	 // process happens to be, because it never went through
-	 // set_file_for_save_fileselection() -- Art reported it landing in a
+	 // set_file_for_save_fileselection() -- reported as landing in a
 	 // different folder from the plain save, 2026-08-26. A symmetry mate almost
 	 // always wants to sit beside the model it came from.
 	 if (graphics_info_t::gtk2_file_chooser_selector_flag == coot::CHOOSER_STYLE) {

@@ -124,7 +124,7 @@ void single_map_properties_apply_contour_level_to_map(GtkWidget *w) {
 //
 // Laid out to match the PDB header browser above it -- a titled frame per
 // category, all of them open, the window scrolling -- because to most users a
-// structure is a structure and the format is an implementation detail (Art,
+// structure is a structure and the format is an implementation detail (
 // 2026-08-17). What differs is deliberate: mmCIF values keep their own mixed
 // case, which is easier to read than PDB's all-caps, while the title is
 // upper-cased to match.

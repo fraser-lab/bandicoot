@@ -105,7 +105,7 @@ static void normalise_link_atom_names(mmdb::Manager *mol) {
 // structure and the reflections it was refined against, in one file. Such a file
 // is coordinates that happen to carry other things, not an ambiguous case.
 //
-// WARNING: BOTH TAG DIALECTS MUST BE TESTED, and getting this wrong is what Art hit on
+// WARNING: BOTH TAG DIALECTS MUST BE TESTED, and getting this wrong is what was hit on
 // 2026-08-19 (build -u65): a dropped small-molecule CIF was reported as
 // unclassifiable. The two dialects spell the SAME categories differently --
 // mmCIF/PDBx separates category from item with a DOT (`_atom_site.Cartn_x`,
@@ -393,7 +393,7 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
       // (see mmcif-document.hh). So label_asym_id / label_entity_id /
       // label_seq_id have to be carried across in a side table or they are
       // gone the moment copy_to_mmdb runs, and the written file gets nulls --
-      // which is what Art found in GUI testing on 2026-08-12.
+      // which is what GUI testing found on 2026-08-12.
       //
       // Done here, before setup_entities() and merge_chain_parts(), so what is
       // captured is unambiguously the FILE's own values. (setup_entities calls
@@ -549,7 +549,7 @@ coot::read_coords_with_gemmi(const std::string &file_name, std::string *message,
       //
       // Measured on 3K0N.cif: 1518 atoms with non-zero U (matching the file's
       // 1518 _atom_site_anisotrop rows), 1518 with ASET_Anis_tFSigma, and ZERO
-      // with ASET_Anis_tFac. Consequence, found by Art comparing a converted
+      // with ASET_Anis_tFac. Consequence, found by comparing a converted
       // file against the deposition: mmCIF -> PDB wrote 0 ANISOU records where
       // the deposited PDB has 1518.
       //
