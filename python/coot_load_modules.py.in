@@ -65,7 +65,7 @@ try:
     sys.modules.setdefault('ConfigParser', _bandicoot_configparser)
 except ImportError:
     pass
-# v0.1.0.2: Py2's `commands` module → Py3's `subprocess.getoutput`/`getstatusoutput`
+# v0.1.0.2: Py2's `commands` module -> Py3's `subprocess.getoutput`/`getstatusoutput`
 # live on `subprocess`. coot_utils.find_exe() does `import commands; commands.getoutput`.
 try:
     import subprocess as _bandicoot_subprocess
@@ -303,6 +303,9 @@ pre_list = [
     "clear_backup.py",
     "3d_generator_import.py",
     "dictionary_generators.py",
+    "bandicoot_restraints.py",  # elbow-based restraint generation for ligands
+                                # with no dictionary; defines only functions,
+                                # so loading it early has no side effects.
     "jligand.py",
     "americanisms.py",
     "group_settings.py",

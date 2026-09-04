@@ -1,7 +1,7 @@
 #!/bin/bash
 # Verify the shipped splash PNG shows the release version number.
 #
-# Art hand-edits pixmaps/bandicoot-splash.png with each version's number (e.g.
+# The splash PNG is hand-edited with each version's number (e.g.
 # "v0.1.4.10"). Nothing else enforces that it was actually bumped, so a stale
 # splash (still "v0.1.4.9" while releasing 0.1.4.10) can ship unnoticed. The
 # version lives as PIXELS in the PNG, so this OCRs it and fails the release if

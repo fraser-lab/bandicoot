@@ -14,6 +14,12 @@
 #     <releases>/<version>/bandicoot-<version>-darwin-<arch>.tar.gz
 #     <releases>/<version>/bandicoot-<version>-darwin-<arch>.tar.gz.sha256
 #
+# For a pseudo-nightly instead, build with BANDICOOT_NIGHTLY=1; the tarball is
+# then named bandicoot-<version>-<commit>-darwin-<arch>.tar.gz (and unpacks to
+# a matching directory), so the build a user reports against is unambiguous.
+# Either way packaging refuses a dirty or unpushed tree — see the provenance
+# gate below.
+#
 # The end user unpacks the tarball and runs the bundled setup.sh (ad-hoc
 # codesign + gdk-pixbuf loaders.cache + Spotlight registration).
 #
@@ -38,7 +44,33 @@ fi
 
 INSTALL="${PREFIX:-$HOME/sw/bandicoot-install}"
 ARCH="$(uname -m)"                       # arm64 on Apple Silicon
-NAME="bandicoot-${VERSION}"
+
+# --- build kind, from the suffix build.sh baked into the binary -------------
+# "" = milestone release, "-<commit>" = nightly, "-u<N>" = local dev build.
+# A nightly carries its commit into the tarball name so a user's bug report
+# maps straight to a commit; "-u<N>" is machine-local counter state and must
+# never reach a filename someone else sees.
+BUILD_ID_H="$REPO/src/bandicoot-build-id.h"
+SUFFIX=""
+if [ -f "$BUILD_ID_H" ]; then
+    SUFFIX="$(awk -F'"' '/BANDICOOT_BUILD_SUFFIX/ {print $2}' "$BUILD_ID_H")"
+fi
+case "${SUFFIX:-}" in
+    "")
+        NAME="bandicoot-${VERSION}"
+        ;;
+    -u[0-9]*)
+        echo "package.sh: WARNING — build suffix is '${SUFFIX}', so this is a DEV build."
+        echo "            For a milestone release run: BANDICOOT_RELEASE=1 ./scripts/build.sh"
+        echo "            For a nightly run:           BANDICOOT_NIGHTLY=1 ./scripts/build.sh"
+        NAME="bandicoot-${VERSION}"
+        ;;
+    *)
+        echo "package.sh: nightly build (commit ${SUFFIX#-}); tarball carries the commit."
+        NAME="bandicoot-${VERSION}${SUFFIX}"
+        ;;
+esac
+
 TARBASE="${NAME}-darwin-${ARCH}"
 OUTDIR="${OUT:-$(dirname "$REPO")/releases/${VERSION}}"
 TARBALL="${OUTDIR}/${TARBASE}.tar.gz"
@@ -49,6 +81,25 @@ if [ ! -d "$INSTALL" ] || [ ! -x "$INSTALL/setup.sh" ]; then
     echo "            Run scripts/build.sh first, or set PREFIX." >&2
     exit 1
 fi
+
+# --- pre-ship provenance gate ----------------------------------------------
+# Order of operations is commit -> push -> package. A tarball built from a
+# dirty or unpushed tree cannot be traced back to source, and with releases
+# hand-rolled there is no CI to notice. Refused rather than warned; override
+# with BANDICOOT_ALLOW_DIRTY=1 (deliberately NOT folded into
+# PACKAGE_SKIP_CHECKS, which is about the bundling gates below).
+echo "==> pre-ship gate: clean, pushed tree"
+"$SCRIPT_DIR/check_clean_tree.sh" "a release tarball"
+
+# Same provenance argument, one layer down: a clean tree still ships the wrong
+# thing if ./configure was generated from a DIFFERENT configure.ac than the one
+# committed. That is invisible to check_clean_tree.sh -- the tree is clean, the
+# generated files are simply out of date with it. build.sh bootstraps
+# automatically now, so this only fires when a tarball is cut from a tree where
+# make was driven by hand; it is cheap and the failure mode it guards against
+# (v0.2 sources compiled at -std=c++14, 2026-08-25) was completely silent.
+echo "==> pre-ship gate: build system current with configure.ac"
+"$SCRIPT_DIR/check_build_system_fresh.sh"
 
 # --- pre-ship dependency gates ---------------------------------------------
 # These catch the class of bug that shipped v0.1.4.2..v0.1.4.8 with a broken
@@ -119,17 +170,7 @@ if [ "${PACKAGE_SKIP_CHECKS:-0}" != "1" ]; then
     fi
 fi
 
-# Warn (don't fail) if this looks like a dev build rather than a release one.
-BUILD_ID_H="$REPO/src/bandicoot-build-id.h"
-if [ -f "$BUILD_ID_H" ]; then
-    SUFFIX="$(awk -F'"' '/BANDICOOT_BUILD_SUFFIX/ {print $2}' "$BUILD_ID_H")"
-    if [ -n "${SUFFIX:-}" ]; then
-        echo "package.sh: WARNING — build suffix is '${SUFFIX}', so this is a DEV build."
-        echo "            For a clean release run: BANDICOOT_RELEASE=1 ./scripts/build.sh"
-    fi
-fi
-
-echo "==> packaging Bandicoot ${VERSION} (${ARCH})"
+echo "==> packaging Bandicoot ${VERSION}${SUFFIX} (${ARCH})"
 echo "    install : ${INSTALL}"
 echo "    tarball : ${TARBALL}"
 mkdir -p "$OUTDIR"

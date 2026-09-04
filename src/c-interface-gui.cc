@@ -2504,18 +2504,18 @@ GtkWidget *coot_save_state_chooser() {
    return w;
 }
 
-GtkWidget *coot_save_symmetry_chooser() {
+/* BANDICOOT v0.2, 2026-08-26: coot_save_symmetry_chooser() REMOVED -- the symmetry
+   save now uses the SAME chooser as the plain save (src/save-coords-gui.cc).
 
-   GtkWidget *w;
-
-   if (graphics_info_t::gtk2_file_chooser_selector_flag == coot::OLD_STYLE) {
-      w = create_save_symmetry_coords_fileselection();
-   } else {
-      w = create_save_symmetry_coords_filechooserdialog1();
-      gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER (w), TRUE);
-   }
-   return w;
-}
+   NOTE what could NOT be removed with it, and why. The glade widgets
+   save_symmetry_coords_filechooserdialog1 / save_symmetry_coords_fileselection,
+   their create_*() in the TRACKED 1.6 MB gtk2-interface.c, the six
+   on_save_symmetry_coords_* handlers in callbacks.c, and
+   save_symmetry_coords_from_fileselection() below form ONE CONNECTED COMPONENT:
+   gtk2-interface.c names the handlers by SYMBOL, resolved at compile time, so
+   deleting any part alone breaks the build. (Tried 2026-08-26; six undeclared-
+   identifier errors.) Retiring them means editing the glade file and
+   gtk2-interface.c together, as one deliberate pass. */
 
 GtkWidget *coot_screendump_chooser() {
 
@@ -4927,52 +4927,10 @@ GtkWidget *wrapped_create_skeleton_dialog() {
 }
 
 
-void save_coordinates_using_widget(GtkWidget *widget) {
+/* BANDICOOT v0.2, 2026-08-26: save_coordinates_using_widget() REMOVED --
+   superseded by coot_save_coords_chooser_execute() in save-coords-gui.cc, which
+   serves both the plain and the symmetry save. Had no callers. */
 
-   // the widget that we get passed is the filechooser dialog
-   // the data was set in on_save_coords_dialog_save_button_clicked.
-
-   {
-
-      gpointer data = g_object_get_data(G_OBJECT(widget), "imol");
-      int imol = GPOINTER_TO_INT(data);
-      bool save_hydrogens = 1;
-      bool save_aniso_records = 1;
-
-      // get the filename?
-
-      const gchar *filename;
-      GtkWidget *chk_but = lookup_widget(GTK_WIDGET(widget), "checkbutton_hydrogens");
-      if (! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chk_but)))
-	 save_hydrogens = 0;
-      chk_but = lookup_widget(GTK_WIDGET(widget), "checkbutton_aniso");
-      if (! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chk_but)))
-	 save_aniso_records = 0;
-
-      if (graphics_info_t::gtk2_file_chooser_selector_flag == coot::CHOOSER_STYLE)  {
-	 filename = gtk_file_chooser_get_filename
-	    (GTK_FILE_CHOOSER(widget));
-      } else {
-	 filename = gtk_file_selection_get_filename
-	    (GTK_FILE_SELECTION(widget));
-      }
-
-      std::cout << "INFO:: save coordinates for molecule "
-		<< imol << " to file " << filename << std::endl;
-
-      graphics_info_t g;
-      if (is_valid_model_molecule(imol)) {
-         int save_conect_records = g.write_conect_records_flag;
-	 int ierr = g.molecules[imol].save_coordinates(filename, save_hydrogens, save_aniso_records, save_conect_records);
-	 if (! ierr) {
-	    std::string s = "Saved coordinates file ";
-	    s += filename;
-	    s += ".";
-	    g.add_status_bar_text(s);
-	 }
-      }
-   }
-}
 
 void save_symmetry_coords_from_fileselection(GtkWidget *fileselection) {
 

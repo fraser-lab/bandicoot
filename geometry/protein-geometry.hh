@@ -1754,6 +1754,42 @@ namespace coot {
                                                                      // 20161004 we also need to match
                                                                      // imols before deletion occurs
 
+      // BANDICOOT v0.2: rename a loaded dictionary's comp id in place.
+      //
+      // Restraints are keyed by comp id, so renaming a ligand's residues in the
+      // coordinates without renaming its dictionary orphans the restraints --
+      // refinement then refuses the ligand exactly as if it had none. The two
+      // renames belong together.
+      //
+      // This is cheap because the comp id is held in ONE place: the restraint
+      // vectors (bond, angle, torsion, chiral, plane) name their atoms and
+      // carry no comp id, and dict_res_restraints is a flat vector rather than
+      // a keyed map, so there is no key to re-index.
+      //
+      // Renames the entry only if new_comp_id is not already taken at imol_enc:
+      // creating a second entry for one comp id is the very collision this is
+      // here to repair. Returns true if a dictionary was renamed.
+      bool rename_comp_id(const std::string &old_comp_id,
+                          const std::string &new_comp_id,
+                          int imol_enc);
+
+      // BANDICOOT v0.2: copy a loaded dictionary to a second comp id, leaving
+      // the original in place.
+      //
+      // Needed because one restraints CIF can legitimately describe several
+      // components at once: after distinct molecules sharing a placeholder name
+      // are renamed apart, a dictionary may match more than one of the results,
+      // and components a dictionary matches equally well are chemically
+      // indistinguishable. Restraints are keyed by comp id, so serving all of
+      // them means an entry per comp id -- renaming the single entry would pick
+      // one arbitrarily and leave the rest unrestrained.
+      //
+      // Does nothing if new_comp_id already has an entry at this scope.
+      // Returns true if a copy was made.
+      bool duplicate_comp_id(const std::string &from_comp_id,
+                             const std::string &to_comp_id,
+                             int imol_enc);
+
       // return a pair, the first is status (1 if the name was found, 0 if not)
       // 
       std::pair<bool, std::string> get_monomer_name(const std::string &comp_id, int imol_enc) const;

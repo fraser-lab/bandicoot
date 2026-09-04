@@ -421,6 +421,11 @@ void sort_residues(int imol);
 /*! \brief a gui dialog showing remarks header info (for a model molecule). */
 void remarks_dialog(int imol);
 
+/*! \brief the header browser for an mmCIF molecule: every category the file
+    actually contains, rather than a fixed set of panels. Called by
+    remarks_dialog() when the molecule has a retained mmCIF document. */
+void mmcif_header_dialog(int imol);
+
 /*! \brief simply print secondary structure info to the
   terminal/console.  In future, this could/should return the info.  */
 void print_header_secondary_structure_info(int imol);
@@ -3813,6 +3818,24 @@ int fix_nomenclature_errors(int imol);
   mode should be "auto-correct", "ignore", "prompt".  The
   default is "prompt" */
 void set_nomenclature_errors_on_read(const char *mode);
+
+/*! \brief show the ligand-restraint warning dialogs on reading coordinates?
+
+  These fire per coordinate load: components with no restraints, a component id
+  naming more than one molecule, and a dictionary that does not describe the
+  atoms it would be applied to.
+
+  Set to 0 when stepping through many ligand-bearing structures in a row --
+  pandda.inspect and similar -- where a dialog per structure becomes a stack to
+  dismiss rather than a warning worth reading. The default is 1.
+
+  Turning them off does NOT silence the reporting: the same detail still goes to
+  stdout, so a batch run still leaves a record of what was wrong with what. */
+void set_show_ligand_restraint_warnings(int state);
+
+/*! \brief are the ligand-restraint warning dialogs shown on reading
+  coordinates? */
+int show_ligand_restraint_warnings_state();
 
 /* \} */
 

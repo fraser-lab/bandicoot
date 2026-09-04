@@ -34,6 +34,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <set>
 #include <algorithm>
 
 #define HAVE_CIF  // will become unnessary at some stage.
@@ -85,6 +86,9 @@
 #include "guile-fixups.h"
 
 
+#include "coot-utils/gemmi-coords.hh"   // classify_cif_file()
+#include "coot-utils/comp-id-collision.hh" // two chemistries under one comp id
+#include "geometry/dict-utils.hh"          // comp_ids_in_dictionary_cif()
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
 #include "cc-interface.hh"
@@ -95,6 +99,7 @@
 #include "cmtz-interface.hh" // for valid columns mtz_column_types_info_t
 #include "c-interface-mmdb.hh"
 #include "c-interface-scm.hh"
+#include "restraints-gui.hh"   // bandicoot_import_restraints_sweep()
 #include "c-interface-python.hh"
 
 #ifdef USE_DUNBRACK_ROTAMERS
@@ -3690,19 +3695,81 @@ merge_molecules_by_vector(const std::vector<int> &add_molecules, int imol) {
 
    std::pair<int, std::vector<merge_molecule_results_info_t> >  merged_info;
    
+   // The molecules being merged in are hidden once the merge is known to be
+   // going ahead -- NOT here. The collision check below can refuse, and hiding
+   // first would mean either leaving them invisible after a merge that never
+   // happened or guessing at the visibility they had before.
    std::vector<atom_selection_container_t> add_molecules_at_sels;
-   if (is_valid_model_molecule(imol)) { 
+   std::vector<int> molecules_to_hide;
+   if (is_valid_model_molecule(imol)) {
       for (unsigned int i=0; i<add_molecules.size(); i++) {
-	 if (is_valid_model_molecule(add_molecules[i])) { 
-	    if (add_molecules[i] != imol) { 
+	 if (is_valid_model_molecule(add_molecules[i])) {
+	    if (add_molecules[i] != imol) {
 	       add_molecules_at_sels.push_back(graphics_info_t::molecules[add_molecules[i]].atom_sel);
-	       set_mol_displayed(add_molecules[i], 0);
-	       set_mol_active(add_molecules[i], 0);
+	       molecules_to_hide.push_back(add_molecules[i]);
 	    }
 	 }
       }
    }
-   if (add_molecules_at_sels.size() > 0) { 
+   // BANDICOOT v0.2: refuse a merge that would put two different chemistries
+   // under one comp id.
+   //
+   // Restraints are global and keyed by comp id, so after such a merge the
+   // dictionary can only describe one of the two molecules -- and which one it
+   // describes depends on the order they were merged in, not on anything the
+   // user chose. Seen in the wild with two chemically different ligands both
+   // called LIG: only the one merged second refined, the other gave an atom
+   // mismatch. It is cheap to detect beforehand and impossible to diagnose
+   // afterwards, so this stops rather than warns.
+   if (add_molecules_at_sels.size() > 0) {
+      std::vector<coot::comp_id_collision::collision_t> clashes;
+      mmdb::Manager *target_mol = graphics_info_t::molecules[imol].atom_sel.mol;
+      for (unsigned int i=0; i<add_molecules_at_sels.size(); i++) {
+	 std::vector<coot::comp_id_collision::collision_t> c =
+	    coot::comp_id_collision::find_collisions_between(target_mol,
+							     add_molecules_at_sels[i].mol);
+	 clashes.insert(clashes.end(), c.begin(), c.end());
+	 // and the incoming molecules against each other
+	 for (unsigned int j=i+1; j<add_molecules_at_sels.size(); j++) {
+	    std::vector<coot::comp_id_collision::collision_t> c2 =
+	       coot::comp_id_collision::find_collisions_between(add_molecules_at_sels[i].mol,
+								add_molecules_at_sels[j].mol);
+	    clashes.insert(clashes.end(), c2.begin(), c2.end());
+	 }
+      }
+
+      if (! clashes.empty()) {
+
+	 // Detail to stdout, where it can be read at length and pasted into a
+	 // report; the dialog says what happened and what to do about it.
+	 std::cout << "WARNING:: merge refused: a component id would describe more "
+		   << "than one chemistry" << std::endl;
+	 std::string m = "Merge not done.\n\nThese component ids would name two\n"
+	                 "different molecules at once:\n\n";
+	 std::set<std::string> named;
+	 for (unsigned int i=0; i<clashes.size(); i++) {
+	    std::cout << "WARNING:: " << clashes[i].message() << std::endl;
+	    if (named.find(clashes[i].comp_id) == named.end()) {
+	       named.insert(clashes[i].comp_id);
+	       m += "    " + clashes[i].comp_id + "\n";
+	    }
+	 }
+	 m += "\nRestraints are stored by component id, so only one of\n"
+	      "them could be refined. Rename one and merge again.";
+
+	 // Nothing has been hidden or modified at this point, so refusing needs
+	 // no undo: the molecules are exactly as the user left them.
+	 if (graphics_info_t::use_graphics_interface_flag)
+	    info_dialog(m.c_str());
+	 return merged_info;
+      }
+   }
+
+   if (add_molecules_at_sels.size() > 0) {
+      for (unsigned int i=0; i<molecules_to_hide.size(); i++) {
+	 set_mol_displayed(molecules_to_hide[i], 0);
+	 set_mol_active(molecules_to_hide[i], 0);
+      }
       merged_info = graphics_info_t::molecules[imol].merge_molecules(add_molecules_at_sels);
    }
 
@@ -3912,6 +3979,14 @@ void set_nomenclature_errors_on_read(const char *mode) {
    if (m == "prompt")
       graphics_info_t::nomenclature_errors_mode = coot::PROMPT;
 
+}
+
+void set_show_ligand_restraint_warnings(int state) {
+   graphics_info_t::show_ligand_restraint_warnings_flag = state ? 1 : 0;
+}
+
+int show_ligand_restraint_warnings_state() {
+   return graphics_info_t::show_ligand_restraint_warnings_flag;
 }
 
 
@@ -5330,8 +5405,13 @@ float residue_density_fit_scale_factor() {
 // dictionary
 int handle_cif_dictionary(const char *filename) {
 
+   // AUTO, not ANY (Bandicoot v0.2, 2026-09-03): a dropped dictionary now goes
+   // through the same sweep as Auto on the Import CIF dictionary dialog, and is
+   // applied scoped to every molecule it fits. Reading it globally would leave
+   // it losing to any generated dictionary, because the lookup prefers an
+   // exact-scope match. See bandicoot_import_restraints_sweep().
    short int new_molecule_flag = 0; // no
-   return handle_cif_dictionary_for_molecule(filename, coot::protein_geometry::IMOL_ENC_ANY,
+   return handle_cif_dictionary_for_molecule(filename, coot::protein_geometry::IMOL_ENC_AUTO,
 					     new_molecule_flag);
 }
 
@@ -5347,6 +5427,57 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 				       short int new_molecule_from_dictionary_cif_checkbutton_state) {
 
    graphics_info_t g;
+
+   // BANDICOOT v0.2: refuse a file that is not actually a dictionary.
+   //
+   // Reading a COORDINATE mmCIF as a dictionary is catastrophic and silent:
+   // every wwPDB coordinate file carries a _chem_comp loop naming its
+   // components, so parsing one deletes the monomer-library entry for ALA,
+   // GLY, VAL... and replaces it from the file's _chem_comp_bond -- which is
+   // connectivity only, with no value_dist. Every bond restraint then throws
+   // "unset target distance", real-space refinement makes ZERO restraints, and
+   // because these are registered at IMOL_ENC_ANY it happens for every molecule
+   // in the session until Bandicoot is restarted. Nothing is reported.
+   //
+   // The user asked for a dictionary here, so the honest answer is to say the
+   // file is not one, rather than half-read it and break refinement.
+   {
+      std::string fn = coot::util::intelligent_debackslash(filename);
+      if (coot::gemmi_handles_file(fn)) {   // .cif / .mmcif / .mcif, maybe .gz
+	 coot::cif_flavour_t flav = coot::classify_cif_file(fn);
+	 if (flav != coot::cif_flavour_t::restraints &&
+	     flav != coot::cif_flavour_t::unknown) {
+	    std::string m = fn;
+	    m += " is not a mmCIF dictionary!";
+	    if (flav == coot::cif_flavour_t::coordinates)
+	       m += "\n\nIt contains coordinates. Use Open Coordinates to read it.";
+	    else
+	       m += "\n\nIt contains structure factors, not restraints.";
+	    std::cout << "WARNING:: " << m << std::endl;
+	    if (graphics_info_t::use_graphics_interface_flag)
+	       info_dialog(m.c_str());
+	    return -1;
+	 }
+      }
+   }
+
+   // BANDICOOT v0.2 (2026-09-03): AUTO now SWEEPS.
+   //
+   // It used to pick the single highest-numbered molecule containing the comp
+   // id (or IMOL_ENC_ANY for anything not on the non-auto-load list, which
+   // includes our renamed 01/02...). Since generated restraints are stored per
+   // molecule, a global import LOSES to them -- the lookup prefers an exact
+   // scope -- so "import your own restraints" quietly stopped working. The
+   // sweep applies the file scoped to every molecule it fits, which both
+   // reaches them all and supersedes properly.
+   //
+   // Placed after the not-a-dictionary guard above, so a coordinate file is
+   // still refused before any of this. No recursion: the sweep calls back with
+   // a real molecule number or IMOL_ENC_ANY, never AUTO.
+   if (imol_enc == coot::protein_geometry::IMOL_ENC_AUTO)
+      return bandicoot_import_restraints_sweep(
+                filename, new_molecule_from_dictionary_cif_checkbutton_state);
+
    short int show_dialog_flag = 0;
    if (graphics_info_t::use_graphics_interface_flag)
       show_dialog_flag = 1;
@@ -5387,6 +5518,153 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
       if (do_new_molecule)
 	 if (new_molecule_from_dictionary_cif_checkbutton_state)
 	    get_monomer_for_molecule_by_index(rmit.monomer_idx, imol_enc);
+   }
+
+   // BANDICOOT v0.2 (2026-08-31): the dictionary's comp id names nothing that
+   // is loaded -- can we find what it actually describes?
+   //
+   // The case this exists for: distinct molecules sharing a placeholder name
+   // have been renamed apart (LIG -> 01, 02), and the user's own LIG.cif now
+   // matches nothing. Renaming the coordinates orphaned their dictionaries, and
+   // the forced rename is what did it.
+   //
+   // A restraints CIF carries atom names and connectivity, so the right
+   // component can be found without trusting the CIF's own name.
+   if (rmit.success && ! rmit.comp_id.empty()) {
+
+      bool comp_id_is_present = false;
+      for (int im=0; im<graphics_info_t::n_molecules() && ! comp_id_is_present; im++)
+	 if (is_valid_model_molecule(im))
+	    if (! coot::comp_id_collision::residues_of_comp_id(g.molecules[im].atom_sel.mol,
+							      rmit.comp_id).empty())
+	       comp_id_is_present = true;
+
+      // Only when it matches nothing. If the comp id IS present, ordinary
+      // binding applies and second-guessing the user's file would be wrong.
+      if (! comp_id_is_present) {
+
+	 std::pair<bool, coot::dictionary_residue_restraints_t> dict =
+	    g.Geom_p()->get_monomer_restraints(rmit.comp_id, imol_enc);
+
+	 std::vector<std::string> matches;
+	 if (dict.first) {
+	    for (int im=0; im<graphics_info_t::n_molecules(); im++) {
+	       if (! is_valid_model_molecule(im)) continue;
+	       std::vector<std::string> m =
+		  coot::comp_id_collision::comp_ids_matching_dictionary(
+		     g.molecules[im].atom_sel.mol, dict.second);
+	       for (unsigned int k=0; k<m.size(); k++)
+		  if (std::find(matches.begin(), matches.end(), m[k]) == matches.end())
+		     matches.push_back(m[k]);
+	    }
+	 }
+
+	 std::string base = coot::util::file_name_non_directory(filename);
+
+	 if (matches.empty()) {
+	    std::string m = "No matching molecules found for\n" + base + "\n\n";
+	    m += "It describes \"" + rmit.comp_id + "\", which is not in any\n";
+	    m += "loaded molecule, and its atoms and bonds do not match\n";
+	    m += "anything that is.";
+	    std::cout << "WARNING:: no component matching " << base
+		      << " (\"" << rmit.comp_id << "\")" << std::endl;
+	    if (graphics_info_t::use_graphics_interface_flag)
+	       if (graphics_info_t::show_ligand_restraint_warnings_flag)
+		  info_dialog(m.c_str());
+	 } else {
+	    std::string names;
+	    for (unsigned int k=0; k<matches.size(); k++) {
+	       if (k) names += ", ";
+	       names += matches[k];
+	    }
+	    std::cout << "INFO:: " << base << " (\"" << rmit.comp_id
+		      << "\") matches: " << names << std::endl;
+
+	    std::string m = base + "\n\ndescribes \"" + rmit.comp_id
+	       + "\", which is not in any loaded molecule,\nbut its atoms and bonds match:\n\n    "
+	       + names + "\n\nApply the restraints to ";
+	    m += (matches.size() > 1) ? "them?" : "it?";
+
+	    bool apply = true;
+	    if (graphics_info_t::use_graphics_interface_flag)
+	       if (graphics_info_t::show_ligand_restraint_warnings_flag)
+		  apply = bandicoot_native_question_dialog(m.c_str());
+
+	    if (apply) {
+	       for (unsigned int k=0; k<matches.size(); k++)
+		  g.Geom_p()->duplicate_comp_id(rmit.comp_id, matches[k], imol_enc);
+	       // The entry under the file's own name serves nothing -- no loaded
+	       // molecule has that component -- and leaving it would collide with
+	       // a later structure that genuinely uses the name.
+	       g.Geom_p()->delete_mon_lib(rmit.comp_id, imol_enc);
+	       for (int im=0; im<graphics_info_t::n_molecules(); im++)
+		  if (is_valid_model_molecule(im))
+		     g.molecules[im].make_bonds_type_checked();
+	    } else {
+	       std::cout << "INFO:: not applied, at the user's request" << std::endl;
+	    }
+	 }
+      }
+   }
+
+   // BANDICOOT v0.2 (2026-08-31): does the dictionary just read actually
+   // describe the atoms it will be applied to?
+   //
+   // This is the same check the coordinate-load path makes, moved to where the
+   // ORIGINAL specification put it -- "after a dictionary resolves" -- rather
+   // than only at load time, which was a narrowing. A dictionary is far more
+   // often imported for a model already open than present when it is opened.
+   //
+   // NOTE: THE DIRECTION IS NOT SYMMETRIC, and this is why it matters:
+   //   * atoms in the MODEL with no entry in the dictionary get no bonded
+   //     restraints at all, so refinement pulls them with nothing holding them
+   //     and they fly apart. Measured in the GUI, 2026-08-31.
+   //   * atoms in the DICTIONARY with no counterpart in the model are
+   //     harmless - there is simply nothing to apply them to.
+   // So the test is model -> dictionary, and only that way round.
+   //
+   // Each molecule is asked with ITS OWN number, not IMOL_ENC_ANY, so what is
+   // reported is what that molecule will really be given: a dictionary stored
+   // against a different molecule's scope does not answer here, which is
+   // exactly the confusion worth surfacing.
+   if (rmit.success) {
+      std::vector<std::string> comp_ids =
+	 coot::comp_ids_in_dictionary_cif(coot::util::intelligent_debackslash(filename));
+
+      std::vector<std::string> reports;
+      for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+	 if (! is_valid_model_molecule(imol)) continue;
+	 for (unsigned int i=0; i<comp_ids.size(); i++) {
+	    coot::comp_id_collision::coverage_t cov =
+	       coot::comp_id_collision::dictionary_coverage(g.molecules[imol].atom_sel.mol,
+							    comp_ids[i], *g.Geom_p(), imol);
+	    // n_model_atoms is 0 when this molecule has no such component, or
+	    // when no dictionary answers for it -- neither is a coverage failure.
+	    if (cov.n_model_atoms > 0 && ! cov.covered()) {
+	       std::cout << "WARNING:: molecule " << imol << ": " << cov.message()
+			 << std::endl;
+	       std::string r = "    " + cov.comp_id + " in molecule "
+		  + coot::util::int_to_string(imol) + " ("
+		  + coot::util::int_to_string(cov.model_atoms_missing_from_dictionary.size())
+		  + " of " + coot::util::int_to_string(cov.n_model_atoms)
+		  + " atoms not described)";
+	       reports.push_back(r);
+	    }
+	 }
+      }
+
+      if (! reports.empty()) {
+	 std::string m = "This dictionary does not describe every atom it\n"
+	                 "would be applied to:\n\n";
+	 for (unsigned int i=0; i<reports.size(); i++)
+	    m += reports[i] + "\n";
+	 m += "\nAtoms with no entry in the dictionary get no restraints, and\n"
+	      "refinement will pull them apart. If two different molecules\n"
+	      "share one component id, rename one of them.";
+	 if (graphics_info_t::use_graphics_interface_flag)
+	    if (graphics_info_t::show_ligand_restraint_warnings_flag)
+	       info_dialog(m.c_str());
+      }
    }
 
    graphics_draw();
@@ -6121,4 +6399,149 @@ void res_tracer(int imol_map, const std::string &pir_file_name) {
    g_timeout_add(500, watching_timeout_func, watch_data_p);
 
    t.detach();
+}
+
+
+/* ------------------------------------------------------------------------ */
+/*        BANDICOOT v0.2: comp id collisions                                 */
+/* ------------------------------------------------------------------------ */
+
+/* Thin scripting glue. The logic is in coot-utils/comp-id-collision.hh, which
+   knows nothing about molecule numbers or graphics. */
+
+std::string comp_id_collision_message(int imol, const std::string &comp_id) {
+
+   std::string m;
+   if (! is_valid_model_molecule(imol)) return m;
+
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+
+   coot::comp_id_collision::collision_t c =
+      coot::comp_id_collision::find_collision(mol, comp_id);
+   if (c.ok())
+      m = c.message();
+
+   // NOTE: deliberately WITHIN this molecule only.
+   //
+   // A briefly-lived version (2026-09-01) also compared against every other
+   // loaded molecule, because restraints were global and generating for "LIG"
+   // here would overwrite the dictionary another molecule's differently-shaped
+   // "LIG" depended on. Generated restraints are now stored PER MOLECULE
+   // (see the scoped read in bandicoot_restraints.py), so that is no longer
+   // true: two loaded models can each have their own LIG, each with its own
+   // dictionary, and refinement finds the right one. Comparing across
+   // molecules now refuses a case that works perfectly well.
+   //
+   // What remains genuinely impossible is two different chemistries under one
+   // comp id INSIDE ONE MOLECULE -- the scope is the molecule, so it cannot
+   // separate them. That is what this still checks.
+   return m;
+}
+
+std::string dictionary_coverage_message(int imol, const std::string &comp_id) {
+
+   std::string m;
+   if (is_valid_model_molecule(imol)) {
+      graphics_info_t g;
+      // Ask with THIS MOLECULE'S OWN NUMBER, never IMOL_ENC_ANY.
+      //
+      // matches_imol() returns true when the STORED scope is IMOL_ENC_ANY, so a
+      // query made with the molecule number finds both the unscoped
+      // dictionaries and the ones scoped to it -- which is exactly what that
+      // molecule will really be given. Querying with IMOL_ENC_ANY instead finds
+      // only the unscoped ones and is blind to every molecule-scoped
+      // dictionary, which is what "Import CIF dictionary" produces for a
+      // placeholder comp id.
+      coot::comp_id_collision::coverage_t cov =
+	 coot::comp_id_collision::dictionary_coverage(g.molecules[imol].atom_sel.mol,
+						      comp_id, *g.Geom_p(), imol);
+      if (cov.n_model_atoms > 0 && ! cov.covered())
+	 m = cov.message();
+   }
+   return m;
+}
+
+std::string most_complete_residue_selection(int imol, const std::string &comp_id) {
+
+   std::string s;
+   if (is_valid_model_molecule(imol)) {
+      mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+      coot::comp_id_collision::residue_ref_t r =
+	 coot::comp_id_collision::most_complete_residue(mol, comp_id);
+      if (r.ok())
+	 s = r.atom_selection_string();
+   }
+   return s;
+}
+
+int is_reserved_placeholder_comp_id(const std::string &comp_id) {
+   return coot::comp_id_collision::is_reserved_placeholder(comp_id) ? 1 : 0;
+}
+
+std::string suggest_free_placeholder_comp_id(int imol) {
+
+   std::string s;
+   if (is_valid_model_molecule(imol)) {
+      // Every loaded molecule, not just imol: a code already used elsewhere in
+      // the session is not free, because the dictionary it would need is
+      // already spoken for. See the note on the overload in
+      // comp-id-collision.hh.
+      std::vector<mmdb::Manager *> mols;
+      for (int im=0; im<graphics_info_t::n_molecules(); im++)
+	 if (is_valid_model_molecule(im))
+	    if (graphics_info_t::molecules[im].atom_sel.mol)
+	       mols.push_back(graphics_info_t::molecules[im].atom_sel.mol);
+      std::vector<std::string> free_codes =
+	 coot::comp_id_collision::free_placeholder_codes(mols);
+      // Two-digit codes only, matching what the load-time rename hands out.
+      // LIG, DRG and INH are kept back for renaming by hand, and a bare
+      // number implies nothing about the chemistry -- which DRG and INH do,
+      // possibly untruthfully. 99 codes, all of them shapes the CCD will never
+      // issue (all 938 numeric CCD ids are three characters).
+      for (unsigned int i=0; i<free_codes.size(); i++) {
+	 if (free_codes[i].size() == 2) {
+	    s = free_codes[i];
+	    break;
+	 }
+      }
+   }
+   return s;
+}
+
+int rename_comp_id_with_dictionary(int imol, const std::string &old_comp_id,
+				   const std::string &new_comp_id) {
+
+   int n_renamed = 0;
+   if (! is_valid_model_molecule(imol)) return n_renamed;
+   if (old_comp_id.empty() || new_comp_id.empty()) return n_renamed;
+   if (old_comp_id == new_comp_id) return n_renamed;
+
+   graphics_info_t g;
+   mmdb::Manager *mol = g.molecules[imol].atom_sel.mol;
+
+   // Collect first, rename second: set_residue_name() modifies the residues we
+   // would otherwise be walking.
+   std::vector<coot::comp_id_collision::residue_ref_t> residues =
+      coot::comp_id_collision::residues_of_comp_id(mol, old_comp_id);
+
+   for (unsigned int i=0; i<residues.size(); i++) {
+      g.molecules[imol].set_residue_name(residues[i].chain_id,
+					 residues[i].res_no,
+					 residues[i].ins_code,
+					 new_comp_id);
+      n_renamed++;
+   }
+
+   // The dictionary has to follow the coordinates. Restraints are bound by comp
+   // id, so renaming residues alone would leave the ligand unrestrained -- the
+   // same state we are trying to get out of.
+   if (n_renamed > 0) {
+      g.Geom_p()->rename_comp_id(old_comp_id, new_comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+      g.molecules[imol].make_bonds_type_checked();
+      graphics_draw();
+      std::cout << "INFO:: renamed " << n_renamed << " residue(s) \"" << old_comp_id
+		<< "\" to \"" << new_comp_id << "\"" << std::endl;
+   }
+
+   return n_renamed;
 }

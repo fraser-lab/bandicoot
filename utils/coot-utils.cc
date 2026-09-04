@@ -850,9 +850,27 @@ coot::is_mmcif_filename(const std::string &filename) {
 
    short int i=0;
 
-   std::string::size_type idot = filename.find_last_of(".");
+   // BANDICOOT v0.2: look beneath a trailing ".gz" -- a compressed mmCIF is
+   // still an mmCIF. This tests only the LAST dot, so without the strip below
+   // "foo.cif.gz" reads as extension ".gz" and the answer comes back "no".
+   //
+   // That was not cosmetic. This function decides three things:
+   //   - input_molecule_was_in_mmcif       (molecule-class-info.cc:163)
+   //   - the format Save Coordinates writes (:6801)
+   //   - the format AND the name of every backup (:7157, :7255)
+   // so opening a gzipped mmCIF used to mark the molecule as not-mmCIF, and
+   // its backups were then written as PDB. Undo re-reads the backup, so an
+   // mmCIF user who keeps files gzipped was silently downgraded to PDB for the
+   // whole session -- losing exactly what Phase 3 exists to preserve.
+   //
+   // C++20 would spell the test filename.ends_with(".gz"); the tree is C++17.
+   std::string f = filename;
+   if (f.size() > 3 && f.compare(f.size() - 3, 3, ".gz") == 0)
+      f.erase(f.size() - 3);
+
+   std::string::size_type idot = f.find_last_of(".");
    if (idot != std::string::npos) {
-      std::string t = filename.substr(idot);
+      std::string t = f.substr(idot);
 
       std::string::size_type icif   = t.rfind(".cif");
       std::string::size_type immcif = t.rfind(".mmcif");

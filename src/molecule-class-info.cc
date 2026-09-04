@@ -163,7 +163,16 @@ molecule_class_info_t::handle_read_draw_molecule(int imol_no_in,
    if (coot::is_mmcif_filename(filename))
       input_molecule_was_in_mmcif = true;
 
-   atom_sel = get_atom_selection(filename, allow_duplseqnum, verbose, convert_to_v2_atom_names_flag);
+   // BANDICOOT v0.2 (Phase 3 / D3): &mmcif_doc catches the retained mmCIF
+   // document when this file was read by gemmi. It stays null for PDB, SHELX
+   // and anything gemmi declined, and the writer synthesizes a document in
+   // that case. This is the ONLY place a molecule acquires one -- there is no
+   // registry keyed on mmdb::Manager*, deliberately: undo deletes and
+   // reallocates Managers, so a recycled address could attribute one
+   // molecule's document to another, and that failure mode is silent data
+   // corruption rather than a crash.
+   atom_sel = get_atom_selection(filename, allow_duplseqnum, verbose, convert_to_v2_atom_names_flag,
+                                 &mmcif_doc);
 
    if (atom_sel.read_success == 1) {
 
@@ -286,7 +295,18 @@ molecule_class_info_t::handle_read_draw_molecule(int imol_no_in,
       return 1;
 
    } else {
-      std::cout << "There was a coordinates read error\n";
+      // BANDICOOT v0.2: a read failure used to be a single stdout line, which
+      // is easy to miss even when you are watching for it -- the molecule
+      // simply never appears. Say so in a dialog as well. info_dialog() is a
+      // no-op when there is no graphics interface, so scripted/headless use is
+      // unaffected.
+      std::string m = "Failed to read coordinates from\n";
+      m += filename;
+      if (! atom_sel.read_error_message.empty() &&
+          atom_sel.read_error_message != "No error")
+         m += "\n\n" + atom_sel.read_error_message;
+      std::cout << "WARNING:: " << m << std::endl;
+      graphics_info_t::info_dialog(m);
       return -1;
    }
 }
@@ -6781,19 +6801,35 @@ molecule_class_info_t::save_coordinates(const std::string filename,
       if (coot::is_mmcif_filename(filename))
          write_as_cif = true;
 
+      // BANDICOOT v0.2 (Phase 3): pass the retained mmCIF document so the
+      // written file keeps every category Bandicoot does not regenerate.
+      // Null for a molecule that did not come from mmCIF; the writer then
+      // synthesises one.
       ierr = write_atom_selection_file(atom_sel, filename, write_as_cif, bz,
                                        save_hydrogens, save_aniso_records,
-                                       save_conect_records);
+                                       save_conect_records, mmcif_doc.get());
    }
 
    if (ierr) {
-      std::cout << "WARNING:: Coordinates write to " << filename
-                << " failed!" << std::endl;
-      std::string ws = "WARNING:: export coords: There was an error ";
-      ws += "in writing ";
+      // BANDICOOT v0.2: say plainly that nothing was saved. This dialog existed
+      // before but was effectively unreachable for mmCIF, because the writer
+      // fell back to mmdb and reported success. With no fallback left, a failed
+      // save has to be unmistakable: the molecule still has unsaved changes
+      // (have_unsaved_changes_flag is only cleared on the success branch below)
+      // and the file on disk must not be trusted.
+      std::cout << "ERROR:: Coordinates write to " << filename
+                << " FAILED (status " << ierr << ")" << std::endl;
+      std::string ws = "SAVE FAILED\n\n";
       ws += filename;
       GtkWidget *w = graphics_info_t::wrapped_nothing_bad_dialog(ws);
-      gtk_widget_show(w);
+      // NULL when running --no-graphics: wrapped_nothing_bad_dialog() returns
+      // early on !use_graphics_interface_flag (graphics-info.cc). Showing it
+      // unguarded SEGFAULTS, which is how a headless save-failure test crashed
+      // the whole interpreter on 2026-08-26. The pattern predates this work, but
+      // removing the mmdb fallback made the failure path reachable in earnest.
+      // NOTE the same unguarded pair is at molecule-class-info-maps.cc:1961.
+      if (w)
+         gtk_widget_show(w);
    } else {
       std::cout << "INFO:: saved coordinates " << filename << std::endl;
       have_unsaved_changes_flag = 0;
@@ -7231,13 +7267,28 @@ molecule_class_info_t::make_backup() { // changes history details
                if (coot::is_mmcif_filename(name_))
                   write_as_cif = true;
 
-               istat = write_atom_selection_file(atom_sel, backup_file_name, write_as_cif, gz);
+               // BANDICOOT v0.2 (Phase 3): the backup goes through the same
+               // preserving writer. This matters more than the save path does:
+               // Undo re-reads the backup, so anything the backup drops is
+               // lost from the live session, not just from a file on disk.
+               istat = write_atom_selection_file(atom_sel, backup_file_name, write_as_cif, gz,
+                                                 1, 1, 0, mmcif_doc.get());
 
-               // WriteMMDBF returns 0 on success, else mmdb:Error_CantOpenFile (15)
+               // write_atom_selection_file() returns 0 on success, non-zero on
+               // failure (mmdb::Error_CantOpenFile is 15).
+               //
+               // BANDICOOT v0.2: this branch is REACHABLE for mmCIF now that the
+               // mmdb fallback writer is gone, so it has to be correct. Two bugs
+               // fixed here: it named WritePDBASCII whichever format was being
+               // written, and `warn += istat` appended the int as a CHARACTER
+               // (status 15 became a control code), so the number never showed.
                if (istat) {
-                  std::string warn;
-                  warn = "WARNING:: WritePDBASCII failed! Return status ";
-                  warn += istat;
+                  std::cout << "ERROR:: backup write to " << backup_file_name
+                            << " FAILED (" << (write_as_cif ? "mmCIF" : "PDB")
+                            << " writer, status " << istat
+                            << "); Undo cannot recover this state" << std::endl;
+                  std::string warn = "BACKUP FAILED\n\n";
+                  warn += backup_file_name;
                   g.info_dialog_and_text(warn);
                }
             } else {
@@ -7904,8 +7955,20 @@ molecule_class_info_t::write_cif_file(const std::string &filename) {
    int err = 1; // fail
    if (atom_sel.n_selected_atoms > 0) {
       mmdb::byte bz = mmdb::io::GZM_NONE;
-      // err = write_atom_selection_file(atom_sel, filename, bz);
-      err = coot::write_coords_cif(atom_sel.mol, filename);
+
+      // BANDICOOT v0.2: this is the scripting API (write_cif_file(imol, name)),
+      // and it used to call coot::write_coords_cif() -> mmdb's WriteCIFASCII,
+      // which re-synthesised the file from a hard-coded tag list: 24 categories
+      // in mmdb's obsolete NDB dialect where this path writes 77 faithfully. So
+      // a script got a materially worse file than File -> Save Coordinates did,
+      // with nothing to say so. That gap is what prompted the v0.2 charter.
+      //
+      // It now goes through the SAME writer as the save and backup paths,
+      // retained document and all. remove_wrong_cis_peptides() is not lost in
+      // the move: write_atom_selection_file() calls it too, on entry.
+      err = write_atom_selection_file(atom_sel, filename, true /* as mmCIF */, bz,
+                                      1 /* hydrogens */, 1 /* aniso */,
+                                      0 /* conect: PDB-only */, mmcif_doc.get());
    }
    return err;
 }
@@ -8835,35 +8898,37 @@ molecule_class_info_t::stripped_save_name_suggestion() {
    // so we have got rid of the pathname.
    // now lets get rid of the extension
    //
-   std::string::size_type ibrk   = stripped_name1.rfind(".brk");
-   std::string::size_type ibrkgz = stripped_name1.rfind(".brk.gz");
-   std::string::size_type ipdb   = stripped_name1.rfind(".pdb");
-   std::string::size_type ires   = stripped_name1.rfind(".res");
-   std::string::size_type ipdbgz = stripped_name1.rfind(".pdb.gz");
    std::string::size_type icoot  = stripped_name1.rfind("-coot-");
 
    std::string stripped_name2;
    if (icoot == std::string::npos) {
-      if (ibrk == std::string::npos) {
-         if (ibrkgz == std::string::npos) {
-            if (ipdb == std::string::npos) {
-               if (ires == std::string::npos) {
-                  if (ipdbgz == std::string::npos) {
-                     stripped_name2 = stripped_name1;
-                  } else {
-                     stripped_name2 = stripped_name1.substr(0, ipdbgz);
-                  }
-               } else {
-                  stripped_name2 = stripped_name1.substr(0, ires);
-               }
-            } else {
-               stripped_name2 = stripped_name1.substr(0, ipdb);
-            }
-         } else {
-            stripped_name2 = stripped_name1.substr(0, ibrkgz);
+
+      // BANDICOOT v0.2: strip a known coordinate extension from the END.
+      //
+      // This was a nested-if ladder over .brk/.brk.gz/.pdb/.res/.pdb.gz with
+      // two gaps. mmCIF was never in it, so an mmCIF molecule was offered
+      // "3K0N_hierarchy.cif-coot-0.cif" -- the old extension buried inside the
+      // new name. Neither was ".ent", which is what every file fetched from
+      // the PDB is called, so those had the same problem.
+      //
+      // Longest first, so ".pdb.gz" wins over ".pdb". Anchored to the end of
+      // the string rather than using a bare rfind(), which would truncate a
+      // file called "notes.pdb.txt" at the ".pdb".
+      static const char *coord_extensions[] = {
+         ".mmcif.gz", ".pdb.gz", ".brk.gz", ".ent.gz", ".cif.gz", ".mcif.gz",
+         ".mmcif", ".pdb", ".brk", ".ent", ".res", ".ins", ".cif", ".mcif" };
+
+      stripped_name2 = stripped_name1;
+      for (unsigned int i = 0; i < sizeof(coord_extensions)/sizeof(coord_extensions[0]); i++) {
+         std::string ext(coord_extensions[i]);
+         if (stripped_name2.length() <= ext.length()) continue;
+         std::string tail = stripped_name2.substr(stripped_name2.length() - ext.length());
+         for (unsigned int j = 0; j < tail.length(); j++)
+            tail[j] = std::tolower(static_cast<unsigned char>(tail[j]));
+         if (tail == ext) {
+            stripped_name2 = stripped_name2.substr(0, stripped_name2.length() - ext.length());
+            break;
          }
-      } else {
-         stripped_name2 = stripped_name1.substr(0, ibrk);
       }
    } else {
       set_coot_save_index(stripped_name1.substr(icoot));

@@ -3897,6 +3897,15 @@ string   static std::string sessionid;
    //
    static coot::nomenclature_error_handle_type nomenclature_errors_mode;
 
+   // BANDICOOT v0.2: show the on-load ligand-restraint dialogs, or not.
+   //
+   // Every one of them is per-coordinate-load, so anything that cycles through
+   // many structures in a row -- pandda.inspect stepping through hundreds of
+   // ligand-bearing models is the case that prompted this -- turns a useful
+   // warning into a stack of dialogs to dismiss. Reporting to stdout is NOT
+   // affected: turning the dialogs off must not turn the information off.
+   static short int show_ligand_restraint_warnings_flag;
+
    void multi_torsion_residues(int imol, const std::vector<coot::residue_spec_t> &v);
    static void on_multi_residue_torsion_button_clicked(GtkButton *button, gpointer user_data);
    void rotate_multi_residue_torsion(double x, double y);

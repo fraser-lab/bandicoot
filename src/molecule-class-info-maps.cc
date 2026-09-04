@@ -1954,12 +1954,13 @@ molecule_class_info_t::read_ccp4_map(std::string filename, int is_diff_map_flag,
 
       std::cout << "Filename for a CCP4 map must end in .map or .ext "
 		<< "or some other approved extension - sorry\n";
+      // BANDICOOT v0.2, 2026-08-26: the dialog that used to be written here was
+      // UNREACHABLE -- it sat after this return, so the user never saw the
+      // explanation, only the stdout line above. Removed rather than made
+      // reachable: showing it would be a behaviour change nobody asked for, and
+      // wrapped_nothing_bad_dialog() returns NULL under --no-graphics, which is
+      // the null-deref that had to be guarded in molecule-class-info.cc.
       return -1;
-      std::string ws = "The filename for a CCP4 map must\n";
-      ws += "currently end in .map or .ext - sorry.\n\n";
-      ws += "The map must be a CCP4 map or Badness Will Happen! :-)\n";
-      GtkWidget *w = graphics_info_t::wrapped_nothing_bad_dialog(ws);
-      gtk_widget_show(w);
    }
 
    // KDC: check map type

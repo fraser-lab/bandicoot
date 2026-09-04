@@ -16,6 +16,12 @@
 #   BUILD_SKIP_CHECKS=1  skip the closing dependency-closure gate (see the end
 #                 of this script). Default is to FAIL the build on an unresolved
 #                 or build-host dependency, dev builds included.
+#   BANDICOOT_RELEASE=1  milestone release build: no version suffix, clean
+#                 recompile, requires a clean+pushed tree.
+#   BANDICOOT_NIGHTLY=1  pseudo-nightly build: version suffix is the short
+#                 commit hash, clean recompile, requires a clean+pushed tree.
+#   BANDICOOT_ALLOW_DIRTY=1  downgrade that clean+pushed requirement to a
+#                 warning (see scripts/check_clean_tree.sh).
 set -e
 
 cd "$(dirname "$0")/.."
@@ -141,7 +147,7 @@ fi
 # AGAINST IT -- ideally when each new Python is released, so the list stays
 # ahead of the problem rather than behind a bug report.
 # 3.13: the version releases are built against (conda base).
-# 3.14: GUI-tested by Art 2026-08-24 on 0.1.4.15-u1 -- launch, mmCIF read, EDS
+# 3.14: GUI-tested 2026-08-24 on 0.1.4.15-u1 -- launch, mmCIF read, EDS
 #       fetch of 2GEW + map, Sphere Refine with undo, and pandda.inspect on a
 #       PanDDA output folder all behaved normally.
 BANDICOOT_TESTED_PYTHON="${BANDICOOT_TESTED_PYTHON:-3.13 3.14}"
@@ -177,9 +183,27 @@ unset _py_ver
 MAC_MAJOR="${MAC_MAJOR:-$(sw_vers -productVersion | cut -d. -f1)}"
 BREW_PC_OSDIR="${BREW_PC_OSDIR:-${BREW_PREFIX}/Library/Homebrew/os/mac/pkgconfig/${MAC_MAJOR}}"
 
+# The generated build system (configure, Makefile.in) has to match the sources
+# it came from (configure.ac, the Makefile.am tree, macros/*.m4).
+#
+# This used to be `if [ ! -x ./configure ]`, an EXISTENCE test -- it can see
+# absence but never staleness. On 2026-08-25 that let through a ./configure
+# generated before the C++17 bump, and a v0.2 build was silently configured at
+# -std=c++14. An mtime comparison would not have been reliable either: git
+# stamps checked-out files with the checkout time, so a rebase or branch switch
+# can leave the PRODUCT looking newer than its SOURCE, in which case make
+# believes a stale configure is current and reports nothing.
+#
+# check_build_system_fresh.sh compares a content HASH instead, which is immune
+# to that in both directions. See the long comment at the top of it.
 if [ ! -x ./configure ]; then
     echo "==> ./configure not found; running bootstrap"
     ./scripts/bootstrap.sh
+    ./scripts/check_build_system_fresh.sh --write-stamp
+elif ! ./scripts/check_build_system_fresh.sh --quiet; then
+    echo "==> build system is stale or unverified; re-running bootstrap"
+    ./scripts/bootstrap.sh
+    ./scripts/check_build_system_fresh.sh --write-stamp
 fi
 
 # v0.1.0.3: per-build unreleased-version counter. Each call to build.sh
@@ -187,10 +211,21 @@ fi
 # title bar carries an unambiguous "-u<N>" suffix during dev iteration.
 # Counter resets when src/bandicoot-version.h's BANDICOOT_VERSION bumps.
 #
-# v0.1.4.13: THE SUFFIX IS NOW OFF BY DEFAULT. It is a maintainer-iteration
-# marker -- "-u7" is machine-local counter state that means nothing on anyone
-# else's machine -- so somebody building from source should get a clean
-# "0.1.4.13", not a number that looks like a build identity but isn't.
+# v0.1.4.13 + v0.2.0.0: FOUR build kinds, distinguished by the version suffix.
+#
+#   BANDICOOT_RELEASE=1    milestone release     -> no suffix   (0.2.0.0)
+#   BANDICOOT_NIGHTLY=1    pseudo-nightly        -> -<commit>   (0.2.0.0-b9e4e04)
+#   .bandicoot-dev marker  maintainer iteration  -> -u<N>       (0.2.0.0-u7)
+#   (none of the above)    plain build from source -> no suffix (0.2.0.0)
+#
+# The two USER-FACING kinds must be traceable back to source, so both gate on a
+# clean, pushed tree (scripts/check_clean_tree.sh) and a nightly carries the
+# short commit hash -- a bug report then maps straight back to a commit.
+#
+# THE -u<N> COUNTER IS OFF BY DEFAULT (v0.1.4.13). It is a maintainer-iteration
+# marker: "-u7" is machine-local counter state that means nothing on anyone
+# else's machine, so somebody building from source should get a clean version
+# number, not one that looks like a build identity but isn't.
 #
 # It is enabled by the presence of a gitignored marker file, <repo>/.bandicoot-dev,
 # NOT by an environment variable. That is deliberate: an env var has to be
@@ -205,11 +240,17 @@ fi
 #   disable (once):                     rm .bandicoot-dev
 #   one-off override, either way:       BANDICOOT_DEV=1 ./scripts/build.sh
 #                                       BANDICOOT_DEV=0 ./scripts/build.sh
-#   release build (always suppresses):  BANDICOOT_RELEASE=1 ./scripts/build.sh
+#   release (always suppresses -uN):    BANDICOOT_RELEASE=1 ./scripts/build.sh
+#   nightly (always suppresses -uN):    BANDICOOT_NIGHTLY=1 ./scripts/build.sh
 BANDICOOT_VERSION_STR="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' \
                              src/bandicoot-version.h)"
 COUNTER_FILE=".build-counter"
 DEV_MARKER="${REPO_ROOT}/.bandicoot-dev"
+
+if [ -n "${BANDICOOT_RELEASE:-}" ] && [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    echo "build.sh: set BANDICOOT_RELEASE=1 or BANDICOOT_NIGHTLY=1, not both." >&2
+    exit 1
+fi
 
 if [ -n "${BANDICOOT_DEV:-}" ]; then
     _dev_build="${BANDICOOT_DEV}"          # explicit override wins
@@ -221,10 +262,23 @@ else
     _dev_build=0
     _dev_why="no .bandicoot-dev marker"
 fi
-# A release build is never a dev build, whatever the marker says.
-[ -n "${BANDICOOT_RELEASE:-}" ] && _dev_build=0
+# A release or nightly build is never a dev build, whatever the marker says:
+# both are user-facing and must not carry machine-local counter state. The
+# suffix chain below already checks them first, so this is belt-and-braces --
+# it keeps the invariant true if that ordering is ever changed.
+if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    _dev_build=0
+fi
 
-if [ "${_dev_build}" = "1" ]; then
+if [ -n "${BANDICOOT_RELEASE:-}" ]; then
+    ./scripts/check_clean_tree.sh "a release build (BANDICOOT_RELEASE=1)"
+    BUILD_SUFFIX=""
+    echo "==> release build (BANDICOOT_RELEASE=1): version ${BANDICOOT_VERSION_STR}"
+elif [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    ./scripts/check_clean_tree.sh "a nightly build (BANDICOOT_NIGHTLY=1)"
+    BUILD_SUFFIX="-$(git rev-parse --short HEAD)"
+    echo "==> nightly build (BANDICOOT_NIGHTLY=1): ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX}"
+elif [ "${_dev_build}" = "1" ]; then
     if [ -f "$COUNTER_FILE" ]; then
         stored_ver=$(awk '{print $1}' "$COUNTER_FILE")
         stored_n=$(awk '{print $2}'   "$COUNTER_FILE")
@@ -241,21 +295,18 @@ if [ "${_dev_build}" = "1" ]; then
     echo "==> dev build (${_dev_why}): ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX}"
 else
     BUILD_SUFFIX=""
-    if [ -n "${BANDICOOT_RELEASE:-}" ]; then
-        echo "==> release build (BANDICOOT_RELEASE=1): version ${BANDICOOT_VERSION_STR}"
-    else
-        # Deliberately says nothing about .bandicoot-dev: the marker is a
-        # maintainer-only affordance and mentioning it here would just raise a
-        # question a source builder has no reason to care about.
-        echo "==> building version ${BANDICOOT_VERSION_STR}"
-    fi
+    # Deliberately says nothing about .bandicoot-dev: the marker is a
+    # maintainer-only affordance and mentioning it here would just raise a
+    # question a source builder has no reason to care about.
+    echo "==> building version ${BANDICOOT_VERSION_STR}"
 fi
 cat > src/bandicoot-build-id.h <<EOF
 // Generated by scripts/build.sh on each invocation. Do not edit; do not
-// commit. The "-u<N>" suffix tags maintainer iteration builds so the title bar
-// distinguishes them from one another and from the released tarball. It is
-// empty unless <repo>/.bandicoot-dev exists (or BANDICOOT_DEV=1 is set), so a
-// build from source reports a clean version number.
+// commit. The suffix tags non-milestone builds so the title bar distinguishes
+// them from one another and from the released tarball: "-u<N>" for maintainer
+// iteration (only when <repo>/.bandicoot-dev exists, or BANDICOOT_DEV=1),
+// "-<commit>" for a nightly, empty for a milestone release or a plain build
+// from source.
 #ifndef BANDICOOT_BUILD_ID_H
 #define BANDICOOT_BUILD_ID_H
 #define BANDICOOT_BUILD_SUFFIX "${BUILD_SUFFIX}"
@@ -279,7 +330,7 @@ export LDFLAGS="-L${CONDA_PREFIX}/lib -L${PREFIX}/lib -L${BREW_PREFIX}/lib \
 # edits. The shim is a no-op when Python.h hasn't been pulled in.
 # See compat/python23-shim.hh for details.
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
-export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++14 ${SHIM_INCLUDE}"
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++17 ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\
@@ -325,16 +376,28 @@ echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time
 # stays inert and pandda.inspect can't launch — see
 # [[bandicoot-coot-py-broken]] for the full backstory.
 
-# RELEASE builds recompile from clean. Compile-time -D macros (PKGDATADIR etc.)
-# are baked into each .o; changing a compile flag -- e.g. the generic
-# BANDICOOT_COMPILE_PREFIX -- does NOT retrigger compilation of unchanged
-# sources, so stale objects would keep an old prefix (this is how the builder's
-# /Users/<home> path lingered in the binaries). A clean recompile guarantees the
-# shipped binaries carry only the generic fallback path. Dev builds stay
-# incremental (fast); force a clean one anytime with BANDICOOT_CLEAN=1.
-if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_CLEAN:-}" ]; then
-    echo "==> make clean (release/clean build)"
+# EVERY BUILD RECOMPILES FROM CLEAN (2026-08-14). Slower is fine; a build
+# that might be part-stale is not.
+#
+# Two ways this has already cost real time:
+#   - Compile-time -D macros (PKGDATADIR, BANDICOOT_COMPILE_PREFIX, ...) are
+#     baked into each .o, and changing a FLAG does not retrigger compilation of
+#     unchanged sources -- so stale objects kept an old prefix, which is how the
+#     builder's /Users/<home> path lingered in shipped binaries.
+#   - After the C++14 -> C++17 flip, make rebuilt only 144 of 676 objects and
+#     exited 0: 532 stale C++14 objects were linked in, so a "successful" build
+#     validated almost nothing and mixed two standards in one binary.
+# A third came up on 2026-08-13: adding FIELDS to a class held across
+# translation-unit boundaries makes a stale object file a memory-corruption bug
+# rather than a compile error -- the sort of thing that costs a day to chase.
+#
+# BANDICOOT_INCREMENTAL=1 opts out for a quick edit-compile loop. It is
+# deliberately opt-IN: the fast path should be the one you have to ask for.
+if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
+    echo "==> make clean (every build is a clean build; BANDICOOT_INCREMENTAL=1 to opt out)"
     make clean >/dev/null 2>&1 || true
+else
+    echo "==> INCREMENTAL build requested (BANDICOOT_INCREMENTAL=1) - objects may be stale"
 fi
 echo "==> make -j${JOBS}"
 make -j"${JOBS}"
@@ -520,8 +583,22 @@ fi
 # strings(1) misses but nm(1)/grep find. `strip -S` removes the debug symbols
 # (and shrinks the binaries) while keeping the exported symbols dylibs need.
 # MUST run before codesign (stripping invalidates signatures; codesign re-signs).
-if [ -n "${BANDICOOT_RELEASE:-}" ]; then
-    echo "==> stripping debug symbols (release)"
+#
+# NIGHTLIES ARE STRIPPED TOO (2026-08-14). A nightly is a user-facing
+# artifact, so it must not carry the builder's home path -- measured on an
+# unstripped 0.2 install: 46 of 271 Mach-O files held /Users/<builder>, 487
+# N_OSO stabs in total. Note strings(1) reports ZERO on those same files; only
+# nm(1) sees them, so never certify an artifact clean with strings alone.
+#
+# THE COST, ACCEPTED DELIBERATELY: a crash report from a nightly will not
+# symbolicate beyond exported symbols. The alternative -- run dsymutil before
+# stripping and keep the .dSYM bundles locally, matching a report by its LC_UUID
+# -- was considered and declined: it costs a few hundred MB per nightly to
+# archive, and no bug report so far has needed a symbolicated trace. Substituting
+# paths in a report does NOT recover symbol names; once the debug map is gone the
+# trace is library + offset whatever the paths say.
+if [ -n "${BANDICOOT_RELEASE:-}" ] || [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    echo "==> stripping debug symbols (release/nightly)"
     _stripped=0
     while IFS= read -r _m; do
         file -b "$_m" 2>/dev/null | grep -q "Mach-O" || continue

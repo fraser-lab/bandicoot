@@ -36,6 +36,7 @@
 #include "graphics-info.h"
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
+#include "save-coords-gui.hh"   // the merged Save Coordinates chooser
 #include "interface.h"
 
 #include "rotate-translate-modes.hh"
@@ -1852,14 +1853,27 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
       if (naii.success == GL_TRUE) { 
 
 	 in_save_symmetry_define = 0;
-	 GtkWidget *w = coot_save_symmetry_chooser();
 
-	 // attach symmetry info to the widget for use in the OK
-	 // button callback:
-	 coot::Symm_Atom_Pick_Info_t *save_pick_info = new coot::Symm_Atom_Pick_Info_t;
-	 *save_pick_info = naii;
+	 // BANDICOOT v0.2: the SAME chooser as Save Coordinates. The symmetry
+	 // operator travels in the options object rather than as a side-channel
+	 // Symm_Atom_Pick_Info_t hung off the widget's user_data -- which is what
+	 // made this a separate dialog, and why it never had the hydrogens and
+	 // anisotropic options that the plain save had.
+	 coot::save_coords_options_t opts;
+	 opts.imol        = naii.imol;
+	 opts.is_symmetry = true;
+	 opts.symop       = naii.symm_trans.isym();
+	 opts.shift_a     = naii.symm_trans.x();
+	 opts.shift_b     = naii.symm_trans.y();
+	 opts.shift_c     = naii.symm_trans.z();
+	 opts.pre_shift_a = naii.pre_shift_to_origin.us;
+	 opts.pre_shift_b = naii.pre_shift_to_origin.vs;
+	 opts.pre_shift_c = naii.pre_shift_to_origin.ws;
+	 opts.format      = molecules[naii.imol].get_input_molecule_was_in_mmcif_state()
+	                       ? coot::coord_file_format_t::MMCIF
+	                       : coot::coord_file_format_t::PDB;
 
-	 gtk_object_set_user_data(GTK_OBJECT(w), save_pick_info);
+	 GtkWidget *w = coot_save_coords_chooser_new(opts);
 
 // 	 std::string filename = "molecule-";
 // 	 filename += int_to_string(naii.imol);
@@ -1894,11 +1908,23 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	 filename += int_to_string(naii.symm_trans.z());
 	 
 	 // 
-	 filename += ".pdb";
+	 // Default extension follows the File Type the chooser will open with,
+	 // rather than being hardwired to PDB. The menu stays authoritative at
+	 // save time either way; this just stops the two disagreeing on sight.
+	 filename += coot::save_coords_options_t::extension_for(opts.format);
 
+	 // Open in the directory the user last saved into, the same one Save
+	 // Coordinates uses. Without this the symmetry save starts wherever the
+	 // process happens to be, because it never went through
+	 // set_file_for_save_fileselection() -- reported as landing in a
+	 // different folder from the plain save, 2026-08-26. A symmetry mate almost
+	 // always wants to sit beside the model it came from.
 	 if (graphics_info_t::gtk2_file_chooser_selector_flag == coot::CHOOSER_STYLE) {
-		gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(w),
-                                         filename.c_str());
+		if (! directory_for_saving_for_filechooser.empty())
+		   gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(w),
+						       directory_for_saving_for_filechooser.c_str());
+		// Goes through the chooser so the name and the format menu agree.
+		coot_save_coords_chooser_set_name(w, filename.c_str());
 	 } else {
 	 	gtk_file_selection_set_filename(GTK_FILE_SELECTION(w),
 					 filename.c_str());

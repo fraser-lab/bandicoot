@@ -84,8 +84,11 @@ AC_SUBST([OPENMP_CXXFLAGS])
 AX_CXX_COMPILE_STDCXX_11
 AX_CXX_HAVE_THREAD
 # AX_CXX_COMPILE_STDCXX_11 sets HAVE_CXX11=1 (hopefully)
+# Bandicoot v0.2: bumped c++14 -> c++17. Needed for modern RDKit (enhanced
+# ligand tools / FLEV, GitHub #11); gemmi is fine either way (it declares
+# cxx_std_14). Keep in sync with CXXFLAGS in scripts/build.sh.
 if test $HAVE_CXX11 = 1 ; then
-   CXXFLAGS="$CXXFLAGS -std=c++14"
+   CXXFLAGS="$CXXFLAGS -std=c++17"
 else
    echo we can\'t compile coot then
 fi
@@ -165,6 +168,11 @@ esac
 
 dnl Check for MMDB.
 AM_PATH_MMDB2(, [echo Error locating necessary mmdb; exit 1],,)
+
+dnl Bandicoot v0.2: gemmi is the mmCIF I/O layer (mmdb remains the model).
+dnl MUST come after AM_PATH_MMDB2 -- gemmi/mmdb.hpp includes mmdb2 headers, so
+dnl the test needs MMDB_CXXFLAGS in scope. See macros/gemmi.m4.
+AM_PATH_GEMMI
 
 AM_WITH_SSM
 AM_WITH_CCP4SRS

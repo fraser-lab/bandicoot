@@ -1982,4 +1982,70 @@ clipper::Spacegroup scm_symop_strings_to_space_group(SCM symop_string_list);
 clipper::Spacegroup py_symop_strings_to_space_group(PyObject *symop_string_list);
 #endif
 
+/* ------------------------------------------------------------------------ */
+/*        BANDICOOT v0.2: comp id collisions                                 */
+/* ------------------------------------------------------------------------ */
+
+/* A comp id does not uniquely identify a chemistry, and restraints are global
+   and keyed by comp id -- so two different molecules sharing one name cannot
+   hold distinct restraints. These expose the detection in
+   coot-utils/comp-id-collision.hh to scripting. */
+
+//! \brief Does comp_id describe more than one chemistry in molecule imol?
+//!
+//! Returns a one-line description of the clash, or an empty string when the
+//! comp id is consistent (which includes the case of it not being present).
+std::string comp_id_collision_message(int imol, const std::string &comp_id);
+
+//! \brief A modal yes/no dialog. Returns true for Yes, false without graphics.
+//!
+//! Modal on purpose: the answer decides what the model or its restraints ARE,
+//! and later code must not run against a half-decided state.
+bool bandicoot_native_question_dialog(const char *msg);
+
+//! \brief On load: offer to rename apart distinct molecules sharing a placeholder name.
+//!
+//! Fires only for the codes the wwPDB reserves (01-99, DRG, INH, LIG), because
+//! those are the ones handed to every depositor and so the ones that actually
+//! collide. Asks; it does not act on its own. Answering No loads the structure
+//! as it stands -- a deliberate choice, not an oversight.
+//!
+//! Returns the number of components renamed apart (0 if declined or if there
+//! was nothing to do).
+int resolve_placeholder_collisions_on_load(int imol);
+
+//! \brief Does the dictionary now loaded for comp_id describe imol's atoms?
+//!
+//! Returns a one-line description of the mismatch, or an empty string when the
+//! dictionary covers the model (which includes the case of there being no
+//! dictionary at all -- that is reported elsewhere). Worth calling after a
+//! dictionary is generated or read, not only when coordinates are loaded: a
+//! dictionary derived from one copy of a component does not necessarily cover
+//! another copy that is only masquerading as the same thing.
+std::string dictionary_coverage_message(int imol, const std::string &comp_id);
+
+//! \brief An atom selection for the most complete copy of comp_id in imol.
+//!
+//! Restraint generation derives from a single representative residue rather
+//! than from every copy, so that several copies can never be handed to a
+//! generator as though they were one molecule. Empty string if not found.
+std::string most_complete_residue_selection(int imol, const std::string &comp_id);
+
+//! \brief Is comp_id one of the codes the wwPDB reserves and will never issue?
+//!
+//! The reserved set is 01-99, DRG, INH and LIG. They exist so a ligand named
+//! during structure determination is recognisable as novel at deposition,
+//! which is exactly why they collide: every depositor is given the same ones.
+int is_reserved_placeholder_comp_id(const std::string &comp_id);
+
+//! \brief A reserved placeholder code not already used in imol, or "".
+std::string suggest_free_placeholder_comp_id(int imol);
+
+//! \brief Rename a component in the coordinates AND in its dictionary.
+//!
+//! Renaming residues without renaming the dictionary orphans the restraints,
+//! because they are bound by comp id. Returns the number of residues renamed.
+int rename_comp_id_with_dictionary(int imol, const std::string &old_comp_id,
+                                   const std::string &new_comp_id);
+
 #endif // CC_INTERFACE_HH
