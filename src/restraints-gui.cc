@@ -77,7 +77,9 @@
 
 #include "restraints-gui.hh"
 
+#include <mmdb2/mmdb_tables.h>          // isSolvent/isAminoacid/isNucleotide
 #include "utils/coot-utils.hh"          // coot::util::int_to_string()
+#include "coot-utils/comp-id-collision.hh" // comp_ids_matching_dictionary()
 #include "graphics-info.h"
 #include "c-interface.h"                // info_dialog(), graphics_draw(),
                                         // is_valid_model_molecule()
@@ -98,19 +100,88 @@ namespace {
    // deliver a delete-event) do not destroy it from under the loop.
    bool generation_running = false;
 
+   // Show every ligand (Modelling menu) rather than only what lacks a
+   // dictionary (a coordinate load). One dialog instance serves both: the menu
+   // switches it into show-all, a later load ADDS rows without changing the
+   // mode, and closing the dialog resets it. Art, 2026-09-03.
+   bool show_all_mode = false;
+
    // Rows the user has switched OFF. Carried across a rebuild; everything else
    // about a row is recomputed. Comp ids, so this survives deletions too.
    std::set<std::string> unchecked;
 
    const char *COMP_ID_KEY = "bandicoot-comp-id";
 
-   // One row: a component with no dictionary, and where it was found. imols and
-   // names are strictly derived -- see the header comment.
+   // What already describes a component. The three states are Art's ladder
+   // (2026-09-03): generate silently only when nothing describes it, and
+   // otherwise make the user say so.
+   //
+   // THE STATE IS READ OFF THE STORAGE SCOPE, which is the provenance:
+   // protein-geometry.cc:535 states that try_dynamic_add() -- the monomer
+   // library path -- adds at IMOL_ENC_ANY, while a generated dictionary is
+   // stored against its own molecule. So:
+   //
+   //   scoped entry for this molecule -> we generated (or scoped-imported) it
+   //   entry at IMOL_ENC_ANY          -> the library, or a global import
+   //   neither                        -> nothing describes it
+   //
+   // A global import is indistinguishable from a library entry, and that is
+   // fine: not silently overwriting the user's own CIF is what we want anyway.
+   enum row_state_t { ROW_NEEDS, ROW_LIBRARY, ROW_GENERATED };
+
+   // One row: a component, where it was found, and what already describes it.
+   // imols and names are strictly derived -- see the header comment.
    struct row_t {
       std::string comp_id;
       std::vector<int> imols;
       std::vector<std::string> names;
+      row_state_t state;
+      row_t() : state(ROW_NEEDS) {}
    };
+
+   row_state_t component_state(int imol, const std::string &comp_id) {
+
+      graphics_info_t g;
+      const coot::protein_geometry &geom = *g.Geom_p();
+
+      bool scoped = false, global = false;
+      for (unsigned int i=0; i<geom.size(); i++) {
+         // Scanned directly rather than through get_monomer_restraints_index():
+         // that stops at the FIRST match by matches_imol(), which accepts an
+         // IMOL_ENC_ANY entry, so it cannot tell us whether a scoped one also
+         // exists. The distinction is the whole point here.
+         const std::pair<int, coot::dictionary_residue_restraints_t> &e = geom[i];
+         if (e.second.residue_info.comp_id != comp_id) continue;
+         if (e.second.is_bond_order_data_only()) continue;   // minimal, not restraints
+         if (e.first == imol) scoped = true;
+         else if (e.first == coot::protein_geometry::IMOL_ENC_ANY) global = true;
+      }
+
+      // Scoped first: that is the precedence refinement itself uses.
+      if (scoped) return ROW_GENERATED;
+      if (global) return ROW_LIBRARY;
+      return ROW_NEEDS;
+   }
+
+   // Is this component a LIGAND, i.e. something it makes sense to derive
+   // restraints for?
+   //
+   // Uses mmdb's own tables rather than coot::util::standard_residue_types(),
+   // which is the twenty amino acids plus MSE and nothing else -- so it calls
+   // every nucleotide non-standard. Deriving self-made restraints for a DNA
+   // backbone is exactly the harm this filter exists to prevent, and
+   // PDB_standard_residue_types() does not fix it either (it lists DA/DC/DG/DT
+   // but omits RNA C and U). mmdb's tables are maintained upstream and answer
+   // the question directly.
+   bool is_ligand_comp_id(const std::string &comp_id) {
+
+      if (comp_id.empty()) return false;
+      const char *n = comp_id.c_str();
+      if (mmdb::isSolvent(n))    return false;
+      if (mmdb::isAminoacid(n))  return false;
+      if (mmdb::isNucleotide(n)) return false;
+      return true;
+   }
 
    // Every component in every loaded molecule that still has no dictionary.
    //
@@ -119,7 +190,12 @@ namespace {
    // supplied a dictionary for simply stops being listed. That is also why
    // nothing here needs to know about dictionary imports: it asks rather than
    // tracking.
-   std::vector<row_t> live_rows() {
+   // show_all false: only what has no dictionary -- the load-time question,
+   //                 asked exactly as before.
+   // show_all true:  every ligand in every loaded molecule, whatever already
+   //                 describes it, so the user can deliberately replace
+   //                 restraints they do not like (Modelling menu).
+   std::vector<row_t> live_rows(bool show_all) {
 
       graphics_info_t g;
       std::vector<row_t> rows;
@@ -127,8 +203,18 @@ namespace {
       for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
          if (! is_valid_model_molecule(imol)) continue;
 
-         std::vector<std::string> types =
-            g.molecules[imol].no_dictionary_for_residue_type_as_yet(*g.Geom_p());
+         std::vector<std::string> types;
+         if (show_all) {
+            std::vector<std::string> all =
+               coot::util::non_standard_residue_types_in_molecule(g.molecules[imol].atom_sel.mol);
+            for (unsigned int i=0; i<all.size(); i++)
+               if (is_ligand_comp_id(all[i]))
+                  types.push_back(all[i]);
+         } else {
+            // Unchanged: the same lookup ladder the load path uses, so the
+            // load-time dialog behaves exactly as it did before show_all.
+            types = g.molecules[imol].no_dictionary_for_residue_type_as_yet(*g.Geom_p());
+         }
 
          for (unsigned int i=0; i<types.size(); i++) {
             unsigned int j = 0;
@@ -141,6 +227,17 @@ namespace {
             }
             rows[j].imols.push_back(imol);
             rows[j].names.push_back(g.molecules[imol].name_for_display_manager());
+
+            // A row spans molecules and the state can differ between them
+            // (generated in one, missing in another). Report the WEAKEST, so a
+            // row still offering something to do reads as needing doing -- and
+            // ticking it fills the gaps, because generation fans out over every
+            // molecule in the row.
+            // ROW_NEEDS < ROW_LIBRARY < ROW_GENERATED, so "weakest" is the
+            // smallest. imols.size()==1 means this is the row's first molecule.
+            row_state_t s = show_all ? component_state(imol, types[i]) : ROW_NEEDS;
+            if (rows[j].imols.size() == 1) rows[j].state = s;
+            else if (s < rows[j].state)    rows[j].state = s;
          }
       }
       return rows;
@@ -170,6 +267,14 @@ namespace {
          label += " more";
       }
       label += ")";
+
+      // Say WHY a row arrives unticked. Without this, an unchecked FMN just
+      // looks like the dialog forgot it.
+      if (r.state == ROW_LIBRARY)
+         label += "  -- has a library dictionary";
+      else if (r.state == ROW_GENERATED)
+         label += "  -- restraints already generated";
+
       return label;
    }
 
@@ -250,13 +355,19 @@ namespace {
          gtk_widget_destroy(GTK_WIDGET(l->data));
       g_list_free(children);
 
-      std::vector<row_t> rows = live_rows();
+      std::vector<row_t> rows = live_rows(show_all_mode);
       for (unsigned int i=0; i<rows.size(); i++) {
          GtkWidget *cb = gtk_check_button_new_with_label(row_label(rows[i]).c_str());
          g_object_set_data_full(G_OBJECT(cb), COMP_ID_KEY,
                                 g_strdup(rows[i].comp_id.c_str()), g_free);
-         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb),
-                                      unchecked.find(rows[i].comp_id) == unchecked.end());
+         // Ticked only when nothing describes it. A component that already
+         // has restraints arrives UNTICKED, so ticking it is the user saying
+         // "yes, replace them" -- Art's ladder, expressed as the default state
+         // rather than as a confirmation dialog per component. On a structure
+         // with several ligands a modal each would be a storm.
+         bool want = (rows[i].state == ROW_NEEDS) &&
+                     (unchecked.find(rows[i].comp_id) == unchecked.end());
+         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb), want);
          gtk_box_pack_start(GTK_BOX(rows_vbox), cb, FALSE, FALSE, 1);
          gtk_widget_show(cb);
       }
@@ -337,16 +448,7 @@ namespace {
       return s;
    }
 
-   // imol_forced >= 0: these components all come from that molecule and are to
-   // be generated whether or not they already have restraints (the Modelling
-   // menu entry point). -1: the dialog's case -- re-validate each against what
-   // is still MISSING, and silently drop anything that no longer needs doing.
-   //
-   // The distinction matters because the re-validation below asks live_rows(),
-   // which by construction lists only components WITHOUT a dictionary. Running
-   // the forced path through it would drop every component the user explicitly
-   // asked to replace, i.e. all of them.
-   void run_generation(const std::vector<std::string> &wanted, int imol_forced) {
+   void run_generation(const std::vector<std::string> &wanted) {
 
       generation_running = true;
 
@@ -374,30 +476,27 @@ namespace {
 
       for (unsigned int i=0; i<wanted.size(); i++) {
 
-         int imol = imol_forced;
-         if (imol_forced < 0) {
-            // RE-VALIDATE, one component at a time and immediately before
-            // running. The list was read off widgets that may have been sitting
-            // there for an hour, and the previous component's dictionary may
-            // even have covered this one.
-            std::vector<row_t> rows = live_rows();
-            imol = -1;
+         // RE-VALIDATE, one component at a time and immediately before
+         // running. The list was read off widgets that may have been sitting
+         // there for an hour, and the previous component's dictionary may even
+         // have covered this one.
+         //
+         // FAN OUT ACROSS EVERY MOLECULE IN THE ROW. Dictionaries are stored
+         // per molecule now, so describing a comp id once no longer describes
+         // it everywhere: taking imols[0] left every other molecule holding
+         // that ligand with no restraints at all (measured 2026-09-03 --
+         // molecule 0 got 20 bonds, molecule 1 got none). One row still means
+         // one chemistry to describe; it now means N molecules to describe it
+         // TO. The same fan-out is what Auto import needs, for the same reason.
+         std::vector<int> imols;
+         {
+            std::vector<row_t> rows = live_rows(show_all_mode);
             for (unsigned int j=0; j<rows.size(); j++)
-               if (rows[j].comp_id == wanted[i] && ! rows[j].imols.empty()) {
-                  imol = rows[j].imols[0];
-                  break;
-               }
-            if (imol < 0) {
-               dropped++;
-               continue;
-            }
-         } else {
-            // Forced: the only thing that could have changed under us is the
-            // molecule going away.
-            if (! is_valid_model_molecule(imol)) {
-               dropped++;
-               continue;
-            }
+               if (rows[j].comp_id == wanted[i]) { imols = rows[j].imols; break; }
+         }
+         if (imols.empty()) {
+            dropped++;
+            continue;
          }
 
          std::string m = "Generating restraints for " + wanted[i];
@@ -411,20 +510,35 @@ namespace {
          m += "...";
          say_progress(m);
 
-         std::string status = generate_one(imol, wanted[i]);
+         // Derived separately for each molecule rather than generated once and
+         // copied: two molecules can hold chemically DIFFERENT ligands under
+         // one comp id, and that is precisely the case per-molecule storage
+         // exists to serve. Sharing one dictionary between them would put back
+         // the bug the scoping removed.
+         bool any_ok = false;
+         for (unsigned int k=0; k<imols.size(); k++) {
 
-         if (status == "ok") {
-            generated++;
-         } else if (status.compare(0, 5, "warn:") == 0) {
-            generated++;
-            warned.push_back(wanted[i] + ": " + status.substr(5));
-         } else if (status.compare(0, 5, "fail:") == 0) {
-            failed.push_back(wanted[i] + ": " + status.substr(5));
-         } else {
-            // No string came back at all: python is unavailable or the call
-            // itself broke. Nothing useful to say beyond naming the component.
-            failed.push_back(wanted[i] + ": restraint generation did not run");
+            if (! is_valid_model_molecule(imols[k])) continue;
+
+            std::string status = generate_one(imols[k], wanted[i]);
+            const std::string where =
+               wanted[i] + " (molecule " + coot::util::int_to_string(imols[k]) + ")";
+
+            if (status == "ok") {
+               any_ok = true;
+            } else if (status.compare(0, 5, "warn:") == 0) {
+               any_ok = true;
+               warned.push_back(where + ": " + status.substr(5));
+            } else if (status.compare(0, 5, "fail:") == 0) {
+               failed.push_back(where + ": " + status.substr(5));
+            } else {
+               // No string came back at all: python is unavailable or the call
+               // itself broke. Nothing useful beyond naming the component.
+               failed.push_back(where + ": restraint generation did not run");
+            }
+            pump_events();
          }
+         if (any_ok) generated++;
 
          pump_events();
       }
@@ -470,9 +584,113 @@ namespace {
       }
    }
 
+
+/* ------------------------------------------------------------------------ */
+/*  Applying an imported restraints CIF to every molecule it fits           */
+/* ------------------------------------------------------------------------ */
+
+// WHY THIS EXISTS: per-molecule dictionaries broke "import your own restraints".
+//
+// Generated restraints are stored against their molecule. An imported CIF used
+// to land at IMOL_ENC_ANY, and the lookup tries an exact-scope match FIRST --
+// so for any molecule that had generated restraints, the user's own CIF was
+// silently ignored. That is the founding requirement of this feature
+// ("if user then reads in a set of custom restraints, they will naturally
+// override the default ones"), broken by the scoping.
+//
+// Importing SCOPED to each molecule the CIF fits repairs both halves at once:
+// it reaches every molecule rather than one, and it lands at the same scope as
+// the generated dictionary, where mon_lib_add_chem_comp() supersedes on a new
+// read number instead of losing to it.
+
+// Which loaded molecules does this dictionary actually describe?
+//
+// Parsed into a THROWAWAY protein_geometry so the matching happens before
+// anything touches the real store -- otherwise deciding where a dictionary
+// belongs would require importing it first. The constructor only fills the
+// metal-distance and non-auto-load tables, so a temporary is cheap.
+std::vector<int> molecules_fitting_dictionary(const std::string &file_name) {
+
+   std::vector<int> targets;
+
+   coot::protein_geometry tmp;
+   tmp.set_verbose(false);
+   coot::read_refmac_mon_lib_info_t info =
+      tmp.init_refmac_mon_lib(file_name, 0, coot::protein_geometry::IMOL_ENC_ANY);
+   if (info.success <= 0) return targets;
+
+   graphics_info_t g;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      if (! is_valid_model_molecule(imol)) continue;
+      mmdb::Manager *mol = g.molecules[imol].atom_sel.mol;
+      if (! mol) continue;
+
+      bool fits = false;
+      for (unsigned int i=0; i<tmp.size() && ! fits; i++) {
+         // Matched by ATOM NAMES and connectivity, not by comp id: the whole
+         // point is to find the molecules this chemistry describes, and after
+         // a placeholder rename the file's own name may match nothing.
+         std::vector<std::string> hit =
+            coot::comp_id_collision::comp_ids_matching_dictionary(mol, tmp[i].second);
+         if (! hit.empty()) fits = true;
+      }
+      if (fits) targets.push_back(imol);
+   }
+   return targets;
+}
+
+// Transient molecule chooser for an import that fits several molecules.
+//
+// NOTE THE ROWS HERE ARE MOLECULES, which the notification dialog's rows
+// deliberately never are. That rule exists because THAT dialog is long-lived
+// and a molecule number goes stale in it. This one is modal and answered
+// immediately -- a transaction, not a request -- so naming molecules is safe
+// and is the only thing that would mean anything to the user.
+std::vector<int> choose_molecules_for_dictionary(const std::string &file_name,
+                                                 const std::vector<int> &targets) {
+
+   std::vector<int> chosen;
+   graphics_info_t g;
+
+   GtkWidget *d =
+      gtk_dialog_new_with_buttons("Apply Restraints", NULL, GTK_DIALOG_MODAL,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  GTK_STOCK_OK,     GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   gtk_window_set_keep_above(GTK_WINDOW(d), TRUE);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(d));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+
+   std::string head = "More than one molecule compatible with these restraints found:\n";
+   head += coot::util::file_name_non_directory(file_name);
+   GtkWidget *label = gtk_label_new(head.c_str());
+   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 4);
+
+   std::vector<GtkWidget *> boxes;
+   for (unsigned int i=0; i<targets.size(); i++) {
+      std::string t = coot::util::int_to_string(targets[i]) + "  "
+                    + g.molecules[targets[i]].name_for_display_manager();
+      GtkWidget *cb = gtk_check_button_new_with_label(t.c_str());
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb), TRUE);   // all checked
+      gtk_box_pack_start(GTK_BOX(vbox), cb, FALSE, FALSE, 1);
+      boxes.push_back(cb);
+   }
+
+   gtk_widget_show_all(d);
+   if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+      for (unsigned int i=0; i<boxes.size(); i++)
+         if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(boxes[i])))
+            chosen.push_back(targets[i]);
+
+   gtk_widget_destroy(d);
+   return chosen;
+}
+
    // ---- the dialog itself ------------------------------------------------
 
    void dialog_destroy(GtkObject *o, gpointer u) {
+      show_all_mode = false;   // the mode belongs to the open dialog
       dialog = NULL;
       rows_vbox = NULL;
       generate_button = NULL;
@@ -496,7 +714,7 @@ namespace {
          return;
       }
 
-      run_generation(wanted, -1);
+      run_generation(wanted);
 
       // Whatever is left still has no dictionary; if nothing is, the dialog has
       // nothing to say and should not sit there empty.
@@ -598,7 +816,9 @@ namespace {
       if (rebuild_rows() == 0) {
          gtk_widget_destroy(dialog);      // the destroy handler nulls it
          if (announce_empty)
-            info_dialog("Every component in the loaded molecules has restraints.");
+            info_dialog(show_all_mode
+                        ? "No ligands found in the loaded molecules."
+                        : "Every component in the loaded molecules has restraints.");
          return;
       }
 
@@ -612,61 +832,55 @@ namespace {
 // Preferences -> Others -> Ligands. Declared here in the house style used for
 // the other preference readers rather than dragging in the preferences header.
 void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
-                                     int *auto_generate, int *show_generate);
+                                     int *auto_generate, int *show_generate,
+                                     int *apply_all);
 
-void bandicoot_generate_restraints_for_molecule(int imol) {
 
-   if (! graphics_info_t::use_graphics_interface_flag) return;
-   if (! is_valid_model_molecule(imol)) return;
+int bandicoot_import_restraints_sweep(const char *file_name_in,
+                                      short int new_molecule_flag) {
 
-   // EVERY ligand, whether or not it already has restraints -- Art, 2026-09-02.
-   //
-   // This is the difference between this entry point and the load-time dialog.
-   // The dialog offers what is MISSING; asking for it from the menu is a
-   // deliberate act, and its purpose includes REPLACING restraints the user
-   // does not like with ones derived from their own coordinates. Filtering to
-   // what lacks a dictionary would make the menu item do nothing in exactly the
-   // case someone reaches for it.
-   //
-   // No confirmation, also his call: "that doesn't seem to be the Coot way.
-   // Those who know about that function will know what they're getting into."
-   //
-   // Water is skipped. So are the standard residue types, by
-   // non_standard_residue_types_in_molecule() -- generating a self-derived
-   // dictionary for ALA would be actively harmful.
-   graphics_info_t g;
-   std::vector<std::string> wanted;
-   {
-      std::vector<std::string> types =
-         coot::util::non_standard_residue_types_in_molecule(g.molecules[imol].atom_sel.mol);
-      for (unsigned int i=0; i<types.size(); i++) {
-         const std::string &t = types[i];
-         if (t.empty()) continue;
-         if (t == "HOH" || t == "WAT" || t == "DOD") continue;
-         wanted.push_back(t);
-      }
+   if (! file_name_in) return 0;
+   const std::string file_name(file_name_in);
+
+   std::vector<int> targets = molecules_fitting_dictionary(file_name);
+
+   // Nothing loaded matches. Read it unscoped rather than dropping it: a
+   // dictionary is often read AHEAD of its coordinates, and scoping it to a
+   // molecule that does not have the component would put it out of reach of
+   // the one that eventually does. This is what Auto already did.
+   if (targets.empty()) {
+      std::cout << "INFO:: no loaded molecule matches " << file_name
+                << " - reading it for all molecules" << std::endl;
+      return handle_cif_dictionary_for_molecule(file_name.c_str(),
+                                                coot::protein_geometry::IMOL_ENC_ANY,
+                                                new_molecule_flag);
    }
 
-   if (wanted.empty()) {
-      // The one thing worth saying: an explicit request that finds nothing to
-      // work on needs an answer, or it looks like the menu item is broken.
-      std::string m = "No ligands found in ";
-      m += g.molecules[imol].name_for_display_manager();
-      m += ".\n\nNo restraints were generated.";
-      std::cout << "INFO:: no ligands in molecule " << imol << std::endl;
-      info_dialog(m.c_str());
-      return;
+   // Exactly one match needs no question asked.
+   if (targets.size() > 1) {
+      int apply_all = 0;
+      bandicoot_load_ligand_behaviour(NULL, NULL, NULL, NULL, &apply_all);
+      if (! apply_all && graphics_info_t::use_graphics_interface_flag)
+         targets = choose_molecules_for_dictionary(file_name, targets);
    }
 
-   std::cout << "INFO:: generating restraints for " << wanted.size()
-             << " component(s) in molecule " << imol
-             << " (replacing any they already have)" << std::endl;
+   if (targets.empty()) {
+      std::cout << "INFO:: restraints from " << file_name
+                << " applied to no molecules, at the user's request" << std::endl;
+      return 0;
+   }
 
-   // The dialog need not be open, and must not be required: this is the
-   // on-demand entry point. run_generation() re-validates every component
-   // against live state anyway, and set_busy() is a no-op with no dialog up.
-   run_generation(wanted, imol);
-   rebuild_on_idle(NULL);
+   int r = 0;
+   for (unsigned int i=0; i<targets.size(); i++) {
+      // new_molecule_flag on the FIRST only: the user asked for a molecule
+      // from the dictionary, not one per molecule it happens to fit.
+      short int mk = (i == 0) ? new_molecule_flag : 0;
+      int n = handle_cif_dictionary_for_molecule(file_name.c_str(), targets[i], mk);
+      if (n > 0) r = n;
+      std::cout << "INFO:: restraints from " << file_name
+                << " applied to molecule " << targets[i] << std::endl;
+   }
+   return r;
 }
 
 void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_ids) {
@@ -687,12 +901,12 @@ void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_
    // exactly as it does for Ligand from SMILES.
    {
       int auto_generate = 0, show_generate = 1;
-      bandicoot_load_ligand_behaviour(NULL, NULL, &auto_generate, &show_generate);
+      bandicoot_load_ligand_behaviour(NULL, NULL, &auto_generate, &show_generate, NULL);
 
       if (auto_generate) {
          std::cout << "INFO:: generating restraints without asking "
                    << "(Preferences -> Others -> Ligands)" << std::endl;
-         run_generation(comp_ids, -1);
+         run_generation(comp_ids);
          return;
       }
       if (! show_generate) {
@@ -716,5 +930,12 @@ void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_
 void bandicoot_restraints_dialog() {
 
    if (! graphics_info_t::use_graphics_interface_flag) return;
+
+   // Modelling -> Generate Ligand Restraints: EVERY ligand in EVERY loaded
+   // molecule, labelled by file, with anything already described arriving
+   // unticked. If a load-time dialog is already open showing only what is
+   // missing, this switches that same window into show-all rather than opening
+   // a second one.
+   show_all_mode = true;
    show_dialog(true);
 }

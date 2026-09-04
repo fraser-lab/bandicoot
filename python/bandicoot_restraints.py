@@ -267,8 +267,52 @@ def elbow_from_coordinates(pdb_file_name, comp_id):
     workdir = tempfile.mkdtemp(prefix="bcoot_elbow_")
     # --name sets the dictionary's comp id. Without it elbow writes LIG and the
     # restraints silently fail to bind to a residue called anything else.
-    return _elbow(["--file=" + pdb_file_name, "--name=" + comp_id],
-                  workdir, comp_id, comp_id)
+    #
+    # --opt (AM1) IS WHAT MAKES THE RESTRAINTS USABLE ON AN UNREFINED LIGAND.
+    #
+    # Without it elbow perceives the chemistry correctly but its TARGET
+    # DISTANCES partly track the input coordinates, and on a ligand that has not
+    # been refined yet -- which is exactly when restraints are generated -- the
+    # aromatic ring targets come out mutually inconsistent. Measured on a real
+    # ligand against a 0.25 A RMS perturbation of itself:
+    #
+    #                          how much the dictionary moves with input quality
+    #                          overall        aromatic bonds
+    #     plain elbow          0.0135 A       0.0575 A mean, 0.0910 A max
+    #     elbow --opt          0.0248 A       0.0105 A mean, 0.0190 A max
+    #
+    # Plain elbow gave one ring C-N a target of 1.265 A and a ring C-C 1.476 A.
+    # A six-membered aromatic ring cannot satisfy that at esd 0.02, so real-space
+    # refinement buckles it -- which is the distortion Art reported (2026-09-03),
+    # and why regenerating AFTER a good dictionary had fixed the geometry
+    # produced better restraints.
+    #
+    # THE COST IS REAL BUT SMALL, and worth stating: AM1 inflates X-H bonds
+    # (about 1.11 A against a true 1.08) and some C-C singles, so the OVERALL
+    # mean error is slightly worse. An X-H that is 1.5 sigma long is a far
+    # cheaper error than a ring whose targets contradict each other.
+    # Timing was 5.5 s against 5.0 s on a 17-heavy-atom ligand -- negligible
+    # here, though AM1 scales worse than perception does, so a much larger
+    # ligand may cost more.
+    # WARNING: AND IT MUST FALL BACK, because --opt can fail outright.
+    #
+    # Measured on a real 11-atom PanDDA ligand: the AM1 optimisation wrote an
+    # empty trajectory and elbow's OWN parser then raised
+    # "IndexError: list index out of range" in xyz_parser.movie(), exit 1, no
+    # dictionary at all. Plain elbow handles the same ligand fine.
+    #
+    # No dictionary is worse than a geometry-sensitive one, so a failed --opt
+    # retries without it rather than giving up.
+    args = ["--file=" + pdb_file_name, "--name=" + comp_id]
+    pdb, cif, err = _elbow(args + ["--opt"], workdir, comp_id, comp_id)
+    if not err:
+        return (pdb, cif, None)
+
+    print("WARNING:: optimised restraint generation failed for %s; retrying "
+          "without --opt. The targets will be more sensitive to the ligand's "
+          "current geometry." % comp_id)
+    workdir = tempfile.mkdtemp(prefix="bcoot_elbow_")
+    return _elbow(args, workdir, comp_id, comp_id)
 
 
 def elbow_from_smiles(smiles, comp_id):

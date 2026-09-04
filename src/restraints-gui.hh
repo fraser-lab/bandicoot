@@ -33,20 +33,29 @@
 //! keeps its record.
 void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_ids);
 
-//! Generate restraints for whatever \a imol still lacks them, on demand.
+//! Open (or raise) the dialog showing EVERY ligand, on demand.
 //
-//! Backs Modelling -> Generate Ligand Restraints. Needs no dialog to be open,
-//! and says so plainly when the molecule has nothing missing -- an explicit
-//! request deserves an answer either way, unlike the load-time path where
-//! silence is the good news.
-void bandicoot_generate_restraints_for_molecule(int imol);
-
-//! Open (or raise) the notification dialog on demand.
-//
-//! Same dialog, same live contents; it simply does not wait for a load. There
-//! is no menu item for this yet -- the "Generate restraints" button per
-//! molecule in the Display Manager is Scope 3 work -- but the entry point is
-//! here so that adding one is a one-line change.
+//! Backs Modelling -> Generate Ligand Restraints. Same dialog as the load-time
+//! one, switched into show-all: every ligand in every loaded molecule appears,
+//! and anything that already has restraints arrives unticked, so ticking it is
+//! the user asking for those restraints to be replaced.
 void bandicoot_restraints_dialog();
+
+//! Import a restraints CIF, applying it to every loaded molecule it FITS.
+//
+//! Backs Auto on the Import CIF dictionary dialog, and a dropped dictionary.
+//! Matching is by atom names and connectivity, not by comp id, so a file still
+//! finds its molecules after a placeholder rename.
+//
+//! Applied SCOPED to each matching molecule rather than globally, which is what
+//! lets an imported CIF supersede a generated one: same scope, new read number.
+//! A global import would lose to it, because the lookup tries an exact-scope
+//! match first.
+//
+//! Several matches ask which, unless Preferences -> Others -> Ligands says to
+//! apply to all. No match reads it unscoped, since a dictionary is often read
+//! before its coordinates. Returns what handle_cif_dictionary_for_molecule()
+//! returns, i.e. > 0 on success.
+int bandicoot_import_restraints_sweep(const char *file_name, short int new_molecule_flag);
 
 #endif // COOT_RESTRAINTS_GUI_HH

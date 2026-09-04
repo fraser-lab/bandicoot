@@ -1957,9 +1957,6 @@ static void bandicoot_imol_chooser(const char *title, const char *label_text,
 }
 
 // Tier 2 per-molecule ops (run after the chooser picks imol).
-static void bmod_op_generate_ligand_restraints(int imol) {
-   bandicoot_generate_restraints_for_molecule(imol);
-}
 static void bmod_op_arrange_waters(int imol)   { move_waters_to_around_protein(imol); }
 static void bmod_op_assign_hetatm(int imol)    { assign_hetatms(imol); }
 static void bmod_op_fix_nomenclature(int imol) { fix_nomenclature_errors(imol); }
@@ -2741,11 +2738,7 @@ extern "C" void bandicoot_modelling_dispatch(int op_id) {
                              "Fetch PDBe Ligand Description for comp-id:",
                              "", bmod_op_fetch_pdbe_ligand); break;
    case BMOD_FETCH_PDBE_THIS_LIGAND:  bmod_fetch_pdbe_this_ligand(); break;
-   case BMOD_GENERATE_LIGAND_RESTRAINTS:
-      bandicoot_imol_chooser("Generate Ligand Restraints",
-                             "Generate restraints for ligands in:",
-                             bmod_op_generate_ligand_restraints);
-      break;
+   case BMOD_GENERATE_LIGAND_RESTRAINTS:  bandicoot_restraints_dialog(); break;
    // ---- Tier 4 (custom result windows) ------------------------------------
    case BMOD_RENAME_RESIDUE:
       bandicoot_single_entry("Rename Residue",
@@ -4692,7 +4685,8 @@ bool bandicoot_native_question_dialog(const char *msg) {
 }
 
 void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
-                                    int *auto_generate, int *show_generate);
+                                    int *auto_generate, int *show_generate,
+                                    int *apply_all);
 
 // The rename itself, factored out (2026-09-02) so the automatic path from
 // Preferences -> Others -> Ligands and the ask-first path run exactly the same
@@ -4883,7 +4877,7 @@ int resolve_placeholder_collisions_on_load(int imol) {
    //   both No -> leave the names alone; the user will rename by hand
    {
       int auto_rename = 0, show_rename = 1;
-      bandicoot_load_ligand_behaviour(&auto_rename, &show_rename, NULL, NULL);
+      bandicoot_load_ligand_behaviour(&auto_rename, &show_rename, NULL, NULL, NULL);
 
       if (! auto_rename && ! show_rename) {
          std::cout << "INFO:: not renaming placeholder names (Preferences -> "

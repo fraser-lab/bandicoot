@@ -99,6 +99,7 @@
 #include "cmtz-interface.hh" // for valid columns mtz_column_types_info_t
 #include "c-interface-mmdb.hh"
 #include "c-interface-scm.hh"
+#include "restraints-gui.hh"   // bandicoot_import_restraints_sweep()
 #include "c-interface-python.hh"
 
 #ifdef USE_DUNBRACK_ROTAMERS
@@ -5404,8 +5405,13 @@ float residue_density_fit_scale_factor() {
 // dictionary
 int handle_cif_dictionary(const char *filename) {
 
+   // AUTO, not ANY (Bandicoot v0.2, 2026-09-03): a dropped dictionary now goes
+   // through the same sweep as Auto on the Import CIF dictionary dialog, and is
+   // applied scoped to every molecule it fits. Reading it globally would leave
+   // it losing to any generated dictionary, because the lookup prefers an
+   // exact-scope match. See bandicoot_import_restraints_sweep().
    short int new_molecule_flag = 0; // no
-   return handle_cif_dictionary_for_molecule(filename, coot::protein_geometry::IMOL_ENC_ANY,
+   return handle_cif_dictionary_for_molecule(filename, coot::protein_geometry::IMOL_ENC_AUTO,
 					     new_molecule_flag);
 }
 
@@ -5454,6 +5460,23 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 	 }
       }
    }
+
+   // BANDICOOT v0.2 (2026-09-03): AUTO now SWEEPS.
+   //
+   // It used to pick the single highest-numbered molecule containing the comp
+   // id (or IMOL_ENC_ANY for anything not on the non-auto-load list, which
+   // includes our renamed 01/02...). Since generated restraints are stored per
+   // molecule, a global import LOSES to them -- the lookup prefers an exact
+   // scope -- so "import your own restraints" quietly stopped working. The
+   // sweep applies the file scoped to every molecule it fits, which both
+   // reaches them all and supersedes properly.
+   //
+   // Placed after the not-a-dictionary guard above, so a coordinate file is
+   // still refused before any of this. No recursion: the sweep calls back with
+   // a real molecule number or IMOL_ENC_ANY, never AUTO.
+   if (imol_enc == coot::protein_geometry::IMOL_ENC_AUTO)
+      return bandicoot_import_restraints_sweep(
+                filename, new_molecule_from_dictionary_cif_checkbutton_state);
 
    short int show_dialog_flag = 0;
    if (graphics_info_t::use_graphics_interface_flag)

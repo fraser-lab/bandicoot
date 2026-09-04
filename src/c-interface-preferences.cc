@@ -633,8 +633,9 @@ static void bcoot_ligands_add_row(GtkWidget *tbl, int row, const char *label_tex
 //   line 1   if not automatic, offer the rename dialog at all?
 //   line 2   generate missing restraints automatically?
 //   line 3   if not automatic, offer the restraints dialog at all?
+//   line 4   apply an imported restraints CIF to every molecule it fits?
 //
-// Defaults 0/1/0/1 -- ask about both, which is exactly the behaviour before
+// Defaults 0/1/0/1/0 -- ask about all three, which is exactly the behaviour before
 // this tab existed, so an existing user notices no change.
 //
 // The point of the "No/No" combinations is to get the OLD, quiet behaviour
@@ -645,6 +646,7 @@ static GtkWidget *bcoot_lig_auto_rename_yes   = NULL;
 static GtkWidget *bcoot_lig_show_rename_yes   = NULL;
 static GtkWidget *bcoot_lig_auto_generate_yes = NULL;
 static GtkWidget *bcoot_lig_show_generate_yes = NULL;
+static GtkWidget *bcoot_lig_apply_all_yes     = NULL;
 static GtkWidget *bcoot_lig_show_rename_box   = NULL;   // greyed when moot
 static GtkWidget *bcoot_lig_show_generate_box = NULL;
 
@@ -655,12 +657,14 @@ static std::string bandicoot_ligand_behaviour_path() {
 }
 
 void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
-                                     int *auto_generate, int *show_generate) {
+                                     int *auto_generate, int *show_generate,
+                                     int *apply_all) {
    // Defaults first, so a missing or short file still yields sane values.
    if (auto_rename)   *auto_rename   = 0;
    if (show_rename)   *show_rename   = 1;
    if (auto_generate) *auto_generate = 0;
    if (show_generate) *show_generate = 1;
+   if (apply_all)     *apply_all     = 0;
 
    std::string fn = bandicoot_ligand_behaviour_path();
    if (fn.empty()) return;
@@ -671,6 +675,7 @@ void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
    if (f >> v) { if (show_rename)   *show_rename   = v ? 1 : 0; }
    if (f >> v) { if (auto_generate) *auto_generate = v ? 1 : 0; }
    if (f >> v) { if (show_generate) *show_generate = v ? 1 : 0; }
+   if (f >> v) { if (apply_all)     *apply_all     = v ? 1 : 0; }
 }
 
 static int bcoot_yes(GtkWidget *w) {
@@ -686,7 +691,8 @@ static void bandicoot_save_ligand_behaviour() {
    f << bcoot_yes(bcoot_lig_auto_rename_yes)   << "\n"
      << bcoot_yes(bcoot_lig_show_rename_yes)   << "\n"
      << bcoot_yes(bcoot_lig_auto_generate_yes) << "\n"
-     << bcoot_yes(bcoot_lig_show_generate_yes) << "\n";
+     << bcoot_yes(bcoot_lig_show_generate_yes) << "\n"
+     << bcoot_yes(bcoot_lig_apply_all_yes)     << "\n";
 }
 
 // GREY OUT rather than hide the dependent setting when it cannot apply.
@@ -732,8 +738,9 @@ static void bandicoot_add_ligand_behaviour_tab(GtkWidget *prefs) {
    if (!nb || !GTK_IS_NOTEBOOK(nb)) return;
 
    int auto_rename = 0, show_rename = 1, auto_generate = 0, show_generate = 1;
+   int apply_all = 0;
    bandicoot_load_ligand_behaviour(&auto_rename, &show_rename,
-                                   &auto_generate, &show_generate);
+                                   &auto_generate, &show_generate, &apply_all);
 
    GtkWidget *page = gtk_vbox_new(FALSE, 8);
    gtk_container_set_border_width(GTK_CONTAINER(page), 12);
@@ -757,6 +764,11 @@ static void bandicoot_add_ligand_behaviour_tab(GtkWidget *prefs) {
       bcoot_lig_yes_no_frame("Ask before generating restraints?",
                              show_generate != 0, &bcoot_lig_show_generate_yes);
    gtk_box_pack_start(GTK_BOX(page), bcoot_lig_show_generate_box, FALSE, FALSE, 0);
+
+   gtk_box_pack_start(GTK_BOX(page),
+      bcoot_lig_yes_no_frame("Apply Loaded mmCIF Restraints to All Molecules?",
+                             apply_all != 0, &bcoot_lig_apply_all_yes),
+      FALSE, FALSE, 0);
 
    {
       GtkWidget *note = gtk_label_new(
