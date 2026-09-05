@@ -2120,6 +2120,10 @@ typedef struct {
 
 static void bandicoot_baddie_clicked(GtkButton *button, gpointer user_data) {
    bandicoot_baddie_t *bd = (bandicoot_baddie_t *) user_data;
+   // Every validation list routes through here, so one call covers all of
+   // them. Before the move, so the recorder's click and the recentre it
+   // causes land in that order.
+   bandicoot_record_navigation("results-list", gtk_button_get_label(button));
    if (bd->has_coord) {
       set_rotation_centre(bd->x, bd->y, bd->z);
    } else {

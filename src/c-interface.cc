@@ -8724,7 +8724,59 @@ int bandicoot_python_timeout_add(int interval_ms, PyObject *callable) {
                               bandicoot_python_timeout_thunk,
                               callable);
 }
+
+// The scripting-API reader, rotation_centre_position(), is added to the command
+// history and echoed to the console like any other user action. A caller that
+// samples the view continuously would therefore fill both with its own reads,
+// so give it a way to ask that leaves no trace.
+PyObject *bandicoot_rotation_centre_py() {
+   graphics_info_t g;
+   coot::Cartesian p = g.RotationCentre();
+   PyObject *r = PyList_New(3);
+   PyList_SetItem(r, 0, PyFloat_FromDouble(p.x()));
+   PyList_SetItem(r, 1, PyFloat_FromDouble(p.y()));
+   PyList_SetItem(r, 2, PyFloat_FromDouble(p.z()));
+   return r;
+}
+
 #endif // USE_PYTHON
+
+// Report a navigation click (a results-list row, a difference-map peak) to the
+// session recorder if one is running. The label is what the user saw on the
+// button, which no downstream hook can reconstruct: the recentre that follows
+// carries coordinates but not what was chosen or how it ranked. A no-op when
+// nothing is recording, so click handlers can call it unconditionally.
+void bandicoot_record_navigation(const char *source, const char *label) {
+
+#ifdef USE_PYTHON
+   // The recorder is optional, so ask whether the entry point exists rather
+   // than assuming it; an undefined name would raise into the click handler.
+   PyObject *v = safe_python_command_with_return
+      ("callable(globals().get('bandicoot_session_record_navigation'))");
+   int ret = 0;
+   if (v) ret = PyInt_AsLong(v);
+   Py_XDECREF(v);
+   if (ret != 1) return;
+   // The command is evaluated as Python source, so the arguments are escaped
+   // rather than merely quoted: labels are built from molecule and file names
+   // and are not guaranteed to be free of quotes, backslashes or control
+   // characters.
+   std::string cmd = "bandicoot_session_record_navigation(";
+   for (int arg=0; arg<2; arg++) {
+      const char *p = arg ? label : source;
+      cmd += "\"";
+      for (; p && *p; p++) {
+         unsigned char c = (unsigned char) *p;
+         if (c < 32 || c == 127) { cmd += ' '; continue; }
+         if (c == '"' || c == '\\') cmd += '\\';
+         cmd += (char) c;
+      }
+      cmd += arg ? "\")" : "\", ";
+   }
+   PyObject *res = safe_python_command_with_return(cmd);
+   Py_XDECREF(res);
+#endif // USE_PYTHON
+}
 
 void set_remote_control_port(int port_number) {
   graphics_info_t::remote_control_port_number = port_number;

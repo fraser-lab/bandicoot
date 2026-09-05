@@ -6,8 +6,10 @@ changed. The log is one JSON object per line (JSON Lines), so it can be read by
 a script or turned into a plain-text summary. Nothing is recorded unless you
 turn it on.
 
-The recorder is `python/bandicoot_session_recorder.py`. It needs no rebuild
-step beyond the normal one and no changes to Coot's C++.
+The recorder is `python/bandicoot_session_recorder.py`, with four small
+supporting functions in Bandicoot's C++: a rotation-centre reader that does not
+echo, a query for whether command echo is on, the navigation-click report, and
+a call on the way out so a session ends cleanly.
 
 ## Start recording
 
@@ -30,8 +32,10 @@ session_recording_status()                           # path, event count, what i
 stop_session_recording()                             # finish the file
 ```
 
-Recording also stops when Bandicoot exits. Every event is flushed to disk as
-it happens, so a crash loses nothing except the final `session_end` line.
+Recording also stops when Bandicoot exits normally (Quit, the window close
+button, or Ctrl-C), which writes a closing diff and the `session_end` line.
+Every event is flushed to disk as it happens, so even a crash or a `kill -9`
+loses nothing except that last diff and line.
 
 ## Read a log
 
@@ -49,22 +53,25 @@ changes are hidden by default). Example output:
 12:15:09  molecule  model 0: /Users/you/refine/model.pdb
 12:15:09  molecule  map 1: /Users/you/refine/maps.mtz FWT PHWT
 12:15:09  molecule  map 2 (difference map): /Users/you/refine/maps.mtz DELFWT PHDELWT
-12:16:41  view      A/45 SER               map 1.3s  diff +5.1s (peak +1/12, +5.2s, 0.4 A)
+12:16:38  click     diff-map-peaks: 1 0.62 (5.2 rmsd) at (12.4, 8.1, 30.7)
+12:16:41  view      A/45 SER               map 1.3s  diff +5.1s
 12:16:55  command   place_typed_atom_at_pointer ("Water")
 12:16:55  edit      add_water x1 (A/301)  [near A/45 SER, backup #7, via backup]
-12:17:20  view      A/45 SER               map 1.1s  diff +3.4s (peak +2/12, +3.6s, 1.1 A)
+12:17:20  view      A/45 SER               map 1.1s  diff +3.4s
 12:17:48  command   add_alt_conf (0, "A", 45, "", "", 1)
 12:17:52  edit      add_altloc B on A/45 SER (6 atoms)  [near A/45 SER, backup #8, via backup]
-12:18:30  view      A/112 GLU              map 0.9s  diff -3.8s (peak -1/12, -3.9s, 0.6 A)
+12:18:28  click     results-list: Density fit outlier A/112 GLU  0.31
+12:18:30  view      A/112 GLU              map 0.9s  diff -3.8s
 ```
 
-`s` means sigma. The peak entry reads: sign, rank among peaks of that sign,
-number of peaks of that sign, peak height, distance from the screen centre to
-the peak.
+`s` means sigma. A `click` line names the dialog and repeats its button text;
+the `view` on the next line is where that click took you. With peak ranking
+turned on, `view` lines also carry a peak entry -- sign, rank among peaks of
+that sign, how many there are, height, and distance from the screen centre.
 
 ## What is recorded
 
-Three sources, merged by timestamp into one file.
+Four sources, merged by timestamp into one file.
 
 **Coot's command echo.** Every GUI action that goes through a scripting-API
 function is printed to the terminal by Coot itself (`add_to_history` in
@@ -83,8 +90,8 @@ The full terminal output of the session is therefore also kept.
   and Shift-Space, middle-click, Go To Atom, and clicks in the Difference Map
   Peaks dialog. The recorder logs a `view` event: rotation centre, zoom, the
   nearest residue, and for each open map the density at the centre in sigma
-  units. For difference maps it also reports which peak you are on (see
-  below).
+  units. With peak ranking turned on it also reports which difference peak you
+  are on (see below).
 - `post_manipulation_script` runs after a moving-atoms accept, a delete, or a
   mutation.
 - `post_read_model_hook` runs after a model is read.
@@ -101,7 +108,7 @@ types:
 
 | Type | Meaning |
 |------|---------|
-| `add_water`, `delete_water` | HOH residues added or removed (grouped, with the residue list) |
+| `add_water`, `delete_water` | water residues added or removed (grouped, with the residue list) |
 | `add_residue`, `delete_residue` | any other residue added or removed |
 | `add_altloc`, `delete_altloc` | alternate-conformation letters appeared or vanished on a residue |
 | `mutate` | residue name changed |
@@ -109,24 +116,44 @@ types:
 | `add_atoms`, `delete_atoms` | atom count changed without an altloc change (side chain, hydrogens) |
 | `occupancy`, `bfactor` | occupancy or B factor changed |
 
+In an ensemble, residues are identified per model: `2:A/45 SER` is chain A
+residue 45 in MODEL 2. Single-model files carry no prefix.
+
 A main-loop timer (500 ms) also polls the nearest residue, so drag-panning,
 which fires no hook, produces `view` events tagged `[poll]` whenever the
 nearest atom changes.
 
+**Navigation clicks.** The dialogs that move the view when you click a row
+report what you clicked, as a `navigate` event immediately before the `view`
+the click produces:
+
+- the Difference Map Peaks dialog, including the jump to peak 1 that happens
+  when the dialog opens (`source: diff-map-peaks`);
+- every validation results list -- check waters, cis peptides, alt confs,
+  rotamer and density-fit outliers, unmodelled blobs and the rest, which all
+  share one dialog (`source: results-list`).
+
+The `label` is the button text, so it carries whatever that list showed: a
+peak's rank and height in rmsd, or an outlier's residue and score. A recentre
+on its own records only a position, which is why this is worth its own event.
+
 ## Difference-map peak rank
 
-"Went to the largest positive difference peak" is not something Coot stores.
-The recorder infers it: for each difference map it computes the peak list at
+Beyond the click labels above, the recorder can also rank each `view` against
+the difference map itself: for each difference map it computes the peak list at
 3 sigma around the model (`map_peaks_around_molecule`), sorts positive and
-negative peaks separately by height, and at each `view` reports the nearest
-peak within 2.5 angstroms of the screen centre with its rank. The list is
-cached for five minutes per map, and the `list_age_s` field says how old it
-was. This is the recorder's own ranking at 3 sigma, not the list in the
-Difference Map Peaks dialog, which uses whatever sigma you chose there.
+negative peaks separately by height, and reports the nearest peak within 2.5
+angstroms of the screen centre with its rank. The list is cached for five
+minutes per map, and `list_age_s` says how old it was. This is the recorder's
+own ranking at 3 sigma, not the list in the Difference Map Peaks dialog, which
+uses whatever sigma you chose there.
 
-Peak search costs a fraction of a second per map, the first time a map is
-looked at and again every five minutes. Set `BANDICOOT_RECORD_PEAKS=0` to
-turn ranking off.
+**Off by default**, because the peak search runs on the main thread inside the
+recentre that triggers it: the window stops responding while it runs, on first
+sight of each map and again every five minutes. Set `BANDICOOT_RECORD_PEAKS=1`
+to turn it on. It answers a different question from the click labels -- "what
+was near where I ended up" rather than "what did I ask for" -- so it is only
+worth the pause if that is the question you have.
 
 ## Files and settings
 
@@ -135,8 +162,15 @@ turn ranking off.
 | `BANDICOOT_RECORD` | unset | `1` starts recording at launch |
 | `BANDICOOT_SESSION_DIR` | `~/bandicoot-sessions` | where log files go |
 | `BANDICOOT_RECORD_STDOUT` | `1` | `0` disables the stdout tee (no `command` events) |
-| `BANDICOOT_RECORD_PEAKS` | `1` | `0` disables difference-peak ranking |
+| `BANDICOOT_RECORD_STDOUT_MAX_MB` | `64` | size at which the terminal copy stops growing; `0` for no limit |
+| `BANDICOOT_RECORD_PEAKS` | `0` | `1` enables difference-peak ranking (pauses the window; see above) |
 | `BANDICOOT_RECORD_ALL_STDOUT` | `0` | `1` stores every terminal line as a `stdout` event (large files) |
+
+`command` events depend on Coot's console command echo, which is on by default
+but is a saved preference (Preferences, or
+`set_console_display_commands_state(1)`). If it is off, the recorder says so in
+a `warning` event at the start of the log rather than quietly recording no
+commands.
 
 Log file names: `bandicoot-session-<YYYYMMDD-HHMMSS>-<pid>.jsonl`, with the
 terminal copy in `bandicoot-session-<YYYYMMDD-HHMMSS>-<pid>.stdout.log`.
@@ -155,6 +189,7 @@ session started), `seq` (running number), and `event`. Other fields by event:
 | `read_model` | `imol`, `molecule` |
 | `view` | `source` (`hook`/`poll`), `xyz`, `zoom`, `residue` {`imol`, `chain`, `resno`, `ins`, `atom`, `alt`, `name`, `spec`}, `maps` [{`imol`, `name`, `difference`, `sigma_at_centre`, `contour_sigma`, `peak` {`sign`, `rank`, `of`, `sigma`, `dist`, `search_sigma`, `list_age_s`}}] |
 | `command` | `text`, `name` (Python-style function name), `args` (raw argument text), `syntax` (`python`/`scheme`) |
+| `navigate` | `source` (`diff-map-peaks`/`results-list`), `label` (the button text) |
 | `key` | `key`, `keyval`, `ctrl` |
 | `manipulation` | `imol`, `mode` (`MOVINGATOMS`/`DELETED`/`MUTATED`), `molecule` |
 | `backup` | `file`, `history_index`, `imols` |
@@ -190,10 +225,14 @@ Residue specs are written `chain/resno[ins] NAME`, for example `A/45 SER`.
 - Coot 0.9 adds most scripting calls to its history, including calls made by
   scripts. The recorder uses the silent ones (`active_residue`,
   `residue_info`, `map_sigma`, `density_at_point`, `map_peaks_around_molecule`,
-  `molecule_to_pdb_string`, `zoom_factor`). Two it cannot avoid are echoed:
-  `rotation_centre_position` (three calls per `view`) and `molecule_name`
-  (once per molecule). They are filtered out of the `command` stream, but they
-  do appear in `0-coot-history.py`.
+  `molecule_to_pdb_string`, `zoom_factor`), and reads the view centre through
+  `bandicoot_rotation_centre_py`, which exists so that polling the view does
+  not echo. `molecule_name` is still echoed, once per molecule slot; it is
+  filtered out of the `command` stream but does appear in `0-coot-history.py`.
+- Snapshots are taken in PDB format, so what a PDB file cannot express is not
+  visible to the diff. In particular a five-character CCD ligand code is
+  truncated to three characters in the snapshot, and therefore in `edit`
+  events, even though the model itself is unaffected.
 - The stdout capture starts a `tee` child process; if `tee` is not on the
   PATH, recording continues without `command` events and logs a warning.
 - File paths of models and maps are recorded. Nothing else leaves the machine;

@@ -23,7 +23,14 @@
 #      or a periodic timer triggers a residue-level diff of the live model
 #      against the previous snapshot: "edit" events such as add_water,
 #      add_altloc, delete_residue, mutate, move. A snapshot is one call,
-#      molecule_to_pdb_string_py, parsed here.
+#      molecule_to_pdb_string_py, parsed here. Residues are keyed by model
+#      number as well as chain/resno/ins, so an ensemble's models stay apart.
+#   4. Navigation clicks. The C++ dialogs that move the view when a row is
+#      clicked -- the validation results lists and the difference-map peaks
+#      dialog -- report the button label through bandicoot_record_navigation(),
+#      giving a "navigate" event immediately before the "view" the click
+#      causes. The label is the only record of WHICH peak or outlier was
+#      chosen and how it ranked; the recentre knows only a position.
 #
 # A main-loop timer (gobject.timeout_add, which Bandicoot routes to GLib via
 # bandicoot_python_timeout_add) polls the nearest residue so that drag-panning,
@@ -33,10 +40,11 @@
 # Most scripting calls in Coot 0.9 are themselves added to the history and
 # echoed, so the recorder uses the ones that are not (active_residue_py,
 # residue_info_py, map_sigma_py, density_at_point, map_peaks_around_molecule_py,
-# molecule_to_pdb_string_py, zoom_factor, is_valid_*). The exceptions it cannot
-# avoid, rotation_centre_position (three calls per view) and molecule_name
-# (once per molecule), are filtered out of the command stream but do land in
-# 0-coot-history.py.
+# molecule_to_pdb_string_py, zoom_factor, is_valid_*). The view centre is read
+# through bandicoot_rotation_centre_py(), which exists because the scripting
+# reader echoes: polling it printed three lines per view and wrote the
+# recorder's own reads into the user's 0-coot-history.py. molecule_name still
+# echoes, once per molecule slot, and is filtered from the command stream.
 #
 # Start recording (any one of):
 #   BANDICOOT_RECORD=1 bcoot                          environment variable
@@ -75,6 +83,9 @@ BSR_VERSION = "0.1.0"
 # src/manipulation-modes.hh
 _BSR_MODES = {2: "DELETED", 3: "MUTATED", 4: "MOVINGATOMS"}
 
+# grouped in the log rather than listed one by one
+_BSR_WATER_NAMES = ("HOH", "WAT", "H2O", "DOD", "SOL", "TIP", "TIP3")
+
 _BSR_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _BSR_BOLD = "\x1b[1m"
 _BSR_CMD_PREFIX = "INFO:: Command: "
@@ -95,9 +106,20 @@ _BSR_NOISE_COMMANDS = {"use_graphics_interface_state", "filter_fileselection_fil
 
 
 def _bsr_parse_pdb_string(text):
-    """ATOM/HETATM records -> {(chain, resno, ins): (resname, {(atom, alt): (x, y, z, occ, b)})}."""
+    """ATOM/HETATM records -> {(model, chain, resno, ins): (resname, {(atom, alt): (x, y, z, occ, b)})}.
+
+    The model number is part of the key: an ensemble repeats the same chain,
+    residue number and insertion code in every MODEL, so without it each model
+    overwrites the last and only the final one is ever compared."""
     res = {}
+    model = 1
     for line in text.splitlines():
+        if line.startswith("MODEL"):
+            try:
+                model = int(line[10:14])
+            except ValueError:
+                model += 1
+            continue
         if not (line.startswith("ATOM") or line.startswith("HETATM")) or len(line) < 54:
             continue
         try:
@@ -115,7 +137,7 @@ def _bsr_parse_pdb_string(text):
             b = float(line[60:66]) if len(line) >= 66 and line[60:66].strip() else 0.0
         except ValueError:
             continue
-        key = (chain, resno, ins)
+        key = (model, chain, resno, ins)
         if key not in res:
             res[key] = (rname, {})
         res[key][1][(name, alt)] = (x, y, z, occ, b)
@@ -145,11 +167,18 @@ def _bsr_default_session_path():
     return os.path.join(_bsr_default_session_dir(), "bandicoot-session-%s-%d.jsonl" % (stamp, os.getpid()))
 
 
-def _bsr_spec(chain, resno, ins, name=None):
+def _bsr_spec(chain, resno, ins, name=None, model=None):
     s = "%s/%s%s" % (chain, resno, (ins or "").strip())
+    if model and int(model) > 1:
+        s = "%s:%s" % (model, s)          # only ensembles carry a model prefix
     if name:
         s += " " + name
     return s
+
+
+def _bsr_key_spec(key, name=None):
+    """Format a snapshot key (model, chain, resno, ins)."""
+    return _bsr_spec(key[1], key[2], key[3], name, key[0])
 
 
 def _bsr_dist(a, b):
@@ -179,17 +208,17 @@ def _bsr_diff_snapshots(old, new, max_list=20):
     removed = [k for k in old if k not in new]
 
     def group(keys, snap, water_type, other_type):
-        waters = [k for k in keys if snap[k][0] == "HOH"]
-        others = [k for k in keys if snap[k][0] != "HOH"]
+        waters = [k for k in keys if snap[k][0] in _BSR_WATER_NAMES]
+        others = [k for k in keys if snap[k][0] not in _BSR_WATER_NAMES]
         if waters:
             waters.sort()
             ch = {"type": water_type, "count": len(waters),
-                  "residues": [_bsr_spec(*k) for k in waters[:max_list]]}
+                  "residues": [_bsr_key_spec(k) for k in waters[:max_list]]}
             if len(waters) > max_list:
                 ch["residues_truncated"] = len(waters) - max_list
             changes.append(ch)
         for k in sorted(others):
-            changes.append({"type": other_type, "residue": _bsr_spec(*k, name=snap[k][0]),
+            changes.append({"type": other_type, "residue": _bsr_key_spec(k, snap[k][0]),
                             "n_atoms": len(snap[k][1])})
 
     group(added, new, "add_water", "add_residue")
@@ -200,9 +229,9 @@ def _bsr_diff_snapshots(old, new, max_list=20):
         nname, natoms = new[k]
         if oname == nname and oatoms == natoms:
             continue
-        spec = _bsr_spec(*k, name=nname)
+        spec = _bsr_key_spec(k, nname)
         if oname != nname:
-            changes.append({"type": "mutate", "residue": _bsr_spec(*k), "from": oname, "to": nname})
+            changes.append({"type": "mutate", "residue": _bsr_key_spec(k), "from": oname, "to": nname})
         oalts = set(a for (_n, a) in oatoms if a)
         nalts = set(a for (_n, a) in natoms if a)
         alt_changed = False
@@ -335,7 +364,8 @@ class _BsrRecorder:
 
     def __init__(self, coot_api, main_ns, path=None, capture_stdout=True, rank_peaks=True,
                  use_timer=True, poll_ms=500, periodic_s=60.0, backup_scan_s=2.0,
-                 peak_sigma=3.0, peak_ttl_s=300.0, record_all_stdout=False, max_changes=50):
+                 peak_sigma=3.0, peak_ttl_s=300.0, record_all_stdout=False, max_changes=50,
+                 stdout_max_mb=None):
         self.coot = coot_api
         self._main = main_ns
         self.path = path or _bsr_default_session_path()
@@ -350,6 +380,12 @@ class _BsrRecorder:
         self.peak_ttl_s = float(peak_ttl_s)
         self.record_all_stdout = record_all_stdout
         self.max_changes = int(max_changes)
+        if stdout_max_mb is None:
+            try:
+                stdout_max_mb = float(os.environ.get("BANDICOOT_RECORD_STDOUT_MAX_MB", 64))
+            except ValueError:
+                stdout_max_mb = 64
+        self.stdout_max_bytes = int(float(stdout_max_mb) * 1024 * 1024)   # 0 disables the cap
 
         self.running = False
         self._fh = None
@@ -405,6 +441,7 @@ class _BsrRecorder:
             except Exception:
                 self._tee = None
                 self._error("stdout_tee_start")
+            self._check_command_echo()
         if self.use_timer:
             self._start_timer()
         try:
@@ -437,6 +474,20 @@ class _BsrRecorder:
             pass
         self._fh = None
 
+    def _check_command_echo(self):
+        # Commands are harvested from Coot's console echo, which is a saved
+        # preference. With it off the log simply has no "command" events, and
+        # nothing else would say why. Report rather than override: it is the
+        # user's setting, and it governs their terminal, not just us.
+        try:
+            state = int(self.coot.console_display_commands_state())
+        except Exception:
+            return
+        if state == 0:
+            self._emit("warning", text="console command echo is off (Preferences, or "
+                                       "set_console_display_commands_state(1)); no command "
+                                       "events will be recorded this session")
+
     def _atexit(self):
         if self.running:
             try:
@@ -453,6 +504,18 @@ class _BsrRecorder:
 
     def note(self, text):
         self._emit("note", text=str(text))
+
+    def record_navigation(self, source, label):
+        # Called from C++ when the user clicks a row in a results list or a
+        # difference-map peak, just before the recentre it causes. The button
+        # label is the only place the identity of the thing clicked exists --
+        # its rank, its height, which list it came from -- and the "view" event
+        # that follows carries the position.
+        try:
+            self._service()
+            self._emit("navigate", source=str(source), label=str(label))
+        except Exception:
+            self._error("navigate")
 
     # ---- output
 
@@ -543,12 +606,18 @@ class _BsrRecorder:
         return self._chain("post_manipulation_script", imol, mode)
 
     def _hook_read_model(self, imol):
+        fresh = ()
         try:
             if self.running:
-                self._service()
+                fresh = self._service()
                 info = self._mol_info(imol)
                 self._emit("read_model", imol=imol, molecule=info[1] if info else None)
-                if info and info[0] == "model":
+                # _service() above ran _scan_molecules(), which snapshots a
+                # molecule it has just noticed -- doing it again here serialised
+                # every model twice. Still snapshot when the scan did not,
+                # which is how a molecule slot re-read under the same name gets
+                # a fresh baseline instead of the previous occupant's.
+                if info and info[0] == "model" and imol not in fresh:
                     self._mol_seen[imol] = info
                     self._snapshots[imol] = self._snapshot(imol)
         except Exception:
@@ -593,8 +662,33 @@ class _BsrRecorder:
         if self._tee is not None:
             for line in self._tee.poll():
                 self._on_stdout_line(line)
-        self._scan_molecules()
+            self._check_stdout_size()
+        fresh = self._scan_molecules()
         self._flush_pending_backups()
+        return fresh          # imols snapshotted here, so callers do not repeat it
+
+    def _check_stdout_size(self):
+        # The sidecar is a verbatim copy of the session's stdout and nothing
+        # bounds it. Past the cap, stop copying and keep recording everything
+        # else, rather than filling the user's disk in the background.
+        if self.stdout_max_bytes <= 0:
+            return
+        try:
+            size = os.path.getsize(self.stdout_path)
+        except OSError:
+            return
+        if size < self.stdout_max_bytes:
+            return
+        try:
+            for line in self._tee.stop():
+                self._on_stdout_line(line)
+        except Exception:
+            self._error("stdout_tee_stop")
+        self._tee = None
+        self._emit("warning", text="stdout capture stopped: %s reached %d MB "
+                                   "(BANDICOOT_RECORD_STDOUT_MAX_MB)"
+                                   % (os.path.basename(self.stdout_path),
+                                      self.stdout_max_bytes // (1024 * 1024)))
 
     def _tick(self):
         if not self.running:
@@ -637,10 +731,25 @@ class _BsrRecorder:
             return
         self._record_view("poll")
 
+    def _rotation_centre(self):
+        # bandicoot_rotation_centre_py() leaves no trace. rotation_centre_position()
+        # is added to the command history and echoed to the console like a user
+        # action, so polling the view with it printed three lines per view and
+        # filled the user's 0-coot-history.py with our own reads.
+        c = self.coot
+        if hasattr(c, "bandicoot_rotation_centre_py"):
+            try:
+                p = c.bandicoot_rotation_centre_py()
+                if isinstance(p, (list, tuple)) and len(p) == 3:
+                    return [float(v) for v in p]
+            except Exception:
+                pass
+        return [float(c.rotation_centre_position(i)) for i in range(3)]
+
     def _record_view(self, source, xyz=None):
         c = self.coot
         if xyz is None:
-            xyz = [float(c.rotation_centre_position(i)) for i in range(3)]
+            xyz = self._rotation_centre()
         rec = {"source": source, "xyz": [round(v, 2) for v in xyz]}
         try:
             rec["zoom"] = round(float(c.zoom_factor()), 2)
@@ -799,10 +908,11 @@ class _BsrRecorder:
 
     def _scan_molecules(self):
         c = self.coot
+        fresh = set()
         try:
             n = c.graphics_n_molecules()
         except Exception:
-            return
+            return fresh
         current = {}
         for imol in range(n):
             info = self._mol_info(imol)
@@ -817,6 +927,7 @@ class _BsrRecorder:
             self._mol_seen[imol] = info
             if info[0] == "model":
                 self._snapshots[imol] = self._snapshot(imol)
+                fresh.add(imol)
             else:
                 self._peak_cache.pop(imol, None)
         for imol in list(self._mol_seen):
@@ -826,6 +937,7 @@ class _BsrRecorder:
                 self._peak_cache.pop(imol, None)
                 self._names.pop(imol, None)
                 self._emit("molecule_closed", imol=imol, kind=info[0], name=info[1])
+        return fresh
 
     def _snapshot(self, imol):
         c = self.coot
@@ -879,7 +991,9 @@ class _BsrRecorder:
                             b = b[0]                      # anisotropic: [Biso, u11, ...]
                         atoms[(str(name_alt[0]).strip(), str(name_alt[1]))] = (
                             float(pos[0]), float(pos[1]), float(pos[2]), float(attrib[0]), float(b))
-                    res[(chain, resno, ins)] = (rname, atoms)
+                    # model 1: these enumerators have no model argument, so
+                    # this fallback cannot see an ensemble's later models.
+                    res[(1, chain, resno, ins)] = (rname, atoms)
                 except Exception:
                     self._error("snapshot_residue")
         cost = time.time() - t
@@ -1028,7 +1142,12 @@ class _BsrRecorder:
             cmd = clean[len(_BSR_CMD_PREFIX):].strip()
         if cmd:
             name, args, syntax = _bsr_parse_command(cmd)
-            if name in _BSR_INTERNAL_COMMANDS:
+            if name is None:
+                # Bold is how the echo marks a command, but it is not proof of
+                # one. Anything else bold falls through to the backup notices
+                # below and, failing those, is dropped.
+                cmd = None
+            elif name in _BSR_INTERNAL_COMMANDS:
                 return
             if name in _BSR_NOISE_COMMANDS:
                 self._emit("command", text=cmd, name=name, args=args, syntax=syntax, noise=True)
@@ -1065,7 +1184,12 @@ def start_session_recording(path=None, capture_stdout=None, rank_peaks=None):
     if capture_stdout is None:
         capture_stdout = _bsr_env_flag("BANDICOOT_RECORD_STDOUT", True)
     if rank_peaks is None:
-        rank_peaks = _bsr_env_flag("BANDICOOT_RECORD_PEAKS", True)
+        # Off by default: ranking a view against the difference map runs a
+        # whole-map peak search on the main thread, inside the recentre that
+        # triggered it, so the GUI stops for its duration. What it was for --
+        # knowing which peak the user went to -- now comes from the peak
+        # dialog itself as a "navigate" event, exactly and for free.
+        rank_peaks = _bsr_env_flag("BANDICOOT_RECORD_PEAKS", False)
     rec = _BsrRecorder(_bsr_coot_module, _bsr_main, path=path, capture_stdout=capture_stdout,
                        rank_peaks=rank_peaks,
                        record_all_stdout=_bsr_env_flag("BANDICOOT_RECORD_ALL_STDOUT", False))
@@ -1092,6 +1216,15 @@ def session_recording_status():
     st = rec.status() if rec is not None else {"running": False}
     print("INFO:: session recording: " + json.dumps(st, default=str))
     return st
+
+
+def bandicoot_session_record_navigation(source, label):
+    """Record a navigation click. Called from C++ (bandicoot_record_navigation)."""
+    rec = _bsr_current()
+    if rec is None or not rec.running:
+        return False
+    rec.record_navigation(source, label)
+    return True
 
 
 def session_note(text):
@@ -1163,6 +1296,8 @@ def _bsr_format_event(ev):
         return "%s  view      %-22s %s%s" % (t, where, "  ".join(parts), tag)
     if kind == "command":
         return "%s  command   %s" % (t, ev.get("text"))
+    if kind == "navigate":
+        return "%s  click     %s: %s" % (t, ev.get("source"), ev.get("label"))
     if kind == "key":
         return "%s  key       %s%s" % (t, "Ctrl+" if ev.get("ctrl") else "", ev.get("key"))
     if kind == "manipulation":
@@ -1429,6 +1564,9 @@ def _bsr_selftest():
     rec._snapshot_cost = 0.0
     rec._tick()
 
+    # a difference-map peak click, as the C++ dialog reports it
+    rec.record_navigation("diff-map-peaks", "2 0.51 (4.2 rmsd) at (10.0, 0.0, 0.0)")
+
     # a key binding, a note, a drag-pan caught by polling
     ns.graphics_general_key_press_hook(ord("w"), 0)
     rec.note("selftest note")
@@ -1475,6 +1613,23 @@ def _bsr_selftest():
           "water edit context wrong: %s" % water_edit)
     check(any(e["event"] == "key" and e["key"] == "w" for e in events), "key event missing")
     check(any(e["event"] == "note" for e in events), "note missing")
+    nav = [e for e in events if e["event"] == "navigate"]
+    check(len(nav) == 1 and nav[0]["source"] == "diff-map-peaks" and "4.2 rmsd" in nav[0]["label"],
+          "navigation click missing: %s" % nav)
+
+    # An ensemble repeats chain/resno/ins in every MODEL: the parser must keep
+    # them apart, or each model overwrites the last.
+    two_models = ("MODEL        1\n"
+                  "ATOM      1  CA  ALA A   1      10.000   0.000   0.000  1.00 20.00           C\n"
+                  "ENDMDL\n"
+                  "MODEL        2\n"
+                  "ATOM      2  CA  ALA A   1      11.000   0.000   0.000  1.00 20.00           C\n"
+                  "ENDMDL\n")
+    parsed = _bsr_parse_pdb_string(two_models)
+    check(len(parsed) == 2 and (1, "A", 1, "") in parsed and (2, "A", 1, "") in parsed,
+          "multi-MODEL keys collapsed: %s" % sorted(parsed))
+    check(_bsr_key_spec((2, "A", 1, ""), "ALA") == "2:A/1 ALA",
+          "model prefix wrong: %s" % _bsr_key_spec((2, "A", 1, ""), "ALA"))
     check(not any(e["event"] == "error" for e in events),
           "errors logged: %s" % [e for e in events if e["event"] == "error"])
 
@@ -1508,7 +1663,8 @@ if _bsr_coot_module is not None:
     # public functions are already there; if imported as a module instead,
     # publish them to __main__ so the scripting console and C hooks find them.
     for _bsr_name in ("start_session_recording", "stop_session_recording",
-                      "session_recording_status", "session_note"):
+                      "session_recording_status", "session_note",
+                      "bandicoot_session_record_navigation"):
         if not hasattr(_bsr_main, _bsr_name):
             setattr(_bsr_main, _bsr_name, globals()[_bsr_name])
     if _bsr_env_flag("BANDICOOT_RECORD", False):

@@ -2100,6 +2100,10 @@ void print_all_history_in_python();
 
   1 for on, 0 for off. */
 void set_console_display_commands_state(short int istate);
+/*! \brief the state of the flag above: 1 if gui commands are echoed to the
+  console, 0 if not. A caller that harvests the echo needs to know whether
+  there will be one. */
+short int console_display_commands_state();
 /*! \brief set a flag to show the text command equivalent of gui
   commands in the console as they happen in bold and colours.
 
@@ -6700,7 +6704,16 @@ int get_remote_control_port_number();
     that drive Coot via gobject.timeout_add actually run on the main
     thread (where the GL context lives) instead of a daemon thread. */
 int bandicoot_python_timeout_add(int interval_ms, PyObject *callable);
+/*! \brief Bandicoot v0.2.0.1: the rotation centre as [x, y, z], without
+    adding the read to the command history or echoing it to the console.
+    For callers that sample the view repeatedly. */
+PyObject *bandicoot_rotation_centre_py();
 #endif
+
+/*! \brief Bandicoot v0.2.0.1: tell the session recorder, if one is running,
+    which results-list row or map peak the user clicked. The label is the
+    button text; source names the dialog. A no-op when not recording. */
+void bandicoot_record_navigation(const char *source, const char *label);
 
 
 /* tooltip */

@@ -47,6 +47,16 @@ molecule_class_info_t::pdb_string() const {
    s = std::string(stringFile, stringFileLength);
    f->shut();  // 'close' file
 
+   // takeFilePool hands the buffer over: the File no longer frees it, so a
+   // caller that only copied out of it leaked one whole PDB text per call.
+   // Measured on a 20-model ensemble: 2.85 MB per call against a 2.78 MB
+   // string. Harmless while nothing called this often; the session recorder
+   // calls it on every model edit.
+   // The pool is 'buf' itself until mmdb outgrows the initial size and moves
+   // to its own allocation, so free it only when it is no longer ours.
+   if (stringFile && stringFile != buf)
+      delete [] stringFile;
+
    delete [] buf;
    delete f;
 

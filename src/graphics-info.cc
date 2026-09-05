@@ -1783,7 +1783,16 @@ graphics_info_t::run_post_read_model_hook(int imol) {
       PyObject *imol_py = PyInt_FromLong(imol);
       PyTuple_SetItem(arg_list, 0, imol_py);
       PyObject *result_py = PyEval_CallObject(pFunc, arg_list);
-      std::cout << "DEBUG:: post_read_model_hook() got result " << result_py << std::endl;
+      // Nothing consumes the hook's return value, and printing it on every
+      // model read is noise. A hook that raises returns NULL: report and clear
+      // it here rather than carrying an error state into the next Python call.
+      if (result_py) {
+         Py_DECREF(result_py);
+      } else {
+         PyErr_Print();
+         PyErr_Clear();
+      }
+      Py_DECREF(arg_list);
    } else {
       std::cout << "INFO:: in run_post_read_model_hook() pFunc " << pFunc << " is not callable" << std::endl;
       std::cout << "INFO:: in run_post_read_model_hook() pDict " << pDict << " " << std::endl;
@@ -1860,15 +1869,12 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
      ss += ", ";
      ss += int_to_string(mode);
      ss += ")";
+     // The hook's return value is not used. It used to be formatted and
+     // printed on every manipulation, which is a line of stdout per accept,
+     // delete and mutate as soon as anything defines the hook; the format
+     // temporaries were leaked as well.
      PyObject *res = safe_python_command_with_return(ss);
-     PyObject *fmt =  PyString_FromString("result: \%s");
-     PyObject *tuple = PyTuple_New(1);
-     PyTuple_SetItem(tuple, 0, res);
-     //PyString_Format(p, tuple);
-     PyObject *msg = PyString_Format(fmt, tuple);
-
-     std::cout << PyString_AsString(msg)<<std::endl;;
-     Py_DECREF(msg);
+     Py_XDECREF(res);
    }
    Py_XDECREF(v);
 }
@@ -1943,14 +1949,11 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
       if (ret == 1) {
         std::string ss = ps;
         ss += "()";
+        // As for the manipulation hook: the return value is unused, and
+        // printing it puts a line of stdout under every recentre once
+        // anything defines this hook.
         PyObject *res = safe_python_command_with_return(ss);
-        PyObject *fmt =  PyString_FromString("result: \%s");
-        PyObject *tuple = PyTuple_New(1);
-        PyTuple_SetItem(tuple, 0, res);
-        PyObject *msg = PyString_Format(fmt, tuple);
-
-        std::cout << PyString_AsString(msg)<<std::endl;;
-        Py_DECREF(msg);
+        Py_XDECREF(res);
       }
       Py_XDECREF(v);
 }

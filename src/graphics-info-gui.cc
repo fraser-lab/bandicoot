@@ -4395,6 +4395,10 @@ graphics_info_t::renumber_residue_range_chain_combobox_changed(GtkWidget *combob
 }
 
 
+// Bandicoot: defined in c-interface.cc; forward-declared because this file
+// does not include c-interface.h.
+void bandicoot_record_navigation(const char *source, const char *label);
+
 // static
 GtkWidget *
 graphics_info_t::wrapped_create_diff_map_peaks_dialog(const std::vector<std::pair<clipper::Coord_orth, float> > &centres, float map_sigma, const std::string &dialog_title) {
@@ -4462,6 +4466,11 @@ graphics_info_t::wrapped_create_diff_map_peaks_dialog(const std::vector<std::pai
    if (centres.size() > 0) {
       graphics_info_t g;
       coot::Cartesian c(centres[0].first.x(), centres[0].first.y(), centres[0].first.z());
+      // Opening the dialog moves the view to the first peak without a click;
+      // record it the same way, or the log shows a jump with no cause.
+      std::string opened = "1 of " + int_to_string((int) centres.size())
+         + " (dialog opened) " + float_to_string(centres[0].second/map_sigma) + " rmsd";
+      bandicoot_record_navigation("diff-map-peaks", opened.c_str());
       g.setRotationCentre(c);
       for(int ii=0; ii<n_molecules(); ii++) {
          molecules[ii].update_map(graphics_info_t::auto_recontour_map_flag);
@@ -4484,6 +4493,9 @@ graphics_info_t::on_diff_map_peak_button_selection_toggled (GtkButton       *but
    graphics_info_t g;
    // std::cout << "button number " << i << " pressed\n";
    if (GTK_TOGGLE_BUTTON(button)->active) {
+      // The button label carries the rank, the peak height and its rmsd
+      // level; the recentre that follows carries only a position.
+      bandicoot_record_navigation("diff-map-peaks", gtk_button_get_label(button));
       // std::cout << "button number " << i << " was active\n";
       coot::Cartesian c(hd->pos.x(), hd->pos.y(), hd->pos.z());
       g.setRotationCentre(c);

@@ -3531,6 +3531,11 @@ void set_console_display_commands_state(short int istate) {
    graphics_info_t::console_display_commands.display_commands_flag = istate;
 }
 
+short int console_display_commands_state() {
+
+   return graphics_info_t::console_display_commands.display_commands_flag;
+}
+
 void set_console_display_commands_hilights(short int bold_flag, short int colour_flag, int colour_index) {
 
    graphics_info_t g;

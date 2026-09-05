@@ -1569,6 +1569,24 @@ coot_save_state_and_exit(int retval, int save_state_flag) {
    // Py_Finalize();
    // #endif
 
+#ifdef USE_PYTHON
+   // Bandicoot v0.2.0.1: give the session recorder its ordinary shutdown.
+   // We leave via exit() with Py_Finalize() commented out above, so Python's
+   // atexit handlers never run and the recorder would lose its closing diff.
+   // Before close_yourself() below, while the models can still be read.
+   {
+      PyObject *v = safe_python_command_with_return
+         ("callable(globals().get('stop_session_recording'))");
+      int ret = 0;
+      if (v) ret = PyInt_AsLong(v);
+      Py_XDECREF(v);
+      if (ret == 1) {
+         PyObject *res = safe_python_command_with_return("stop_session_recording()");
+         Py_XDECREF(res);
+      }
+   }
+#endif // USE_PYTHON
+
    for (int imol=0; imol<graphics_n_molecules(); imol++)
       graphics_info_t::molecules[imol].close_yourself();
 
