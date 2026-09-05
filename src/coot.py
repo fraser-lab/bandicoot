@@ -1584,6 +1584,9 @@ def print_all_history_in_python():
 def set_console_display_commands_state(istate):
     return _coot.set_console_display_commands_state(istate)
 
+def console_display_commands_state():
+    return _coot.console_display_commands_state()
+
 def set_console_display_commands_hilights(bold_flag, colour_flag, colour_index):
     return _coot.set_console_display_commands_hilights(bold_flag, colour_flag, colour_index)
 
@@ -4304,6 +4307,12 @@ def get_remote_control_port_number():
 
 def bandicoot_python_timeout_add(interval_ms, callable):
     return _coot.bandicoot_python_timeout_add(interval_ms, callable)
+
+def bandicoot_rotation_centre_py():
+    return _coot.bandicoot_rotation_centre_py()
+
+def bandicoot_record_navigation(source, label):
+    return _coot.bandicoot_record_navigation(source, label)
 
 def set_tip_of_the_day_flag(state):
     return _coot.set_tip_of_the_day_flag(state)

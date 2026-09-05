@@ -24093,6 +24093,20 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_console_display_commands_state(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  short result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "console_display_commands_state", 0, 0, 0)) SWIG_fail;
+  result = (short)console_display_commands_state();
+  resultobj = SWIG_From_short(static_cast< short >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_set_console_display_commands_hilights(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   short arg1 ;
@@ -50415,6 +50429,57 @@ SWIGINTERN PyObject *_wrap_bandicoot_python_timeout_add(PyObject *self, PyObject
   resultobj = SWIG_From_int(static_cast< int >(result));
   return resultobj;
 fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_rotation_centre_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  PyObject *result = 0 ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_rotation_centre_py", 0, 0, 0)) SWIG_fail;
+  result = (PyObject *)bandicoot_rotation_centre_py();
+  resultobj = result;
+  if (!resultobj) SWIG_fail;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_bandicoot_record_navigation(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  char *arg1 = 0 ;
+  char *arg2 = 0 ;
+  int res1 ;
+  char *buf1 = 0 ;
+  int alloc1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_record_navigation", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_AsCharPtrAndSize(swig_obj[0], &buf1, NULL, &alloc1);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "bandicoot_record_navigation" "', argument " "1"" of type '" "char const *""'");
+  }
+  arg1 = reinterpret_cast< char * >(buf1);
+  res2 = SWIG_AsCharPtrAndSize(swig_obj[1], &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "bandicoot_record_navigation" "', argument " "2"" of type '" "char const *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  bandicoot_record_navigation((char const *)arg1,(char const *)arg2);
+  resultobj = SWIG_Py_Void();
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
   return NULL;
 }
 
@@ -77612,6 +77677,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "print_all_history_in_scheme", _wrap_print_all_history_in_scheme, METH_NOARGS, NULL},
 	 { "print_all_history_in_python", _wrap_print_all_history_in_python, METH_NOARGS, NULL},
 	 { "set_console_display_commands_state", _wrap_set_console_display_commands_state, METH_O, NULL},
+	 { "console_display_commands_state", _wrap_console_display_commands_state, METH_NOARGS, NULL},
 	 { "set_console_display_commands_hilights", _wrap_set_console_display_commands_hilights, METH_VARARGS, NULL},
 	 { "save_state", _wrap_save_state, METH_NOARGS, NULL},
 	 { "save_state_file", _wrap_save_state_file, METH_O, NULL},
@@ -78517,6 +78583,8 @@ static PyMethodDef SwigMethods[] = {
 	 { "set_remote_control_port", _wrap_set_remote_control_port, METH_O, NULL},
 	 { "get_remote_control_port_number", _wrap_get_remote_control_port_number, METH_NOARGS, NULL},
 	 { "bandicoot_python_timeout_add", _wrap_bandicoot_python_timeout_add, METH_VARARGS, NULL},
+	 { "bandicoot_rotation_centre_py", _wrap_bandicoot_rotation_centre_py, METH_NOARGS, NULL},
+	 { "bandicoot_record_navigation", _wrap_bandicoot_record_navigation, METH_VARARGS, NULL},
 	 { "set_tip_of_the_day_flag", _wrap_set_tip_of_the_day_flag, METH_O, NULL},
 	 { "set_display_lists_for_maps", _wrap_set_display_lists_for_maps, METH_O, NULL},
 	 { "display_lists_for_maps_state", _wrap_display_lists_for_maps_state, METH_NOARGS, NULL},

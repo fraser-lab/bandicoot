@@ -4396,8 +4396,9 @@ graphics_info_t::renumber_residue_range_chain_combobox_changed(GtkWidget *combob
 
 
 // Bandicoot: defined in c-interface.cc; forward-declared because this file
-// does not include c-interface.h.
-void bandicoot_record_navigation(const char *source, const char *label);
+// does not include c-interface.h. extern "C" to match that header, whose
+// declarations all sit inside BEGIN_C_DECLS.
+extern "C" void bandicoot_record_navigation(const char *source, const char *label);
 
 // static
 GtkWidget *
