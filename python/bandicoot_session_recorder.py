@@ -50,10 +50,11 @@
 #   BANDICOOT_RECORD=1 bcoot                          environment variable
 #   start_session_recording()                         scripting console
 #   echo 'start_session_recording()' > ~/.coot-preferences/record_sessions.py
-# Logs go to ~/bandicoot-sessions/ (override with BANDICOOT_SESSION_DIR).
+# Logs go to ./bandicoot-sessions/ in the working directory (override with
+# BANDICOOT_SESSION_DIR).
 #
 # Read a log without Bandicoot:
-#   python3 bandicoot_session_recorder.py summarize ~/bandicoot-sessions/<file>.jsonl
+#   python3 bandicoot_session_recorder.py summarize ./bandicoot-sessions/<file>.jsonl
 # Self-test without Bandicoot (fake coot module):
 #   python3 bandicoot_session_recorder.py selftest
 #
@@ -156,10 +157,16 @@ def _bsr_env_flag(name, default=False):
 
 
 def _bsr_default_session_dir():
+    """A subfolder of the working directory, unless overridden.
+
+    The log belongs where the user is working and will look for it, alongside
+    the other per-session files Coot already leaves there. Resolved to an
+    absolute path here because the path is built once and opened later, so a
+    directory change in between would otherwise move the file."""
     d = os.environ.get("BANDICOOT_SESSION_DIR")
     if not d:
-        d = os.path.join(os.path.expanduser("~"), "bandicoot-sessions")
-    return os.path.expanduser(d)
+        d = "bandicoot-sessions"
+    return os.path.abspath(os.path.expanduser(d))
 
 
 def _bsr_default_session_path():

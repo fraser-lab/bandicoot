@@ -373,7 +373,9 @@ namespace {
       return s;
    }
 
-   void run_generation(const std::vector<std::string> &wanted) {
+   // Returns whether generation actually ran, which the caller needs to tell a
+   // finished run from one that never started.
+   bool run_generation(const std::vector<std::string> &wanted) {
 
       generation_running = true;
 
@@ -394,7 +396,7 @@ namespace {
                      "PATH and in the environment your login shell provides.\n"
                      "Install Phenix or CCP4, or read in a dictionary with\n"
                      "File -> Import CIF dictionary...");
-         return;
+         return false;
       }
 
       set_busy(true);
@@ -507,6 +509,7 @@ namespace {
          }
          info_dialog(m.c_str());
       }
+      return true;
    }
 
 
@@ -639,11 +642,16 @@ std::vector<int> choose_molecules_for_dictionary(const std::string &file_name,
          return;
       }
 
-      run_generation(wanted);
+      bool ran = run_generation(wanted);
 
-      // Whatever is left still has no dictionary; if nothing is, the dialog has
-      // nothing to say and should not sit there empty.
-      if (rebuild_rows() == 0)
+      // Dismissal is per mode, because the row count means different things in
+      // the two. Listing only what is missing, an empty list is the report and
+      // an empty dialog has nothing to say. Listing everything, the count never
+      // reaches zero, so a finished run is itself the end of the exchange --
+      // and since success is deliberately silent, the dialog closing is the
+      // only acknowledgement the user gets. A run that never started is not a
+      // finished one and leaves the dialog up.
+      if ((show_all_mode && ran) || rebuild_rows() == 0)
          gtk_widget_destroy(GTK_WIDGET(d));
    }
 

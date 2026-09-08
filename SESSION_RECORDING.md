@@ -21,8 +21,12 @@ Any one of these:
 | From inside Bandicoot | In the scripting console: `start_session_recording()` |
 | Always on | Create `~/.coot-preferences/record_sessions.py` containing the single line `start_session_recording()` |
 
-The console prints the log path when recording starts, for example
-`INFO:: session recording -> /Users/you/bandicoot-sessions/bandicoot-session-20260903-121500-4242.jsonl`.
+Logs are written to a `bandicoot-sessions/` subfolder of the directory
+Bandicoot was launched from, alongside the `0-coot*` files and `coot-backup/`
+that Coot already leaves there. The console prints the full path when recording
+starts, for example
+`INFO:: session recording -> <working directory>/bandicoot-sessions/bandicoot-session-20260903-121500-4242.jsonl`.
+Set `BANDICOOT_SESSION_DIR` to write somewhere else.
 
 Other console commands:
 
@@ -42,7 +46,7 @@ loses nothing except that last diff and line.
 The summary needs only Python 3, not Bandicoot:
 
 ```
-python3 <bandicoot>/lib/python3.13/site-packages/coot/bandicoot_session_recorder.py summarize ~/bandicoot-sessions/<file>.jsonl
+python3 <bandicoot>/lib/python3.13/site-packages/coot/bandicoot_session_recorder.py summarize ./bandicoot-sessions/<file>.jsonl
 ```
 
 Add `--all` to see every event (key presses, backups, peak lists, rapid view
@@ -160,7 +164,7 @@ worth the pause if that is the question you have.
 | Setting | Default | Meaning |
 |---------|---------|---------|
 | `BANDICOOT_RECORD` | unset | `1` starts recording at launch |
-| `BANDICOOT_SESSION_DIR` | `~/bandicoot-sessions` | where log files go |
+| `BANDICOOT_SESSION_DIR` | `./bandicoot-sessions` | where log files go; relative paths resolve against the launch directory |
 | `BANDICOOT_RECORD_STDOUT` | `1` | `0` disables the stdout tee (no `command` events) |
 | `BANDICOOT_RECORD_STDOUT_MAX_MB` | `64` | size at which the terminal copy stops growing; `0` for no limit |
 | `BANDICOOT_RECORD_PEAKS` | `0` | `1` enables difference-peak ranking (pauses the window; see above) |

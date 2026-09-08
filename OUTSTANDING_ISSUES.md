@@ -79,17 +79,6 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 
 ## P3 — cosmetic / minor
 
-### Restraints dialog stays open after generating, when opened from the menu
-Opened from **Modelling > Generate Ligand Restraints**, the dialog remains on screen
-after **Generate Restraints** has finished. Opened automatically on a coordinate load it
-closes as expected.
-
-- **Root cause:** the dialog is destroyed after a run only when no rows remain
-  (`src/restraints-gui.cc:646`). The menu opens it in show-all mode, which lists every
-  ligand whether or not it already has restraints, so the row count is never zero. The
-  rule was written for the load-time mode, where rows are only what is missing.
-- **Workaround:** press Close.
-
 ### Generated restraints depend on the quality of the input geometry
 elbow's target distances partly track the input coordinates, so restraints derived from
 an unrefined ligand can carry targets a ring cannot satisfy, and real-space refinement
