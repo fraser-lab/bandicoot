@@ -203,19 +203,38 @@ INSTALL_BASE="$(basename "$INSTALL")"
 # copy (bsdtar -s path substitution, the macOS default). Inner symlinks (e.g.
 # bin/bcoot -> coot) are preserved because we do NOT dereference. GNU tar lacks
 # -s, so fall back to a staged copy (cp -RP preserves symlinks).
-# Exclude the build-seeded gdk-pixbuf loaders.cache: build.sh generates it with
-# THIS machine's absolute loader paths (a /Users/<builder> leak), and setup.sh
-# regenerates it with the user's paths on install anyway. Keep it in the dev
-# tree (so `bin/bcoot` shows icons here) but don't ship the build-path copy.
+# Three classes of build-seeded file are excluded, all for the same reason: they
+# are generated on THIS machine, they embed its absolute paths (a
+# /Users/<builder> leak), and each is reproduced on the user's machine anyway.
+# All are kept in the dev tree, so `bin/bcoot` still works here.
+#
+#   loaders.cache   gdk-pixbuf loader cache; setup.sh regenerates it.
+#   gtk.immodules   GTK input-method cache, the same kind of file; setup.sh
+#                   regenerates it too (step 4b). It was leaking 12 builder
+#                   paths for want of this line.
+#   __pycache__     .pyc files record the compile-time source path in
+#                   co_filename, which is what a TRACEBACK PRINTS -- so this
+#                   one was visible to users, not merely embedded. Every
+#                   shipped .pyc has its .py beside it, so dropping them costs
+#                   one recompile on first import and nothing else.
+#
+# check_buildhost_paths.sh cannot catch any of these: it scans Mach-O files
+# plus top-level scripts and bin/, and these are data files.
+TAR_EXCLUDES=(
+    --exclude '.DS_Store'
+    --exclude '*/loaders.cache'
+    --exclude '*/gtk.immodules'
+    --exclude '*/__pycache__'
+)
 if tar --version 2>&1 | grep -qi bsdtar; then
-    tar -C "$INSTALL_PARENT" --exclude '.DS_Store' --exclude '*/loaders.cache' \
+    tar -C "$INSTALL_PARENT" "${TAR_EXCLUDES[@]}" \
         -s "|^${INSTALL_BASE}|${NAME}|" \
         -czf "$TARBALL" "$INSTALL_BASE"
 else
     STAGE="$(mktemp -d)"
     trap 'rm -rf "$STAGE"' EXIT
     cp -RP "$INSTALL" "$STAGE/$NAME"
-    tar -C "$STAGE" --exclude '.DS_Store' --exclude '*/loaders.cache' -czf "$TARBALL" "$NAME"
+    tar -C "$STAGE" "${TAR_EXCLUDES[@]}" -czf "$TARBALL" "$NAME"
     rm -rf "$STAGE"
     trap - EXIT
 fi
