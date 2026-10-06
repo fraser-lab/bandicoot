@@ -417,7 +417,10 @@ else
    # better RDKit linking I hope
    # coordgen and maeparser are not listed: current RDKit uses them as
    # external libraries, which its own dylibs already link.
-   RDKIT_CXXFLAGS="-I$rdkit_install_dir/include/rdkit -DRDKIT_HAS_CAIRO_SUPPORT"
+   # -fmacro-prefix-map: RDKit's inline functions expand __FILE__ in their
+   # assertion macros, which would otherwise embed the RDKit install path
+   # in shipped binaries.
+   RDKIT_CXXFLAGS="-I$rdkit_install_dir/include/rdkit -DRDKIT_HAS_CAIRO_SUPPORT -fmacro-prefix-map=$rdkit_install_dir/include/rdkit/=rdkit/"
    RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -lboost_serialization -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
 fi
 
