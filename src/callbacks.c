@@ -6655,6 +6655,29 @@ on_preferences_altloc_colour_difference_hscale_value_changed
   set_altloc_colour_difference(fvalue);
 }
 
+/* BANDICOOT: Scale Bond Width to Occupancy */
+void
+on_preferences_scale_bond_width_to_occupancy_yes_radiobutton_toggled
+                                        (GtkToggleButton *togglebutton,
+                                        gpointer         user_data)
+{
+  if (gtk_toggle_button_get_active(togglebutton)) {
+    preferences_internal_change_value_int(PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY, 1);
+    set_scale_bond_width_to_occupancy(1);
+  }
+}
+
+void
+on_preferences_scale_bond_width_to_occupancy_no_radiobutton_toggled
+                                        (GtkToggleButton *togglebutton,
+                                        gpointer         user_data)
+{
+  if (gtk_toggle_button_get_active(togglebutton)) {
+    preferences_internal_change_value_int(PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY, 0);
+    set_scale_bond_width_to_occupancy(0);
+  }
+}
+
 void
 on_preferences_bond_colours_checkbutton_toggled
                                         (GtkToggleButton *togglebutton,

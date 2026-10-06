@@ -1216,6 +1216,9 @@ public:
    // read as a family rather than as separate molecules.
    static float altloc_conf_a_colour_offset;
    static float altloc_colour_difference;
+   // BANDICOOT: in "Colour by Alt. Conf.", draw bonds involving partially occupied
+   // atoms thinner, on a coarse scale, and show the occupancy in their atom labels.
+   static bool scale_bond_width_to_occupancy;
 
    static float rotate_colour_map_for_map; // e.g. 31.0 (degrees)
 

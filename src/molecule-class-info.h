@@ -945,6 +945,11 @@ public:        //                      public
    // many hue steps.
    coot::colour_t get_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background);
    void set_bond_colour_for_altloc_mode(int icol, bool against_a_dark_background);
+   // BANDICOOT: "Scale Bond Width to Occupancy" (Colour by Alt. Conf. only).
+   bool scale_bond_width_to_occupancy_p() const;
+   // the fraction of the molecule's bond width for a bond, from the lower of its two
+   // atoms' occupancies; 1.0 when neither atom can be identified.
+   float occupancy_bond_width_factor(const graphics_line_t &line) const;
 
    // return the colour, don't call glColor3f();
    coot::colour_t get_bond_colour_by_mol_no(int icolour, bool against_a_dark_background);

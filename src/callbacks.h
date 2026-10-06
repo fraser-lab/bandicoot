@@ -2277,6 +2277,17 @@ on_preferences_altloc_colour_difference_hscale_value_changed
                                         (GtkRange        *range,
                                         gpointer         user_data);
 
+/* BANDICOOT: Scale Bond Width to Occupancy */
+void
+on_preferences_scale_bond_width_to_occupancy_yes_radiobutton_toggled
+                                        (GtkToggleButton *togglebutton,
+                                        gpointer         user_data);
+
+void
+on_preferences_scale_bond_width_to_occupancy_no_radiobutton_toggled
+                                        (GtkToggleButton *togglebutton,
+                                        gpointer         user_data);
+
 void
 on_preferences_bond_colours_checkbutton_toggled
                                         (GtkToggleButton *togglebutton,

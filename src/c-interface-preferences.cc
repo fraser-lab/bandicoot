@@ -1317,6 +1317,16 @@ void update_preference_gui() {
 #endif
       break;
 
+    // BANDICOOT: "Scale Bond Width to Occupancy"
+    case PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY:
+      if (g.preferences_internal[i].ivalue1) {
+	w = lookup_widget(dialog, "preferences_scale_bond_width_to_occupancy_yes_radiobutton");
+      } else {
+	w = lookup_widget(dialog, "preferences_scale_bond_width_to_occupancy_no_radiobutton");
+      }
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w), TRUE);
+      break;
+
     case PREFERENCES_BOND_COLOURS_MAP_ROTATION:
       w = lookup_widget(dialog, "preferences_bond_colours_hscale");
       fval1 = g.preferences_internal[i].fvalue1;

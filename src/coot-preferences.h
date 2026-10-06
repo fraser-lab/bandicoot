@@ -58,6 +58,8 @@
 // representation every newly-read molecule comes up in. Value is a
 // bonds_box_type (the coot:: enum in molecule-class-info.h), not a menu index.
 #define PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME   45
+// BANDICOOT: "Scale Bond Width to Occupancy" (Preferences > Bond Parameters)
+#define PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY 46
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

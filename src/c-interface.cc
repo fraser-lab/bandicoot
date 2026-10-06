@@ -5416,6 +5416,22 @@ float get_altloc_colour_difference() {
    return graphics_info_t::altloc_colour_difference;
 }
 
+/* BANDICOOT: "Scale Bond Width to Occupancy". Widths and labels are worked out at
+   draw time, so a redraw is all a change needs. */
+void set_scale_bond_width_to_occupancy(int state) {
+
+   graphics_info_t::scale_bond_width_to_occupancy = state;
+   graphics_draw();
+   std::vector<std::string> command_strings;
+   command_strings.push_back("set-scale-bond-width-to-occupancy");
+   command_strings.push_back(graphics_info_t::int_to_string(state));
+   add_to_history(command_strings);
+}
+
+int get_scale_bond_width_to_occupancy() {
+   return graphics_info_t::scale_bond_width_to_occupancy;
+}
+
 /*! \brief draw molecule number imol coloured by user-defined atom colours */
 void graphics_to_user_defined_atom_colours_representation(int imol) {
 

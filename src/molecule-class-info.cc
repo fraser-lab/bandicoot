@@ -42,6 +42,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <cmath>
 
 #include <string.h> // strcmp
 
@@ -1010,6 +1011,42 @@ molecule_class_info_t::set_bond_colour_for_altloc_mode(int icol, bool against_a_
    coot::colour_t col = get_bond_colour_for_altloc_mode(icol, against_a_dark_background);
    glColor3f(col[0], col[1], col[2]);
    bond_colour_internal = {col[0], col[1], col[2]};
+}
+
+bool
+molecule_class_info_t::scale_bond_width_to_occupancy_p() const {
+
+   return graphics_info_t::scale_bond_width_to_occupancy &&
+          bonds_box_type == coot::COLOUR_BY_ALTLOC_BONDS;
+}
+
+// Occupancy is rounded to one decimal place and binned in fifths of the bond width:
+// 0.0-0.2 -> 1/5, 0.3-0.4 -> 2/5, 0.5-0.6 -> 3/5, 0.7-0.8 -> 4/5, 0.9-1.0 -> full.
+// A coarse scale keeps the widths distinguishable by eye. The atom indices are the
+// molecule's own (the "atom index" UDD set in make_asc), so they index atom_sel.
+float
+molecule_class_info_t::occupancy_bond_width_factor(const graphics_line_t &line) const {
+
+   float occ = 1.0;
+   bool found = false;
+   for (int idx : { line.atom_index_1, line.atom_index_2 }) {
+      if (idx >= 0 && idx < atom_sel.n_selected_atoms) {
+         mmdb::Atom *at = atom_sel.atom_selection[idx];
+         if (at) {
+            if (! found || at->occupancy < occ)
+               occ = at->occupancy;
+            found = true;
+         }
+      }
+   }
+   if (! found) return 1.0;
+
+   // via hundredths, so that a value read as e.g. 0.45 rounds up consistently
+   long hundredths = std::lround(occ * 100.0);
+   long tenths = (hundredths + 5) / 10;
+   if (tenths > 10) tenths = 10;
+   if (tenths <= 2) return 0.2;
+   return static_cast<float>((tenths + 1) / 2) * 0.2;
 }
 
 void
@@ -2323,6 +2360,10 @@ molecule_class_info_t::display_bonds(const graphical_bonds_container &bonds_box,
       with_gl_lines = true;
    }
 
+   // BANDICOOT: per-bond width only on the quads path; GL line width cannot change
+   // between the vertices of one glBegin(GL_LINES) block.
+   const bool scale_by_occupancy = (! with_gl_lines) && scale_bond_width_to_occupancy_p();
+
    coot::Cartesian front;
    coot::Cartesian back;
 
@@ -2419,7 +2460,10 @@ molecule_class_info_t::display_bonds(const graphical_bonds_container &bonds_box,
                      get_vector_pependicular_to_screen_z(front, back,
                                                          ll.pair_list[j].positions.getFinish() -
                                                          ll.pair_list[j].positions.getStart(),
-                                                         zsc_inner, p_bond_width);
+                                                         zsc_inner,
+                                                         scale_by_occupancy
+                                                         ? p_bond_width * occupancy_bond_width_factor(ll.pair_list[j])
+                                                         : p_bond_width);
 
                   glVertex3f(ll.pair_list[j].positions.getStart().get_x()+vec_perp_to_screen_z.get_x(),
                              ll.pair_list[j].positions.getStart().get_y()+vec_perp_to_screen_z.get_y(),
@@ -2450,7 +2494,10 @@ molecule_class_info_t::display_bonds(const graphical_bonds_container &bonds_box,
                      get_vector_pependicular_to_screen_z(front, back,
                                                          ll.pair_list[j].positions.getFinish() -
                                                          ll.pair_list[j].positions.getStart(),
-                                                         zsc_inner, p_bond_width);
+                                                         zsc_inner,
+                                                         scale_by_occupancy
+                                                         ? p_bond_width * occupancy_bond_width_factor(ll.pair_list[j])
+                                                         : p_bond_width);
 
                   if (graphics_info_t::is_within_display_radius(ll.pair_list[j].positions)) {
 
@@ -4370,6 +4417,19 @@ molecule_class_info_t::make_atom_label_string(mmdb::PAtom atom,
          s += ",";
       }
       s += alt_loc;
+   }
+
+   // BANDICOOT: partially occupied atoms show their occupancy when bond widths
+   // follow it, e.g. "CB,B(0.38)/445 CYS/A".
+   if (scale_bond_width_to_occupancy_p() && atom->occupancy < 0.995) {
+      char occ_str[16];
+      snprintf(occ_str, sizeof(occ_str), "%.2f", atom->occupancy);
+      std::size_t slen = s.length();
+      if (slen > 0 && s[slen-1] == ' ')
+         s = s.substr(0, slen-1);
+      s += "(";
+      s += occ_str;
+      s += ")";
    }
 
    if (brief_atom_labels_flag) {

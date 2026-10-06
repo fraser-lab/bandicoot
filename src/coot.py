@@ -3305,6 +3305,12 @@ def set_altloc_colour_difference(f):
 def get_altloc_colour_difference():
     return _coot.get_altloc_colour_difference()
 
+def set_scale_bond_width_to_occupancy(state):
+    return _coot.set_scale_bond_width_to_occupancy(state)
+
+def get_scale_bond_width_to_occupancy():
+    return _coot.get_scale_bond_width_to_occupancy()
+
 def graphics_to_user_defined_atom_colours_representation(imol):
     return _coot.graphics_to_user_defined_atom_colours_representation(imol)
 

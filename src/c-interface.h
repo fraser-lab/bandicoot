@@ -4904,6 +4904,12 @@ float get_altloc_conf_a_colour_offset();
 void set_altloc_colour_difference(float f);
 /*! \brief the hue difference (degrees) between successive alt confs in "Colour by Alt. Conf." */
 float get_altloc_colour_difference();
+/*! \brief in "Colour by Alt. Conf.", draw bonds to partially occupied atoms thinner
+    in proportion to occupancy (on a coarse scale) and show the occupancy in their atom
+    labels: 1 for on (the default), 0 for off */
+void set_scale_bond_width_to_occupancy(int state);
+/*! \brief is "Scale Bond Width to Occupancy" on? */
+int get_scale_bond_width_to_occupancy();
 /*! \brief draw molecule number imol in CA+Ligands mode coloured by user-defined atom colours */
 void graphics_to_user_defined_atom_colours_representation(int imol);
 /*! \brief draw molecule number imol all atoms coloured by user-defined atom colours */

@@ -40327,6 +40327,43 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_set_scale_bond_width_to_occupancy(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "set_scale_bond_width_to_occupancy" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  set_scale_bond_width_to_occupancy(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_get_scale_bond_width_to_occupancy(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "get_scale_bond_width_to_occupancy", 0, 0, 0)) SWIG_fail;
+  result = (int)get_scale_bond_width_to_occupancy();
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_graphics_to_user_defined_atom_colours_representation(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -79556,6 +79593,8 @@ static PyMethodDef SwigMethods[] = {
 	 { "get_altloc_conf_a_colour_offset", _wrap_get_altloc_conf_a_colour_offset, METH_NOARGS, NULL},
 	 { "set_altloc_colour_difference", _wrap_set_altloc_colour_difference, METH_O, NULL},
 	 { "get_altloc_colour_difference", _wrap_get_altloc_colour_difference, METH_NOARGS, NULL},
+	 { "set_scale_bond_width_to_occupancy", _wrap_set_scale_bond_width_to_occupancy, METH_O, NULL},
+	 { "get_scale_bond_width_to_occupancy", _wrap_get_scale_bond_width_to_occupancy, METH_NOARGS, NULL},
 	 { "graphics_to_user_defined_atom_colours_representation", _wrap_graphics_to_user_defined_atom_colours_representation, METH_O, NULL},
 	 { "graphics_to_user_defined_atom_colours_all_atoms_representation", _wrap_graphics_to_user_defined_atom_colours_all_atoms_representation, METH_O, NULL},
 	 { "graphics_molecule_bond_type", _wrap_graphics_molecule_bond_type, METH_O, NULL},

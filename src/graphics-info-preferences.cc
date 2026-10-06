@@ -131,6 +131,12 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
        commands.push_back(state_command("set-default-bond-thickness",
 					g.preferences_internal[i].ivalue1, il));
        break;
+
+     // BANDICOOT: "Scale Bond Width to Occupancy"
+     case PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY:
+       commands.push_back(state_command("set-scale-bond-width-to-occupancy",
+					g.preferences_internal[i].ivalue1, il));
+       break;
        
      case PREFERENCES_BOND_COLOURS_MAP_ROTATION:
        commands.push_back(state_command("set-colour-map-rotation-on-read-pdb",
@@ -503,6 +509,11 @@ graphics_info_t::make_preferences_internal() {
   on = get_default_bond_thickness();
   p.preference_type = PREFERENCES_BONDS_THICKNESS;
   p.ivalue1 = on;
+  ret.push_back(p);
+
+  // BANDICOOT: "Scale Bond Width to Occupancy"
+  p.preference_type = PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY;
+  p.ivalue1 = get_scale_bond_width_to_occupancy();
   ret.push_back(p);
 
   // Bond colours

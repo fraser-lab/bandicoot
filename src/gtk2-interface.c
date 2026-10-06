@@ -19517,6 +19517,12 @@ create_preferences (void)
   GtkWidget *preferences_bond_width_combobox;
   GtkWidget *label526;
   GtkWidget *label527;
+  GtkWidget *frame212_occupancy;
+  GtkWidget *vbox_scale_bond_width_to_occupancy;
+  GtkWidget *preferences_scale_bond_width_to_occupancy_yes_radiobutton;
+  GSList *preferences_scale_bond_width_to_occupancy_yes_radiobutton_group = NULL;
+  GtkWidget *preferences_scale_bond_width_to_occupancy_no_radiobutton;
+  GtkWidget *label_scale_bond_width_to_occupancy_frame;
   GtkWidget *label478;
   GtkWidget *preferences_bond_colours;
   GtkWidget *vbox212;
@@ -20602,6 +20608,36 @@ create_preferences (void)
   gtk_widget_show (label527);
   gtk_frame_set_label_widget (GTK_FRAME (frame212), label527);
 
+  /* BANDICOOT: "Scale Bond Width to Occupancy" -- applies to molecules drawn
+     in "Bonds (Colour by Alt. Conf.)". */
+
+  frame212_occupancy = gtk_frame_new (NULL);
+  gtk_widget_show (frame212_occupancy);
+  gtk_box_pack_start (GTK_BOX (vbox223), frame212_occupancy, FALSE, TRUE, 0);
+  gtk_container_set_border_width (GTK_CONTAINER (frame212_occupancy), 8);
+
+  vbox_scale_bond_width_to_occupancy = gtk_vbox_new (FALSE, 0);
+  gtk_widget_show (vbox_scale_bond_width_to_occupancy);
+  gtk_container_add (GTK_CONTAINER (frame212_occupancy), vbox_scale_bond_width_to_occupancy);
+
+  preferences_scale_bond_width_to_occupancy_yes_radiobutton = gtk_radio_button_new_with_mnemonic (NULL, "Yes");
+  gtk_widget_show (preferences_scale_bond_width_to_occupancy_yes_radiobutton);
+  gtk_box_pack_start (GTK_BOX (vbox_scale_bond_width_to_occupancy), preferences_scale_bond_width_to_occupancy_yes_radiobutton, FALSE, FALSE, 0);
+  gtk_container_set_border_width (GTK_CONTAINER (preferences_scale_bond_width_to_occupancy_yes_radiobutton), 5);
+  gtk_radio_button_set_group (GTK_RADIO_BUTTON (preferences_scale_bond_width_to_occupancy_yes_radiobutton), preferences_scale_bond_width_to_occupancy_yes_radiobutton_group);
+  preferences_scale_bond_width_to_occupancy_yes_radiobutton_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (preferences_scale_bond_width_to_occupancy_yes_radiobutton));
+
+  preferences_scale_bond_width_to_occupancy_no_radiobutton = gtk_radio_button_new_with_mnemonic (NULL, "No");
+  gtk_widget_show (preferences_scale_bond_width_to_occupancy_no_radiobutton);
+  gtk_box_pack_start (GTK_BOX (vbox_scale_bond_width_to_occupancy), preferences_scale_bond_width_to_occupancy_no_radiobutton, FALSE, FALSE, 0);
+  gtk_container_set_border_width (GTK_CONTAINER (preferences_scale_bond_width_to_occupancy_no_radiobutton), 5);
+  gtk_radio_button_set_group (GTK_RADIO_BUTTON (preferences_scale_bond_width_to_occupancy_no_radiobutton), preferences_scale_bond_width_to_occupancy_yes_radiobutton_group);
+  preferences_scale_bond_width_to_occupancy_yes_radiobutton_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (preferences_scale_bond_width_to_occupancy_no_radiobutton));
+
+  label_scale_bond_width_to_occupancy_frame = gtk_label_new ("Scale Bond Width to Occupancy");
+  gtk_widget_show (label_scale_bond_width_to_occupancy_frame);
+  gtk_frame_set_label_widget (GTK_FRAME (frame212_occupancy), label_scale_bond_width_to_occupancy_frame);
+
   label478 = gtk_label_new ("Bond Parameters");
   gtk_widget_show (label478);
   gtk_notebook_set_tab_label (GTK_NOTEBOOK (preferences_notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (preferences_notebook), 7), label478);
@@ -21661,6 +21697,12 @@ create_preferences (void)
   g_signal_connect ((gpointer) preferences_hid_flat_radiobutton, "toggled",
                     G_CALLBACK (on_preferences_hid_flat_radiobutton_toggled),
                     NULL);
+  g_signal_connect ((gpointer) preferences_scale_bond_width_to_occupancy_yes_radiobutton, "toggled",
+                    G_CALLBACK (on_preferences_scale_bond_width_to_occupancy_yes_radiobutton_toggled),
+                    NULL);
+  g_signal_connect ((gpointer) preferences_scale_bond_width_to_occupancy_no_radiobutton, "toggled",
+                    G_CALLBACK (on_preferences_scale_bond_width_to_occupancy_no_radiobutton_toggled),
+                    NULL);
   g_signal_connect ((gpointer) preferences_bond_width_combobox, "changed",
                     G_CALLBACK (on_preferences_bond_width_combobox_changed),
                     NULL);
@@ -22002,6 +22044,11 @@ create_preferences (void)
   GLADE_HOOKUP_OBJECT (preferences, preferences_bond_width_combobox, "preferences_bond_width_combobox");
   GLADE_HOOKUP_OBJECT (preferences, label526, "label526");
   GLADE_HOOKUP_OBJECT (preferences, label527, "label527");
+  GLADE_HOOKUP_OBJECT (preferences, frame212_occupancy, "frame212_occupancy");
+  GLADE_HOOKUP_OBJECT (preferences, vbox_scale_bond_width_to_occupancy, "vbox_scale_bond_width_to_occupancy");
+  GLADE_HOOKUP_OBJECT (preferences, preferences_scale_bond_width_to_occupancy_yes_radiobutton, "preferences_scale_bond_width_to_occupancy_yes_radiobutton");
+  GLADE_HOOKUP_OBJECT (preferences, preferences_scale_bond_width_to_occupancy_no_radiobutton, "preferences_scale_bond_width_to_occupancy_no_radiobutton");
+  GLADE_HOOKUP_OBJECT (preferences, label_scale_bond_width_to_occupancy_frame, "label_scale_bond_width_to_occupancy_frame");
   GLADE_HOOKUP_OBJECT (preferences, label478, "label478");
   GLADE_HOOKUP_OBJECT (preferences, preferences_bond_colours, "preferences_bond_colours");
   GLADE_HOOKUP_OBJECT (preferences, vbox212, "vbox212");
