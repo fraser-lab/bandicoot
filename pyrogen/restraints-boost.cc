@@ -23,6 +23,7 @@
 #include "Python.h"
 
 #include "compat/coot-sysdep.h"
+#include <any>
 #include <GraphMol/GraphMol.h>
 
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
@@ -267,7 +268,7 @@ coot::rdkit_mol_chem_comp_pdbx(const std::string &chem_comp_dict_file_name,
 		  catch (const KeyErrorException &err) {
 		     std::cout << "no-error: no _CIPRank " << err.what() << std::endl;
 		  }
-		  catch (const boost::bad_any_cast &bac) {
+		  catch (const std::bad_any_cast &bac) {
 		     // Goodness knows why this is thrown... 
 		     std::cout << "strange - caught bad_any_cast on _CIPRank get" << std::endl;
 		  } 

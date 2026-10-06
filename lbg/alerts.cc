@@ -26,8 +26,14 @@
 void
 lbg_info_t::setup_user_defined_alert_smarts() {
 
+   // The Ligand Builder can be opened from a GTK callback, which runs without
+   // the GIL (the application releases it around the main loop).
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *m = PyImport_AddModule("__main__");
    user_defined_alerts_smarts_py = PyObject_GetAttrString(m,"user_defined_alert_smarts");
+   if (! user_defined_alerts_smarts_py)
+      PyErr_Clear(); // no user-defined alerts is the normal case
+   PyGILState_Release(gstate);
 }
 #endif
 
@@ -75,7 +81,8 @@ lbg_info_t::user_defined_alert_smarts() const {
 
 #ifdef USE_PYTHON
 
-   if (user_defined_alerts_smarts_py) { 
+   if (user_defined_alerts_smarts_py) {
+      PyGILState_STATE gstate = PyGILState_Ensure(); // see setup_user_defined_alert_smarts()
       if (PyList_Check(user_defined_alerts_smarts_py)) {
 	 Py_ssize_t len = PyList_Size(user_defined_alerts_smarts_py);
 	 for (Py_ssize_t i=0; i<len; i++) { 
@@ -97,7 +104,8 @@ lbg_info_t::user_defined_alert_smarts() const {
 	    }
 	 }
       }
-   } 
+      PyGILState_Release(gstate);
+   }
 #endif
    return v;
 } 

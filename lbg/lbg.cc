@@ -4470,7 +4470,7 @@ lbg_info_t::import_mol_from_file(const std::string &file_name) {
       }
    }
    catch (const RDKit::BadFileException &e) {
-      std::cout << "WARNING:: Bad file " << file_name << " " << e.message() << std::endl;
+      std::cout << "WARNING:: Bad file " << file_name << " " << e.what() << std::endl;
       try_as_mdl_mol = true;
    }
    catch (const std::runtime_error &rte) {

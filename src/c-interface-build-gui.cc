@@ -99,6 +99,10 @@
 #include "c-interface-ligands-swig.hh"  // coot_reduce, invert_chiral_centre (Modelling menu)
 #include "restraints-gui.hh"           // Modelling -> Generate Ligand Restraints
 #include "rotamer-search-modes.hh"   // ROTAMERSEARCHLOWRES / HIGHRES (Modelling menu)
+#include "lbg-interface.hh"          // Ligand menu: SMILES/Residue -> 2D
+#include "sdf-interface.hh"          // Ligand menu: SMILES -> 3D, chemical features
+#include "c-interface-ligands.hh"    // Ligand menu: contact dots for ligand
+#include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
 
@@ -2989,6 +2993,182 @@ extern "C" void bandicoot_glyco_dispatch(int op_id) {
    case BGLYCO_DISPLAY_EXTRA_REST:     safe_python_command("glyco_display_extra_restraints()"); break;
    case BGLYCO_UNDISPLAY_EXTRA_REST:   safe_python_command("glyco_undisplay_extra_restraints()"); break;
    case BGLYCO_EXTRACT_TREE:           safe_python_command("glyco_extract_tree()");             break;
+   default:
+      break;
+   }
+}
+
+// ---- Native "Ligand" menu ---------------------------------------------------
+//
+// Restores the menu Coot 0.9 built from Python (gui_contact_score_isolated_ligand.py
+// and enhanced_ligand.py). Each op does what Coot 0.9's menu item did: most call
+// the C function directly on the active residue; the contact-score and quick
+// validation items call Coot 0.9's own Python functions, whose modules are loaded
+// by default. Menu built in gtk2-interface.c, op ids in callbacks.h (BLIG_*).
+
+// Several labelled text entries, then op(values). The active residue is
+// captured when the menu item is chosen, as Coot 0.9 did.
+typedef void (*bandicoot_multi_entry_op_fn)(const coot::atom_spec_t &spec, int imol,
+                                            const std::vector<std::string> &values);
+struct bandicoot_multi_entry_t {
+   std::vector<GtkWidget *> entries;
+   bandicoot_multi_entry_op_fn op;
+   coot::atom_spec_t spec;
+   int imol;
+};
+
+static void bandicoot_multi_entry_response(GtkDialog *dialog, gint response,
+                                           gpointer user_data) {
+   bandicoot_multi_entry_t *cd = static_cast<bandicoot_multi_entry_t *>(user_data);
+   if (response == GTK_RESPONSE_ACCEPT) {
+      std::vector<std::string> values;
+      for (std::size_t i=0; i<cd->entries.size(); i++)
+         values.push_back(gtk_entry_get_text(GTK_ENTRY(cd->entries[i])));
+      cd->op(cd->spec, cd->imol, values);
+   }
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   delete cd;
+}
+
+static void bandicoot_multi_entry(const char *title,
+                                  const std::vector<std::pair<std::string, std::string> > &fields,
+                                  const char *ok_label,
+                                  const coot::atom_spec_t &spec, int imol,
+                                  bandicoot_multi_entry_op_fn op) {
+   if (! graphics_info_t::use_graphics_interface_flag) return;
+   GtkWidget *main_window = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
+   GtkWidget *dialog =
+      gtk_dialog_new_with_buttons(title, GTK_WINDOW(main_window),
+                                  GTK_DIALOG_DESTROY_WITH_PARENT,
+                                  GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+                                  ok_label,         GTK_RESPONSE_ACCEPT,
+                                  (char *) NULL);
+   GtkWidget *vbox = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+   GtkWidget *table = gtk_table_new(fields.size(), 2, FALSE);
+   gtk_table_set_row_spacings(GTK_TABLE(table), 4);
+   gtk_table_set_col_spacings(GTK_TABLE(table), 6);
+   bandicoot_multi_entry_t *cd = new bandicoot_multi_entry_t;
+   cd->op = op; cd->spec = spec; cd->imol = imol;
+   for (std::size_t i=0; i<fields.size(); i++) {
+      GtkWidget *label = gtk_label_new(fields[i].first.c_str());
+      gtk_misc_set_alignment(GTK_MISC(label), 1.0, 0.5);
+      GtkWidget *entry = gtk_entry_new();
+      gtk_entry_set_text(GTK_ENTRY(entry), fields[i].second.c_str());
+      gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
+      gtk_table_attach(GTK_TABLE(table), label, 0, 1, i, i+1, GTK_FILL, GTK_FILL, 0, 0);
+      gtk_table_attach(GTK_TABLE(table), entry, 1, 2, i, i+1,
+                       GtkAttachOptions(GTK_EXPAND|GTK_FILL), GTK_FILL, 0, 0);
+      cd->entries.push_back(entry);
+   }
+   gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 4);
+   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+   g_signal_connect(dialog, "response", G_CALLBACK(bandicoot_multi_entry_response), cd);
+   gtk_widget_show_all(dialog);
+}
+
+static void blig_op_smiles_2d(const coot::atom_spec_t &, int, const std::vector<std::string> &v) {
+   if (! v.empty() && ! v[0].empty()) smiles_to_ligand_builder(v[0].c_str());
+}
+
+static void blig_op_smiles_3d(const coot::atom_spec_t &, int, const std::vector<std::string> &v) {
+   if (v.size() == 2 && ! v[1].empty())
+      import_rdkit_mol_from_smiles(v[1], v[0]);   // (smiles, comp_id)
+}
+
+static void blig_op_rename_to_reference(const coot::atom_spec_t &spec, int imol,
+                                        const std::vector<std::string> &v) {
+   if (v.size() != 3) return;
+   // fields: reference comp id, new comp id, output dictionary file name
+   match_this_residue_and_dictionary(imol, spec.chain_id, spec.res_no, spec.ins_code,
+                                     v[2], v[0], v[1]);
+}
+
+extern "C" int bandicoot_ligand_item_available(int op_id) {
+   switch (op_id) {
+   case BLIG_FLEV:
+   case BLIG_TOGGLE_FLEV:
+   case BLIG_CHEMICAL_FEATURES:
+      return enhanced_ligand_coot_p() ? 1 : 0;
+   default:
+      return 1;
+   }
+}
+
+extern "C" void bandicoot_ligand_dispatch(int op_id) {
+
+   // Items that do not act on the active residue.
+   switch (op_id) {
+   case BLIG_FIND_LIGANDS:      do_find_ligands_dialog();                                    return;
+   case BLIG_HYDROGENATE:       hydrogenate_region(6);                                       return;
+   case BLIG_TOGGLE_FLEV:       toggle_flev_idle_ligand_interactions();                      return;
+   case BLIG_SOLID_OBJECTS:     set_display_generic_objects_as_solid(1); graphics_draw();    return;
+   case BLIG_UNSOLID_OBJECTS:   set_display_generic_objects_as_solid(0); graphics_draw();    return;
+   case BLIG_MOLPROBITY_DOTS:   safe_python_command("contact_score_ligand_func()");           return;
+   case BLIG_COOT_LIGAND_DOTS:  safe_python_command("coot_contact_dots_ligand_func()");       return;
+   case BLIG_ALL_ATOM_DOTS:     safe_python_command("coot_all_atom_contact_dots_func()");     return;
+   case BLIG_QUICK_VALIDATE:    safe_python_command("gui_ligand_check_dialog_active_residue()"); return;
+   case BLIG_SMILES_2D: {
+      std::vector<std::pair<std::string, std::string> > f(1, std::make_pair("SMILES string:", ""));
+      bandicoot_multi_entry("SMILES -> 2D", f, " Send to 2D Viewer ", coot::atom_spec_t(), -1,
+                            blig_op_smiles_2d);
+      return;
+   }
+   case BLIG_SMILES_3D: {
+      std::vector<std::pair<std::string, std::string> > f;
+      f.push_back(std::make_pair("Residue name:", "LIG"));
+      f.push_back(std::make_pair("SMILES string:", ""));
+      bandicoot_multi_entry("SMILES -> simple 3D", f, "Import Molecule", coot::atom_spec_t(), -1,
+                            blig_op_smiles_3d);
+      return;
+   }
+   default:
+      break;
+   }
+
+   // Items that act on the active residue (the atom nearest the screen centre).
+   coot::atom_spec_t spec;
+   int imol = bandicoot_active_imol(&spec);
+   if (imol < 0) return;   // bandicoot_active_imol() has already said why
+   const char *chain_id = spec.chain_id.c_str();
+   const char *ins_code = spec.ins_code.c_str();
+
+   switch (op_id) {
+   case BLIG_JIGGLE_FIT:
+      fit_to_map_by_random_jiggle(imol, chain_id, spec.res_no, ins_code, 100, 1.0);
+      break;
+   case BLIG_CONTACT_DOTS_LIGAND: {
+      coot::residue_spec_t res_spec(spec);
+      coot_contact_dots_for_ligand_internal(imol, res_spec);
+      break;
+   }
+   case BLIG_RESIDUE_2D:
+      residue_to_ligand_builder(imol, chain_id, spec.res_no, ins_code, 0.015);
+      break;
+   case BLIG_FLEV:
+      fle_view_with_rdkit(imol, chain_id, spec.res_no, ins_code, 4.2);
+      set_flev_idle_ligand_interactions(1);
+      break;
+   case BLIG_CHEMICAL_FEATURES:
+      set_display_generic_objects_as_solid(1);
+      show_feats(imol, chain_id, spec.res_no, ins_code);
+      break;
+   case BLIG_RENAME_TO_REFERENCE: {
+      std::vector<std::pair<std::string, std::string> > f;
+      f.push_back(std::make_pair("Reference Residue Type:", "ATP"));
+      f.push_back(std::make_pair("New Residue Type:", "RXC"));
+      f.push_back(std::make_pair("New Dictionary cif file name:", "new-dictionary-RXC.cif"));
+      bandicoot_multi_entry("Rename Atom to Reference", f, "   OK   ", spec, imol,
+                            blig_op_rename_to_reference);
+      break;
+   }
+   case BLIG_TABULATE_DISTORTIONS:
+      print_residue_distortions(imol, spec.chain_id, spec.res_no, spec.ins_code);
+      break;
+   case BLIG_DISPLAY_DISTORTIONS:
+      set_display_generic_objects_as_solid(1);
+      display_residue_distortions(imol, spec.chain_id, spec.res_no, spec.ins_code);
+      break;
    default:
       break;
    }

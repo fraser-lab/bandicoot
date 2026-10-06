@@ -46,8 +46,8 @@ coot::mmff_bonds_and_angles(RDKit::ROMol &mol) {
 
       // iterate over bonds - simple
       // 
-      ForceFields::MMFF::MMFFBondCollection *mmff_bonds =
-	 ForceFields::MMFF::MMFFBondCollection::getMMFFBond();
+      static const ForceFields::MMFF::MMFFBondCollection mmff_bonds_default;
+      const ForceFields::MMFF::MMFFBondCollection *mmff_bonds = &mmff_bonds_default;
       
       RDKit::ROMol::BondIterator bondIt;
       RDKit::ROMol::BondIterator start;
@@ -75,8 +75,10 @@ coot::mmff_bonds_and_angles(RDKit::ROMol &mol) {
       
       // iterate over angles
       // 
-      ForceFields::MMFF::MMFFAngleCollection *mmff_angles =
-	 ForceFields::MMFF::MMFFAngleCollection::getMMFFAngle();
+      const ForceFields::MMFF::MMFFAngleCollection *mmff_angles =
+	 RDKit::MMFF::DefaultParameters::getMMFFAngle();
+      const ForceFields::MMFF::MMFFDefCollection *mmff_defs =
+	 RDKit::MMFF::DefaultParameters::getMMFFDef();
       unsigned int n_atoms = mol.getNumAtoms();
       std::map<unsigned long long, bool> done_angle;
       for (unsigned int iat_1=0; iat_1<n_atoms; iat_1++) { 
@@ -113,7 +115,7 @@ coot::mmff_bonds_and_angles(RDKit::ROMol &mol) {
 			mmffMolProperties->getMMFFAngleType(mol, idx_1, idx_2, idx_3);
 
  		     const ForceFields::MMFF::MMFFAngle *mmffAngleParams =
- 			(*mmff_angles)(angle_type, iAtomType_1, iAtomType_2, iAtomType_3);
+ 			(*mmff_angles)(mmff_defs, angle_type, iAtomType_1, iAtomType_2, iAtomType_3);
 		     
 		     if (mmffAngleParams) {
 			double a = ForceFields::MMFF::Utils::calcAngleRestValue(mmffAngleParams);

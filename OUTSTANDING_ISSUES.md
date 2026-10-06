@@ -86,6 +86,12 @@ can then distort it. Generation runs elbow with `--opt`, which is five times mor
 on aromatic bonds, and falls back to plain elbow when `--opt` fails to converge — that
 fallback is where poor targets can still appear.
 
+- **A second trigger for the fallback, inside elbow itself:** with Phenix 2.0, an `--opt`
+  run that ends "geometry not converged" can then crash in elbow's own
+  `optimisation_manager` (`xyz_parser.movie`, `IndexError` on an empty `.elbow_opt.xyz`).
+  elbow exits non-zero, the failure is detected, and the plain-elbow retry produces the
+  dictionary — so the console shows an elbow traceback even though generation succeeds.
+  Outside Bandicoot; whether a different elbow option avoids it is not yet known.
 - **Workaround:** import a canonical dictionary if one exists, or regenerate after the
   geometry has been improved.
 

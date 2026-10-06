@@ -430,6 +430,31 @@ namespace coot {
          return false;
       }
 
+      // A centre carrying two terminal atoms of the same element (the two
+      // non-bridging oxygens of a phosphate, sulfonate, ...) is not a
+      // stereocentre: those atoms are interchangeable, and deposited copies
+      // of one ligand name them either way round.
+      bool has_equivalent_terminal_neighbours(const std::string &centre,
+                                              const std::vector<atom_pos_t> &atoms) {
+
+         std::set<std::string> all;
+         for (unsigned int i=0; i<atoms.size(); i++) all.insert(atoms[i].name);
+         const std::map<std::string, std::vector<std::string> > nbrs =
+            neighbours_restricted(atoms, all);
+         const std::map<std::string, atom_pos_t> pos = by_name(atoms);
+
+         std::map<std::string, std::vector<std::string> >::const_iterator it = nbrs.find(centre);
+         if (it == nbrs.end()) return false;
+         std::map<std::string, int> terminal_count; // by element
+         for (unsigned int i=0; i<it->second.size(); i++) {
+            std::map<std::string, std::vector<std::string> >::const_iterator jt =
+               nbrs.find(it->second[i]);
+            if (jt == nbrs.end() || jt->second.size() != 1) continue;
+            if (++terminal_count[pos.find(it->second[i])->second.element] >= 2) return true;
+         }
+         return false;
+      }
+
       bool chirality_differs(const residue_ref_t &a, const residue_ref_t &b) {
 
          const std::set<std::string> shared = shared_names(a, b);
@@ -450,6 +475,9 @@ namespace coot {
                nb.find(it->first);
             if (jt == nb.end()) continue;
             if (jt->second != it->second) continue; // connectivity handles that
+            if (has_equivalent_terminal_neighbours(it->first, a.heavy_atoms) ||
+                has_equivalent_terminal_neighbours(it->first, b.heavy_atoms))
+               continue;
 
             const std::map<std::string, atom_pos_t>::const_iterator
                ca = pa.find(it->first), cb = pb.find(it->first);

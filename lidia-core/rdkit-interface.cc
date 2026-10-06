@@ -1175,7 +1175,8 @@ coot::rdkit_mol(const coot::dictionary_residue_restraints_t &r) {
          }
 	 
 	 int idx = m.addAtom(at);
-	 added_atoms[r.atom_info[iat].atom_id_4c] = idx; // for making bonds.
+	 // keyed without whitespace, to match the bond lookup below
+	 added_atoms[coot::util::remove_whitespace(r.atom_info[iat].atom_id_4c)] = idx;
       }
       catch (const std::exception &rte) {
 	 std::cout << rte.what() << std::endl;

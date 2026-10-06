@@ -84,11 +84,11 @@ AC_SUBST([OPENMP_CXXFLAGS])
 AX_CXX_COMPILE_STDCXX_11
 AX_CXX_HAVE_THREAD
 # AX_CXX_COMPILE_STDCXX_11 sets HAVE_CXX11=1 (hopefully)
-# Bandicoot v0.2: bumped c++14 -> c++17. Needed for modern RDKit (enhanced
-# ligand tools / FLEV, GitHub #11); gemmi is fine either way (it declares
-# cxx_std_14). Keep in sync with CXXFLAGS in scripts/build.sh.
+# C++20: required by current RDKit headers (enhanced ligand tools / FLEV,
+# GitHub #11); gemmi is fine either way (it declares cxx_std_14). Keep in
+# sync with CXXFLAGS in scripts/build.sh.
 if test $HAVE_CXX11 = 1 ; then
-   CXXFLAGS="$CXXFLAGS -std=c++17"
+   CXXFLAGS="$CXXFLAGS -std=c++20"
 else
    echo we can\'t compile coot then
 fi
@@ -229,9 +229,92 @@ if test "x$with_gnomecanvas" != "xno"; then
 fi
 AC_SUBST(GNOME_CANVAS_CFLAGS)
 
-AM_PATH_GTKGLEXT_1_0(1.0.0,,[exit 1]) 
+AM_PATH_GTKGLEXT_1_0(1.0.0,,[exit 1])
 MAKE_COOTRC_CMD="sed -e 's/\#GTK2 //' "
 AC_SUBST(MAKE_COOTRC_CMD)
+
+
+dnl =========================== UI TOOLKIT SELECTION =======================
+dnl
+dnl Selects which UI implementation is compiled. Both must stay buildable for
+dnl the duration of the toolkit changeover, so that work on the released line
+dnl continues while the replacement UI is incomplete.
+dnl
+dnl The default is gtk, so an unflagged build is unchanged.
+dnl
+dnl Note: the wx configuration does NOT yet drop the GTK checks above. Engine
+dnl and engine-adjacent code still carries GTK references, and those are being
+dnl extracted behind toolkit-neutral seams rather than all at once. Until that
+dnl is finished a wx build still compiles and links against GTK.
+
+AC_ARG_WITH([ui],
+  [AS_HELP_STRING([--with-ui=gtk|wx],
+                  [UI toolkit to build (default: gtk)])],
+  [with_ui=$withval], [with_ui=gtk])
+
+case "x$with_ui" in
+  xgtk|xwx) ;;
+  *) AC_MSG_ERROR([--with-ui must be gtk or wx (got '$with_ui')]) ;;
+esac
+
+dnl wx-config is resolved by absolute path, never from PATH. Other scientific
+dnl software ships a wrapper of the same name earlier in PATH whose behaviour
+dnl depends on that package's own configuration, so a bare wx-config can
+dnl silently supply the wrong answer or none at all.
+AC_ARG_VAR([WX_CONFIG], [full path to wx-config (not searched on PATH)])
+if test "x$WX_CONFIG" = "x" ; then
+   WX_CONFIG=/opt/homebrew/opt/wxwidgets/bin/wx-config
+fi
+
+if test "x$with_ui" = "xwx" ; then
+   AC_MSG_CHECKING([for wx-config at $WX_CONFIG])
+   if test -x "$WX_CONFIG" ; then
+      AC_MSG_RESULT([yes])
+   else
+      AC_MSG_RESULT([no])
+      AC_MSG_ERROR([wx-config not executable at $WX_CONFIG; set WX_CONFIG=/path/to/wx-config])
+   fi
+
+   WX_VERSION=`$WX_CONFIG --version`
+   AC_MSG_CHECKING([wxWidgets version])
+   AC_MSG_RESULT([$WX_VERSION])
+
+   WX_CFLAGS=`$WX_CONFIG --cxxflags base,core,gl,aui`
+   WX_LIBS=`$WX_CONFIG --libs base,core,gl,aui`
+
+   dnl wx-config does not validate the library list it is given: an unknown
+   dnl name produces a fabricated -l flag and a zero exit status, so checking
+   dnl the exit status proves nothing. Link a real program instead. This also
+   dnl catches a wx built for the wrong architecture, which is how a nearby
+   dnl bundled copy of wx fails.
+   bandicoot_save_CXXFLAGS="$CXXFLAGS"
+   bandicoot_save_LIBS="$LIBS"
+   CXXFLAGS="$CXXFLAGS $WX_CFLAGS"
+   LIBS="$LIBS $WX_LIBS"
+   AC_LANG_PUSH([C++])
+   AC_MSG_CHECKING([whether a wxWidgets GL program links])
+   AC_LINK_IFELSE(
+     [AC_LANG_PROGRAM([[#include <wx/wx.h>
+#include <wx/glcanvas.h>]],
+                      [[wxGLAttributes attrs;
+attrs.PlatformDefaults().RGBA().DoubleBuffer().Depth(24).EndList();
+return wxGLCanvas::IsDisplaySupported(attrs) ? 0 : 1;]])],
+     [AC_MSG_RESULT([yes])],
+     [AC_MSG_RESULT([no])
+      AC_MSG_ERROR([cannot link a wxWidgets GL program using flags from $WX_CONFIG])])
+   AC_LANG_POP([C++])
+   CXXFLAGS="$bandicoot_save_CXXFLAGS"
+   LIBS="$bandicoot_save_LIBS"
+
+   WX_CFLAGS="-DBANDICOOT_UI_WX $WX_CFLAGS"
+else
+   WX_CFLAGS=""
+   WX_LIBS=""
+fi
+
+AC_SUBST(WX_CFLAGS)
+AC_SUBST(WX_LIBS)
+AM_CONDITIONAL(UI_WX, test x$with_ui = xwx)
 
 
 dnl ============================ OPENGL ===================
@@ -332,8 +415,10 @@ if test x$rdkit_prefix = x ; then
 else
    rdkit_install_dir="$withval"
    # better RDKit linking I hope
+   # coordgen and maeparser are not listed: current RDKit uses them as
+   # external libraries, which its own dylibs already link.
    RDKIT_CXXFLAGS="-I$rdkit_install_dir/include/rdkit -DRDKIT_HAS_CAIRO_SUPPORT"
-   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitcoordgenlib -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitmaeparser -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -lboost_serialization -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
+   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -lboost_serialization -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
 fi
 
 if test x$coot_enhanced_ligand_additions = xtrue ; then

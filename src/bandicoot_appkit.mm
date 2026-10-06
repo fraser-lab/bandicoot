@@ -2382,6 +2382,10 @@ static NSTextField *bandicoot_status_field  = nil;  // its label (owned by conte
 static NSWindow *bandicoot_get_status_window(void) { return bandicoot_status_window; }
 static NSWindow    *bandicoot_status_parent = nil;  // the main NSWindow (unretained)
 
+extern "C" double bandicoot_status_bar_height(void) {
+    return bandicoot_status_window ? BANDICOOT_STATUS_BAR_HEIGHT : 0.0;
+}
+
 static void bandicoot_reposition_status_bar(void) {
     if (!bandicoot_status_window || !bandicoot_status_parent) return;
     // Pin to the bottom edge of the parent's *content* area, full width, so the

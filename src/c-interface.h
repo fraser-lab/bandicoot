@@ -5793,6 +5793,10 @@ void bandicoot_make_link_interactive();
     extensions.py "Modelling..." submenu (dead PyGTK menu path) as native C. */
 void bandicoot_modelling_dispatch(int op_id);
 
+/*! \brief Bandicoot: run one operation of the native "Ligand" menu.
+    op_id is one of the BLIG_* values in callbacks.h. */
+void bandicoot_ligand_dispatch(int op_id);
+
 /*! \brief Bandicoot: run one operation of the native "Glyco" (carbohydrate)
     menu. op_id is one of the BGLYCO_* values in callbacks.h. Restores the
     orphaned gui_add_linked_cho.py add_module_carbohydrate_gui() submenu (dead

@@ -120,6 +120,31 @@ if [ -d "$LIB_PREFIX" ]; then
     done < <(find "$LIB_PREFIX" -name "*.dylib" -type f)
 fi
 
+# Python extension modules (.so) built by this tree, e.g. pyrogen and the
+# RDKit-enabled coot modules, link our own dylibs as well. Only modules that
+# do are touched, so third-party ones are left alone. Their rpath has to climb
+# from the module's directory back up to lib/.
+links_own_libs() {
+    otool -L "$1" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r DEP; do
+        case "$DEP" in
+            "$LIB_PREFIX"/*|"$COMPILE_LIB_PREFIX"/*) echo yes; break ;;
+        esac
+    done | grep -q yes
+}
+if [ -d "$LIB_PREFIX" ]; then
+    while IFS= read -r SO; do
+        is_macho "$SO" || continue
+        links_own_libs "$SO" || continue
+        SUB="${SO#"$LIB_PREFIX"}"
+        UP="$(dirname "$SUB" | sed -E 's#/[^/]+#/..#g')"
+        chmod u+w "$SO"
+        rewrite_dep_loads "$SO"
+        rewrite_rpaths "$SO" "@loader_path$UP"
+        add_rpath_if_missing "$SO" "@loader_path$UP"
+        COUNT=$((COUNT + 1))
+    done < <(find "$LIB_PREFIX" -name "*.so" -type f)
+fi
+
 # Executables in libexec/ and bin/: rewrite deps, replace absolute
 # rpath with @executable_path/../lib.
 for d in libexec bin; do

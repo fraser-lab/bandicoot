@@ -61,6 +61,12 @@ class graphics_ligand_molecule : public lig_build::molecule_t<graphics_ligand_at
    std::pair<bool, double> scale_correction; // push down to base class at some stage
                                              // (wmolecule has one of these too).
    void gl_bonds(bool against_a_dark_background);
+   // Atom labels are drawn at render time, not compiled into the display list:
+   // they are placed from the current raster position, which only exists when
+   // the drawing actually executes.
+   std::vector<std::pair<unsigned int, lig_build::atom_id_info_t> > label_items;
+   void make_label_items();
+   void gl_labels() const;
 
 public:
    graphics_ligand_molecule() {

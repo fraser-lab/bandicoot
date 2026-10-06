@@ -32,6 +32,10 @@
 #include "ideal/torsion-bonds.hh"
 
 #include "trackball.h"
+
+#ifdef __APPLE__
+#include "bandicoot_appkit.h" // bandicoot_status_bar_height()
+#endif
 void
 graphics_info_t::multi_torsion_residues(int imol, const std::vector<coot::residue_spec_t> &v) {
 
@@ -212,20 +216,20 @@ graphics_info_t::graphics_ligand_view() {
 				       // changing size as the window
 				       // is reshaped
 
-	 // std::cout << "extents: top_left " << ext.first
-	 // << "   bottom right" << ext.second << std::endl;
-	 // 
-	 // If the offset scale factor (now 0.9) is 1.0, then when we
-	 // have big molecules, they sit too much towards the centre
-	 // of the screen (i.e. the offset correction is too much).
-	 // 
-	 // glTranslatef(-20.5-0.8*ext.first.x, -21.0+0.8*ext.second.y, 0);
-	 // glTranslatef(-20.5-0.8*ext.first.x, -20.5-0.8*ext.first.y, 0);
-
 	 double screen_bottom_left_x_pos = -1 * w/sc;
 	 double screen_bottom_left_y_pos = -1 * h/sc;
-	 double x_trans = screen_bottom_left_x_pos -0.8*ext.first.x + 3;
-	 double y_trans = screen_bottom_left_y_pos -0.8*ext.first.y + 2;
+	 // ext.first is the drawing's minimum x and y, i.e. its bottom-left in GL
+	 // coordinates. Offset by all of it, so the bounding box sits at the
+	 // margin whatever the depiction's origin; a partial offset leaves
+	 // molecules with large negative coordinates hanging off the edge.
+	 double x_trans = screen_bottom_left_x_pos - ext.first.x + 3;
+	 double y_trans = screen_bottom_left_y_pos - ext.first.y + 2;
+#ifdef __APPLE__
+	 // The native status strip is drawn over the bottom of the GL area, which
+	 // keeps its full allocation; lift the view clear of it. One unit here is
+	 // sc/2 points (allocation is in points).
+	 y_trans += 2.0 * bandicoot_status_bar_height() / sc;
+#endif
 	 
 	 glTranslatef(x_trans, y_trans, 0);
 

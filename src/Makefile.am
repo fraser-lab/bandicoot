@@ -227,7 +227,8 @@ AM_CPPFLAGS = \
 	$(WITH_SOUND)                   \
 	$(VORBISFILE_CFLAGS)            \
 	$(SQLITE3_CFLAGS)               \
-	$(CURL_CFLAGS)                 
+	$(CURL_CFLAGS)                  \
+	$(WX_CFLAGS)
 
 #	$(WITH_SCRIPT_CFLAGS) 
 
@@ -663,6 +664,7 @@ coot_bin_LDADD = $(OPENMP_CFLAGS)       \
 		$(L_BOOST_PYTHON)	\
 		$(GOOCANVAS_LIBS)       \
 		$(SQLITE3_LIBS)         \
+		$(WX_LIBS)              \
 		@GTK_LIBS@
 
 

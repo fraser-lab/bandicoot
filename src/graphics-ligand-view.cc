@@ -58,6 +58,8 @@ graphics_ligand_molecule::generate_display_list(bool dark_background_flag) {
    glNewList(display_list_tag, GL_COMPILE);
    gl_bonds(dark_background_flag);
    glEndList();
+
+   make_label_items();
 }
 
 coot::colour_t
@@ -128,21 +130,32 @@ void graphics_ligand_molecule::gl_bonds(bool dark_background) {
 	 bonds[ib].gl_bond(pos_1, pos_2, shorten_first, shorten_second, bt);
       }
    }
+}
 
-   for (unsigned int iat=0; iat<atoms.size(); iat++) { 
+void graphics_ligand_molecule::make_label_items() {
+
+   label_items.clear();
+   for (unsigned int iat=0; iat<atoms.size(); iat++) {
       std::string ele = atoms[iat].element;
-      if (ele != "C") { 
+      if (ele != "C") {
 	 std::vector<unsigned int> local_bonds = bonds_having_atom_with_atom_index(iat);
 	 bool gl_flag = true;
 	 lig_build::atom_id_info_t atom_id_info = make_atom_id_by_using_bonds(iat, ele, local_bonds, gl_flag);
 	 if (false)
-	    std::cout << "in gl_bonds() atom_index " << iat << " with charge " << atoms[iat].charge
+	    std::cout << "in make_label_items() atom_index " << iat << " with charge " << atoms[iat].charge
 		      << " made atom_id_info " << atom_id_info << std::endl;
-	 // atoms[iat].set_atom_id(atom_id_info.atom_id); // quick hack
-	 bool background_black = true;
-	 coot::colour_t col = atoms[iat].get_colour(background_black); // using ele
-	 atoms[iat].make_text_item(atom_id_info, col);
+	 label_items.push_back(std::make_pair(iat, atom_id_info));
       }
+   }
+}
+
+void graphics_ligand_molecule::gl_labels() const {
+
+   for (unsigned int i=0; i<label_items.size(); i++) {
+      const graphics_ligand_atom &at = atoms[label_items[i].first];
+      bool background_black = true;
+      coot::colour_t col = at.get_colour(background_black); // using ele
+      at.make_text_item(label_items[i].second, col);
    }
 }
 
@@ -375,6 +388,7 @@ graphics_ligand_molecule::render() {
    // 
    glDisable(GL_FOG);
    glCallList(display_list_tag);
+   gl_labels();
    glEnable(GL_FOG);
 }
 
@@ -427,8 +441,11 @@ graphics_ligand_molecule::setup_from(int imol_in, mmdb::Residue *residue_p,
 	    }
 	 }
       }
-      catch (const std::runtime_error &coot_error) {
-	 std::cout << coot_error.what() << std::endl;
+      catch (const std::exception &e) {
+	 // RDKit's sanitization errors (e.g. a failed kekulization) are not
+	 // runtime_errors, so catch the base class: the dictionary-only molecule
+	 // carries its hydrogens and can succeed where the model's atoms did not.
+	 std::cout << e.what() << std::endl;
          try {
             std::string res_name = residue_p->GetResName();
             std::pair<bool, coot::dictionary_residue_restraints_t> p =
@@ -441,15 +458,9 @@ graphics_ligand_molecule::setup_from(int imol_in, mmdb::Residue *residue_p,
                status = true;
             }
          }
-         catch (const std::runtime_error &coot_error_inner) {
-            std::cout << coot_error_inner.what() << std::endl;
+         catch (const std::exception &e_inner) {
+            std::cout << e_inner.what() << std::endl;
          }
-         catch (const std::exception &rdkit_error) {
-            std::cout << rdkit_error.what() << std::endl;
-         }
-      }
-      catch (const std::exception &rdkit_error) {
-	 std::cout << rdkit_error.what() << std::endl;
       }
    }
 #endif   // MAKE_ENHANCED_LIGAND_TOOLS

@@ -139,7 +139,19 @@ while queue:
     if lib in seen:
         continue
     seen.add(lib)
-    queue += deps(os.path.realpath(lib))
+    real = os.path.realpath(lib)
+    queue += deps(real)
+    # Homebrew libraries can name their own siblings as @rpath/<name> (webp ->
+    # sharpyuv does), so those must be followed during the walk as well, not
+    # only for files already in the install.
+    for base in rpath_dep_basenames(real):
+        if os.path.exists(os.path.join(prefix, 'lib', base)):
+            continue
+        for d in (os.path.dirname(real), os.path.join(brew, 'lib')):
+            cand = os.path.join(d, base)
+            if os.path.exists(cand):
+                queue.append(cand)
+                break
 
 emitted = set()
 for lib in sorted(seen):
