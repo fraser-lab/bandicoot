@@ -3446,94 +3446,104 @@ SWIG_Python_NonDynamicSetAttr(PyObject *obj, PyObject *name, PyObject *value) {
 #define SWIGTYPE_p_GtkToggleToolButton swig_types[3]
 #define SWIGTYPE_p_GtkWidget swig_types[4]
 #define SWIGTYPE_p_allocator_type swig_types[5]
-#define SWIGTYPE_p_char swig_types[6]
-#define SWIGTYPE_p_clipper__Coord_orth swig_types[7]
-#define SWIGTYPE_p_clipper__RTop_orth swig_types[8]
-#define SWIGTYPE_p_clipper__Spacegroup swig_types[9]
-#define SWIGTYPE_p_coot__alias_path_t swig_types[10]
-#define SWIGTYPE_p_coot__atom_spec_t swig_types[11]
-#define SWIGTYPE_p_coot__fasta_multi swig_types[12]
-#define SWIGTYPE_p_coot__file_attribs_info_t swig_types[13]
-#define SWIGTYPE_p_coot__fle_ligand_bond_t swig_types[14]
-#define SWIGTYPE_p_coot__graph_match_info_t swig_types[15]
-#define SWIGTYPE_p_coot__mtz_column_types_info_t swig_types[16]
-#define SWIGTYPE_p_coot__mtz_to_map_info_t swig_types[17]
-#define SWIGTYPE_p_coot__mtz_type_label swig_types[18]
-#define SWIGTYPE_p_coot__one_way_probe_contact_container_t swig_types[19]
-#define SWIGTYPE_p_coot__one_way_probe_contact_t swig_types[20]
-#define SWIGTYPE_p_coot__phenix_geo_bond swig_types[21]
-#define SWIGTYPE_p_coot__phenix_geo_bonds swig_types[22]
-#define SWIGTYPE_p_coot__pisa_interface_bond_info_t swig_types[23]
-#define SWIGTYPE_p_coot__probe_atom_spec_t swig_types[24]
-#define SWIGTYPE_p_coot__probe_clash_score_t swig_types[25]
-#define SWIGTYPE_p_coot__residue_spec_t swig_types[26]
-#define SWIGTYPE_p_coot__spec_eraser swig_types[27]
-#define SWIGTYPE_p_coot__str_mtime swig_types[28]
-#define SWIGTYPE_p_coot__util__density_correlation_stats_info_t swig_types[29]
-#define SWIGTYPE_p_difference_type swig_types[30]
-#define SWIGTYPE_p_double swig_types[31]
-#define SWIGTYPE_p_first_type swig_types[32]
-#define SWIGTYPE_p_gboolean swig_types[33]
-#define SWIGTYPE_p_gchar swig_types[34]
-#define SWIGTYPE_p_gdouble swig_types[35]
-#define SWIGTYPE_p_gpointer swig_types[36]
-#define SWIGTYPE_p_mmdb__Atom swig_types[37]
-#define SWIGTYPE_p_mmdb__Link swig_types[38]
-#define SWIGTYPE_p_mmdb__LinkR swig_types[39]
-#define SWIGTYPE_p_mmdb__Manager swig_types[40]
-#define SWIGTYPE_p_mmdb__Model swig_types[41]
-#define SWIGTYPE_p_mmdb__Residue swig_types[42]
-#define SWIGTYPE_p_mmdb__SELECTION_KEY swig_types[43]
-#define SWIGTYPE_p_p_PyObject swig_types[44]
-#define SWIGTYPE_p_second_type swig_types[45]
-#define SWIGTYPE_p_sequence_to_chain_results_t swig_types[46]
-#define SWIGTYPE_p_size_type swig_types[47]
-#define SWIGTYPE_p_std__allocatorT_coot__atom_spec_t_t swig_types[48]
-#define SWIGTYPE_p_std__allocatorT_coot__mtz_type_label_t swig_types[49]
-#define SWIGTYPE_p_std__allocatorT_int_t swig_types[50]
-#define SWIGTYPE_p_std__allocatorT_std__string_t swig_types[51]
-#define SWIGTYPE_p_std__invalid_argument swig_types[52]
-#define SWIGTYPE_p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t swig_types[53]
-#define SWIGTYPE_p_std__pairT_bool_coot__atom_spec_t_t swig_types[54]
-#define SWIGTYPE_p_std__pairT_bool_coot__residue_spec_t_t swig_types[55]
-#define SWIGTYPE_p_std__pairT_bool_float_t swig_types[56]
-#define SWIGTYPE_p_std__pairT_bool_std__pairT_int_coot__atom_spec_t_t_t swig_types[57]
-#define SWIGTYPE_p_std__pairT_coot__atom_spec_t_coot__atom_spec_t_t swig_types[58]
-#define SWIGTYPE_p_std__pairT_coot__atom_spec_t_std__string_t swig_types[59]
-#define SWIGTYPE_p_std__pairT_coot__dipole_int_t swig_types[60]
-#define SWIGTYPE_p_std__pairT_int_int_t swig_types[61]
-#define SWIGTYPE_p_std__pairT_int_std__string_t swig_types[62]
-#define SWIGTYPE_p_std__pairT_int_std__vectorT_merge_molecule_results_info_t_std__allocatorT_merge_molecule_results_info_t_t_t_t swig_types[63]
-#define SWIGTYPE_p_std__pairT_short_float_t swig_types[64]
-#define SWIGTYPE_p_std__pairT_short_int_t swig_types[65]
-#define SWIGTYPE_p_std__pairT_short_std__string_t swig_types[66]
-#define SWIGTYPE_p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t swig_types[67]
-#define SWIGTYPE_p_std__pairT_std__string_std__string_t swig_types[68]
-#define SWIGTYPE_p_std__pairT_symm_trans_t_Cell_Translation_t swig_types[69]
-#define SWIGTYPE_p_std__string swig_types[70]
-#define SWIGTYPE_p_std__vectorT_coot__atom_spec_t_t swig_types[71]
-#define SWIGTYPE_p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t swig_types[72]
-#define SWIGTYPE_p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t swig_types[73]
-#define SWIGTYPE_p_std__vectorT_coot__mtz_type_label_t swig_types[74]
-#define SWIGTYPE_p_std__vectorT_coot__named_rotamer_score_std__allocatorT_coot__named_rotamer_score_t_t swig_types[75]
-#define SWIGTYPE_p_std__vectorT_coot__one_way_probe_contact_t_std__allocatorT_coot__one_way_probe_contact_t_t_t swig_types[76]
-#define SWIGTYPE_p_std__vectorT_coot__phenix_geo_bond_std__allocatorT_coot__phenix_geo_bond_t_t swig_types[77]
-#define SWIGTYPE_p_std__vectorT_coot__probe_atom_spec_t_std__allocatorT_coot__probe_atom_spec_t_t_t swig_types[78]
-#define SWIGTYPE_p_std__vectorT_coot__residue_range_t_std__allocatorT_coot__residue_range_t_t_t swig_types[79]
-#define SWIGTYPE_p_std__vectorT_coot__residue_spec_t_std__allocatorT_coot__residue_spec_t_t_t swig_types[80]
-#define SWIGTYPE_p_std__vectorT_coot__str_mtime_std__allocatorT_coot__str_mtime_t_t swig_types[81]
-#define SWIGTYPE_p_std__vectorT_int_t swig_types[82]
-#define SWIGTYPE_p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t swig_types[83]
-#define SWIGTYPE_p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t swig_types[84]
-#define SWIGTYPE_p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t swig_types[85]
-#define SWIGTYPE_p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t swig_types[86]
-#define SWIGTYPE_p_std__vectorT_std__string_t swig_types[87]
-#define SWIGTYPE_p_swig__SwigPyIterator swig_types[88]
-#define SWIGTYPE_p_time_t swig_types[89]
-#define SWIGTYPE_p_value_type swig_types[90]
-#define SWIGTYPE_p_void swig_types[91]
-static swig_type_info *swig_types[93];
-static swig_module_info swig_module = {swig_types, 92, 0, 0, 0, 0};
+#define SWIGTYPE_p_cfc__clustered_feature_info_from_python swig_types[6]
+#define SWIGTYPE_p_cfc__extracted_cluster_info_from_python swig_types[7]
+#define SWIGTYPE_p_cfc__water_cluster_info_from_python swig_types[8]
+#define SWIGTYPE_p_char swig_types[9]
+#define SWIGTYPE_p_clipper__Coord_orth swig_types[10]
+#define SWIGTYPE_p_clipper__RTop_orth swig_types[11]
+#define SWIGTYPE_p_clipper__Spacegroup swig_types[12]
+#define SWIGTYPE_p_coot__alias_path_t swig_types[13]
+#define SWIGTYPE_p_coot__atom_spec_t swig_types[14]
+#define SWIGTYPE_p_coot__fasta_multi swig_types[15]
+#define SWIGTYPE_p_coot__file_attribs_info_t swig_types[16]
+#define SWIGTYPE_p_coot__fle_ligand_bond_t swig_types[17]
+#define SWIGTYPE_p_coot__graph_match_info_t swig_types[18]
+#define SWIGTYPE_p_coot__mtz_column_types_info_t swig_types[19]
+#define SWIGTYPE_p_coot__mtz_to_map_info_t swig_types[20]
+#define SWIGTYPE_p_coot__mtz_type_label swig_types[21]
+#define SWIGTYPE_p_coot__one_way_probe_contact_container_t swig_types[22]
+#define SWIGTYPE_p_coot__one_way_probe_contact_t swig_types[23]
+#define SWIGTYPE_p_coot__phenix_geo_bond swig_types[24]
+#define SWIGTYPE_p_coot__phenix_geo_bonds swig_types[25]
+#define SWIGTYPE_p_coot__pisa_interface_bond_info_t swig_types[26]
+#define SWIGTYPE_p_coot__probe_atom_spec_t swig_types[27]
+#define SWIGTYPE_p_coot__probe_clash_score_t swig_types[28]
+#define SWIGTYPE_p_coot__residue_spec_t swig_types[29]
+#define SWIGTYPE_p_coot__spec_eraser swig_types[30]
+#define SWIGTYPE_p_coot__str_mtime swig_types[31]
+#define SWIGTYPE_p_coot__util__density_correlation_stats_info_t swig_types[32]
+#define SWIGTYPE_p_difference_type swig_types[33]
+#define SWIGTYPE_p_double swig_types[34]
+#define SWIGTYPE_p_first_type swig_types[35]
+#define SWIGTYPE_p_gboolean swig_types[36]
+#define SWIGTYPE_p_gchar swig_types[37]
+#define SWIGTYPE_p_gdouble swig_types[38]
+#define SWIGTYPE_p_gpointer swig_types[39]
+#define SWIGTYPE_p_mmdb__Atom swig_types[40]
+#define SWIGTYPE_p_mmdb__Link swig_types[41]
+#define SWIGTYPE_p_mmdb__LinkR swig_types[42]
+#define SWIGTYPE_p_mmdb__Manager swig_types[43]
+#define SWIGTYPE_p_mmdb__Model swig_types[44]
+#define SWIGTYPE_p_mmdb__Residue swig_types[45]
+#define SWIGTYPE_p_mmdb__SELECTION_KEY swig_types[46]
+#define SWIGTYPE_p_p_PyObject swig_types[47]
+#define SWIGTYPE_p_second_type swig_types[48]
+#define SWIGTYPE_p_sequence_to_chain_results_t swig_types[49]
+#define SWIGTYPE_p_size_type swig_types[50]
+#define SWIGTYPE_p_std__allocatorT_coot__atom_spec_t_t swig_types[51]
+#define SWIGTYPE_p_std__allocatorT_coot__mtz_type_label_t swig_types[52]
+#define SWIGTYPE_p_std__allocatorT_int_t swig_types[53]
+#define SWIGTYPE_p_std__allocatorT_std__string_t swig_types[54]
+#define SWIGTYPE_p_std__invalid_argument swig_types[55]
+#define SWIGTYPE_p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t swig_types[56]
+#define SWIGTYPE_p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t swig_types[57]
+#define SWIGTYPE_p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t swig_types[58]
+#define SWIGTYPE_p_std__pairT_bool_clipper__Coord_orth_t swig_types[59]
+#define SWIGTYPE_p_std__pairT_bool_coot__atom_spec_t_t swig_types[60]
+#define SWIGTYPE_p_std__pairT_bool_coot__residue_spec_t_t swig_types[61]
+#define SWIGTYPE_p_std__pairT_bool_float_t swig_types[62]
+#define SWIGTYPE_p_std__pairT_bool_std__pairT_int_coot__atom_spec_t_t_t swig_types[63]
+#define SWIGTYPE_p_std__pairT_coot__atom_spec_t_coot__atom_spec_t_t swig_types[64]
+#define SWIGTYPE_p_std__pairT_coot__atom_spec_t_std__string_t swig_types[65]
+#define SWIGTYPE_p_std__pairT_coot__dipole_int_t swig_types[66]
+#define SWIGTYPE_p_std__pairT_int_int_t swig_types[67]
+#define SWIGTYPE_p_std__pairT_int_std__string_t swig_types[68]
+#define SWIGTYPE_p_std__pairT_int_std__vectorT_merge_molecule_results_info_t_std__allocatorT_merge_molecule_results_info_t_t_t_t swig_types[69]
+#define SWIGTYPE_p_std__pairT_short_float_t swig_types[70]
+#define SWIGTYPE_p_std__pairT_short_int_t swig_types[71]
+#define SWIGTYPE_p_std__pairT_short_std__string_t swig_types[72]
+#define SWIGTYPE_p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t swig_types[73]
+#define SWIGTYPE_p_std__pairT_std__string_std__string_t swig_types[74]
+#define SWIGTYPE_p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t swig_types[75]
+#define SWIGTYPE_p_std__pairT_symm_trans_t_Cell_Translation_t swig_types[76]
+#define SWIGTYPE_p_std__string swig_types[77]
+#define SWIGTYPE_p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t swig_types[78]
+#define SWIGTYPE_p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t swig_types[79]
+#define SWIGTYPE_p_std__vectorT_coot__atom_spec_t_t swig_types[80]
+#define SWIGTYPE_p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t swig_types[81]
+#define SWIGTYPE_p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t swig_types[82]
+#define SWIGTYPE_p_std__vectorT_coot__mtz_type_label_t swig_types[83]
+#define SWIGTYPE_p_std__vectorT_coot__named_rotamer_score_std__allocatorT_coot__named_rotamer_score_t_t swig_types[84]
+#define SWIGTYPE_p_std__vectorT_coot__one_way_probe_contact_t_std__allocatorT_coot__one_way_probe_contact_t_t_t swig_types[85]
+#define SWIGTYPE_p_std__vectorT_coot__phenix_geo_bond_std__allocatorT_coot__phenix_geo_bond_t_t swig_types[86]
+#define SWIGTYPE_p_std__vectorT_coot__probe_atom_spec_t_std__allocatorT_coot__probe_atom_spec_t_t_t swig_types[87]
+#define SWIGTYPE_p_std__vectorT_coot__residue_range_t_std__allocatorT_coot__residue_range_t_t_t swig_types[88]
+#define SWIGTYPE_p_std__vectorT_coot__residue_spec_t_std__allocatorT_coot__residue_spec_t_t_t swig_types[89]
+#define SWIGTYPE_p_std__vectorT_coot__str_mtime_std__allocatorT_coot__str_mtime_t_t swig_types[90]
+#define SWIGTYPE_p_std__vectorT_int_t swig_types[91]
+#define SWIGTYPE_p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t swig_types[92]
+#define SWIGTYPE_p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t swig_types[93]
+#define SWIGTYPE_p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t swig_types[94]
+#define SWIGTYPE_p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t swig_types[95]
+#define SWIGTYPE_p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t swig_types[96]
+#define SWIGTYPE_p_std__vectorT_std__string_t swig_types[97]
+#define SWIGTYPE_p_swig__SwigPyIterator swig_types[98]
+#define SWIGTYPE_p_time_t swig_types[99]
+#define SWIGTYPE_p_value_type swig_types[100]
+#define SWIGTYPE_p_void swig_types[101]
+static swig_type_info *swig_types[103];
+static swig_module_info swig_module = {swig_types, 102, 0, 0, 0, 0};
 #define SWIG_TypeQuery(name) SWIG_TypeQueryModule(&swig_module, &swig_module, name)
 #define SWIG_MangledTypeQuery(name) SWIG_MangledTypeQueryModule(&swig_module, &swig_module, name)
 
@@ -45898,6 +45908,29 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_ligand_dispatch(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "bandicoot_ligand_dispatch" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  bandicoot_ligand_dispatch(arg1);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_bandicoot_glyco_dispatch(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -76123,6 +76156,1276 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_chemical_feature_clusters_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  PyObject *arg1 = 0 ;
+  PyObject *arg2 = 0 ;
+  double arg3 ;
+  double arg4 ;
+  double val3 ;
+  int ecode3 = 0 ;
+  double val4 ;
+  int ecode4 = 0 ;
+  PyObject *swig_obj[4] ;
+  PyObject *result = 0 ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "chemical_feature_clusters_py", 4, 4, swig_obj)) SWIG_fail;
+  arg1 = swig_obj[0];
+  arg2 = swig_obj[1];
+  ecode3 = SWIG_AsVal_double(swig_obj[2], &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "chemical_feature_clusters_py" "', argument " "3"" of type '" "double""'");
+  } 
+  arg3 = static_cast< double >(val3);
+  ecode4 = SWIG_AsVal_double(swig_obj[3], &val4);
+  if (!SWIG_IsOK(ecode4)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode4), "in method '" "chemical_feature_clusters_py" "', argument " "4"" of type '" "double""'");
+  } 
+  arg4 = static_cast< double >(val4);
+  result = (PyObject *)chemical_feature_clusters_py(arg1,arg2,arg3,arg4);
+  resultobj = result;
+  if (!resultobj) SWIG_fail;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_chemical_feature_clusters_accept_info_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  unsigned int arg1 ;
+  PyObject *arg2 = 0 ;
+  PyObject *arg3 = 0 ;
+  PyObject *arg4 = 0 ;
+  unsigned int val1 ;
+  int ecode1 = 0 ;
+  PyObject *swig_obj[4] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "chemical_feature_clusters_accept_info_py", 4, 4, swig_obj)) SWIG_fail;
+  ecode1 = SWIG_AsVal_unsigned_SS_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "chemical_feature_clusters_accept_info_py" "', argument " "1"" of type '" "unsigned int""'");
+  } 
+  arg1 = static_cast< unsigned int >(val1);
+  arg2 = swig_obj[1];
+  arg3 = swig_obj[2];
+  arg4 = swig_obj[3];
+  chemical_feature_clusters_accept_info_py(arg1,arg2,arg3,arg4);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_chemical_feature_clusters_accept_site_clusters_info_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  PyObject *arg1 = 0 ;
+  PyObject *swig_obj[1] ;
+  PyObject *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  arg1 = swig_obj[0];
+  result = (PyObject *)chemical_feature_clusters_accept_site_clusters_info_py(arg1);
+  resultobj = result;
+  if (!resultobj) SWIG_fail;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_water_cluster_info_from_python__SWIG_0(PyObject *self, Py_ssize_t nobjs, PyObject **swig_obj) {
+  PyObject *resultobj = 0;
+  clipper::Coord_orth *arg1 = 0 ;
+  double arg2 ;
+  double arg3 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  double val2 ;
+  int ecode2 = 0 ;
+  double val3 ;
+  int ecode3 = 0 ;
+  cfc::water_cluster_info_from_python *result = 0 ;
+  
+  (void)self;
+  if ((nobjs < 3) || (nobjs > 3)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1, SWIGTYPE_p_clipper__Coord_orth,  0  | 0);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "new_water_cluster_info_from_python" "', argument " "1"" of type '" "clipper::Coord_orth const &""'"); 
+  }
+  if (!argp1) {
+    SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "new_water_cluster_info_from_python" "', argument " "1"" of type '" "clipper::Coord_orth const &""'"); 
+  }
+  arg1 = reinterpret_cast< clipper::Coord_orth * >(argp1);
+  ecode2 = SWIG_AsVal_double(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "new_water_cluster_info_from_python" "', argument " "2"" of type '" "double""'");
+  } 
+  arg2 = static_cast< double >(val2);
+  ecode3 = SWIG_AsVal_double(swig_obj[2], &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "new_water_cluster_info_from_python" "', argument " "3"" of type '" "double""'");
+  } 
+  arg3 = static_cast< double >(val3);
+  result = (cfc::water_cluster_info_from_python *)new cfc::water_cluster_info_from_python((clipper::Coord_orth const &)*arg1,arg2,arg3);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_cfc__water_cluster_info_from_python, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_water_cluster_info_from_python__SWIG_1(PyObject *self, Py_ssize_t nobjs, PyObject **SWIGUNUSEDPARM(swig_obj)) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *result = 0 ;
+  
+  (void)self;
+  if ((nobjs < 0) || (nobjs > 0)) SWIG_fail;
+  result = (cfc::water_cluster_info_from_python *)new cfc::water_cluster_info_from_python();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_cfc__water_cluster_info_from_python, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_water_cluster_info_from_python(PyObject *self, PyObject *args) {
+  Py_ssize_t argc;
+  PyObject *argv[4] = {
+    0
+  };
+  
+  if (!(argc = SWIG_Python_UnpackTuple(args, "new_water_cluster_info_from_python", 0, 3, argv))) SWIG_fail;
+  --argc;
+  if (argc == 0) {
+    return _wrap_new_water_cluster_info_from_python__SWIG_1(self, argc, argv);
+  }
+  if (argc == 3) {
+    int _v = 0;
+    int res = SWIG_ConvertPtr(argv[0], 0, SWIGTYPE_p_clipper__Coord_orth, SWIG_POINTER_NO_NULL | 0);
+    _v = SWIG_CheckState(res);
+    if (_v) {
+      {
+        int res = SWIG_AsVal_double(argv[1], NULL);
+        _v = SWIG_CheckState(res);
+      }
+      if (_v) {
+        {
+          int res = SWIG_AsVal_double(argv[2], NULL);
+          _v = SWIG_CheckState(res);
+        }
+        if (_v) {
+          return _wrap_new_water_cluster_info_from_python__SWIG_0(self, argc, argv);
+        }
+      }
+    }
+  }
+  
+fail:
+  SWIG_Python_RaiseOrModifyTypeError("Wrong number or type of arguments for overloaded function 'new_water_cluster_info_from_python'.\n"
+    "  Possible C/C++ prototypes are:\n"
+    "    cfc::water_cluster_info_from_python::water_cluster_info_from_python(clipper::Coord_orth const &,double,double)\n"
+    "    cfc::water_cluster_info_from_python::water_cluster_info_from_python()\n");
+  return 0;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_pos_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  clipper::Coord_orth arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "water_cluster_info_from_python_pos_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_pos_set" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  {
+    res2 = SWIG_ConvertPtr(swig_obj[1], &argp2, SWIGTYPE_p_clipper__Coord_orth,  0  | 0);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "water_cluster_info_from_python_pos_set" "', argument " "2"" of type '" "clipper::Coord_orth""'"); 
+    }  
+    if (!argp2) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "water_cluster_info_from_python_pos_set" "', argument " "2"" of type '" "clipper::Coord_orth""'");
+    } else {
+      clipper::Coord_orth * temp = reinterpret_cast< clipper::Coord_orth * >(argp2);
+      arg2 = *temp;
+      if (SWIG_IsNewObj(res2)) delete temp;
+    }
+  }
+  if (arg1) (arg1)->pos = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_pos_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  clipper::Coord_orth result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_pos_get" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  result =  ((arg1)->pos);
+  resultobj = SWIG_NewPointerObj((new clipper::Coord_orth(result)), SWIGTYPE_p_clipper__Coord_orth, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_weight_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  double arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  double val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "water_cluster_info_from_python_weight_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_weight_set" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  ecode2 = SWIG_AsVal_double(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "water_cluster_info_from_python_weight_set" "', argument " "2"" of type '" "double""'");
+  } 
+  arg2 = static_cast< double >(val2);
+  if (arg1) (arg1)->weight = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_weight_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  double result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_weight_get" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  result = (double) ((arg1)->weight);
+  resultobj = SWIG_From_double(static_cast< double >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_radius_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  double arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  double val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "water_cluster_info_from_python_radius_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_radius_set" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  ecode2 = SWIG_AsVal_double(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "water_cluster_info_from_python_radius_set" "', argument " "2"" of type '" "double""'");
+  } 
+  arg2 = static_cast< double >(val2);
+  if (arg1) (arg1)->radius = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_water_cluster_info_from_python_radius_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  double result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "water_cluster_info_from_python_radius_get" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  result = (double) ((arg1)->radius);
+  resultobj = SWIG_From_double(static_cast< double >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_water_cluster_info_from_python(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::water_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__water_cluster_info_from_python, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_water_cluster_info_from_python" "', argument " "1"" of type '" "cfc::water_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::water_cluster_info_from_python * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *water_cluster_info_from_python_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj = NULL;
+  if (!SWIG_Python_UnpackTuple(args, "swigregister", 1, 1, &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_cfc__water_cluster_info_from_python, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *water_cluster_info_from_python_swiginit(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  return SWIG_Python_InitShadowInstance(args);
+}
+
+SWIGINTERN PyObject *_wrap_new_clustered_feature_info_from_python__SWIG_0(PyObject *self, Py_ssize_t nobjs, PyObject **swig_obj) {
+  PyObject *resultobj = 0;
+  int arg1 ;
+  coot::residue_spec_t *arg2 = 0 ;
+  unsigned int arg3 ;
+  int val1 ;
+  int ecode1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  unsigned int val3 ;
+  int ecode3 = 0 ;
+  cfc::clustered_feature_info_from_python *result = 0 ;
+  
+  (void)self;
+  if ((nobjs < 3) || (nobjs > 3)) SWIG_fail;
+  ecode1 = SWIG_AsVal_int(swig_obj[0], &val1);
+  if (!SWIG_IsOK(ecode1)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode1), "in method '" "new_clustered_feature_info_from_python" "', argument " "1"" of type '" "int""'");
+  } 
+  arg1 = static_cast< int >(val1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2, SWIGTYPE_p_coot__residue_spec_t,  0  | 0);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "new_clustered_feature_info_from_python" "', argument " "2"" of type '" "coot::residue_spec_t const &""'"); 
+  }
+  if (!argp2) {
+    SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "new_clustered_feature_info_from_python" "', argument " "2"" of type '" "coot::residue_spec_t const &""'"); 
+  }
+  arg2 = reinterpret_cast< coot::residue_spec_t * >(argp2);
+  ecode3 = SWIG_AsVal_unsigned_SS_int(swig_obj[2], &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "new_clustered_feature_info_from_python" "', argument " "3"" of type '" "unsigned int""'");
+  } 
+  arg3 = static_cast< unsigned int >(val3);
+  result = (cfc::clustered_feature_info_from_python *)new cfc::clustered_feature_info_from_python(arg1,(coot::residue_spec_t const &)*arg2,arg3);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_cfc__clustered_feature_info_from_python, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_clustered_feature_info_from_python__SWIG_1(PyObject *self, Py_ssize_t nobjs, PyObject **SWIGUNUSEDPARM(swig_obj)) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *result = 0 ;
+  
+  (void)self;
+  if ((nobjs < 0) || (nobjs > 0)) SWIG_fail;
+  result = (cfc::clustered_feature_info_from_python *)new cfc::clustered_feature_info_from_python();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_cfc__clustered_feature_info_from_python, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_clustered_feature_info_from_python(PyObject *self, PyObject *args) {
+  Py_ssize_t argc;
+  PyObject *argv[4] = {
+    0
+  };
+  
+  if (!(argc = SWIG_Python_UnpackTuple(args, "new_clustered_feature_info_from_python", 0, 3, argv))) SWIG_fail;
+  --argc;
+  if (argc == 0) {
+    return _wrap_new_clustered_feature_info_from_python__SWIG_1(self, argc, argv);
+  }
+  if (argc == 3) {
+    int _v = 0;
+    {
+      int res = SWIG_AsVal_int(argv[0], NULL);
+      _v = SWIG_CheckState(res);
+    }
+    if (_v) {
+      int res = SWIG_ConvertPtr(argv[1], 0, SWIGTYPE_p_coot__residue_spec_t, SWIG_POINTER_NO_NULL | 0);
+      _v = SWIG_CheckState(res);
+      if (_v) {
+        {
+          int res = SWIG_AsVal_unsigned_SS_int(argv[2], NULL);
+          _v = SWIG_CheckState(res);
+        }
+        if (_v) {
+          return _wrap_new_clustered_feature_info_from_python__SWIG_0(self, argc, argv);
+        }
+      }
+    }
+  }
+  
+fail:
+  SWIG_Python_RaiseOrModifyTypeError("Wrong number or type of arguments for overloaded function 'new_clustered_feature_info_from_python'.\n"
+    "  Possible C/C++ prototypes are:\n"
+    "    cfc::clustered_feature_info_from_python::clustered_feature_info_from_python(int,coot::residue_spec_t const &,unsigned int)\n"
+    "    cfc::clustered_feature_info_from_python::clustered_feature_info_from_python()\n");
+  return 0;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_imol_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  int arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "clustered_feature_info_from_python_imol_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_imol_set" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  ecode2 = SWIG_AsVal_int(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "clustered_feature_info_from_python_imol_set" "', argument " "2"" of type '" "int""'");
+  } 
+  arg2 = static_cast< int >(val2);
+  if (arg1) (arg1)->imol = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_imol_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_imol_get" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  result = (int) ((arg1)->imol);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_cluster_number_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  unsigned int arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  unsigned int val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "clustered_feature_info_from_python_cluster_number_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_cluster_number_set" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  ecode2 = SWIG_AsVal_unsigned_SS_int(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "clustered_feature_info_from_python_cluster_number_set" "', argument " "2"" of type '" "unsigned int""'");
+  } 
+  arg2 = static_cast< unsigned int >(val2);
+  if (arg1) (arg1)->cluster_number = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_cluster_number_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  unsigned int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_cluster_number_get" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  result = (unsigned int) ((arg1)->cluster_number);
+  resultobj = SWIG_From_unsigned_SS_int(static_cast< unsigned int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_residue_spec_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  coot::residue_spec_t *arg2 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "clustered_feature_info_from_python_residue_spec_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_residue_spec_set" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2,SWIGTYPE_p_coot__residue_spec_t, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "clustered_feature_info_from_python_residue_spec_set" "', argument " "2"" of type '" "coot::residue_spec_t *""'"); 
+  }
+  arg2 = reinterpret_cast< coot::residue_spec_t * >(argp2);
+  if (arg1) (arg1)->residue_spec = *arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_clustered_feature_info_from_python_residue_spec_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  coot::residue_spec_t *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "clustered_feature_info_from_python_residue_spec_get" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  result = (coot::residue_spec_t *)& ((arg1)->residue_spec);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_coot__residue_spec_t, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_clustered_feature_info_from_python(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::clustered_feature_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__clustered_feature_info_from_python, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_clustered_feature_info_from_python" "', argument " "1"" of type '" "cfc::clustered_feature_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::clustered_feature_info_from_python * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *clustered_feature_info_from_python_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj = NULL;
+  if (!SWIG_Python_UnpackTuple(args, "swigregister", 1, 1, &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_cfc__clustered_feature_info_from_python, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *clustered_feature_info_from_python_swiginit(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  return SWIG_Python_InitShadowInstance(args);
+}
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_wc_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > *arg2 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_wc_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_wc_set" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2,SWIGTYPE_p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_wc_set" "', argument " "2"" of type '" "std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > *""'"); 
+  }
+  arg2 = reinterpret_cast< std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > * >(argp2);
+  if (arg1) (arg1)->wc = *arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_wc_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_wc_get" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > *)& ((arg1)->wc);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_cw_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > *arg2 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_cw_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_cw_set" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2,SWIGTYPE_p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_cw_set" "', argument " "2"" of type '" "std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > *""'"); 
+  }
+  arg2 = reinterpret_cast< std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > * >(argp2);
+  if (arg1) (arg1)->cw = *arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_cw_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_cw_get" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > *)& ((arg1)->cw);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_extracted_cluster_info_from_python(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  PyObject *arg1 = 0 ;
+  PyObject *swig_obj[1] ;
+  cfc::extracted_cluster_info_from_python *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  arg1 = swig_obj[0];
+  result = (cfc::extracted_cluster_info_from_python *)new cfc::extracted_cluster_info_from_python(arg1);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_cfc__extracted_cluster_info_from_python, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_n_water_structures(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  unsigned int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_n_water_structures" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (unsigned int)((cfc::extracted_cluster_info_from_python const *)arg1)->n_water_structures();
+  resultobj = SWIG_From_unsigned_SS_int(static_cast< unsigned int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_n_pharmacophore_structures(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  unsigned int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_n_pharmacophore_structures" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (unsigned int)((cfc::extracted_cluster_info_from_python const *)arg1)->n_pharmacophore_structures();
+  resultobj = SWIG_From_unsigned_SS_int(static_cast< unsigned int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_water_structures_vec(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::vector< int,std::allocator< int > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_water_structures_vec" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = ((cfc::extracted_cluster_info_from_python const *)arg1)->water_structures_vec();
+  resultobj = swig::from(static_cast< std::vector< int,std::allocator< int > > >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_structures_vec(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::vector< int,std::allocator< int > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_structures_vec" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = ((cfc::extracted_cluster_info_from_python const *)arg1)->pharmacophore_structures_vec();
+  resultobj = swig::from(static_cast< std::vector< int,std::allocator< int > > >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_structures_and_specs_vec(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  SwigValueWrapper< std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_structures_and_specs_vec" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = ((cfc::extracted_cluster_info_from_python const *)arg1)->pharmacophore_structures_and_specs_vec();
+  resultobj = SWIG_NewPointerObj((new std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > >(result)), SWIGTYPE_p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophores_centre(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  SwigValueWrapper< std::pair< bool,clipper::Coord_orth > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophores_centre" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = ((cfc::extracted_cluster_info_from_python const *)arg1)->pharmacophores_centre();
+  resultobj = SWIG_NewPointerObj((new std::pair< bool,clipper::Coord_orth >(result)), SWIGTYPE_p_std__pairT_bool_clipper__Coord_orth_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_water_cluster_imol_residue_spec_vec(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  SwigValueWrapper< std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_water_cluster_imol_residue_spec_vec" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = ((cfc::extracted_cluster_info_from_python const *)arg1)->water_cluster_imol_residue_spec_vec();
+  resultobj = SWIG_NewPointerObj((new std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > >(result)), SWIGTYPE_p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  std::string *arg2 = 0 ;
+  unsigned int arg3 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 = SWIG_OLDOBJ ;
+  unsigned int val3 ;
+  int ecode3 = 0 ;
+  PyObject *swig_obj[3] ;
+  SwigValueWrapper< std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > > > result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec", 3, 3, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  {
+    std::string *ptr = (std::string *)0;
+    res2 = SWIG_AsPtr_std_string(swig_obj[1], &ptr);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    if (!ptr) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec" "', argument " "2"" of type '" "std::string const &""'"); 
+    }
+    arg2 = ptr;
+  }
+  ecode3 = SWIG_AsVal_unsigned_SS_int(swig_obj[2], &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec" "', argument " "3"" of type '" "unsigned int""'");
+  } 
+  arg3 = static_cast< unsigned int >(val3);
+  result = (arg1)->pharmacophore_cluster_imol_residue_spec_vec((std::string const &)*arg2,arg3);
+  resultobj = SWIG_NewPointerObj((new std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > >(result)), SWIGTYPE_p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t, SWIG_POINTER_OWN |  0 );
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return resultobj;
+fail:
+  if (SWIG_IsNewObj(res2)) delete arg2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_water_cluster_idx_max(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  unsigned int result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_water_cluster_idx_max" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (unsigned int)((cfc::extracted_cluster_info_from_python const *)arg1)->water_cluster_idx_max();
+  resultobj = SWIG_From_unsigned_SS_int(static_cast< unsigned int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > *arg2 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_pharmacophore_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_set" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2,SWIGTYPE_p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_pharmacophore_set" "', argument " "2"" of type '" "std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > *""'"); 
+  }
+  arg2 = reinterpret_cast< std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > * >(argp2);
+  if (arg1) (arg1)->pharmacophore = *arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > *result = 0 ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_get" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result = (std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > *)& ((arg1)->pharmacophore);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > > arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  {
+    res2 = SWIG_ConvertPtr(swig_obj[1], &argp2, SWIGTYPE_p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t,  0  | 0);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set" "', argument " "2"" of type '" "std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > >""'"); 
+    }  
+    if (!argp2) {
+      SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set" "', argument " "2"" of type '" "std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > >""'");
+    } else {
+      std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > > * temp = reinterpret_cast< std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > > * >(argp2);
+      arg2 = *temp;
+      if (SWIG_IsNewObj(res2)) delete temp;
+    }
+  }
+  if (arg1) (arg1)->pharmacophore_model_cluster_means = arg2;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_pharmacophore_model_cluster_means_get(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > > result;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_get" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  result =  ((arg1)->pharmacophore_model_cluster_means);
+  resultobj = SWIG_NewPointerObj((new std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > >(result)), SWIGTYPE_p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_cluster_vector_sorter(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > *arg1 = 0 ;
+  std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > *arg2 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject *swig_obj[2] ;
+  bool result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_cluster_vector_sorter", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1, SWIGTYPE_p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t,  0  | 0);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_cluster_vector_sorter" "', argument " "1"" of type '" "std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &""'"); 
+  }
+  if (!argp1) {
+    SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "extracted_cluster_info_from_python_cluster_vector_sorter" "', argument " "1"" of type '" "std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &""'"); 
+  }
+  arg1 = reinterpret_cast< std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > * >(argp1);
+  res2 = SWIG_ConvertPtr(swig_obj[1], &argp2, SWIGTYPE_p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t,  0  | 0);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "extracted_cluster_info_from_python_cluster_vector_sorter" "', argument " "2"" of type '" "std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &""'"); 
+  }
+  if (!argp2) {
+    SWIG_exception_fail(SWIG_NullReferenceError, "invalid null reference " "in method '" "extracted_cluster_info_from_python_cluster_vector_sorter" "', argument " "2"" of type '" "std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &""'"); 
+  }
+  arg2 = reinterpret_cast< std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > * >(argp2);
+  result = (bool)cfc::extracted_cluster_info_from_python::cluster_vector_sorter((std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &)*arg1,(std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > const &)*arg2);
+  resultobj = SWIG_From_bool(static_cast< bool >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_extracted_cluster_info_from_python_show_water_balls(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  unsigned int arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  unsigned int val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "extracted_cluster_info_from_python_show_water_balls", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "extracted_cluster_info_from_python_show_water_balls" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python const *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  ecode2 = SWIG_AsVal_unsigned_SS_int(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "extracted_cluster_info_from_python_show_water_balls" "', argument " "2"" of type '" "unsigned int""'");
+  } 
+  arg2 = static_cast< unsigned int >(val2);
+  result = (int)((cfc::extracted_cluster_info_from_python const *)arg1)->show_water_balls(arg2);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_extracted_cluster_info_from_python(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  cfc::extracted_cluster_info_from_python *arg1 = 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject *swig_obj[1] ;
+  
+  (void)self;
+  if (!args) SWIG_fail;
+  swig_obj[0] = args;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_cfc__extracted_cluster_info_from_python, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_extracted_cluster_info_from_python" "', argument " "1"" of type '" "cfc::extracted_cluster_info_from_python *""'"); 
+  }
+  arg1 = reinterpret_cast< cfc::extracted_cluster_info_from_python * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *extracted_cluster_info_from_python_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj = NULL;
+  if (!SWIG_Python_UnpackTuple(args, "swigregister", 1, 1, &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_cfc__extracted_cluster_info_from_python, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *extracted_cluster_info_from_python_swiginit(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  return SWIG_Python_InitShadowInstance(args);
+}
+
+SWIGINTERN PyObject *_wrap_chemical_feature_clusters_setup_dialog(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "chemical_feature_clusters_setup_dialog", 0, 0, 0)) SWIG_fail;
+  chemical_feature_clusters_setup_dialog();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_set_user_defined_atom_colour_by_residue_py(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   int arg1 ;
@@ -78438,6 +79741,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "add_OXT_to_residue", _wrap_add_OXT_to_residue, METH_VARARGS, NULL},
 	 { "bandicoot_make_link_interactive", _wrap_bandicoot_make_link_interactive, METH_NOARGS, NULL},
 	 { "bandicoot_modelling_dispatch", _wrap_bandicoot_modelling_dispatch, METH_O, NULL},
+	 { "bandicoot_ligand_dispatch", _wrap_bandicoot_ligand_dispatch, METH_O, NULL},
 	 { "bandicoot_glyco_dispatch", _wrap_bandicoot_glyco_dispatch, METH_O, NULL},
 	 { "bandicoot_glyco_dialog_refresh_if_open", _wrap_bandicoot_glyco_dialog_refresh_if_open, METH_NOARGS, NULL},
 	 { "bandicoot_interesting_things_py", _wrap_bandicoot_interesting_things_py, METH_VARARGS, NULL},
@@ -79377,6 +80681,53 @@ static PyMethodDef SwigMethods[] = {
 	 { "set_display_all_generic_objects", _wrap_set_display_all_generic_objects, METH_O, NULL},
 	 { "generic_objects_gui_wrapper", _wrap_generic_objects_gui_wrapper, METH_NOARGS, NULL},
 	 { "close_all_generic_objects", _wrap_close_all_generic_objects, METH_NOARGS, NULL},
+	 { "chemical_feature_clusters_py", _wrap_chemical_feature_clusters_py, METH_VARARGS, NULL},
+	 { "chemical_feature_clusters_accept_info_py", _wrap_chemical_feature_clusters_accept_info_py, METH_VARARGS, NULL},
+	 { "chemical_feature_clusters_accept_site_clusters_info_py", _wrap_chemical_feature_clusters_accept_site_clusters_info_py, METH_O, NULL},
+	 { "new_water_cluster_info_from_python", _wrap_new_water_cluster_info_from_python, METH_VARARGS, NULL},
+	 { "water_cluster_info_from_python_pos_set", _wrap_water_cluster_info_from_python_pos_set, METH_VARARGS, NULL},
+	 { "water_cluster_info_from_python_pos_get", _wrap_water_cluster_info_from_python_pos_get, METH_O, NULL},
+	 { "water_cluster_info_from_python_weight_set", _wrap_water_cluster_info_from_python_weight_set, METH_VARARGS, NULL},
+	 { "water_cluster_info_from_python_weight_get", _wrap_water_cluster_info_from_python_weight_get, METH_O, NULL},
+	 { "water_cluster_info_from_python_radius_set", _wrap_water_cluster_info_from_python_radius_set, METH_VARARGS, NULL},
+	 { "water_cluster_info_from_python_radius_get", _wrap_water_cluster_info_from_python_radius_get, METH_O, NULL},
+	 { "delete_water_cluster_info_from_python", _wrap_delete_water_cluster_info_from_python, METH_O, NULL},
+	 { "water_cluster_info_from_python_swigregister", water_cluster_info_from_python_swigregister, METH_O, NULL},
+	 { "water_cluster_info_from_python_swiginit", water_cluster_info_from_python_swiginit, METH_VARARGS, NULL},
+	 { "new_clustered_feature_info_from_python", _wrap_new_clustered_feature_info_from_python, METH_VARARGS, NULL},
+	 { "clustered_feature_info_from_python_imol_set", _wrap_clustered_feature_info_from_python_imol_set, METH_VARARGS, NULL},
+	 { "clustered_feature_info_from_python_imol_get", _wrap_clustered_feature_info_from_python_imol_get, METH_O, NULL},
+	 { "clustered_feature_info_from_python_cluster_number_set", _wrap_clustered_feature_info_from_python_cluster_number_set, METH_VARARGS, NULL},
+	 { "clustered_feature_info_from_python_cluster_number_get", _wrap_clustered_feature_info_from_python_cluster_number_get, METH_O, NULL},
+	 { "clustered_feature_info_from_python_residue_spec_set", _wrap_clustered_feature_info_from_python_residue_spec_set, METH_VARARGS, NULL},
+	 { "clustered_feature_info_from_python_residue_spec_get", _wrap_clustered_feature_info_from_python_residue_spec_get, METH_O, NULL},
+	 { "delete_clustered_feature_info_from_python", _wrap_delete_clustered_feature_info_from_python, METH_O, NULL},
+	 { "clustered_feature_info_from_python_swigregister", clustered_feature_info_from_python_swigregister, METH_O, NULL},
+	 { "clustered_feature_info_from_python_swiginit", clustered_feature_info_from_python_swiginit, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_wc_set", _wrap_extracted_cluster_info_from_python_wc_set, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_wc_get", _wrap_extracted_cluster_info_from_python_wc_get, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_cw_set", _wrap_extracted_cluster_info_from_python_cw_set, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_cw_get", _wrap_extracted_cluster_info_from_python_cw_get, METH_O, NULL},
+	 { "new_extracted_cluster_info_from_python", _wrap_new_extracted_cluster_info_from_python, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_n_water_structures", _wrap_extracted_cluster_info_from_python_n_water_structures, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_n_pharmacophore_structures", _wrap_extracted_cluster_info_from_python_n_pharmacophore_structures, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_water_structures_vec", _wrap_extracted_cluster_info_from_python_water_structures_vec, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_structures_vec", _wrap_extracted_cluster_info_from_python_pharmacophore_structures_vec, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_structures_and_specs_vec", _wrap_extracted_cluster_info_from_python_pharmacophore_structures_and_specs_vec, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophores_centre", _wrap_extracted_cluster_info_from_python_pharmacophores_centre, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_water_cluster_imol_residue_spec_vec", _wrap_extracted_cluster_info_from_python_water_cluster_imol_residue_spec_vec, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec", _wrap_extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_water_cluster_idx_max", _wrap_extracted_cluster_info_from_python_water_cluster_idx_max, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_set", _wrap_extracted_cluster_info_from_python_pharmacophore_set, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_get", _wrap_extracted_cluster_info_from_python_pharmacophore_get, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set", _wrap_extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_pharmacophore_model_cluster_means_get", _wrap_extracted_cluster_info_from_python_pharmacophore_model_cluster_means_get, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_cluster_vector_sorter", _wrap_extracted_cluster_info_from_python_cluster_vector_sorter, METH_VARARGS, NULL},
+	 { "extracted_cluster_info_from_python_show_water_balls", _wrap_extracted_cluster_info_from_python_show_water_balls, METH_VARARGS, NULL},
+	 { "delete_extracted_cluster_info_from_python", _wrap_delete_extracted_cluster_info_from_python, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_swigregister", extracted_cluster_info_from_python_swigregister, METH_O, NULL},
+	 { "extracted_cluster_info_from_python_swiginit", extracted_cluster_info_from_python_swiginit, METH_VARARGS, NULL},
+	 { "chemical_feature_clusters_setup_dialog", _wrap_chemical_feature_clusters_setup_dialog, METH_NOARGS, NULL},
 	 { "set_user_defined_atom_colour_by_residue_py", _wrap_set_user_defined_atom_colour_by_residue_py, METH_VARARGS, NULL},
 	 { "set_user_defined_atom_colour_py", _wrap_set_user_defined_atom_colour_py, METH_VARARGS, NULL},
 	 { "set_user_defined_colours_py", _wrap_set_user_defined_colours_py, METH_O, NULL},
@@ -79430,6 +80781,9 @@ static swig_type_info _swigt__p_GtkSignalFunc = {"_p_GtkSignalFunc", "GtkSignalF
 static swig_type_info _swigt__p_GtkToggleToolButton = {"_p_GtkToggleToolButton", "GtkToggleToolButton *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_GtkWidget = {"_p_GtkWidget", "GtkWidget *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_allocator_type = {"_p_allocator_type", "allocator_type *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_cfc__clustered_feature_info_from_python = {"_p_cfc__clustered_feature_info_from_python", "cfc::clustered_feature_info_from_python *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_cfc__extracted_cluster_info_from_python = {"_p_cfc__extracted_cluster_info_from_python", "cfc::extracted_cluster_info_from_python *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_cfc__water_cluster_info_from_python = {"_p_cfc__water_cluster_info_from_python", "cfc::water_cluster_info_from_python *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_char = {"_p_char", "char *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_clipper__Coord_orth = {"_p_clipper__Coord_orth", "clipper::Coord_orth *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_clipper__RTop_orth = {"_p_clipper__RTop_orth", "clipper::RTop_orth *", 0, 0, (void*)0, 0};
@@ -79478,6 +80832,9 @@ static swig_type_info _swigt__p_std__allocatorT_int_t = {"_p_std__allocatorT_int
 static swig_type_info _swigt__p_std__allocatorT_std__string_t = {"_p_std__allocatorT_std__string_t", "std::vector< std::string >::allocator_type *|std::allocator< std::string > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__invalid_argument = {"_p_std__invalid_argument", "std::invalid_argument *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t = {"_p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t", "std::map< std::pair< coot::probe_atom_spec_t,coot::probe_atom_spec_t >,bool > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t = {"_p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t", "std::map< std::string,std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t = {"_p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t", "std::map< std::string,std::vector< clipper::Coord_orth,std::allocator< clipper::Coord_orth > > > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__pairT_bool_clipper__Coord_orth_t = {"_p_std__pairT_bool_clipper__Coord_orth_t", "std::pair< bool,clipper::Coord_orth > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_bool_coot__atom_spec_t_t = {"_p_std__pairT_bool_coot__atom_spec_t_t", "std::pair< bool,coot::atom_spec_t > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_bool_coot__residue_spec_t_t = {"_p_std__pairT_bool_coot__residue_spec_t_t", "std::pair< bool,coot::residue_spec_t > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_bool_float_t = {"_p_std__pairT_bool_float_t", "std::pair< bool,float > *", 0, 0, (void*)0, 0};
@@ -79493,8 +80850,11 @@ static swig_type_info _swigt__p_std__pairT_short_int_t = {"_p_std__pairT_short_i
 static swig_type_info _swigt__p_std__pairT_short_std__string_t = {"_p_std__pairT_short_std__string_t", "std::pair< short,std::string > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t = {"_p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t", "std::pair< std::pair< int,int >,std::vector< int,std::allocator< int > > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_std__string_std__string_t = {"_p_std__pairT_std__string_std__string_t", "std::pair< std::string,std::string > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t = {"_p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t", "std::pair< std::vector< int,std::allocator< int > >,cfc::water_cluster_info_from_python > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__pairT_symm_trans_t_Cell_Translation_t = {"_p_std__pairT_symm_trans_t_Cell_Translation_t", "std::pair< symm_trans_t,Cell_Translation > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__string = {"_p_std__string", "std::string *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t = {"_p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t", "std::vector< cfc::clustered_feature_info_from_python,std::allocator< cfc::clustered_feature_info_from_python > > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t = {"_p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t", "std::vector< cfc::water_cluster_info_from_python,std::allocator< cfc::water_cluster_info_from_python > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_coot__atom_spec_t_t = {"_p_std__vectorT_coot__atom_spec_t_t", "std::vector< coot::atom_spec_t,std::allocator< coot::atom_spec_t > > *|std::vector< coot::atom_spec_t > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t = {"_p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t", "std::vector< coot::chain_mutation_info_container_t,std::allocator< coot::chain_mutation_info_container_t > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t = {"_p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t", "std::vector< coot::command_arg_t,std::allocator< coot::command_arg_t > > *", 0, 0, (void*)0, 0};
@@ -79509,6 +80869,7 @@ static swig_type_info _swigt__p_std__vectorT_coot__str_mtime_std__allocatorT_coo
 static swig_type_info _swigt__p_std__vectorT_int_t = {"_p_std__vectorT_int_t", "std::vector< int,std::allocator< int > > *|std::vector< int > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t = {"_p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t", "std::vector< std::pair< clipper::Coord_orth,double >,std::allocator< std::pair< clipper::Coord_orth,double > > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t = {"_p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t", "std::vector< std::pair< coot::residue_spec_t,double >,std::allocator< std::pair< coot::residue_spec_t,double > > > *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t = {"_p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t", "std::vector< std::pair< int,coot::residue_spec_t >,std::allocator< std::pair< int,coot::residue_spec_t > > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t = {"_p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t", "std::vector< std::pair< std::string,coot::residue_spec_t >,std::allocator< std::pair< std::string,coot::residue_spec_t > > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t = {"_p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t", "std::vector< std::pair< std::string,std::string >,std::allocator< std::pair< std::string,std::string > > > *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_std__vectorT_std__string_t = {"_p_std__vectorT_std__string_t", "std::vector< std::string,std::allocator< std::string > > *|std::vector< std::string > *", 0, 0, (void*)0, 0};
@@ -79524,6 +80885,9 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_GtkToggleToolButton,
   &_swigt__p_GtkWidget,
   &_swigt__p_allocator_type,
+  &_swigt__p_cfc__clustered_feature_info_from_python,
+  &_swigt__p_cfc__extracted_cluster_info_from_python,
+  &_swigt__p_cfc__water_cluster_info_from_python,
   &_swigt__p_char,
   &_swigt__p_clipper__Coord_orth,
   &_swigt__p_clipper__RTop_orth,
@@ -79572,6 +80936,9 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_std__allocatorT_std__string_t,
   &_swigt__p_std__invalid_argument,
   &_swigt__p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t,
+  &_swigt__p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t,
+  &_swigt__p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t,
+  &_swigt__p_std__pairT_bool_clipper__Coord_orth_t,
   &_swigt__p_std__pairT_bool_coot__atom_spec_t_t,
   &_swigt__p_std__pairT_bool_coot__residue_spec_t_t,
   &_swigt__p_std__pairT_bool_float_t,
@@ -79587,8 +80954,11 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_std__pairT_short_std__string_t,
   &_swigt__p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t,
   &_swigt__p_std__pairT_std__string_std__string_t,
+  &_swigt__p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t,
   &_swigt__p_std__pairT_symm_trans_t_Cell_Translation_t,
   &_swigt__p_std__string,
+  &_swigt__p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t,
+  &_swigt__p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t,
   &_swigt__p_std__vectorT_coot__atom_spec_t_t,
   &_swigt__p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t,
   &_swigt__p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t,
@@ -79603,6 +80973,7 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_std__vectorT_int_t,
   &_swigt__p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t,
   &_swigt__p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t,
+  &_swigt__p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t,
   &_swigt__p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t,
   &_swigt__p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t,
   &_swigt__p_std__vectorT_std__string_t,
@@ -79618,6 +80989,9 @@ static swig_cast_info _swigc__p_GtkSignalFunc[] = {  {&_swigt__p_GtkSignalFunc, 
 static swig_cast_info _swigc__p_GtkToggleToolButton[] = {  {&_swigt__p_GtkToggleToolButton, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_GtkWidget[] = {  {&_swigt__p_GtkWidget, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_allocator_type[] = {  {&_swigt__p_allocator_type, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_cfc__clustered_feature_info_from_python[] = {  {&_swigt__p_cfc__clustered_feature_info_from_python, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_cfc__extracted_cluster_info_from_python[] = {  {&_swigt__p_cfc__extracted_cluster_info_from_python, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_cfc__water_cluster_info_from_python[] = {  {&_swigt__p_cfc__water_cluster_info_from_python, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_char[] = {  {&_swigt__p_char, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_clipper__Coord_orth[] = {  {&_swigt__p_clipper__Coord_orth, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_clipper__RTop_orth[] = {  {&_swigt__p_clipper__RTop_orth, 0, 0, 0},{0, 0, 0, 0}};
@@ -79666,6 +81040,9 @@ static swig_cast_info _swigc__p_std__allocatorT_int_t[] = {  {&_swigt__p_std__al
 static swig_cast_info _swigc__p_std__allocatorT_std__string_t[] = {  {&_swigt__p_std__allocatorT_std__string_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__invalid_argument[] = {  {&_swigt__p_std__invalid_argument, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t[] = {  {&_swigt__p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t[] = {  {&_swigt__p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t[] = {  {&_swigt__p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__pairT_bool_clipper__Coord_orth_t[] = {  {&_swigt__p_std__pairT_bool_clipper__Coord_orth_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_bool_coot__atom_spec_t_t[] = {  {&_swigt__p_std__pairT_bool_coot__atom_spec_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_bool_coot__residue_spec_t_t[] = {  {&_swigt__p_std__pairT_bool_coot__residue_spec_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_bool_float_t[] = {  {&_swigt__p_std__pairT_bool_float_t, 0, 0, 0},{0, 0, 0, 0}};
@@ -79681,8 +81058,11 @@ static swig_cast_info _swigc__p_std__pairT_short_int_t[] = {  {&_swigt__p_std__p
 static swig_cast_info _swigc__p_std__pairT_short_std__string_t[] = {  {&_swigt__p_std__pairT_short_std__string_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t[] = {  {&_swigt__p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_std__string_std__string_t[] = {  {&_swigt__p_std__pairT_std__string_std__string_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t[] = {  {&_swigt__p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__pairT_symm_trans_t_Cell_Translation_t[] = {  {&_swigt__p_std__pairT_symm_trans_t_Cell_Translation_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__string[] = {  {&_swigt__p_std__string, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t[] = {  {&_swigt__p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t[] = {  {&_swigt__p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_coot__atom_spec_t_t[] = {  {&_swigt__p_std__vectorT_coot__atom_spec_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t[] = {  {&_swigt__p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t[] = {  {&_swigt__p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
@@ -79697,6 +81077,7 @@ static swig_cast_info _swigc__p_std__vectorT_coot__str_mtime_std__allocatorT_coo
 static swig_cast_info _swigc__p_std__vectorT_int_t[] = {  {&_swigt__p_std__vectorT_int_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t[] = {  {&_swigt__p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t[] = {  {&_swigt__p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t[] = {  {&_swigt__p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t[] = {  {&_swigt__p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t[] = {  {&_swigt__p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_std__vectorT_std__string_t[] = {  {&_swigt__p_std__vectorT_std__string_t, 0, 0, 0},{0, 0, 0, 0}};
@@ -79712,6 +81093,9 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_GtkToggleToolButton,
   _swigc__p_GtkWidget,
   _swigc__p_allocator_type,
+  _swigc__p_cfc__clustered_feature_info_from_python,
+  _swigc__p_cfc__extracted_cluster_info_from_python,
+  _swigc__p_cfc__water_cluster_info_from_python,
   _swigc__p_char,
   _swigc__p_clipper__Coord_orth,
   _swigc__p_clipper__RTop_orth,
@@ -79760,6 +81144,9 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_std__allocatorT_std__string_t,
   _swigc__p_std__invalid_argument,
   _swigc__p_std__mapT_std__pairT_coot__probe_atom_spec_t_coot__probe_atom_spec_t_t_bool_t,
+  _swigc__p_std__mapT_std__string_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t_t,
+  _swigc__p_std__mapT_std__string_std__vectorT_clipper__Coord_orth_std__allocatorT_clipper__Coord_orth_t_t_t,
+  _swigc__p_std__pairT_bool_clipper__Coord_orth_t,
   _swigc__p_std__pairT_bool_coot__atom_spec_t_t,
   _swigc__p_std__pairT_bool_coot__residue_spec_t_t,
   _swigc__p_std__pairT_bool_float_t,
@@ -79775,8 +81162,11 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_std__pairT_short_std__string_t,
   _swigc__p_std__pairT_std__pairT_int_int_t_std__vectorT_int_t_t,
   _swigc__p_std__pairT_std__string_std__string_t,
+  _swigc__p_std__pairT_std__vectorT_int_t_cfc__water_cluster_info_from_python_t,
   _swigc__p_std__pairT_symm_trans_t_Cell_Translation_t,
   _swigc__p_std__string,
+  _swigc__p_std__vectorT_cfc__clustered_feature_info_from_python_std__allocatorT_cfc__clustered_feature_info_from_python_t_t,
+  _swigc__p_std__vectorT_cfc__water_cluster_info_from_python_std__allocatorT_cfc__water_cluster_info_from_python_t_t,
   _swigc__p_std__vectorT_coot__atom_spec_t_t,
   _swigc__p_std__vectorT_coot__chain_mutation_info_container_t_std__allocatorT_coot__chain_mutation_info_container_t_t_t,
   _swigc__p_std__vectorT_coot__command_arg_t_std__allocatorT_coot__command_arg_t_t_t,
@@ -79791,6 +81181,7 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_std__vectorT_int_t,
   _swigc__p_std__vectorT_std__pairT_clipper__Coord_orth_double_t_std__allocatorT_std__pairT_clipper__Coord_orth_double_t_t_t,
   _swigc__p_std__vectorT_std__pairT_coot__residue_spec_t_double_t_std__allocatorT_std__pairT_coot__residue_spec_t_double_t_t_t,
+  _swigc__p_std__vectorT_std__pairT_int_coot__residue_spec_t_t_std__allocatorT_std__pairT_int_coot__residue_spec_t_t_t_t,
   _swigc__p_std__vectorT_std__pairT_std__string_coot__residue_spec_t_t_std__allocatorT_std__pairT_std__string_coot__residue_spec_t_t_t_t,
   _swigc__p_std__vectorT_std__pairT_std__string_std__string_t_std__allocatorT_std__pairT_std__string_std__string_t_t_t,
   _swigc__p_std__vectorT_std__string_t,

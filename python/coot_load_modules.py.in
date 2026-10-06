@@ -322,7 +322,6 @@ post_list = [
     "extensions.py",
     "shelx_extensions.py",
     "enhanced_ligand.py",
-    "ligand_check.py",
     "acedrg_link.py",
     "sharpen_blur.py",
     "dynamic_atom_overlaps_and_other_outliers.py",
@@ -331,7 +330,6 @@ post_list = [
     "find_baddies.py",
     "coot_toolbuttons.py",
     # "pdbe_validation_data.py" -- moved to pre_list (defines pdb_validate)
-    "contact_score_isolated_ligand.py",
     "ligand_validation_sliders.py",
 ]
 non_win_list = ["brute_lsqman.py"]
@@ -350,6 +348,13 @@ carbohydrate_list = [
     "add_linked_cho.py",
 ]
 
+# Ligand menu (native, gtk2-interface.c): its contact-score and quick-validation
+# items call Python functions defined here. Both modules define functions only.
+ligand_list = [
+    "contact_score_isolated_ligand.py",
+    "ligand_check.py",
+]
+
 # Session recorder (SESSION_RECORDING.md): defines start_session_recording()
 # and friends in __main__ and installs its hooks only when recording is on
 # (BANDICOOT_RECORD=1 or an explicit start_session_recording() call).
@@ -362,6 +367,7 @@ python_list = list(pre_list)
 if os.name != 'nt':
     python_list += non_win_list
 python_list += carbohydrate_list
+python_list += ligand_list
 python_list += bandicoot_list
 
 # Skip the GUI module list for now (pygtk2 is Py2-only; PyGObject port

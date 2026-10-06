@@ -1110,6 +1110,52 @@ create_window1 (void)
     }
   }
 
+  /* BANDICOOT: native "Ligand" top-level menu. Restores the menu Coot 0.9
+     built from Python (dead PyGTK path in Bandicoot), in Coot 0.9's item
+     order, but placed between Modelling and Draw rather than appended at the
+     end of the menu bar. Items Coot 0.9 showed only with the enhanced ligand
+     tools are skipped otherwise (bandicoot_ligand_item_available). */
+  {
+    static const struct { const char *label; int op; } bandicoot_ligand_items[] = {
+      { "Isolated Molprobity Dots for this Ligand",   BLIG_MOLPROBITY_DOTS },
+      { "Isolated Coot Ligand Dots for this Ligand",  BLIG_COOT_LIGAND_DOTS },
+      { "Coot All-Atom Contact Dots",                 BLIG_ALL_ATOM_DOTS },
+      { "Find Ligands...",                            BLIG_FIND_LIGANDS },
+      { "Jiggle-Fit Ligand",                          BLIG_JIGGLE_FIT },
+      { "Hydrogenate region",                         BLIG_HYDROGENATE },
+      { "Contact Dots for Ligand",                    BLIG_CONTACT_DOTS_LIGAND },
+      { "SMILES -> 2D",                               BLIG_SMILES_2D },
+      { "SMILES -> simple 3D",                        BLIG_SMILES_3D },
+      { "Residue -> 2D",                              BLIG_RESIDUE_2D },
+      { "FLEV this residue",                          BLIG_FLEV },
+      { "Toggle FLEV Ligand Interactions",            BLIG_TOGGLE_FLEV },
+      { "Solid Generic Objects",                      BLIG_SOLID_OBJECTS },
+      { "Unsolid Generic Objects",                    BLIG_UNSOLID_OBJECTS },
+      { "Show Chemical Features",                     BLIG_CHEMICAL_FEATURES },
+      { "Rename Atom to Reference",                   BLIG_RENAME_TO_REFERENCE },
+      { "Tabulate (on terminal) Ligand Distorsions",  BLIG_TABULATE_DISTORTIONS },
+      { "Display Ligand Distortions",                 BLIG_DISPLAY_DISTORTIONS },
+      { "Quick Ligand Validate",                      BLIG_QUICK_VALIDATE }
+    };
+    GtkWidget *ligand1 = gtk_menu_item_new_with_mnemonic ("_Ligand");
+    GtkWidget *ligand1_menu = gtk_menu_new ();
+    guint bli;
+    gtk_widget_show (ligand1);
+    gtk_container_add (GTK_CONTAINER (menubar1), ligand1);
+    gtk_menu_item_set_submenu (GTK_MENU_ITEM (ligand1), ligand1_menu);
+    for (bli = 0; bli < G_N_ELEMENTS (bandicoot_ligand_items); bli++) {
+      GtkWidget *blig_it;
+      if (! bandicoot_ligand_item_available (bandicoot_ligand_items[bli].op))
+        continue;
+      blig_it = gtk_menu_item_new_with_label (bandicoot_ligand_items[bli].label);
+      g_signal_connect ((gpointer) blig_it, "activate",
+                        G_CALLBACK (on_bandicoot_ligand_activate),
+                        GINT_TO_POINTER (bandicoot_ligand_items[bli].op));
+      gtk_widget_show (blig_it);
+      gtk_container_add (GTK_CONTAINER (ligand1_menu), blig_it);
+    }
+  }
+
   draw1 = gtk_menu_item_new_with_mnemonic ("_Draw");
   gtk_widget_show (draw1);
   gtk_container_add (GTK_CONTAINER (menubar1), draw1);

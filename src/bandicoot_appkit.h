@@ -40,6 +40,11 @@ void bandicoot_set_dock_icon(const char *png_path);
 double bandicoot_get_backing_scale_factor(void);
 double bandicoot_get_backing_scale_factor_for_widget(GtkWidget *w);
 
+// Height in points of the native status strip, which is drawn over the bottom
+// of the GL area; 0 when it is not installed. Overlays anchored to the bottom
+// of the GL area use it to stay clear of the strip.
+double bandicoot_status_bar_height(void);
+
 // Mirror a GtkToolbar into a native NSToolbar attached to the toplevel
 // NSWindow's title bar. Walks gtk_toolbar's children to build the initial
 // visible set, and walks model_toolbar (the sidebar) to populate the

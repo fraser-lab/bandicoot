@@ -3869,6 +3869,9 @@ def bandicoot_make_link_interactive():
 def bandicoot_modelling_dispatch(op_id):
     return _coot.bandicoot_modelling_dispatch(op_id)
 
+def bandicoot_ligand_dispatch(op_id):
+    return _coot.bandicoot_ligand_dispatch(op_id)
+
 def bandicoot_glyco_dispatch(op_id):
     return _coot.bandicoot_glyco_dispatch(op_id)
 
@@ -6240,6 +6243,92 @@ def generic_objects_gui_wrapper():
 
 def close_all_generic_objects():
     return _coot.close_all_generic_objects()
+
+def chemical_feature_clusters_py(environment_residues_py, solvated_ligand_info_py, radius_1, radius_2):
+    return _coot.chemical_feature_clusters_py(environment_residues_py, solvated_ligand_info_py, radius_1, radius_2)
+
+def chemical_feature_clusters_accept_info_py(site_number, env_residue_py, mol_ligand_specs_py, cluster_info_py):
+    return _coot.chemical_feature_clusters_accept_info_py(site_number, env_residue_py, mol_ligand_specs_py, cluster_info_py)
+
+def chemical_feature_clusters_accept_site_clusters_info_py(site_info_py):
+    return _coot.chemical_feature_clusters_accept_site_clusters_info_py(site_info_py)
+class water_cluster_info_from_python(object):
+    thisown = property(lambda x: x.this.own(), lambda x, v: x.this.own(v), doc="The membership flag")
+    __repr__ = _swig_repr
+
+    def __init__(self, *args):
+        _coot.water_cluster_info_from_python_swiginit(self, _coot.new_water_cluster_info_from_python(*args))
+    pos = property(_coot.water_cluster_info_from_python_pos_get, _coot.water_cluster_info_from_python_pos_set)
+    weight = property(_coot.water_cluster_info_from_python_weight_get, _coot.water_cluster_info_from_python_weight_set)
+    radius = property(_coot.water_cluster_info_from_python_radius_get, _coot.water_cluster_info_from_python_radius_set)
+    __swig_destroy__ = _coot.delete_water_cluster_info_from_python
+
+# Register water_cluster_info_from_python in _coot:
+_coot.water_cluster_info_from_python_swigregister(water_cluster_info_from_python)
+class clustered_feature_info_from_python(object):
+    thisown = property(lambda x: x.this.own(), lambda x, v: x.this.own(v), doc="The membership flag")
+    __repr__ = _swig_repr
+
+    def __init__(self, *args):
+        _coot.clustered_feature_info_from_python_swiginit(self, _coot.new_clustered_feature_info_from_python(*args))
+    imol = property(_coot.clustered_feature_info_from_python_imol_get, _coot.clustered_feature_info_from_python_imol_set)
+    cluster_number = property(_coot.clustered_feature_info_from_python_cluster_number_get, _coot.clustered_feature_info_from_python_cluster_number_set)
+    residue_spec = property(_coot.clustered_feature_info_from_python_residue_spec_get, _coot.clustered_feature_info_from_python_residue_spec_set)
+    __swig_destroy__ = _coot.delete_clustered_feature_info_from_python
+
+# Register clustered_feature_info_from_python in _coot:
+_coot.clustered_feature_info_from_python_swigregister(clustered_feature_info_from_python)
+class extracted_cluster_info_from_python(object):
+    thisown = property(lambda x: x.this.own(), lambda x, v: x.this.own(v), doc="The membership flag")
+    __repr__ = _swig_repr
+    wc = property(_coot.extracted_cluster_info_from_python_wc_get, _coot.extracted_cluster_info_from_python_wc_set)
+    cw = property(_coot.extracted_cluster_info_from_python_cw_get, _coot.extracted_cluster_info_from_python_cw_set)
+
+    def __init__(self, cluster_info_py):
+        _coot.extracted_cluster_info_from_python_swiginit(self, _coot.new_extracted_cluster_info_from_python(cluster_info_py))
+
+    def n_water_structures(self):
+        return _coot.extracted_cluster_info_from_python_n_water_structures(self)
+
+    def n_pharmacophore_structures(self):
+        return _coot.extracted_cluster_info_from_python_n_pharmacophore_structures(self)
+
+    def water_structures_vec(self):
+        return _coot.extracted_cluster_info_from_python_water_structures_vec(self)
+
+    def pharmacophore_structures_vec(self):
+        return _coot.extracted_cluster_info_from_python_pharmacophore_structures_vec(self)
+
+    def pharmacophore_structures_and_specs_vec(self):
+        return _coot.extracted_cluster_info_from_python_pharmacophore_structures_and_specs_vec(self)
+
+    def pharmacophores_centre(self):
+        return _coot.extracted_cluster_info_from_python_pharmacophores_centre(self)
+
+    def water_cluster_imol_residue_spec_vec(self):
+        return _coot.extracted_cluster_info_from_python_water_cluster_imol_residue_spec_vec(self)
+
+    def pharmacophore_cluster_imol_residue_spec_vec(self, type, cluster_idx):
+        return _coot.extracted_cluster_info_from_python_pharmacophore_cluster_imol_residue_spec_vec(self, type, cluster_idx)
+
+    def water_cluster_idx_max(self):
+        return _coot.extracted_cluster_info_from_python_water_cluster_idx_max(self)
+    pharmacophore = property(_coot.extracted_cluster_info_from_python_pharmacophore_get, _coot.extracted_cluster_info_from_python_pharmacophore_set)
+    pharmacophore_model_cluster_means = property(_coot.extracted_cluster_info_from_python_pharmacophore_model_cluster_means_get, _coot.extracted_cluster_info_from_python_pharmacophore_model_cluster_means_set)
+
+    @staticmethod
+    def cluster_vector_sorter(v1, v2):
+        return _coot.extracted_cluster_info_from_python_cluster_vector_sorter(v1, v2)
+
+    def show_water_balls(self, site_number):
+        return _coot.extracted_cluster_info_from_python_show_water_balls(self, site_number)
+    __swig_destroy__ = _coot.delete_extracted_cluster_info_from_python
+
+# Register extracted_cluster_info_from_python in _coot:
+_coot.extracted_cluster_info_from_python_swigregister(extracted_cluster_info_from_python)
+
+def chemical_feature_clusters_setup_dialog():
+    return _coot.chemical_feature_clusters_setup_dialog()
 
 def set_user_defined_atom_colour_by_residue_py(imol, residue_specs_colour_index_tuple_list_py):
     return _coot.set_user_defined_atom_colour_by_residue_py(imol, residue_specs_colour_index_tuple_list_py)

@@ -5018,3 +5018,41 @@ enum {
 void
 on_bandicoot_glyco_activate             (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
+
+/* Bandicoot: op ids for the native "Ligand" menu, which restores the menu
+   Coot 0.9 built from Python (gui_contact_score_isolated_ligand.py,
+   enhanced_ligand.py). Built in gtk2-interface.c, dispatched by
+   bandicoot_ligand_dispatch() in c-interface-build-gui.cc. */
+enum {
+  BLIG_MOLPROBITY_DOTS = 1,
+  BLIG_COOT_LIGAND_DOTS,
+  BLIG_ALL_ATOM_DOTS,
+  BLIG_FIND_LIGANDS,
+  BLIG_JIGGLE_FIT,
+  BLIG_HYDROGENATE,
+  BLIG_CONTACT_DOTS_LIGAND,
+  BLIG_SMILES_2D,
+  BLIG_SMILES_3D,
+  BLIG_RESIDUE_2D,
+  BLIG_FLEV,                 /* enhanced ligand tools only */
+  BLIG_TOGGLE_FLEV,          /* enhanced ligand tools only */
+  BLIG_SOLID_OBJECTS,
+  BLIG_UNSOLID_OBJECTS,
+  BLIG_CHEMICAL_FEATURES,    /* enhanced ligand tools only */
+  BLIG_RENAME_TO_REFERENCE,
+  BLIG_TABULATE_DISTORTIONS,
+  BLIG_DISPLAY_DISTORTIONS,
+  BLIG_QUICK_VALIDATE
+};
+
+void
+on_bandicoot_ligand_activate            (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);
+
+/* Whether a Ligand menu item belongs in this build (the FLEV and chemical
+   features items need the enhanced ligand tools, as in Coot 0.9). Defined in
+   C++ (c-interface-build-gui.cc), called from gtk2-interface.c. */
+#ifdef __cplusplus
+extern "C"
+#endif
+int bandicoot_ligand_item_available(int op_id);

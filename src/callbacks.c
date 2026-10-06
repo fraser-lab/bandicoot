@@ -9984,6 +9984,16 @@ on_bandicoot_glyco_activate            (GtkMenuItem     *menuitem,
 
 
 void
+on_bandicoot_ligand_activate           (GtkMenuItem     *menuitem,
+                                        gpointer         user_data)
+{
+  /* Bandicoot: shared handler for the native "Ligand" menu. The op id was
+     bound as user_data when the item was created (gtk2-interface.c). */
+  bandicoot_ligand_dispatch(GPOINTER_TO_INT(user_data));
+}
+
+
+void
 on_gln_and_asn_b_factor_outliers1_activate
                                         (GtkMenuItem     *menuitem,
                                         gpointer         user_data)

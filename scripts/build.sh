@@ -13,6 +13,13 @@
 #                 MolProbity binaries + dictionary; auto-probed from a CCP4
 #                 install, and merely warned about if absent
 #   JOBS          parallel make jobs   (default: number of CPUs)
+#   BANDICOOT_UI  UI toolkit: gtk or wx (default: unset, which configures gtk).
+#                 Both toolkits stay buildable for the duration of the
+#                 changeover; a wx build belongs in its own install prefix.
+#   BANDICOOT_RDKIT  enable RDKit / enhanced ligand tools, which the 2D ligand
+#                 view and FLEV are compiled out without. 1 uses the Homebrew
+#                 location; any other value is used as the prefix. Needs
+#                 boost-python, or configure proceeds without RDKit support.
 #   BUILD_SKIP_CHECKS=1  skip the closing dependency-closure gate (see the end
 #                 of this script). Default is to FAIL the build on an unresolved
 #                 or build-host dependency, dev builds included.
@@ -330,7 +337,7 @@ export LDFLAGS="-L${CONDA_PREFIX}/lib -L${PREFIX}/lib -L${BREW_PREFIX}/lib \
 # edits. The shim is a no-op when Python.h hasn't been pulled in.
 # See compat/python23-shim.hh for details.
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
-export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++17 ${SHIM_INCLUDE}"
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++20 ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 export PKG_CONFIG_PATH="\
@@ -356,9 +363,37 @@ ${CONDA_PREFIX}/lib/pkgconfig"
 # naming the script -- previously a missing canvas tree just silently dropped
 # Sequence View and the ligand editor from the build.
 
+# UI toolkit selection. Unset means the flag is not passed at all, so the
+# default build's configure line is unchanged from before the option existed.
+UI_CONFIGURE_ARG=""
+if [ -n "${BANDICOOT_UI:-}" ]; then
+    UI_CONFIGURE_ARG="--with-ui=${BANDICOOT_UI}"
+    echo "==> UI toolkit: ${BANDICOOT_UI}"
+fi
+
+# RDKit / enhanced ligand tools. This is what un-darkens the 2D ligand view and
+# FLEV, both of which are compiled out without it. Set BANDICOOT_RDKIT to 1 for
+# the Homebrew location, or to an explicit prefix. Unset passes no flag.
+RDKIT_CONFIGURE_ARGS=""
+if [ -n "${BANDICOOT_RDKIT:-}" ]; then
+    if [ "${BANDICOOT_RDKIT}" = "1" ]; then
+        RDKIT_PREFIX="${BREW_PREFIX}/opt/rdkit"
+    else
+        RDKIT_PREFIX="${BANDICOOT_RDKIT}"
+    fi
+    if [ ! -d "${RDKIT_PREFIX}/include/rdkit" ]; then
+        echo "!! BANDICOOT_RDKIT set but ${RDKIT_PREFIX}/include/rdkit is absent" >&2
+        exit 1
+    fi
+    RDKIT_CONFIGURE_ARGS="--with-enhanced-ligand-tools --with-rdkit-prefix=${RDKIT_PREFIX}"
+    echo "==> RDKit: ${RDKIT_PREFIX}"
+fi
+
 echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time fallback; files install to ${PREFIX})"
 ./configure \
     --prefix="${BANDICOOT_COMPILE_PREFIX}" \
+    ${UI_CONFIGURE_ARG} \
+    ${RDKIT_CONFIGURE_ARGS} \
     --with-fftw-prefix="${FFTW_PREFIX}" \
     --with-goocanvas-prefix="${CANVAS_PREFIX}" \
     --with-glut-prefix="${BREW_PREFIX}" \
@@ -491,6 +526,12 @@ if [ "${BANDICOOT_TOOLKIT:-0}" = "1" ]; then
 else
     echo "==> pruning dev artifacts (lib/*.a, lib/*.la, include/) from the install"
     rm -f "${PREFIX}/lib/"*.a "${PREFIX}/lib/"*.la
+    # libtool also installs Python extension modules (RDKit builds) with a .la
+    # and a static .a beside them; the .la records build paths.
+    for _la in "${PREFIX}/lib/"python*/site-packages/*.la; do
+        [ -e "${_la}" ] || continue
+        rm -f "${_la}" "${_la%.la}.a"
+    done
     rm -rf "${PREFIX}/include"
 fi
 
@@ -715,6 +756,14 @@ _copy_tree "${COOT_DATA_SRC}/monomers" \
            "${PREFIX}/share/coot/lib/data/monomers" "monomer dictionary"
 _copy_tree "${COOT_DATA_SRC}/reference-structures" \
            "${PREFIX}/share/coot/reference-structures" "reference structures"
+
+# RDKit's data directory. The enhanced ligand tools look for it at share/RDKit,
+# beside share/coot (coot::rdkit_package_data_dir()); Show Chemical Features,
+# for one, reads its feature definitions from there.
+if [ -n "${RDKIT_PREFIX:-}" ]; then
+    _copy_tree "${RDKIT_PREFIX}/share/RDKit/Data" \
+               "${PREFIX}/share/RDKit/Data" "RDKit data"
+fi
 
 # GTK theme (Raleigh) ships with Homebrew's gtk+2 itself
 # ($BREW_PREFIX/share/themes/Raleigh) -- no hand-staged tree needed.
