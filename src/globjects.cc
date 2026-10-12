@@ -3652,7 +3652,9 @@ gint key_release_event(GtkWidget *widget, GdkEventKey *event)
    }
 
    /* prevent the default handler from being run */
+#ifndef BANDICOOT_UI_WX
    gtk_signal_emit_stop_by_name(GTK_OBJECT(widget),"key_release_event");
+#endif
    return TRUE;
 
   return TRUE;
@@ -3969,7 +3971,13 @@ gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
 
    int x_as_int, y_as_int;
    GdkModifierType state;
+#ifdef BANDICOOT_UI_WX
+   // GDK does not see wx's events, so its pointer state would be stale; the
+   // wx surface supplies the pointer state in the event instead.
+   state = (GdkModifierType) event->state;
+#else
    gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+#endif
 
    // GTK-Quartz on Tahoe doesn't populate event->state with modifier bits
    // (shift/control); only the button mask makes it through. Query AppKit

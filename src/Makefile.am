@@ -18,6 +18,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA
 
+# objects for sources in subdirectories (wxUI/) are built beside them
+AUTOMAKE_OPTIONS = subdir-objects
+
 if COOT_USE_PYTHON
 
 # if coot.py is called __init.py and goes in site-packages/coot/
@@ -590,6 +593,15 @@ coot_bin_SOURCES = \
 if COOT_USE_PYTHON
    coot_bin_SOURCES += coot_wrap_python.cc
    EXTRA_DIST += coot_wrap_python_pre.cc
+endif
+
+# wx main window (--with-ui=wx)
+if UI_WX
+   coot_bin_SOURCES += \
+	wxUI/main/surface.hh         \
+	wxUI/main/main-window.cc     \
+	wxUI/bridge/core-bridge.hh   \
+	wxUI/bridge/core-bridge.cc
 endif
 if COOT_USE_PYTHON
    dist_python_PYTHON = coot.py coot.pth

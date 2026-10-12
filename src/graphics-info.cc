@@ -4926,12 +4926,16 @@ void
 graphics_info_t::pick_cursor_real() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_PICK);
+#else
       //    GdkCursorType c = GDK_CROSSHAIR;
       GdkCursorType c = pick_cursor_index;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
+#endif
    }
 }
 
@@ -4941,11 +4945,15 @@ graphics_info_t::normal_cursor() {
 
    if (use_graphics_interface_flag) {
       if (control_key_for_rotate_flag) {
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_NORMAL);
+#else
 	 GdkCursorType c = GDK_LEFT_PTR;
 	 GdkCursor *cursor;
 	 cursor = gdk_cursor_new (c);
 	 gdk_window_set_cursor (glarea->window, cursor);
 	 gdk_cursor_destroy (cursor);
+#endif
       }
    }
 }
@@ -4955,11 +4963,15 @@ void
 graphics_info_t::watch_cursor() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_WATCH);
+#else
       GdkCursorType c = GDK_WATCH;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
+#endif
       while (gtk_events_pending()) {
 	 gtk_main_iteration();
       }
@@ -4971,11 +4983,15 @@ void
 graphics_info_t::fleur_cursor() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_FLEUR);
+#else
       GdkCursorType c = GDK_FLEUR;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
+#endif
    }
 }
 

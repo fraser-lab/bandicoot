@@ -53,6 +53,10 @@
 #include <gdk/gdkgldrawable.h>
 #include <gtk/gtkgl.h>
 
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/main/surface.hh"
+#endif
+
 #include <utils/ctpl.h>
 
 #ifdef USE_MOLECULES_TO_TRIANGLES
@@ -903,7 +907,12 @@ public:
 
    static void graphics_draw() {
      if (glarea) {
+#ifdef BANDICOOT_UI_WX
+       // glarea is a hidden stand-in; the surface on screen is wx's
+       bandicoot_wx_surface_redraw();
+#else
        gtk_widget_draw(glarea, NULL);
+#endif
        if (make_movie_flag)
 	 dump_a_movie_image();
      }
@@ -957,9 +966,13 @@ public:
    /* OpenGL functions can be called only if make_current returns true */
    static int make_current_gl_context(GtkWidget *widget) {
 
+#ifdef BANDICOOT_UI_WX
+     return bandicoot_wx_surface_make_current();
+#else
      GdkGLContext *glcontext = gtk_widget_get_gl_context (widget);
      GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable (widget);
      return gdk_gl_drawable_gl_begin (gldrawable, glcontext);
+#endif
    }
 
 

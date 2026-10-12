@@ -18,6 +18,9 @@
 #include <sys/stat.h>  // for stat() — verifying Quicksave wrote a file
 
 #include "bandicoot_appkit.h"
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/main/surface.hh"
+#endif
 
 // Forward-declare Coot C-interface functions we need for the Quicksave
 // toolbar action. These live inside BEGIN_C_DECLS in c-interface.h, so
@@ -329,6 +332,10 @@ extern "C" double bandicoot_get_backing_scale_factor(void) {
 // backingScaleFactor follows the screen the window currently sits on and
 // updates as it is dragged between displays. Falls back to mainScreen, then 1.
 extern "C" double bandicoot_get_backing_scale_factor_for_widget(GtkWidget *w) {
+#ifdef BANDICOOT_UI_WX
+    // The GL surface is wx's; the GTK widget is a hidden stand-in.
+    return bandicoot_wx_surface_backing_scale();
+#endif
     if (w) {
         GtkWidget *top = gtk_widget_get_toplevel(w);
         if (top && top->window) {

@@ -519,12 +519,16 @@ draw_mono(GtkWidget *widget, GdkEventExpose *event, short int stereo_mode) {
       // BL says:: not sure if we dont need to do this for 2nd Zalman view
       if (stereo_mode != IN_STEREO_HARDWARE_STEREO && stereo_mode != IN_STEREO_ZALMAN_RIGHT) {
          /* Swap backbuffer to front */
+#ifdef BANDICOOT_UI_WX
+         bandicoot_wx_surface_swap_buffers();
+#else
          GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable (widget);
          if (gdk_gl_drawable_is_double_buffered (gldrawable)) {
             gdk_gl_drawable_swap_buffers (gldrawable);
          } else {
             glFlush ();
          }
+#endif
          graphics_info_t::Increment_Frames();
       }
 
@@ -598,8 +602,10 @@ void draw_molecular_triangles(GtkWidget *widget) {
 void gdkglext_finish_frame(GtkWidget *widget) {
 
    // should not even be called by GTK.
+#ifndef BANDICOOT_UI_WX
   GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable (widget);
   gdk_gl_drawable_gl_end (gldrawable);
+#endif
 
 }
 

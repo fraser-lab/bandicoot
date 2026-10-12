@@ -77,6 +77,10 @@
 #include "bandicoot_appkit.h"
 #endif
 
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/main/surface.hh"
+#endif
+
 #include <vector>
 #include <string>
 
@@ -281,6 +285,11 @@ main (int argc, char *argv[]) {
       // app name. See bandicoot_appkit.h.
       bandicoot_set_application_name();
 #endif
+#ifdef BANDICOOT_UI_WX
+      // wx first, so the application object is wx's; GTK then shares it.
+      if (! bandicoot_wx_init(argc, argv))
+         return 1;
+#endif
       gtk_init (&argc, &argv);
       // Bandicoot: restore the user's saved atom-pick radius (Preferences > Pick Atom)
       bandicoot_load_pick_atom_radius();
@@ -349,7 +358,13 @@ main (int argc, char *argv[]) {
    GtkWidget *splash = NULL;
    gint64 splash_show_us = 0;  // monotonic microseconds when splash shown
 
+#ifdef BANDICOOT_UI_WX
+   // The splash is a GTK window and the wait below pumps GTK's loop; neither
+   // belongs in a wx build.
+   if (false) {
+#else
    if (graphics_info_t::use_graphics_interface_flag) {
+#endif
 
       if (cld.use_splash_screen) {
 	 std::string f = cld.alternate_splash_screen_file_name;
@@ -441,10 +456,19 @@ main (int argc, char *argv[]) {
 
       gtk_window_set_title(GTK_WINDOW (window1), main_title.c_str());
 
+#ifdef BANDICOOT_UI_WX
+      // The GL surface is wx's. window1 is still built, but never shown,
+      // because unconverted code looks widgets up in it; glarea is a plain
+      // stand-in inside it (see wxUI/bridge/core-bridge.cc).
+      glarea = gtk_drawing_area_new();
+      gtk_container_add(GTK_CONTAINER(lookup_widget(window1, "main_window_graphics_hbox")),
+                        glarea);
+#else
       // this vbox is not used execut to look up "main_window_graphics_hbox"
       // which is where the gl_area goes
       glarea = gl_extras(lookup_widget(window1, "main_window_vbox"),
 			 cld.hardware_stereo_flag);
+#endif
       if (glarea) {
 	 // application icon:
 	 setup_application_icon(GTK_WINDOW(window1));
@@ -465,6 +489,12 @@ main (int argc, char *argv[]) {
 	 graphics_info_t::statusbar_context_id =
 	    gtk_statusbar_get_context_id(GTK_STATUSBAR(sb), "picked atom info");
 	
+#ifdef BANDICOOT_UI_WX
+	 // Everything up to the matching #endif dresses the GTK main window
+	 // (native menu bar, toolbar, sidebar, A/R bar, status strip); the wx
+	 // build shows its own window instead.
+	 bandicoot_wx_create_main_window(main_title);
+#else
 #ifdef __APPLE__
 	 // Install the native macOS menu bar *before* showing the window so
 	 // GTK never computes "with in-window menubar" geometry hints for the
@@ -576,6 +606,7 @@ main (int argc, char *argv[]) {
 	    }
 	 }
 #endif
+#endif // BANDICOOT_UI_WX
 	 create_rot_trans_menutoolbutton_menu(window1);
 	
 	 // We need to somehow connect the submenu to the menu's (which are
@@ -749,7 +780,11 @@ main (int argc, char *argv[]) {
       // gobject.timeout_add stub) are blocked forever -- gtk_main is a
       // C function holding the GIL by default.
       Py_BEGIN_ALLOW_THREADS;
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_run_main_loop();
+#else
       gtk_main();
+#endif
       Py_END_ALLOW_THREADS;
    } else {
       start_command_line_python_maybe(argv);
@@ -757,8 +792,13 @@ main (int argc, char *argv[]) {
 
 #else
    // not python or guile
-   if (graphics_info_t::use_graphics_interface_flag)
+   if (graphics_info_t::use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_run_main_loop();
+#else
       gtk_main();
+#endif
+   }
 #endif // USE_PYTHON
 
 #endif // ! USE_GUILE
