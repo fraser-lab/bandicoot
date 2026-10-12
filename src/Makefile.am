@@ -601,7 +601,44 @@ if UI_WX
 	wxUI/main/surface.hh         \
 	wxUI/main/main-window.cc     \
 	wxUI/bridge/core-bridge.hh   \
-	wxUI/bridge/core-bridge.cc
+	wxUI/bridge/core-bridge.cc   \
+	wxUI/assets/chart-canvas.hh  \
+	wxUI/assets/chart-canvas.cc  \
+	wxUI/assets/palette.hh       \
+	wxUI/assets/bevel.hh         \
+	wxUI/assets/bevel.cc         \
+	wxUI/assets/button-base.hh   \
+	wxUI/assets/button-base.cc   \
+	wxUI/assets/bevel-button.hh  \
+	wxUI/assets/bevel-button.cc  \
+	wxUI/assets/toolbar-button.hh \
+	wxUI/assets/toolbar-button.cc \
+	wxUI/assets/flat-button.hh   \
+	wxUI/assets/flat-button.cc   \
+	wxUI/widgets/row-list.hh     \
+	wxUI/widgets/row-list.cc     \
+	wxUI/widgets/click-through-list.hh \
+	wxUI/widgets/click-through-list.cc \
+	wxUI/widgets/molecule-chooser.hh \
+	wxUI/widgets/molecule-chooser.cc \
+	wxUI/widgets/entry-row.hh    \
+	wxUI/widgets/entry-row.cc    \
+	wxUI/widgets/path-box.hh     \
+	wxUI/widgets/path-box.cc     \
+	wxUI/widgets/titled-panel.hh \
+	wxUI/widgets/titled-panel.cc \
+	wxUI/widgets/mixed-row.hh    \
+	wxUI/widgets/mixed-row.cc    \
+	wxUI/dialogs/message.hh      \
+	wxUI/dialogs/message.cc      \
+	wxUI/dialogs/text-dialog.hh  \
+	wxUI/dialogs/text-dialog.cc  \
+	wxUI/dialogs/form-dialogs.hh \
+	wxUI/dialogs/form-dialogs.cc \
+	wxUI/dialogs/click-through-dialog.hh \
+	wxUI/dialogs/click-through-dialog.cc \
+	wxUI/dialogs/file-dialogs.hh \
+	wxUI/dialogs/file-dialogs.cc
 endif
 if COOT_USE_PYTHON
    dist_python_PYTHON = coot.py coot.pth
