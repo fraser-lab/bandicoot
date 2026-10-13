@@ -47,6 +47,16 @@ void bandicoot_core_key(bool press, unsigned int keyval, unsigned int mods);
 void bandicoot_core_drop_file(const std::string &file_name);
 void bandicoot_core_drop_text(const std::string &text);
 
+// The directory holding Bandicoot's icons.
+std::string bandicoot_core_pixmaps_dir();
+
+// The sidebar style the core holds: 1 icons, 2 icons and text, 3 text.
+int bandicoot_core_sidebar_style();
+
+// Whether this build has an optional capability, e.g. "enhanced_ligand_tools"
+// (the ligand tools that need RDKit).
+bool bandicoot_core_has_capability(const std::string &capability);
+
 // Molecules with unsaved changes, one "imol  name" line each.
 std::vector<std::string> bandicoot_core_unsaved_molecules();
 

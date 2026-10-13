@@ -29,6 +29,9 @@ void   bandicoot_wx_surface_swap_buffers();
 void   bandicoot_wx_surface_redraw();       // synchronous, like gtk_widget_draw()
 double bandicoot_wx_surface_backing_scale();
 
+// Text for the status bar at the bottom of the main window.
+void bandicoot_wx_set_status_text(const std::string &text);
+
 enum bandicoot_wx_cursor_t {
    BANDICOOT_WX_CURSOR_NORMAL,
    BANDICOOT_WX_CURSOR_PICK,

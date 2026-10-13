@@ -25,6 +25,10 @@
 
 #include "wxUI/main/surface.hh"
 #include "wxUI/bridge/core-bridge.hh"
+#include "wxUI/main/main-menu.hh"
+#include "wxUI/main/top-toolbar.hh"
+#include "wxUI/main/sidebar.hh"
+#include "wxUI/assets/icons.hh"
 
 namespace {
 
@@ -378,20 +382,47 @@ private:
 // while empty. The transient-bar area shares a splitter with the surface and
 // is unsplit (zero height) while no bar is showing.
 
+// Until the menu, toolbar and sidebar are connected to the core, say what was
+// chosen rather than doing nothing.
+void report_unconnected(const std::string &what, const std::string &action, bool state = true) {
+   std::cout << "INFO:: not yet connected in the wx build: " << what;
+   if (! state) std::cout << " (off)";
+   std::cout << " (" << action << ")" << std::endl;
+}
+
 class MainFrame : public wxFrame {
 public:
    explicit MainFrame(const wxString &title)
       : wxFrame(nullptr, wxID_ANY, title) {
 
-      // A menu bar is needed for the application menu's Quit to reach this
-      // window; the main menu proper is built later.
-      SetMenuBar(new wxMenuBar);
+      wxui::set_icon_directory(wxString::FromUTF8(bandicoot_core_pixmaps_dir()));
+
+      wxui::MainMenuHooks hooks;
+      hooks.has_capability = [](const std::string &c) { return bandicoot_core_has_capability(c); };
+      hooks.on_select = [](const std::string &action, const std::string &path) {
+         report_unconnected(path, action);
+      };
+      SetMenuBar(wxui::build_main_menu(hooks));
+      wxui::build_top_toolbar(this, [](const std::string &action, const std::string &label,
+                                       bool state) {
+         report_unconnected("Toolbar > " + label, action, state);
+      });
+      CreateStatusBar(1);
       Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
       Bind(wxEVT_CLOSE_WINDOW, &MainFrame::on_close, this);
 
       left_slot   = make_slot();
       right_slot  = make_slot();
       bottom_slot = make_slot();
+
+      // the sidebar starts docked on the right, as in the GTK build
+      int style = bandicoot_core_sidebar_style();
+      sidebar = new wxui::Sidebar(right_slot, true, wxui::Sidebar::Style(style < 1 ? 1 : style > 3 ? 3 : style),
+                                  [](const std::string &action, const std::string &label, bool state) {
+                                     report_unconnected("Sidebar > " + label, action, state);
+                                  });
+      right_slot->GetSizer()->Add(sidebar, 1, wxEXPAND);
+      right_slot->Show();
 
       splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                       wxSP_LIVE_UPDATE | wxSP_3DSASH);
@@ -449,6 +480,7 @@ public:
    }
 
 private:
+   wxui::Sidebar *sidebar  = nullptr;
    wxPanel *left_slot      = nullptr;
    wxPanel *right_slot     = nullptr;
    wxPanel *bottom_slot    = nullptr;
@@ -473,6 +505,7 @@ private:
          { bottom_slot, "bottom slot", wxSize(-1, 60)  }
       };
       for (auto &s : slots) {
+         if (! s.panel->GetChildren().empty()) continue; // already holds something
          s.panel->GetSizer()->Add(new wxStaticText(s.panel, wxID_ANY, s.label), 0, wxALL, 6);
          s.panel->SetMinSize(s.size);
          s.panel->Show();
@@ -561,6 +594,10 @@ void bandicoot_wx_surface_redraw() {
 double bandicoot_wx_surface_backing_scale() {
    GLSurface *s = the_surface();
    return s ? s->GetContentScaleFactor() : 1.0;
+}
+
+void bandicoot_wx_set_status_text(const std::string &text) {
+   if (main_frame) main_frame->SetStatusText(wxString::FromUTF8(text));
 }
 
 void bandicoot_wx_surface_set_cursor(bandicoot_wx_cursor_t cursor) {

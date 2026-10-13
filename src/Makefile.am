@@ -600,6 +600,14 @@ if UI_WX
    coot_bin_SOURCES += \
 	wxUI/main/surface.hh         \
 	wxUI/main/main-window.cc     \
+	wxUI/main/main-menu.hh       \
+	wxUI/main/main-menu.cc       \
+	wxUI/main/top-toolbar.hh     \
+	wxUI/main/top-toolbar.cc     \
+	wxUI/main/sidebar.hh         \
+	wxUI/main/sidebar.cc         \
+	wxUI/assets/icons.hh         \
+	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \
 	wxUI/bridge/core-bridge.cc   \
 	wxUI/assets/chart-canvas.hh  \

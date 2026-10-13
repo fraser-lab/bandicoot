@@ -2528,6 +2528,11 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
 }
 
 extern "C" void bandicoot_set_status_text(const char *text) {
+#ifdef BANDICOOT_UI_WX
+    // the status bar is the wx main window's
+    bandicoot_wx_set_status_text(text ? text : "");
+    return;
+#endif
     if (!bandicoot_status_field) return;
     @autoreleasepool {
         NSString *s = text ? [NSString stringWithUTF8String:text] : @"";

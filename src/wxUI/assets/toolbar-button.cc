@@ -68,8 +68,8 @@ void ToolbarButton::draw(wxDC &dc, const wxRect &rect) {
    wxSize ts = shows_text() ? dc.GetTextExtent(GetLabel()) : wxSize(0, 0);
 
    if (bmp.IsOk() && shows_text() && content == Content::IconBesideText) {
-      int w = bs.x + gap + ts.x;
-      int x = inner.x + (inner.width - w) / 2;
+      // left-aligned, so a column of these lines up as a list
+      int x = inner.x;
       dc.DrawBitmap(bmp, x, inner.y + (inner.height - bs.y) / 2, true);
       dc.DrawText(GetLabel(), x + bs.x + gap, inner.y + (inner.height - ts.y) / 2);
    } else if (bmp.IsOk() && shows_text()) {

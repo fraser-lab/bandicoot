@@ -23,6 +23,8 @@
 #include "c-interface.h"
 #include "cc-interface.hh"
 #include "drag-and-drop.hh"
+#include "c-interface-ligands-swig.hh"
+#include "coot-utils/coot-package-paths.hh"
 
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/surface.hh"
@@ -170,6 +172,20 @@ void bandicoot_core_drop_file(const std::string &file_name) {
 
 void bandicoot_core_drop_text(const std::string &text) {
    handle_drag_and_drop_string(text);
+}
+
+std::string bandicoot_core_pixmaps_dir() {
+   return coot::package_pixmaps_dir();
+}
+
+int bandicoot_core_sidebar_style() {
+   return model_toolbar_style_state();
+}
+
+bool bandicoot_core_has_capability(const std::string &capability) {
+   if (capability == "enhanced_ligand_tools")
+      return enhanced_ligand_coot_p();
+   return false;
 }
 
 std::vector<std::string> bandicoot_core_unsaved_molecules() {
