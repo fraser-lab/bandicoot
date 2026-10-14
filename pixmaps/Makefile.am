@@ -79,7 +79,11 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   curlew-long.png curlew-128-filled.svg \
   refine-sphere-1.png regularize-sphere-1.png refine-tandem-1.png \
   bandicoot-splash.png \
-  stock-open.png stock-clear.png stock-delete.png stock-undo.png stock-redo.png stock-zoom-fit.png
+  stock-open.png stock-clear.png stock-delete.png stock-undo.png stock-redo.png stock-zoom-fit.png \
+  stock-menu-about.png stock-menu-add.png stock-menu-clear.png stock-menu-close.png stock-menu-copy.png \
+  stock-menu-dialog-info.png stock-menu-execute.png stock-menu-find-and-replace.png stock-menu-index.png stock-menu-justify-center.png \
+  stock-menu-justify-left.png stock-menu-open.png stock-menu-preferences.png stock-menu-quit.png stock-menu-refresh.png \
+  stock-menu-save.png stock-menu-select-color.png stock-menu-undo.png stock-menu-unindent.png
 
 if CLIPPER_TOP8000
 dist_cootpixmap_DATA += \

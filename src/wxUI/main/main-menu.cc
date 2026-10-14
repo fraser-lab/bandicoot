@@ -1,6 +1,7 @@
 // src/wxUI/main/main-menu.cc
 
 #include "wxUI/main/main-menu.hh"
+#include "wxUI/assets/icons.hh"
 
 #include <wx/menu.h>
 
@@ -52,6 +53,92 @@ wxString menu_label(const std::string &label) {
    return s;
 }
 
+// Coot 0.9's menu icons: items by action, submenus by label
+const std::map<std::string, const char *> item_icons = {
+   { "on_about1_activate", "stock-menu-about.png" },
+   { "on_hints1_activate", "stock-menu-dialog-info.png" },
+   { "on_fps1_activate", "appointment-new.png" },
+   { "on_ncs_maps1_activate", "calculate-ghosts.svg" },
+   { "on_run_script1_activate", "stock-menu-execute.png" },
+   { "on_anisotropic_atoms1_activate", "aniso-atom.svg" },
+   { "on_antialiasing1_activate", "add-peptide-1.svg" },
+   { "on_show_symmetry1_activate", "cell+symm.svg" },
+   { "on_centre_atom_label1_activate", "stock-menu-justify-center.png" },
+   { "on_crosshairs1_activate", "crosshairs.svg" },
+   { "on_map_and_mol_control1_activate", "display-manager.svg" },
+   { "on_generic_display_objects1_activate", "generic-display-objects.svg" },
+   { "on_go_to_atom1_activate", "go-to-atom.svg" },
+   { "on_ncs_ghost_control1_activate", "ghosts.svg" },
+   { "on_spin_view_on_off1_activate", "spin-view.svg" },
+   { "on_stereo1_activate", "stereo-view.svg" },
+   { "on_undo_last_navigation1_activate", "stock-menu-undo.png" },
+   { "on_bond_colours1_activate", "stock-menu-select-color.png" },
+   { "on_bond_parameters1_activate", "stock-menu-preferences.png" },
+   { "on_edit_copy_fragment1_activate", "stock-menu-copy.png" },
+   { "on_edit_copy_molecule1_activate", "stock-menu-copy.png" },
+   { "on_font_size1_activate", "gtk-font.png" },
+   { "on_density_size1_activate", "stock-menu-preferences.png" },
+   { "on_edit_merge_molecules1_activate", "merge-molecules.svg" },
+   { "on_pink_pointer_size1_activate", "pink-pointer.svg" },
+   { "on_preferences1_activate", "stock-menu-preferences.png" },
+   { "on_edit_replace_fragment1_activate", "stock-menu-refresh.png" },
+   { "on_edit_replace_residue1_activate", "stock-menu-refresh.png" },
+   { "on_restraints1_activate", "radacina_handcuffs-small.svg" },
+   { "on_skeleton_colour1_activate", "stock-menu-select-color.png" },
+   { "on_auto_open_mtz_activate", "stock-menu-open.png" },
+   { "on_close_molecule1_activate", "stock-menu-close.png" },
+   { "on_exit1_activate", "stock-menu-quit.png" },
+   { "on_get_pdb_using_code1_activate", "connect-to-oca.svg" },
+   { "on_get_monomer1_activate", "connect-to-ccp4.svg" },
+   { "on_import_cif_dictionary1_activate", "stock-menu-add.png" },
+   { "on_open_coordinates1_activate", "stock-menu-open.png" },
+   { "on_open_dataset1_activate", "stock-menu-open.png" },
+   { "on_open_map1_activate", "stock-menu-open.png" },
+   { "on_recover_session1_activate", "stock-menu-find-and-replace.png" },
+   { "on_save_coordinates1_activate", "stock-menu-save.png" },
+   { "on_save_state1_activate", "coot-save.png" },
+   { "on_save_symmetry_coordinates1_activate", "coot-save-symm.png" },
+   { "on_search_monomer_library1_activate", "stock-menu-index.png" },
+   { "on_clear_atom_labels1_activate", "stock-menu-clear.png" },
+   { "on_distances_and_angles1_activate", "stock-menu-unindent.png" },
+   { "on_environment_distances1_activate", "env-distances.svg" },
+   { "on_plane_distances1_activate", "plane-distances.svg" },
+   { "on_pointer_distances1_activate", "pointer-distances.svg" },
+   { "on_other_modelling_tools1_activate", "gnome-run.png" },
+   { "on_check_waters1_activate", "water-drop.svg" },
+   { "on_difference_map_peaks1_activate", "diff-map.svg" },
+   { "on_ramachandran_differences_plot1_activate", "kleywegt.svg" },
+   { "on_unmodelled_blobs1_activate", "unknown-blob.svg" },
+};
+
+const std::map<std::string, const char *> submenu_icons = {
+   { "Scripting...", "stock-menu-justify-left.png" },
+   { "Screenshot", "panel-screenshot.png" },
+   { "Background Colour...", "stock-menu-select-color.png" },
+   { "Map Colour...", "stock-menu-select-color.png" },
+   { "Skeleton Parameters", "stock-menu-preferences.png" },
+   { "Average Temp. fact. analysis", "temperature.svg" },
+   { "Peptide omega analysis", "peptide-omega.svg" },
+   { "Probe clashes", "probe-clash.svg" },
+   { "Ramachandran Plot", "ramachandran.png" },
+   { "Rotamer analysis", "rotamers.svg" },
+   { "Temp. fact. variance analysis", "temperature.svg" },
+};
+
+wxBitmapBundle menu_icon(const std::map<std::string, const char *> &table, const std::string &key) {
+   auto it = table.find(key);
+   return it == table.end() ? wxBitmapBundle() : icon(it->second, wxSize(16, 16));
+}
+
+// a submenu with its icon, which has to be set before it is appended
+void append_submenu(wxMenu *menu, wxMenu *sub, const std::string &label) {
+   wxMenuItem *mi = new wxMenuItem(menu, wxID_ANY, menu_label(label), wxEmptyString,
+                                   wxITEM_NORMAL, sub);
+   wxBitmapBundle b = menu_icon(submenu_icons, label);
+   if (b.IsOk()) mi->SetBitmap(b);
+   menu->Append(mi);
+}
+
 struct Selection { std::string action, path; };
 
 void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string &path,
@@ -68,13 +155,13 @@ void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string
       case Kind::Submenu: {
          wxMenu *sub = new wxMenu;
          fill(sub, e.items, here, hooks, ids);
-         menu->AppendSubMenu(sub, menu_label(e.label));
+         append_submenu(menu, sub, e.label);
          break;
       }
       case Kind::MoleculeSubmenu: {
          wxMenu *sub = new wxMenu;
          sub->Append(wxID_ANY, "No molecules")->Enable(false);
-         menu->AppendSubMenu(sub, menu_label(e.label));
+         append_submenu(menu, sub, e.label);
          break;
       }
       case Kind::Item:
@@ -82,7 +169,12 @@ void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string
       case Kind::Radio: {
          wxItemKind kind = e.kind == Kind::Check ? wxITEM_CHECK
                          : e.kind == Kind::Radio ? wxITEM_RADIO : wxITEM_NORMAL;
-         wxMenuItem *mi = menu->Append(wxID_ANY, menu_label(e.label), wxEmptyString, kind);
+         wxMenuItem *mi = new wxMenuItem(menu, wxID_ANY, menu_label(e.label), wxEmptyString, kind);
+         if (kind == wxITEM_NORMAL) {
+            wxBitmapBundle b = menu_icon(item_icons, e.action);
+            if (b.IsOk()) mi->SetBitmap(b);
+         }
+         menu->Append(mi);
          if (kind != wxITEM_NORMAL) mi->Check(e.checked);
          (*ids)[mi->GetId()] = Selection{ e.action, here };
          break;
