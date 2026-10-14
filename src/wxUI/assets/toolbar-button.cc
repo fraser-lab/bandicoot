@@ -12,7 +12,7 @@
 namespace wxui {
 
 namespace {
-const int pad = 3, gap = 2; // points: inside the frame, between icon and label
+const int gap = 2; // points, between icon and label
 }
 
 ToolbarButton::ToolbarButton(wxWindow *parent, wxWindowID id, const wxString &label,
@@ -37,6 +37,13 @@ bool ToolbarButton::shows_text() const {
    return content != Content::Icon;
 }
 
+// Space inside the frame, in points: in proportion to the icon, so a smaller
+// icon gives a proportionally smaller button.
+int ToolbarButton::padding() const {
+   if (! shows_icon()) return 3;
+   return std::max(1, (3 * icon.GetDefaultSize().y + 12) / 24);
+}
+
 void ToolbarButton::draw(wxDC &dc, const wxRect &rect) {
 
    // idle: no frame, the parent's background shows through
@@ -53,7 +60,7 @@ void ToolbarButton::draw(wxDC &dc, const wxRect &rect) {
                  palette::toolbar_hover_shadow());
    }
 
-   wxRect inner = frame_interior(rect).Deflate(pad);
+   wxRect inner = frame_interior(rect).Deflate(padding());
    if (sunken) inner.Offset(1, 1);
 
    wxBitmap bmp;
@@ -107,7 +114,7 @@ wxSize ToolbarButton::DoGetBestSize() const {
       content_size = wxSize(std::max(bs.x, ts.x), bs.y + gap + ts.y);
    else
       content_size = shows_icon() ? bs : ts;
-   const int border = 2 + pad;
+   const int border = 2 + padding();
    return wxSize(content_size.x + 2 * border, content_size.y + 2 * border);
 }
 

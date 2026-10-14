@@ -69,6 +69,9 @@ void bandicoot_core_save_sidebar_docked(bool docked);
 // The side it docks on, in Coot's numbering: 0 right (default), 1 left, 3 bottom.
 int bandicoot_core_sidebar_position();
 void bandicoot_core_save_sidebar_position(int position);
+// Its icon size in points: 24, 20, 16 or 12 (default).
+int bandicoot_core_sidebar_icon_size();
+void bandicoot_core_save_sidebar_icon_size(int points);
 
 // Whether this build has an optional capability, e.g. "enhanced_ligand_tools"
 // (the ligand tools that need RDKit).

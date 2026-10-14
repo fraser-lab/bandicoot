@@ -32,6 +32,7 @@ private:
    Content content;
    bool shows_icon() const;
    bool shows_text() const;
+   int padding() const;
 };
 
 } // namespace wxui

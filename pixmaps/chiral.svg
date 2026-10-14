@@ -1,79 +1,8 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-<svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://web.resource.org/cc/"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="16px"
-   height="16px"
-   id="svg2217"
-   sodipodi:version="0.32"
-   inkscape:version="0.45"
-   sodipodi:docbase="/home/paule/Projects/coot/pixmaps"
-   sodipodi:docname="chiral.svg"
-   inkscape:export-filename="/lmb/wear/emsley/Projects/coot/pixmaps/chiral.png"
-   inkscape:export-xdpi="90"
-   inkscape:export-ydpi="90"
-   inkscape:output_extension="org.inkscape.output.svg.inkscape"
-   sodipodi:modified="true">
-  <defs
-     id="defs2219" />
-  <sodipodi:namedview
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0.0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="22.197802"
-     inkscape:cx="6.5979836"
-     inkscape:cy="7.1424041"
-     inkscape:current-layer="layer1"
-     showgrid="true"
-     inkscape:grid-bbox="true"
-     inkscape:document-units="px"
-     inkscape:window-width="828"
-     inkscape:window-height="718"
-     inkscape:window-x="202"
-     inkscape:window-y="28" />
-  <metadata
-     id="metadata2222">
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
-  <g
-     id="layer1"
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer">
-    <path
-       style="fill:#7373db;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:round;stroke-linejoin:miter;stroke-opacity:1"
-       d="M 6.3112817,2.7708309 L 6.9471726,15.5 L 0.2387605,10.471637 L 6.3112817,2.7708309 z "
-       id="path2225"
-       sodipodi:nodetypes="cccc" />
-    <path
-       style="fill:#bebee9;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="M 6.5,2.8345405 L 6.9579954,15.319216 L 13.026316,9.6928443 L 6.5,2.8345405 z "
-       id="path3104"
-       sodipodi:nodetypes="cccc" />
-    <text
-       xml:space="preserve"
-       style="font-size:12px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Microsoft Sans Serif, Bitstream Vera Sans, Helvetica, Arial"
-       x="10.46875"
-       y="9"
-       id="text3106"><tspan
-         sodipodi:role="line"
-         id="tspan3108"
-         x="10.46875"
-         y="9">?</tspan></text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg2217" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16.4 16.57">
+  <path id="path2225" d="M7.36,1.79l.7,13.75L.71,10.11,7.36,1.79Z" fill="#7373db" fill-rule="evenodd" stroke="#000" stroke-linecap="round"/>
+  <path id="path3104" d="M7.57,1.86l.5,13.48,6.64-6.08L7.57,1.86Z" fill="#bebee9" fill-rule="evenodd" stroke="#000"/>
+  <g isolation="isolate">
+    <path d="M14.53,4.16c-.02.21-.08.36-.18.46-.1.1-.23.14-.38.14-.16,0-.3-.06-.4-.17-.1-.11-.16-.3-.16-.57v-.62c.89-.33,1.42-.59,1.6-.77.18-.18.27-.36.27-.55,0-.26-.11-.49-.32-.68s-.52-.29-.91-.29c-.41,0-.81.09-1.19.28v.16c0,.26-.05.45-.16.56-.1.11-.24.17-.41.17s-.3-.06-.4-.17-.16-.3-.16-.57v-.89c.57-.27,1.02-.44,1.33-.53.32-.09.65-.13.98-.13.71,0,1.27.2,1.7.6s.64.91.64,1.52c0,.43-.13.8-.39,1.1s-.75.61-1.49.93ZM14.76,6.29c0,.17-.06.31-.18.41-.12.11-.33.16-.61.16s-.49-.05-.61-.16c-.12-.11-.18-.24-.18-.41s.06-.31.18-.41c.12-.11.32-.16.61-.16s.49.05.61.16c.12.11.18.24.18.41Z"/>
   </g>
 </svg>

@@ -219,6 +219,17 @@ void bandicoot_core_save_sidebar_position(int position) {
    bandicoot_save_sidebar_position(position);
 }
 
+extern "C" void bandicoot_save_sidebar_icon_size(int points);
+extern "C" int  bandicoot_load_sidebar_icon_size(void);
+
+int bandicoot_core_sidebar_icon_size() {
+   return bandicoot_load_sidebar_icon_size();
+}
+
+void bandicoot_core_save_sidebar_icon_size(int points) {
+   bandicoot_save_sidebar_icon_size(points);
+}
+
 bool bandicoot_core_has_capability(const std::string &capability) {
    if (capability == "enhanced_ligand_tools")
       return enhanced_ligand_coot_p();

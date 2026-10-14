@@ -1,114 +1,19 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
-<svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="16px"
-   height="16px"
-   id="svg1307"
-   sodipodi:version="0.32"
-   inkscape:version="0.92.5 (2060ec1f9f, 2020-04-08)"
-   sodipodi:docname="gln-asn-b-factors.svg"
-   inkscape:export-filename="/lmb/wear/emsley/Projects/coot/pixmaps/temperature.png"
-   inkscape:export-xdpi="90"
-   inkscape:export-ydpi="90"
-   version="1.1">
-  <defs
-     id="defs1309" />
-  <sodipodi:namedview
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0.0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="22.197802"
-     inkscape:cx="7.3625773"
-     inkscape:cy="10.458058"
-     inkscape:current-layer="layer1"
-     showgrid="true"
-     inkscape:grid-bbox="true"
-     inkscape:document-units="px"
-     showguides="false"
-     inkscape:window-width="914"
-     inkscape:window-height="869"
-     inkscape:window-x="765"
-     inkscape:window-y="279"
-     inkscape:window-maximized="0" />
-  <metadata
-     id="metadata1312">
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
-  <g
-     id="layer1"
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer">
-    <g
-       id="g3412"
-       transform="matrix(0.82581,0,0,0.82581,-3.772677,3.189579)">
-      <path
-         transform="matrix(0.743671,0,0,0.854152,1.616754,1.627693)"
-         d="M 11.307426 12.260891 A 3.4012377 2.9282179 0 1 1  4.5049503,12.260891 A 3.4012377 2.9282179 0 1 1  11.307426 12.260891 z"
-         sodipodi:ry="2.9282179"
-         sodipodi:rx="3.4012377"
-         sodipodi:cy="12.260891"
-         sodipodi:cx="7.906188"
-         id="path2192"
-         style="fill:#f98849;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-         sodipodi:type="arc" />
-      <rect
-         ry="3.277909"
-         rx="1.2109321"
-         y="1.3535534"
-         x="6.3918056"
-         height="12"
-         width="2.2163885"
-         id="rect1315"
-         style="fill:#ff813c;fill-opacity:1;stroke:#000000;stroke-width:0.74437696;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <path
-         transform="matrix(0.735027,0,0,0.751444,1.688742,2.987019)"
-         d="M 11.307426 12.260891 A 3.4012377 2.9282179 0 1 1  4.5049503,12.260891 A 3.4012377 2.9282179 0 1 1  11.307426 12.260891 z"
-         sodipodi:ry="2.9282179"
-         sodipodi:rx="3.4012377"
-         sodipodi:cy="12.260891"
-         sodipodi:cx="7.906188"
-         id="path1317"
-         style="fill:#f98849;fill-opacity:1;stroke:none;stroke-width:1.00000072;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-         sodipodi:type="arc" />
-      <path
-         sodipodi:nodetypes="ccc"
-         id="path2197"
-         d="M 7.5336627,2.4459674 C 7.5495902,5.4459674 7.5177354,4.8885082 7.5177354,4.8885082 L 7.5495902,4.0443557"
-         style="fill:none;fill-opacity:0.75;fill-rule:evenodd;stroke:#ffffff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-    </g>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;line-height:0%;font-family:'Microsoft Sans Serif', 'Bitstream Vera Sans', Helvetica, Arial;text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="3.5527344"
-       y="5.453125"
-       id="text3418"><tspan
-         sodipodi:role="line"
-         id="tspan3420"
-         x="3.5527344"
-         y="5.453125"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6px;line-height:1;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">GLN</tspan><tspan
-         sodipodi:role="line"
-         x="3.5527344"
-         y="11.453125"
-         id="tspan3422"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6px;line-height:1;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">ASN</tspan></text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg1307" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15.8 14.64">
+  <g id="g3412">
+    <path id="path2192" d="M4.77,11.96c0,1.2-.96,2.17-2.13,2.17s-2.13-.97-2.13-2.17.96-2.17,2.13-2.17,2.13.97,2.13,2.17Z" fill="#f98849" stroke="#000" stroke-linecap="round"/>
+    <path id="rect1315" d="M2.64,2.63h0c.52,0,.93,1.28.93,2.85v4.73c0,1.57-.42,2.85-.93,2.85h0c-.52,0-.93-1.28-.93-2.85v-4.73c0-1.57.42-2.85.93-2.85Z" fill="#ff813c" stroke="#000" stroke-linecap="round" stroke-miterlimit="3.3" stroke-width=".61"/>
+    <path id="path1317" d="M4.75,12.05c0,1.06-.94,1.91-2.11,1.91s-2.11-.86-2.11-1.91.94-1.91,2.11-1.91,2.11.86,2.11,1.91Z" fill="#f98849"/>
+    <path id="path2197" d="M2.67,3.57c.01,2.61-.01,2.12-.01,2.12l.03-.73" fill="none" stroke="#fff" stroke-linecap="round" stroke-miterlimit="3.3" stroke-width="1.24"/>
+  </g>
+  <g isolation="isolate">
+    <path d="M8.2,2.68v.85c-.28.15-.51.26-.71.32-.19.06-.4.08-.63.08-.31,0-.6-.05-.87-.14-.21-.07-.37-.17-.5-.28s-.23-.28-.33-.5c-.1-.22-.15-.47-.15-.74v-.46c0-.42.12-.8.37-1.13.34-.45.79-.67,1.37-.67.17,0,.33.02.48.05s.29.09.43.16c.08-.08.16-.11.24-.11.09,0,.16.03.22.1s.08.17.08.32v.41c0,.15-.03.26-.09.33-.06.06-.13.1-.22.1-.07,0-.13-.02-.19-.07-.04-.03-.07-.1-.1-.21-.03-.1-.06-.18-.09-.21-.05-.06-.15-.11-.29-.16-.14-.05-.29-.07-.46-.07-.24,0-.45.05-.63.15-.13.08-.25.21-.35.4s-.16.39-.16.62v.46c0,.34.1.6.29.77.19.18.49.26.91.26.28,0,.54-.05.77-.16v-.45h-.63c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h1.09c.15,0,.25.03.32.09s.09.13.09.23c0,.07-.02.14-.06.19s-.11.1-.2.12Z"/>
+    <path d="M10.08.73v2.47h1.32v-.6c0-.15.03-.26.09-.33.06-.06.13-.1.22-.1s.16.03.22.1c.06.07.08.17.08.33v1.23h-2.91c-.15,0-.25-.03-.32-.09-.06-.06-.09-.13-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.36V.73h-.36c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h1.33c.15,0,.25.03.32.09.06.06.09.13.09.23s-.03.17-.09.23c-.06.06-.17.09-.32.09h-.36Z"/>
+    <path d="M13.24,1.29v1.91h.22c.15,0,.25.03.32.09.06.06.09.14.09.23s-.03.17-.09.23c-.06.06-.17.09-.32.09h-.81c-.15,0-.25-.03-.32-.09-.06-.06-.09-.13-.09-.23s.03-.17.09-.23.16-.09.29-.09V.73h-.1c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.71s1.57,2.54,1.57,2.54V.73h-.22c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.81c.15,0,.25.03.32.09.06.06.09.13.09.23s-.03.17-.09.23-.16.09-.28.09v3.1h-.61l-1.58-2.54Z"/>
+  </g>
+  <g isolation="isolate">
+    <path d="M7.4,9.13h-1.49l-.15.39h.15c.15,0,.25.03.32.09.06.06.09.14.09.23s-.03.17-.09.23c-.06.06-.17.09-.32.09h-.83c-.15,0-.25-.03-.32-.09-.06-.06-.09-.13-.09-.23s.03-.17.1-.23.17-.09.33-.08l.96-2.47h-.4c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h1.33s1.22,3.11,1.22,3.11c.14,0,.24.02.28.05.09.07.14.16.14.27,0,.09-.03.17-.09.23-.06.06-.17.09-.31.09h-.83c-.15,0-.25-.03-.32-.09-.06-.06-.09-.13-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.15l-.15-.39ZM7.15,8.49l-.49-1.25-.5,1.25h.99Z"/>
+    <path d="M9.44,9.98c-.05.07-.1.11-.13.13s-.07.03-.12.03c-.09,0-.17-.03-.23-.1-.06-.07-.09-.17-.09-.32v-.43c0-.15.03-.26.09-.32.06-.07.13-.1.23-.1.07,0,.13.02.18.06.05.04.09.1.11.2.03.09.05.15.08.19.06.06.16.13.31.19s.31.1.48.1c.27,0,.5-.07.67-.2.11-.08.17-.18.17-.3,0-.08-.03-.15-.08-.22-.05-.07-.14-.13-.26-.17-.08-.03-.26-.07-.54-.13-.34-.06-.59-.14-.76-.23s-.31-.22-.41-.38-.15-.34-.15-.53c0-.3.12-.57.37-.79.25-.23.56-.34.96-.34.16,0,.3.02.44.05.13.04.26.09.37.16.08-.08.16-.12.24-.12.09,0,.16.03.22.1.06.06.08.17.08.32v.47c0,.15-.03.26-.08.33-.06.06-.13.1-.22.1-.08,0-.14-.02-.2-.07-.04-.03-.08-.1-.1-.21s-.05-.18-.08-.23c-.06-.08-.14-.14-.26-.2s-.25-.08-.4-.08c-.22,0-.4.05-.53.16-.13.11-.19.22-.19.33,0,.08.03.15.08.23.05.07.13.13.23.17.07.03.26.08.57.14.31.06.55.13.72.21.17.08.31.2.42.36s.17.36.17.58c0,.31-.11.56-.32.75-.28.25-.64.37-1.08.37-.17,0-.34-.02-.49-.06-.16-.04-.32-.1-.47-.19Z"/>
+    <path d="M13.24,7.6v1.91h.22c.15,0,.25.03.32.09.06.06.09.14.09.23s-.03.17-.09.23c-.06.06-.17.09-.32.09h-.81c-.15,0-.25-.03-.32-.09-.06-.06-.09-.13-.09-.23s.03-.17.09-.23.16-.09.29-.09v-2.47h-.1c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.71s1.57,2.54,1.57,2.54v-1.9h-.22c-.15,0-.25-.03-.32-.09-.06-.06-.09-.14-.09-.23s.03-.17.09-.23c.06-.06.17-.09.32-.09h.81c.15,0,.25.03.32.09.06.06.09.13.09.23s-.03.17-.09.23-.16.09-.28.09v3.1h-.61l-1.58-2.54Z"/>
   </g>
 </svg>

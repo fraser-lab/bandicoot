@@ -430,8 +430,7 @@ main (int argc, char *argv[]) {
       std::string version_string = VERSION;
 #ifdef __APPLE__
       std::string main_title =
-	 std::string("BANDICOOT ") + BANDICOOT_VERSION + BANDICOOT_BUILD_SUFFIX +
-	 " (Coot " + version_string + ")";
+	 std::string("BANDICOOT ") + BANDICOOT_VERSION + BANDICOOT_BUILD_SUFFIX;
 #else
       std::string main_title = "Coot " + version_string;
 #endif

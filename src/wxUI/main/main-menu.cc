@@ -2,6 +2,9 @@
 
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/assets/icons.hh"
+#ifdef __WXOSX__
+#include "wxUI/main/mac-menu.hh"
+#endif
 
 #include <wx/menu.h>
 
@@ -74,6 +77,7 @@ const std::map<std::string, const char *> item_icons = {
    { "on_undo_last_navigation1_activate", "stock-menu-undo.png" },
    { "on_bond_colours1_activate", "stock-menu-select-color.png" },
    { "on_bond_parameters1_activate", "stock-menu-preferences.png" },
+   { "on_edit_change_chain_ids1_activate", "change-chain-id.svg" },
    { "on_edit_copy_fragment1_activate", "stock-menu-copy.png" },
    { "on_edit_copy_molecule1_activate", "stock-menu-copy.png" },
    { "on_font_size1_activate", "gtk-font.png" },
@@ -82,12 +86,15 @@ const std::map<std::string, const char *> item_icons = {
    { "on_pink_pointer_size1_activate", "pink-pointer.svg" },
    { "on_preferences1_activate", "stock-menu-preferences.png" },
    { "on_edit_replace_fragment1_activate", "stock-menu-refresh.png" },
+   { "on_edit_renumber_residues1_activate", "renumber-residues.svg" },
    { "on_edit_replace_residue1_activate", "stock-menu-refresh.png" },
+   { "on_residue_info2_activate", "residue-info.svg" },
    { "on_restraints1_activate", "radacina_handcuffs-small.svg" },
    { "on_skeleton_colour1_activate", "stock-menu-select-color.png" },
    { "on_auto_open_mtz_activate", "stock-menu-open.png" },
    { "on_close_molecule1_activate", "stock-menu-close.png" },
    { "on_exit1_activate", "stock-menu-quit.png" },
+   { "on_get_pdb_and_map_using_eds1_activate", "connect-to-usf.svg" },
    { "on_get_pdb_using_code1_activate", "connect-to-oca.svg" },
    { "on_get_monomer1_activate", "connect-to-ccp4.svg" },
    { "on_import_cif_dictionary1_activate", "stock-menu-add.png" },
@@ -104,8 +111,11 @@ const std::map<std::string, const char *> item_icons = {
    { "on_environment_distances1_activate", "env-distances.svg" },
    { "on_plane_distances1_activate", "plane-distances.svg" },
    { "on_pointer_distances1_activate", "pointer-distances.svg" },
+   { "on_residue_info1_activate", "residue-info.svg" },
+   { "on_ligand_builder1_activate", "go-to-ligand.svg" },
    { "on_other_modelling_tools1_activate", "gnome-run.png" },
    { "on_check_waters1_activate", "water-drop.svg" },
+   { "on_incorrect_chiral_volumes1_activate", "chiral.svg" },
    { "on_difference_map_peaks1_activate", "diff-map.svg" },
    { "on_ramachandran_differences_plot1_activate", "kleywegt.svg" },
    { "on_unmodelled_blobs1_activate", "unknown-blob.svg" },
@@ -117,7 +127,11 @@ const std::map<std::string, const char *> submenu_icons = {
    { "Background Colour...", "stock-menu-select-color.png" },
    { "Map Colour...", "stock-menu-select-color.png" },
    { "Skeleton Parameters", "stock-menu-preferences.png" },
+   { "Sequence View", "sequence-view.svg" },
    { "Average Temp. fact. analysis", "temperature.svg" },
+   { "Density fit analysis", "density-fit.svg" },
+   { "Geometry analysis", "geom.svg" },
+   { "GLN and ASN B-factor Outliers", "gln-asn-b-factors.svg" },
    { "Peptide omega analysis", "peptide-omega.svg" },
    { "Probe clashes", "probe-clash.svg" },
    { "Ramachandran Plot", "ramachandran.png" },
@@ -461,6 +475,9 @@ wxMenuBar *build_main_menu(const MainMenuHooks &hooks) {
       if (wxMenuItem *quit = apple->FindItem(wxID_EXIT))
          quit->SetItemLabel("Exit Bandicoot\tCtrl+Q");
    }
+   int edit = bar->FindMenu("Edit");
+   if (edit != wxNOT_FOUND)
+      mac_strip_stock_edit_items(bar->GetMenu(edit));
 #endif
    return bar;
 }

@@ -51,7 +51,8 @@ public:
       std::function<void(int side)> dock_on;
    };
 
-   Sidebar(wxWindow *parent, bool vertical, Style style, Hooks hooks);
+   // icon_points: the size of the tool icons, in points
+   Sidebar(wxWindow *parent, bool vertical, Style style, int icon_points, Hooks hooks);
 
    void set_style(Style style);
    Style get_style() const { return style; }
@@ -65,6 +66,7 @@ public:
 private:
    bool vertical;
    Style style;
+   int icon_points;
    Hooks hooks;
    int rot_trans_mode = 0; // 0 residue range, 1 chain, 2 molecule
 

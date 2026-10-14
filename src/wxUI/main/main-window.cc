@@ -555,7 +555,8 @@ private:
 
       if (dock) {
          wxPanel *slot = slot_for_side();
-         sidebar = new wxui::Sidebar(slot, side != 3, style, sidebar_hooks());
+         sidebar = new wxui::Sidebar(slot, side != 3, style,
+                                     bandicoot_core_sidebar_icon_size(), sidebar_hooks());
          slot->GetSizer()->Add(sidebar, 1, wxEXPAND);
          slot->Show();
       } else {
@@ -566,7 +567,8 @@ private:
          floater->Bind(wxEVT_CLOSE_WINDOW, [](wxCloseEvent &e) {
             if (e.CanVeto()) e.Veto(); else e.Skip();
          });
-         sidebar = new wxui::Sidebar(floater, true, style, sidebar_hooks());
+         sidebar = new wxui::Sidebar(floater, true, style,
+                                     bandicoot_core_sidebar_icon_size(), sidebar_hooks());
          wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
          s->Add(sidebar, 1, wxEXPAND);
          floater->SetSizer(s);

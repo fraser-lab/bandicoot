@@ -172,6 +172,25 @@ extern "C" int bandicoot_load_sidebar_position(void) {
    }
    return 0;   // default: right
 }
+// Persisted sidebar icon size in points, in
+// ~/.coot-preferences/bandicoot-sidebar-icon-size: one of 24, 20, 16, 12;
+// default 12.
+extern "C" void bandicoot_save_sidebar_icon_size(int points) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sidebar-icon-size").c_str());
+   if (f) f << points << std::endl;
+}
+extern "C" int bandicoot_load_sidebar_icon_size(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sidebar-icon-size").c_str());
+      int v = 0;
+      if (f && (f >> v) && (v == 24 || v == 20 || v == 16 || v == 12)) return v;
+   }
+   return 12;   // default
+}
 // Persisted "Dock Sequence View Dialog?" preference, in
 // ~/.coot-preferences/bandicoot-sequence-view-docked ("1" docked / "0" floating).
 // Same self-contained store as the sidebar dock above; read by nsv() when the

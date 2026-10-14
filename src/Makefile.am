@@ -606,6 +606,8 @@ if UI_WX
 	wxUI/main/top-toolbar.cc     \
 	wxUI/main/sidebar.hh         \
 	wxUI/main/sidebar.cc         \
+	wxUI/main/mac-menu.hh        \
+	wxUI/main/mac-menu.mm        \
 	wxUI/assets/icons.hh         \
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \

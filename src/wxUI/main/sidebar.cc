@@ -67,8 +67,6 @@ const std::vector<SidebarEntry> entries = {
 
 const char *rot_trans_modes[] = { "By Residue Range...", "By Chain...", "By Molecule..." };
 
-const wxSize icon_size(24, 24); // points, as GTK's toolbar sizes them
-
 // GTK's etched separator line: a shadow line beside a highlight line.
 class SeparatorLine : public wxWindow {
 public:
@@ -143,8 +141,10 @@ void refresh_all(wxWindow *w) {
 
 } // namespace
 
-Sidebar::Sidebar(wxWindow *parent, bool vertical_in, Style style_in, Hooks hooks_in)
-   : wxPanel(parent), vertical(vertical_in), style(style_in), hooks(std::move(hooks_in)) {
+Sidebar::Sidebar(wxWindow *parent, bool vertical_in, Style style_in, int icon_points_in,
+                 Hooks hooks_in)
+   : wxPanel(parent), vertical(vertical_in), style(style_in), icon_points(icon_points_in),
+     hooks(std::move(hooks_in)) {
 
    // No colour of its own: the sidebar shows the window's background, which
    // follows the system appearance.
@@ -276,7 +276,7 @@ void Sidebar::populate() {
       case E::ToggleTool:
       case E::RotateTranslate: {
          ToolbarButton *b = new ToolbarButton(area, wxID_ANY, wxString::FromUTF8(e.label),
-                                              icon(e.icon, icon_size),
+                                              icon(e.icon, wxSize(icon_points, icon_points)),
                                               content_for(style, vertical, e.important));
          b->set_toggle(e.kind == E::ToggleTool);
          b->Bind(wxEVT_BUTTON, [this, action, label](wxCommandEvent &) {
