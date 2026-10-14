@@ -5,6 +5,7 @@
 #include "wxUI/assets/palette.hh"
 
 #include <wx/dcclient.h>
+#include <wx/settings.h>
 
 #include <algorithm>
 
@@ -62,9 +63,14 @@ void ToolbarButton::draw(wxDC &dc, const wxRect &rect) {
    }
    wxSize bs = bmp.IsOk() ? bmp.GetLogicalSize() : wxSize(0, 0);
 
+   // On its own face the text is Coot's colour; with no face it sits on the
+   // window's background and takes the system's (which follows dark mode).
+   bool flush = ! sunken && l != Look::Hover;
    dc.SetFont(GetFont());
    dc.SetTextForeground(! IsEnabled() ? palette::text_disabled()
-                        : is_on()     ? palette::text_on() : palette::text());
+                        : is_on()     ? palette::text_on()
+                        : flush       ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+                                      : palette::text());
    wxSize ts = shows_text() ? dc.GetTextExtent(GetLabel()) : wxSize(0, 0);
 
    if (bmp.IsOk() && shows_text() && content == Content::IconBesideText) {

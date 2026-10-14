@@ -382,6 +382,12 @@ private:
 // while empty. The transient-bar area shares a splitter with the surface and
 // is unsplit (zero height) while no bar is showing.
 
+wxui::Sidebar::Style sidebar_style(int coot_style) {
+   if (coot_style <= 1) return wxui::Sidebar::Style::Icons;
+   if (coot_style == 2) return wxui::Sidebar::Style::IconsAndText;
+   return wxui::Sidebar::Style::Text;
+}
+
 // Until the menu, toolbar and sidebar are connected to the core, say what was
 // chosen rather than doing nothing.
 void report_unconnected(const std::string &what, const std::string &action, bool state = true) {
@@ -415,14 +421,11 @@ public:
       right_slot  = make_slot();
       bottom_slot = make_slot();
 
-      // the sidebar starts docked on the right, as in the GTK build
-      int style = bandicoot_core_sidebar_style();
-      sidebar = new wxui::Sidebar(right_slot, true, wxui::Sidebar::Style(style < 1 ? 1 : style > 3 ? 3 : style),
-                                  [](const std::string &action, const std::string &label, bool state) {
-                                     report_unconnected("Sidebar > " + label, action, state);
-                                  });
-      right_slot->GetSizer()->Add(sidebar, 1, wxEXPAND);
-      right_slot->Show();
+      // the sidebar starts where the user last left it: docked on the right
+      // unless saved as undocked (that window opens once this one is shown)
+      docked = bandicoot_core_sidebar_docked();
+      side = bandicoot_core_sidebar_position();
+      if (docked) place_sidebar(true);
 
       splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                       wxSP_LIVE_UPDATE | wxSP_3DSASH);
@@ -468,6 +471,21 @@ public:
    }
 
    GLSurface *get_surface() const { return surface; }
+   wxui::Sidebar *get_sidebar() const { return sidebar; }
+   bool sidebar_docked() const { return docked; }
+
+   // Dock the sidebar in this window, or undock it into a window of its own.
+   // save: remember the choice for the next session.
+   void set_sidebar_docked(bool state, bool save) {
+      if (save) bandicoot_core_save_sidebar_docked(state);
+      if (state == docked && sidebar) return;
+      place_sidebar(state);
+   }
+
+   // Called once this window is on screen.
+   void place_saved_sidebar() {
+      if (! sidebar) place_sidebar(docked);
+   }
 
    // Show or collapse the area above the surface.
    void show_transient_area(bool state, int height = 80) {
@@ -481,6 +499,93 @@ public:
 
 private:
    wxui::Sidebar *sidebar  = nullptr;
+   wxFrame *floater        = nullptr;  // the undocked sidebar's window
+   bool docked = true;
+   int side = 0;   // where it docks, in Coot's numbering: 0 right, 1 left, 3 bottom
+
+   wxPanel *slot_for_side() const {
+      return side == 1 ? left_slot : side == 3 ? bottom_slot : right_slot;
+   }
+
+   wxui::Sidebar::Hooks sidebar_hooks() {
+      wxui::Sidebar::Hooks h;
+      h.on_select = [](const std::string &action, const std::string &label, bool state) {
+         report_unconnected("Sidebar > " + label, action, state);
+      };
+      h.icon_states = []() {
+         std::vector<wxui::Sidebar::IconState> v;
+         for (const bandicoot_sidebar_icon &i : bandicoot_core_sidebar_icons())
+            v.push_back({ i.widget, i.shown, i.shown_by_default });
+         return v;
+      };
+      h.choose_icon_set = [](bool main_only) {
+         bandicoot_core_sidebar_show_icon_set(main_only);
+      };
+      h.is_docked = [this]() { return docked; };
+      h.dock_side = [this]() { return side; };
+      // as for toggle_docked, once the menu has closed
+      h.dock_on = [this](int s) {
+         CallAfter([this, s]() {
+            side = s;
+            bandicoot_core_save_sidebar_position(s);
+            bandicoot_core_save_sidebar_docked(true);
+            place_sidebar(true);
+         });
+      };
+      // after the menu that asked has closed: the sidebar is about to be destroyed
+      h.toggle_docked = [this]() {
+         CallAfter([this]() { set_sidebar_docked(! docked, true); });
+      };
+      return h;
+   }
+
+   // Build the sidebar where it now belongs, replacing the old one. Its style
+   // carries over; which tools show is the core's and needs no carrying.
+   void place_sidebar(bool dock) {
+
+      wxui::Sidebar::Style style = sidebar ? sidebar->get_style()
+                                           : sidebar_style(bandicoot_core_sidebar_style());
+      if (sidebar) { sidebar->Destroy(); sidebar = nullptr; }
+      if (floater) { floater->Destroy(); floater = nullptr; }
+      docked = dock;
+
+      // a slot shows only while it holds the sidebar
+      for (wxPanel *slot : { left_slot, right_slot, bottom_slot })
+         if (slot->GetChildren().empty()) slot->Hide();
+
+      if (dock) {
+         wxPanel *slot = slot_for_side();
+         sidebar = new wxui::Sidebar(slot, side != 3, style, sidebar_hooks());
+         slot->GetSizer()->Add(sidebar, 1, wxEXPAND);
+         slot->Show();
+      } else {
+         // A utility window floats above Bandicoot's others. It has no close,
+         // minimize or zoom button: once closed there would be no way back.
+         floater = new wxFrame(this, wxID_ANY, "Model Tools", wxDefaultPosition, wxDefaultSize,
+                               wxCAPTION | wxRESIZE_BORDER | wxFRAME_TOOL_WINDOW);
+         floater->Bind(wxEVT_CLOSE_WINDOW, [](wxCloseEvent &e) {
+            if (e.CanVeto()) e.Veto(); else e.Skip();
+         });
+         sidebar = new wxui::Sidebar(floater, true, style, sidebar_hooks());
+         wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+         s->Add(sidebar, 1, wxEXPAND);
+         floater->SetSizer(s);
+
+         // as tall as the tools need, within the screen; beside this window
+         wxRect screen = wxGetClientDisplayRect();
+         wxSize natural = sidebar->natural_size();
+         int h = std::min(natural.y, screen.height - 60);
+         floater->SetClientSize(natural.x, h);
+         floater->SetMinClientSize(wxSize(natural.x, 120));
+         wxRect me = GetScreenRect();
+         int x = me.GetRight() + 8;
+         if (x + floater->GetSize().x > screen.GetRight()) x = std::max(screen.x, me.x - floater->GetSize().x - 8);
+         floater->Move(x, std::max(screen.y, me.y));
+         floater->Show();
+      }
+      Layout();
+   }
+
    wxPanel *left_slot      = nullptr;
    wxPanel *right_slot     = nullptr;
    wxPanel *bottom_slot    = nullptr;
@@ -566,6 +671,7 @@ void bandicoot_wx_create_main_window(const std::string &title) {
    main_frame = new MainFrame(wxString::FromUTF8(title));
    wxTheApp->SetTopWindow(main_frame);
    main_frame->Show();
+   main_frame->place_saved_sidebar();
    main_frame->Raise();
    main_frame->get_surface()->SetFocus();
 }
@@ -594,6 +700,30 @@ void bandicoot_wx_surface_redraw() {
 double bandicoot_wx_surface_backing_scale() {
    GLSurface *s = the_surface();
    return s ? s->GetContentScaleFactor() : 1.0;
+}
+
+void bandicoot_wx_sidebar_refresh() {
+   static bool pending = false;
+   if (! main_frame || ! main_frame->get_sidebar() || pending) return;
+   pending = true;
+   wxTheApp->CallAfter([]() {
+      pending = false;
+      if (main_frame && main_frame->get_sidebar()) main_frame->get_sidebar()->refresh_icons();
+   });
+}
+
+bool bandicoot_wx_sidebar_is_docked() {
+   return main_frame ? main_frame->sidebar_docked() : true;
+}
+
+void bandicoot_wx_set_sidebar_docked(bool state) {
+   if (main_frame) main_frame->set_sidebar_docked(state, true);
+   else bandicoot_core_save_sidebar_docked(state);
+}
+
+void bandicoot_wx_set_sidebar_style(int style) {
+   if (main_frame && main_frame->get_sidebar())
+      main_frame->get_sidebar()->set_style(sidebar_style(style));
 }
 
 void bandicoot_wx_set_status_text(const std::string &text) {

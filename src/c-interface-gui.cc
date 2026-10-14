@@ -3179,6 +3179,10 @@ update_toolbar_icons_menu(int toolbar_index) {
 // functions for the modelling toolbar style
 void set_model_toolbar_style(int istate) {
    graphics_info_t::model_toolbar_style_state = istate;
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag)
+      bandicoot_wx_set_sidebar_style(istate);
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       GtkWidget *menuitem;
       if (istate <= 1) {

@@ -14,7 +14,6 @@ namespace wxui {
 namespace palette {
 
 inline wxColour face()             { return wxColour(0xdc, 0xdc, 0xdc); }
-inline wxColour sidebar_face()     { return wxColour(0xd8, 0xd8, 0xd8); }
 inline wxColour face_pressed()     { return wxColour(0xc4, 0xc4, 0xc4); }
 inline wxColour face_hover()       { return wxColour(0xed, 0xed, 0xf5); } // cootrc "button"
 inline wxColour face_hover_toggle(){ return wxColour(0xeb, 0xeb, 0xfa); } // cootrc "toggle_button"

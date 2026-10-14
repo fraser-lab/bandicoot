@@ -1,141 +1,18 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
-<svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="48"
-   height="48"
-   id="svg3803"
-   sodipodi:version="0.32"
-   inkscape:version="0.92.5 (2060ec1f9f, 2020-04-08)"
-   sodipodi:docname="side-chain-180.svg"
-   inkscape:export-filename="/home/paule/Projects/coot/pixmaps/side-chain-180.png"
-   inkscape:export-xdpi="100"
-   inkscape:export-ydpi="100"
-   inkscape:output_extension="org.inkscape.output.svg.inkscape"
-   version="1.1">
-  <defs
-     id="defs3805">
-    <inkscape:perspective
-       sodipodi:type="inkscape:persp3d"
-       inkscape:vp_x="0 : 8 : 1"
-       inkscape:vp_y="0 : 1000 : 0"
-       inkscape:vp_z="16 : 8 : 1"
-       inkscape:persp3d-origin="8 : 5.3333333 : 1"
-       id="perspective4675" />
-    <linearGradient
-       id="linearGradient3238">
-      <stop
-         style="stop-color:#27c42b;stop-opacity:1;"
-         offset="0"
-         id="stop3240" />
-      <stop
-         style="stop-color:#aff0b1;stop-opacity:1;"
-         offset="1"
-         id="stop3242" />
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 46.5 43.07">
+  <defs>
+    <linearGradient id="linear-gradient" x1="-2057.73" y1="197.56" x2="-2045.18" y2="197.56" gradientTransform="translate(7737.3562 895.6163) scale(3.7603 -4.3846)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27c42b"/>
+      <stop offset="1" stop-color="#aff0b1"/>
     </linearGradient>
-    <linearGradient
-       id="linearGradient3230">
-      <stop
-         style="stop-color:#000000;stop-opacity:1;"
-         offset="0"
-         id="stop3232" />
-      <stop
-         style="stop-color:#b3b3b3;stop-opacity:1;"
-         offset="1"
-         id="stop3234" />
+    <linearGradient id="linear-gradient-2" x1="-2058.74" y1="197.56" x2="-2044.18" y2="197.56" gradientTransform="translate(7737.3562 895.6163) scale(3.7603 -4.3846)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#000"/>
+      <stop offset="1" stop-color="#b3b3b3"/>
     </linearGradient>
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient3230"
-       id="linearGradient3236"
-       x1="2.2448671"
-       y1="10.793498"
-       x2="15.189291"
-       y2="10.793498"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient3238"
-       id="linearGradient3244"
-       x1="2.2448671"
-       y1="10.793498"
-       x2="15.189291"
-       y2="10.793498"
-       gradientUnits="userSpaceOnUse" />
   </defs>
-  <sodipodi:namedview
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0.0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="5.5494504"
-     inkscape:cx="-19.784647"
-     inkscape:cy="36.829529"
-     inkscape:current-layer="layer1"
-     showgrid="true"
-     inkscape:grid-bbox="true"
-     inkscape:document-units="px"
-     inkscape:window-width="1376"
-     inkscape:window-height="1031"
-     inkscape:window-x="229"
-     inkscape:window-y="76"
-     inkscape:window-maximized="0" />
-  <metadata
-     id="metadata3808">
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
-  <g
-     id="layer1"
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer"
-     transform="translate(0,32)">
-    <rect
-       style="fill:#ffffff;fill-opacity:0;fill-rule:evenodd;stroke:none"
-       id="rect3357"
-       width="48.215885"
-       height="48.049915"
-       x="0.219761"
-       y="-32.435646" />
-    <path
-       sodipodi:type="arc"
-       style="fill:url(#linearGradient3244);fill-opacity:1;fill-rule:evenodd;stroke:url(#linearGradient3236);stroke-width:1.0063051;stroke-linecap:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0"
-       id="path3811"
-       sodipodi:cx="8.7170792"
-       sodipodi:cy="8.093812"
-       sodipodi:rx="5.9690595"
-       sodipodi:ry="5.473515"
-       d="M 14.686139,8.093812 A 5.9690595,5.473515 0 1 1 2.7485673,8.0196692"
-       sodipodi:start="0"
-       sodipodi:end="3.1551388"
-       sodipodi:open="true"
-       transform="matrix(3.7603255,0,0,4.3845671,-8.290414,-45.529891)" />
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;line-height:0%;font-family:'Microsoft Sans Serif', 'Bitstream Vera Sans', Helvetica, Arial;text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
-       x="4.0767069"
-       y="-15.608515"
-       id="text3813"><tspan
-         sodipodi:role="line"
-         id="tspan3246"
-         x="4.0767069"
-         y="-15.608515"
-         style="font-size:18.16400019px;line-height:1;-inkscape-font-specification:'Noto Sans, Normal';font-family:'Noto Sans';font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal">Side</tspan></text>
-  </g>
+  <path id="path3811" d="M45,17.57c0,13.25-9.74,24-21.75,24S1.5,30.83,1.5,17.57v-.32" fill="url(#linear-gradient)" fill-rule="evenodd" stroke="url(#linear-gradient-2)" stroke-linecap="round" stroke-width="3"/>
+  <path d="M10.59,1.87c.09-.19.19-.32.3-.39s.28-.11.51-.11c.34,0,.56.06.65.19.1.13.15.38.16.75l.04,1.69v.1c0,.35-.07.59-.21.73s-.37.21-.7.21c-.42,0-.73-.22-.93-.67-.03-.06-.05-.12-.07-.16-.18-.36-.43-.64-.74-.82-.31-.19-.68-.28-1.1-.28-.53,0-.95.12-1.28.37s-.49.55-.49.94c0,.54.74.96,2.23,1.27.25.05.45.09.6.12,1.12.25,1.94.62,2.44,1.12s.76,1.19.76,2.07c0,1.08-.37,1.91-1.1,2.49s-1.78.87-3.15.87c-.53,0-1.01-.04-1.43-.11s-.82-.18-1.22-.33c-.09.15-.2.26-.33.33-.12.07-.29.1-.51.1-.37,0-.63-.07-.77-.21s-.22-.39-.23-.75l-.04-2.07v-.1c0-.39.07-.66.22-.81s.39-.23.75-.23c.38,0,.7.28.96.83.06.13.11.24.14.31.23.45.55.79.95,1.01s.91.33,1.5.33c.54,0,.96-.11,1.26-.33s.45-.54.45-.94c0-.63-.68-1.1-2.03-1.42-.4-.09-.72-.17-.96-.24-1.14-.3-1.92-.67-2.36-1.12-.44-.45-.66-1.06-.66-1.84,0-1,.38-1.82,1.13-2.46s1.73-.95,2.92-.95c.4,0,.79.04,1.17.12s.77.21,1.15.37Z"/>
+  <path d="M20.43,10.17h1.89c.4,0,.69.07.86.22s.25.39.25.73-.09.59-.26.75-.46.23-.86.23h-5.94c-.4,0-.68-.08-.86-.23s-.26-.4-.26-.75.08-.58.25-.73.46-.22.87-.22h1.89v-4.27h-.99c-.39,0-.67-.08-.84-.22-.17-.15-.25-.4-.25-.74s.08-.59.25-.74.45-.22.85-.22h2.65c.16,0,.29.03.38.1s.13.16.13.28v5.82ZM19.16,0c.43,0,.71.08.85.25s.21.56.21,1.18-.06.97-.19,1.11c-.13.14-.42.22-.89.22s-.75-.07-.88-.2-.2-.4-.2-.81c0-.75.07-1.23.2-1.43s.43-.31.9-.31Z"/>
+  <path d="M33.74,10.17h.15c.32,0,.55.08.71.24.16.16.24.4.24.71,0,.35-.08.59-.25.75s-.45.23-.85.23h-1.34c-.17,0-.3-.03-.39-.1-.09-.07-.14-.16-.14-.28v-.62c-.29.39-.66.69-1.11.9-.45.21-.96.31-1.52.31-1.15,0-2.11-.39-2.88-1.17-.77-.78-1.16-1.76-1.16-2.93s.39-2.23,1.17-3.03,1.78-1.2,2.98-1.2c.42,0,.82.07,1.22.21s.76.33,1.09.58v-2.22h-1.17c-.4,0-.69-.08-.86-.23-.17-.15-.25-.4-.25-.74s.08-.59.25-.75.46-.23.86-.23h2.73c.2,0,.33.04.41.12s.11.23.11.46v9ZM29.62,5.84c-.57,0-1.05.22-1.43.65-.38.43-.57.98-.57,1.64s.19,1.24.56,1.67c.38.43.85.65,1.43.65s1.06-.22,1.44-.65.57-.99.57-1.66-.19-1.2-.57-1.63-.86-.65-1.43-.65Z"/>
+  <path d="M38.41,8.55c.15.65.45,1.14.88,1.46s1.02.48,1.75.48,1.44-.18,2.15-.53,1.14-.53,1.28-.53c.22,0,.39.08.53.24.14.16.21.37.21.62,0,.55-.41,1.03-1.22,1.42s-1.82.6-3.02.6c-1.42,0-2.57-.4-3.46-1.2s-1.33-1.82-1.33-3.08.44-2.27,1.33-3.07,2.04-1.2,3.46-1.2c1.27,0,2.31.37,3.15,1.12.83.75,1.25,1.66,1.25,2.75,0,.35-.08.58-.25.71s-.51.19-1.03.19h-5.67ZM43.15,7.18c-.1-.54-.36-.97-.77-1.27s-.95-.45-1.61-.45-1.15.14-1.54.43c-.39.29-.66.71-.81,1.29h4.74Z"/>
 </svg>

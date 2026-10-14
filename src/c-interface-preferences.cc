@@ -151,6 +151,27 @@ extern "C" int bandicoot_load_sidebar_docked(void) {
    return 1;   // default: docked
 }
 
+// Persisted side the docked sidebar sits on, in
+// ~/.coot-preferences/bandicoot-sidebar-position, in Coot's numbering (0 right,
+// 1 left, 3 bottom). Written when the user picks a side; default = right. Coot's
+// own set_model_toolbar_docked_position() is not used for this: in Bandicoot it
+// is inert, yet the preferences file calls it at every start.
+extern "C" void bandicoot_save_sidebar_position(int position) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sidebar-position").c_str());
+   if (f) f << position << std::endl;
+}
+extern "C" int bandicoot_load_sidebar_position(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sidebar-position").c_str());
+      int v = 0;
+      if (f && (f >> v) && (v == 0 || v == 1 || v == 3)) return v;
+   }
+   return 0;   // default: right
+}
 // Persisted "Dock Sequence View Dialog?" preference, in
 // ~/.coot-preferences/bandicoot-sequence-view-docked ("1" docked / "0" floating).
 // Same self-contained store as the sidebar dock above; read by nsv() when the

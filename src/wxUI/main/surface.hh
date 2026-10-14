@@ -32,6 +32,15 @@ double bandicoot_wx_surface_backing_scale();
 // Text for the status bar at the bottom of the main window.
 void bandicoot_wx_set_status_text(const std::string &text);
 
+// The sidebar: re-read which tools the core shows (deferred, so a run of
+// changes redraws once), and apply a style (1 icons, 2 icons and text, 3 text).
+void bandicoot_wx_sidebar_refresh();
+void bandicoot_wx_set_sidebar_style(int style);
+// Whether the sidebar is docked in the main window; dock or undock it (and
+// remember the choice).
+bool bandicoot_wx_sidebar_is_docked();
+void bandicoot_wx_set_sidebar_docked(bool state);
+
 enum bandicoot_wx_cursor_t {
    BANDICOOT_WX_CURSOR_NORMAL,
    BANDICOOT_WX_CURSOR_PICK,

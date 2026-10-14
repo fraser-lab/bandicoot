@@ -1961,9 +1961,17 @@ extern "C" void bandicoot_sidebar_dock_default(void) {
 // Get / set the sidebar dock state from outside (the "Dock Toolbar?" preference).
 // Keeps the settings-popup Dock/Undock label in sync.
 extern "C" int bandicoot_sidebar_is_docked(void) {
+#ifdef BANDICOOT_UI_WX
+    return bandicoot_wx_sidebar_is_docked() ? 1 : 0;
+#endif
     return bandicoot_sidebar_docked ? 1 : 0;
 }
 extern "C" void bandicoot_sidebar_set_docked_ext(int docked) {
+#ifdef BANDICOOT_UI_WX
+    // the sidebar is the wx main window's
+    bandicoot_wx_set_sidebar_docked(docked != 0);
+    return;
+#endif
     BOOL want = docked ? YES : NO;
     if (want == bandicoot_sidebar_docked) return;
     bandicoot_sidebar_set_docked(want);

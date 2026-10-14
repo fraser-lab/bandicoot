@@ -962,6 +962,10 @@ graphics_info_t::show_hide_toolbar_icon_pos(int pos, int show_hide_flag, int too
          coot::preferences_icon_info_t item = (*pall_items)[pos];
          
       }
+#ifdef BANDICOOT_UI_WX
+      if (toolbar_index == MODEL_TOOLBAR)
+         bandicoot_wx_sidebar_refresh();
+#endif
    }
 }
 

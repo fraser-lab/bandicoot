@@ -182,6 +182,43 @@ int bandicoot_core_sidebar_style() {
    return model_toolbar_style_state();
 }
 
+std::vector<bandicoot_sidebar_icon> bandicoot_core_sidebar_icons() {
+   std::vector<bandicoot_sidebar_icon> v;
+   if (graphics_info_t::model_toolbar_icons)
+      for (const coot::preferences_icon_info_t &i : *graphics_info_t::model_toolbar_icons)
+         v.push_back({ i.icon_widget, i.show_hide_flag == 1, i.default_show_flag == 1 });
+   return v;
+}
+
+void bandicoot_core_sidebar_show_icon_set(bool main_icons_only) {
+   if (main_icons_only)
+      show_model_toolbar_main_icons();
+   else
+      show_model_toolbar_all_icons();
+}
+
+extern "C" void bandicoot_save_sidebar_docked(int docked);
+extern "C" int  bandicoot_load_sidebar_docked(void);
+
+bool bandicoot_core_sidebar_docked() {
+   return bandicoot_load_sidebar_docked() != 0;
+}
+
+void bandicoot_core_save_sidebar_docked(bool docked) {
+   bandicoot_save_sidebar_docked(docked ? 1 : 0);
+}
+
+extern "C" void bandicoot_save_sidebar_position(int position);
+extern "C" int  bandicoot_load_sidebar_position(void);
+
+int bandicoot_core_sidebar_position() {
+   return bandicoot_load_sidebar_position();
+}
+
+void bandicoot_core_save_sidebar_position(int position) {
+   bandicoot_save_sidebar_position(position);
+}
+
 bool bandicoot_core_has_capability(const std::string &capability) {
    if (capability == "enhanced_ligand_tools")
       return enhanced_ligand_coot_p();

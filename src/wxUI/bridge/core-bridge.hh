@@ -53,6 +53,23 @@ std::string bandicoot_core_pixmaps_dir();
 // The sidebar style the core holds: 1 icons, 2 icons and text, 3 text.
 int bandicoot_core_sidebar_style();
 
+// The sidebar tools the core can show or hide, by Coot's widget name.
+struct bandicoot_sidebar_icon {
+   std::string widget;
+   bool shown;
+   bool shown_by_default;
+};
+std::vector<bandicoot_sidebar_icon> bandicoot_core_sidebar_icons();
+// The Settings menu's Main Icons (true) or All Icons (false).
+void bandicoot_core_sidebar_show_icon_set(bool main_icons_only);
+
+// The sidebar's saved dock state (docked unless saved otherwise), and saving it.
+bool bandicoot_core_sidebar_docked();
+void bandicoot_core_save_sidebar_docked(bool docked);
+// The side it docks on, in Coot's numbering: 0 right (default), 1 left, 3 bottom.
+int bandicoot_core_sidebar_position();
+void bandicoot_core_save_sidebar_position(int position);
+
 // Whether this build has an optional capability, e.g. "enhanced_ligand_tools"
 // (the ligand tools that need RDKit).
 bool bandicoot_core_has_capability(const std::string &capability);
