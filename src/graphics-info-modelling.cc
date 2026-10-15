@@ -114,6 +114,12 @@ extern "C" int bandicoot_ar_bar_is_active(void);
 void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
 #endif
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc).
+bool bandicoot_wx_ar_update(const coot::refinement_results_t &rr);
+bool bandicoot_wx_ar_warnings(const std::string &text);
+#endif
+
 
 void
 graphics_info_t::get_restraints_lock(const std::string &calling_function_name) {
@@ -875,6 +881,9 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function() {
       moving_atoms_bonds_lock = 0;
       moving_atoms_lock = false;
 
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_ar_update(saved_dragged_refinement_results);
+#endif
 #ifdef __APPLE__
       // Bandicoot's native A/R bar gets the live geometry updates (the stock
       // dialog is suppressed, so accept_reject_dialog is NULL).
@@ -5476,6 +5485,9 @@ graphics_info_t::check_and_warn_inverted_chirals_and_cis_peptides() const {
 	    // ===================== show it? ==============================
 
 	    if (show_chiral_volume_errors_dialog_flag) {
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_wx_ar_warnings(message_string != "Unset" ? message_string : std::string());
+#endif
 	       if (accept_reject_dialog) {
 		  if (message_string != "Unset") {
 

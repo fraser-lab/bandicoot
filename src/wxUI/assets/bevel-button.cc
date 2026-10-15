@@ -12,11 +12,19 @@ namespace wxui {
 
 namespace {
 const int pad_x = 6, pad_y = 2, min_height = 22; // points, inside the frame
+const int icon_gap = 8;                          // points, icon to label
 }
 
 BevelButton::BevelButton(wxWindow *parent, wxWindowID id, const wxString &label)
    : ButtonBase(parent, id, label) {
    SetInitialSize();
+}
+
+void BevelButton::set_icon(const wxBitmapBundle &b) {
+   icon = b;
+   InvalidateBestSize();
+   SetInitialSize();
+   Refresh();
 }
 
 void BevelButton::draw(wxDC &dc, const wxRect &rect) {
@@ -46,13 +54,28 @@ void BevelButton::draw(wxDC &dc, const wxRect &rect) {
    wxRect inner = frame_interior(rect);
    if (style == FrameStyle::Sunken)
       inner.Offset(1, 1); // the label sinks with the button, as in GTK
-   dc.DrawLabel(GetLabel(), inner, wxALIGN_CENTRE);
+   if (! icon.IsOk()) {
+      dc.DrawLabel(GetLabel(), inner, wxALIGN_CENTRE);
+      return;
+   }
+   // icon and label centred together
+   wxBitmap bmp = icon.GetBitmapFor(this);
+   wxSize b = bmp.GetLogicalSize();
+   wxSize t = dc.GetMultiLineTextExtent(GetLabel());
+   int x = inner.x + (inner.width - (b.x + icon_gap + t.x)) / 2;
+   dc.DrawBitmap(bmp, x, inner.y + (inner.height - b.y) / 2, true);
+   dc.DrawText(GetLabel(), x + b.x + icon_gap, inner.y + (inner.height - t.y) / 2);
 }
 
 wxSize BevelButton::DoGetBestSize() const {
    wxClientDC dc(const_cast<BevelButton *>(this));
    dc.SetFont(GetFont());
    wxSize t = dc.GetMultiLineTextExtent(GetLabel());
+   if (icon.IsOk()) {
+      wxSize b = icon.GetDefaultSize();
+      t.x += b.x + icon_gap;
+      t.y = std::max(t.y, b.y);
+   }
    return wxSize(t.x + 2 * (2 + pad_x), std::max(min_height, t.y + 2 * (2 + pad_y)));
 }
 

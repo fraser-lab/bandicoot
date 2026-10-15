@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg2250" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 46.12 46.81">
+  <defs>
+    <radialGradient id="radial-gradient" cx="-1973.78" cy="111.47" fx="-1973.78" fy="111.47" r="6.96" gradientTransform="translate(6777.8898 400.71) scale(3.4163 -3.4618)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e7e4"/>
+      <stop offset="1" stop-color="#f37d86"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="-1987.97" cy="191.21" fx="-1987.97" fy="191.21" r=".77" gradientTransform="translate(6905.3292 1403.3192) rotate(5.3542) scale(3.508 -3.8804) skewX(-1.2108)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#901a00"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-3" cx="-1988.35" cy="186.94" fx="-1988.35" fy="186.94" r=".77" xlink:href="#radial-gradient-2"/>
+    <radialGradient id="radial-gradient-4" cx="-1983.44" cy="186.41" fx="-1983.44" fy="186.41" r=".77" xlink:href="#radial-gradient-2"/>
+  </defs>
+  <path id="path2260" d="M45.12,23.41c0,12.37-9.87,22.4-22.06,22.4S1,35.78,1,23.41h0C1,11.03,10.87,1,23.06,1s22.06,10.03,22.06,22.4h0Z" fill="url(#radial-gradient)" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+  <path id="path2262" d="M1.37,23.14h6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2264" d="M38.83,23.14h6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2266" d="M23.11,1.55v6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2268" d="M23.11,39.26v6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2270" d="M19.47,14c0,2.21-1.79,4.01-4,4.01s-4-1.79-4-3.99h0c0-2.21,1.79-4.01,4-4.01s4,1.79,4,3.99h0Z" fill="url(#radial-gradient-2)"/>
+  <path id="path2270-2" data-name="path2270" d="M16.93,30.38c0,2.21-1.79,4.01-4,4.01s-4-1.79-4-3.99h0c0-2.21,1.79-4.01,4-4.01s4,1.79,4,3.99h0Z" fill="url(#radial-gradient-3)"/>
+  <path id="path2270-3" data-name="path2270" d="M33.93,34.04c0,2.21-1.79,4.01-4,4.01s-4-1.79-4-3.99h0c0-2.21,1.79-4.01,4-4.01s4,1.79,4,3.99h0Z" fill="url(#radial-gradient-4)"/>
+</svg>

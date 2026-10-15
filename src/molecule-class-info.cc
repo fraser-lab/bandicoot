@@ -1552,6 +1552,9 @@ molecule_class_info_t::initialize_coordinate_things_on_read_molecule_internal(st
    if (! is_undo_or_redo) {
       // std::cout << "DEBUG:: not an undo/redo!\n";
       new_coords_mol_in_display_control_widget(); // uses draw_it
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_molecules_changed();
+#endif
    }
 }
 
@@ -1787,6 +1790,9 @@ molecule_class_info_t::initialize_map_things_on_read_molecule(std::string molecu
 void
 molecule_class_info_t::update_mol_in_display_control_widget() const {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_display_changed(); // the name, here
+#endif
    graphics_info_t g;
 
    // we don't want to add a display control hbox if we are simply

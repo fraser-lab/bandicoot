@@ -139,6 +139,13 @@
 #include "cmtz-interface.hh"
 // #include "mtz-bits.h" stuff from here moved to cmtz-interface
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Go To Atom window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_goto_target_changed();
+// And its Display Manager: false if it is not in place.
+bool bandicoot_wx_display_manager_open();
+#endif
+
 
 // This is (already) in git-revision-count.cc
 //
@@ -5005,6 +5012,9 @@ int set_go_to_atom_chain_residue_atom_name(const char *t1, int iresno, const cha
       GtkWidget *window = graphics_info_t::go_to_atom_window;
       if (window)
 	 g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    }
    graphics_draw();
    return success;
@@ -5024,6 +5034,9 @@ int set_go_to_atom_chain_residue_atom_name_full(const char *chain_id,
       GtkWidget *window = graphics_info_t::go_to_atom_window;
       if (window)
 	 g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    }
    graphics_draw();
    return success;
@@ -5061,6 +5074,9 @@ int set_go_to_atom_chain_residue_atom_name_no_redraw(const char *t1, int iresno,
    GtkWidget *window = graphics_info_t::go_to_atom_window;
    if (window)
       g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    
    int success = 0;
    if (make_the_move_flag) { 
@@ -5760,8 +5776,14 @@ void save_display_control_widget_in_graphics(GtkWidget *widget) {
 }
 
 void 
-post_display_control_window() { 
+post_display_control_window() {
 
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_display_manager_open()) {
+      add_to_history(std::vector<std::string>(1, "post-display-control-window"));
+      return;
+   }
+#endif
    GtkWidget *widget = wrapped_create_display_control_window();
    gtk_widget_show(widget);
    std::vector<std::string> command_strings;

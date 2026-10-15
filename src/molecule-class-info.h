@@ -37,6 +37,14 @@
 
 #include "compat/coot-sysdep.h"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's windows that list molecules (wxUI/bridge/core-bridge.cc):
+// a molecule's displayed or active state or its name changed; a molecule
+// was added or closed.
+void bandicoot_wx_display_changed();
+void bandicoot_wx_molecules_changed();
+#endif
+
 namespace coot {
    // BANDICOOT v0.2 (Phase 3 / D3): forward declaration ONLY. The definition
    // lives in coot-utils/mmcif-document.hh, which includes gemmi; this header
@@ -1039,6 +1047,9 @@ public:        //                      public
 	 draw_it = state;
       }
       set_mol_triangles_is_displayed(state);
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_display_changed();
+#endif
    }
 
    void set_mol_is_active(int state) {
@@ -1046,10 +1057,16 @@ public:        //                      public
 	 pickable_atom_selection = state;
       else
 	 pickable_atom_selection = 0;
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_display_changed();
+#endif
    }
 
    void set_map_is_displayed(int state) {
       draw_it_for_map = state;
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_display_changed();
+#endif
    }
 
    void set_map_is_displayed_as_standard_lines(short int state) {

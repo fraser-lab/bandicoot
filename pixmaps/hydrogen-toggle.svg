@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg5309" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 11.89 11.89">
+  <defs>
+    <radialGradient id="radial-gradient" cx="-2000.22" cy="182.43" fx="-2000.22" fy="182.43" r="1.17" gradientTransform="translate(6508.6984 1276.1482) rotate(5.3542) scale(3.2888 -3.6186) skewX(-1.2043)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#444d60"/>
+    </radialGradient>
+  </defs>
+  <path id="path2270" d="M11.64,5.94c0,3.15-2.55,5.7-5.7,5.7S.25,9.09.25,5.95H.25C.25,2.8,2.8.25,5.95.25s5.7,2.55,5.7,5.69h0Z" fill="url(#radial-gradient)" isolation="isolate" opacity=".6" stroke="#231f20" stroke-miterlimit="10" stroke-width=".5"/>
+  <circle cx="5.95" cy="5.95" r="5.7" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M2.97,4.13v2.34h2.7v-2.34h.73v5.59h-.73v-2.62h-2.7v2.62h-.72v-5.59h.72Z"/>
+  <path d="M7.88,4.21h-1.23v-.9h1.23v-1.16h.89v1.16h1.23v.9h-1.23v1.16h-.89v-1.16Z"/>
+</svg>

@@ -9,15 +9,23 @@
 
 #include "wxUI/assets/button-base.hh"
 
+#include <wx/bmpbndl.h>
+
 namespace wxui {
 
 class BevelButton : public ButtonBase {
 public:
    BevelButton(wxWindow *parent, wxWindowID id, const wxString &label);
 
+   // An icon shown before the label, as on Coot's Accept and Reject.
+   void set_icon(const wxBitmapBundle &icon);
+
 protected:
    void draw(wxDC &dc, const wxRect &rect) override;
    wxSize DoGetBestSize() const override;
+
+private:
+   wxBitmapBundle icon;
 };
 
 } // namespace wxui

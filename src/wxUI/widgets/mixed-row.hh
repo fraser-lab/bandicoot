@@ -13,7 +13,6 @@
 #include <vector>
 
 class wxBoxSizer;
-class wxButton;
 class wxCheckBox;
 class wxChoice;
 class wxRadioButton;
@@ -21,6 +20,8 @@ class wxStaticText;
 class wxTextCtrl;
 
 namespace wxui {
+
+class BevelButton;
 
 class MixedRow : public wxPanel {
 public:
@@ -32,7 +33,7 @@ public:
    wxCheckBox    *add_check(const wxString &label, bool state = false);
    // starts a new radio group when first_in_group
    wxRadioButton *add_radio(const wxString &label, bool first_in_group = false);
-   wxButton      *add_button(const wxString &label);
+   BevelButton   *add_button(const wxString &label);  // Coot's grey push button
    wxChoice      *add_choice(const std::vector<wxString> &items, int selection = 0);
    void add_stretch();
 

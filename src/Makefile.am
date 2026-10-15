@@ -604,6 +604,16 @@ if UI_WX
 	wxUI/main/main-menu.cc       \
 	wxUI/main/top-toolbar.hh     \
 	wxUI/main/top-toolbar.cc     \
+	wxUI/main/file-actions.hh    \
+	wxUI/main/file-actions.cc    \
+	wxUI/main/go-to-atom.hh      \
+	wxUI/main/go-to-atom.cc      \
+	wxUI/main/display-manager.hh \
+	wxUI/main/display-manager.cc \
+	wxUI/dialogs/accept-reject-dialog.hh \
+	wxUI/dialogs/accept-reject-dialog.cc \
+	wxUI/dialogs/toolbar-customizer.hh \
+	wxUI/dialogs/toolbar-customizer.cc \
 	wxUI/main/sidebar.hh         \
 	wxUI/main/sidebar.cc         \
 	wxUI/main/mac-menu.hh        \

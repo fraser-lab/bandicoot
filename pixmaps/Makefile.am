@@ -83,7 +83,12 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   stock-menu-about.png stock-menu-add.png stock-menu-clear.png stock-menu-close.png stock-menu-copy.png \
   stock-menu-dialog-info.png stock-menu-execute.png stock-menu-find-and-replace.png stock-menu-index.png stock-menu-justify-center.png \
   stock-menu-justify-left.png stock-menu-open.png stock-menu-preferences.png stock-menu-quit.png stock-menu-refresh.png \
-  stock-menu-save.png stock-menu-select-color.png stock-menu-undo.png stock-menu-unindent.png
+  stock-menu-save.png stock-menu-select-color.png stock-menu-undo.png stock-menu-unindent.png \
+  stock-button-ok.png stock-button-cancel.png stock-button-previous.png stock-button-next.png stock-button-apply.png \
+  coords-open.svg mtz-open.svg map-open.svg \
+  refine-sphere-1.svg refine-sphere-plus-1.svg regularize-sphere-1.svg regularize-sphere-plus-1.svg \
+  refine-tandem-1.svg probe-clash-local.svg auto-fit-rotamer-backrub.svg hydrogen-toggle.svg \
+  hydrogen-toggle-on.svg probe-clash-on.svg auto-fit-rotamer-backrub-on.svg
 
 if CLIPPER_TOP8000
 dist_cootpixmap_DATA += \

@@ -32,6 +32,9 @@ inline wxColour shadow_of(const wxColour &c) {
 // the sidebar's hovered buttons are drawn with a bluer shadow than the rule gives
 inline wxColour toolbar_hover_shadow() { return wxColour(0x87, 0x87, 0xc9); }
 
+// lists and trees, a little lighter than the face so rows stand apart from it
+inline wxColour list_background()  { return wxColour(0xe8, 0xe8, 0xe8); }
+
 inline wxColour indicator_ring()   { return *wxBLACK; }
 inline wxColour indicator_fill()   { return *wxWHITE; }
 

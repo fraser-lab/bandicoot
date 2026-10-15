@@ -122,13 +122,14 @@ bool open_coordinates(wxWindow *parent, const std::vector<FileType> &types,
    r.title = "Select Coordinates File";
    r.types = types;
    r.directory = directory;
+   r.multiple = true;
    r.choices.push_back({ "Recentre?",
                          { "Recentre on Molecule", "Don't Recentre", "Recentre Molecule Here" },
                          int(initial) });
    std::vector<wxString> paths = open_files(parent, r);
    if (paths.empty()) return false;
    directory = r.directory;
-   out.path = paths.front();
+   out.paths = paths;
    out.recentre = Recentre(r.choices[0].value);
    return true;
 }

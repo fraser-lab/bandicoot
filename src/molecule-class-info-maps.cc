@@ -373,6 +373,9 @@ molecule_class_info_t::set_draw_solid_density_surface(bool state) {
 void
 molecule_class_info_t::update_map_in_display_control_widget() const {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_molecules_changed();
+#endif
    graphics_info_t g;
 
    std::string dmn = name_for_display_manager();

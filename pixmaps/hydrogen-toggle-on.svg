@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg5309" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 15.18 15.18">
+  <defs>
+    <radialGradient id="radial-gradient" cx="-1998.58" cy="184.07" fx="-1998.58" fy="184.07" r="1.17" gradientTransform="translate(6504.5178 1283.2203) rotate(5.3542) scale(3.2888 -3.6186) skewX(-1.2043)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#444d60"/>
+    </radialGradient>
+  </defs>
+  <rect width="15.18" height="15.18" fill="#e2e439" opacity=".25"/>
+  <path id="path2270" d="M13.29,7.58c0,3.15-2.55,5.7-5.7,5.7S1.89,10.73,1.89,7.6h0C1.89,4.45,4.44,1.89,7.59,1.89s5.7,2.55,5.7,5.69h0Z" fill="url(#radial-gradient)" isolation="isolate" opacity=".6" stroke="#231f20" stroke-miterlimit="10" stroke-width=".5"/>
+  <circle cx="7.59" cy="7.59" r="5.7" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M4.62,5.77v2.34h2.7v-2.34h.73v5.59h-.73v-2.62h-2.7v2.62h-.72v-5.59h.72Z"/>
+  <path d="M9.52,5.85h-1.23v-.9h1.23v-1.16h.89v1.16h1.23v.9h-1.23v1.16h-.89v-1.16Z"/>
+</svg>

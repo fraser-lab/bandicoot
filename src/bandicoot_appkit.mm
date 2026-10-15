@@ -662,7 +662,8 @@ static gboolean bandicoot_action_open_map(gpointer data) {
 // first_coords_imol() if go-to-atom hasn't been used yet (which is also
 // what the original Quicksave did, so behaviour for fresh sessions is
 // unchanged).
-static gboolean bandicoot_action_quicksave(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_quicksave(gpointer data) {
     int imol = go_to_atom_molecule_number();
     if (imol < 0 || !is_valid_model_molecule(imol)) {
         imol = first_coords_imol();
@@ -732,7 +733,8 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
 // BandicootToggleTarget below. Cleaner than keeping a parallel C
 // static, since the button is the user-visible source of truth.
 
-static gboolean bandicoot_action_backrub_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_backrub_apply(gpointer data) {
     // ROTAMERSEARCHLOWRES = 2 is "backrub"; ROTAMERSEARCHAUTOMATIC = 0
     // is Coot's default per-residue selection. See rotamer-search-modes.hh.
     int on = GPOINTER_TO_INT(data);
@@ -742,7 +744,8 @@ static gboolean bandicoot_action_backrub_apply(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-static gboolean bandicoot_action_hydrogen_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_hydrogen_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
     int n = graphics_n_molecules();
     for (int i = 0; i < n; ++i) {
@@ -780,7 +783,8 @@ static gboolean bandicoot_action_full_screen_apply(gpointer data) {
 //
 // All paths use Coot's C++ atom_overlaps_container_t — NOT the guile-
 // gtk-gated do_interactive_probe() (dead in this build).
-static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
     set_do_coot_probe_dots_during_refine(on);
     set_do_probe_dots_post_refine(on);
@@ -806,7 +810,8 @@ static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
 // the user then clicks an atom and Coot performs the conversion + exits
 // the mode automatically. Each press of the toolbar button re-arms the
 // mode for one more flip.
-static gboolean bandicoot_action_cis_trans(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_cis_trans(gpointer data) {
     do_cis_trans_conversion_setup(1);
     fprintf(stdout, "[bandicoot] Cis↔Trans: click an atom to flip\n");
     fflush(stdout);

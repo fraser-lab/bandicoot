@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg2250" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 46.12 46.81">
+  <defs>
+    <radialGradient id="radial-gradient" cx="-1973.78" cy="111.47" fx="-1973.78" fy="111.47" r="6.96" gradientTransform="translate(6777.8898 400.71) scale(3.4163 -3.4618)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e7e4"/>
+      <stop offset="1" stop-color="#7aff5c"/>
+    </radialGradient>
+    <linearGradient id="linear-gradient" x1="1029.11" y1="-1624.39" x2="1031.71" y2="-1624.39" gradientTransform="translate(-932.94 -644.01) rotate(90) scale(.64 .59)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e7e4"/>
+      <stop offset="1" stop-color="#381213"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="-433.32" y1="3169.1" x2="-430.73" y2="3169.1" gradientTransform="translate(298.6815 -1845.6448) scale(.64 .59)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e7e4"/>
+      <stop offset="1" stop-color="#381213"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-3" x1="-4851.48" y1="1559.04" x2="-4848.89" y2="1559.04" gradientTransform="translate(-901.9802 -3071.5979) rotate(-90) scale(.64 .59)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e7e4"/>
+      <stop offset="1" stop-color="#381213"/>
+    </linearGradient>
+    <radialGradient id="radial-gradient-2" cx="-1932" cy="304.33" fx="-1932" fy="304.33" r=".77" gradientTransform="translate(5233.3781 3862.7121) rotate(26.6707) scale(3.2888 -3.6379) skewX(-1.2108)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#901a00"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-3" cx="-1934.61" cy="301.43" fx="-1934.61" fy="301.43" r=".77" gradientTransform="translate(5233.3781 3862.7121) rotate(26.6707) scale(3.2888 -3.6379) skewX(-1.2108)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#901a00"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-4" cx="-1931.92" cy="299.21" fx="-1931.92" fy="299.21" r=".77" gradientTransform="translate(5233.3781 3862.7121) rotate(26.6707) scale(3.2888 -3.6379) skewX(-1.2108)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdc1"/>
+      <stop offset="1" stop-color="#901a00"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-5" cx="-1934.38" cy="296.42" fx="-1934.38" fy="296.42" r=".77" xlink:href="#radial-gradient-4"/>
+  </defs>
+  <path id="path2260" d="M45.12,23.41c0,12.37-9.87,22.4-22.06,22.4S1,35.78,1,23.41h0C1,11.03,10.87,1,23.06,1s22.06,10.03,22.06,22.4h0Z" fill="url(#radial-gradient)" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+  <path id="path2262" d="M1.37,23.14h6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2264" d="M38.83,23.14h6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2266" d="M23.11,1.55v6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <path id="path2268" d="M23.11,39.26v6.01" fill="none" stroke="#000" stroke-width="3.01"/>
+  <rect x="19.91" y="14.5" width="11.1" height="1.67" transform="translate(-4.02 11.52) rotate(-23.68)" fill="url(#linear-gradient)" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width=".25"/>
+  <rect x="21.19" y="18.57" width="1.67" height="11.1" transform="translate(-7.83 10.88) rotate(-23.68)" fill="url(#linear-gradient-2)" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width=".25"/>
+  <rect x="12.31" y="31.88" width="11.1" height="1.67" transform="translate(-11.64 9.93) rotate(-23.68)" fill="url(#linear-gradient-3)" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width=".25"/>
+  <path id="path2270" d="M35.19,13.96c-.75,1.93-2.92,2.89-4.86,2.14s-2.88-2.93-2.13-4.85h0c.75-1.93,2.92-2.89,4.86-2.14,1.94.75,2.88,2.93,2.13,4.85h0Z" fill="url(#radial-gradient-2)"/>
+  <path id="path2270-2" d="M22.96,19.64c-.75,1.93-2.92,2.89-4.86,2.14s-2.88-2.93-2.13-4.85h0c.75-1.93,2.92-2.89,4.86-2.14s2.88,2.93,2.13,4.85h0Z" fill="url(#radial-gradient-3)"/>
+  <path id="path2270-2-2" data-name="path2270-2" d="M27.38,30.9c-.75,1.93-2.92,2.89-4.86,2.14s-2.88-2.93-2.13-4.85h0c.75-1.93,2.92-2.89,4.86-2.14s2.88,2.93,2.13,4.85h0Z" fill="url(#radial-gradient-4)"/>
+  <path id="path2270-2-3" data-name="path2270-2" d="M15.77,36.41c-.75,1.93-2.92,2.89-4.86,2.14s-2.88-2.93-2.13-4.85h0c.75-1.93,2.92-2.89,4.86-2.14s2.88,2.93,2.13,4.85h0Z" fill="url(#radial-gradient-5)"/>
+</svg>

@@ -53,7 +53,7 @@ wxString wildcard_for(const std::vector<FileType> &types, bool add_all_files);
 enum class Recentre { OnMolecule = 0, DontRecentre = 1, MoleculeHere = 2 };
 
 struct CoordinatesChoice {
-   wxString path;
+   std::vector<wxString> paths;  // one or more, as Coot allowed
    Recentre recentre = Recentre::OnMolecule;
 };
 bool open_coordinates(wxWindow *parent, const std::vector<FileType> &types,

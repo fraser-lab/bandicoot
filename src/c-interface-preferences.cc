@@ -191,6 +191,29 @@ extern "C" int bandicoot_load_sidebar_icon_size(void) {
    }
    return 12;   // default
 }
+// Persisted wx top toolbar, in ~/.coot-preferences/bandicoot-top-toolbar: the
+// display style (1 icons, 2 icons and text, 3 text) on the first line, then one
+// item id per line, in order, for the part of the toolbar the user arranges.
+// False when there is no saved toolbar, so the caller uses its defaults.
+bool bandicoot_load_top_toolbar(int &style, std::vector<std::string> &ids) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return false;
+   std::ifstream f((dir + "/bandicoot-top-toolbar").c_str());
+   if (! f || ! (f >> style) || style < 1 || style > 3) return false;
+   ids.clear();
+   std::string id;
+   while (f >> id) ids.push_back(id);
+   return true;
+}
+void bandicoot_save_top_toolbar(int style, const std::vector<std::string> &ids) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-top-toolbar").c_str());
+   if (! f) return;
+   f << style << std::endl;
+   for (const std::string &id : ids) f << id << std::endl;
+}
 // Persisted "Dock Sequence View Dialog?" preference, in
 // ~/.coot-preferences/bandicoot-sequence-view-docked ("1" docked / "0" floating).
 // Same self-contained store as the sidebar dock above; read by nsv() when the

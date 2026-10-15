@@ -2,6 +2,7 @@
 
 #include "wxUI/main/mac-menu.hh"
 
+#include <wx/frame.h>
 #include <wx/menu.h>
 
 #import <AppKit/AppKit.h>
@@ -40,6 +41,30 @@ void mac_strip_stock_edit_items(wxMenu *edit) {
                  pending = true;
                  dispatch_async(dispatch_get_main_queue(), strip);
               }];
+}
+
+void mac_on_toolbar_right_click(wxFrame *frame, const std::function<void()> &show_menu) {
+
+   NSWindow *window = (NSWindow *) frame->GetWXWindow();
+   if (! window) return;
+   std::function<void()> show = show_menu;
+   [NSEvent addLocalMonitorForEventsMatchingMask:(NSEventMaskRightMouseDown | NSEventMaskLeftMouseDown)
+                                         handler:^NSEvent *(NSEvent *e) {
+      if (e.window != window) return e;
+      bool context_click = e.type == NSEventTypeRightMouseDown ||
+                           (e.modifierFlags & NSEventModifierFlagControl);
+      if (! context_click) return e;
+      // the toolbar shares the area above the content with the title bar
+      if (e.locationInWindow.y < NSMaxY(window.contentLayoutRect)) return e;
+      dispatch_async(dispatch_get_main_queue(), ^{ show(); });
+      return nil;
+   }];
+}
+
+void mac_title_above_toolbar(wxFrame *frame) {
+   NSWindow *window = (NSWindow *) frame->GetWXWindow();
+   if (window && [window respondsToSelector:@selector(setToolbarStyle:)])
+      window.toolbarStyle = NSWindowToolbarStyleExpanded;
 }
 
 } // namespace wxui

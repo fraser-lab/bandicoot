@@ -134,6 +134,12 @@ void open_coords_dialog() {
 
 #include "c-interface-widgets.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's windows that list molecules (wxUI/bridge/core-bridge.cc):
+// a molecule was added or closed.
+void bandicoot_wx_molecules_changed();
+#endif
+
 void
 open_cif_dictionary_file_selector_dialog() {
 
@@ -4128,6 +4134,9 @@ void close_molecule(int imol) {
 
    g.clear_up_moving_atoms_maybe(imol);
    g.update_scroll_wheel_map_on_molecule_close();
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_molecules_changed();
+#endif
 
    graphics_draw();
    std::string cmd = "close-molecule";
@@ -5008,8 +5017,20 @@ GtkWidget *wrapped_create_goto_atom_window() {
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Go To Atom window (wxUI/bridge/core-bridge.cc). False if it
+// is not in place.
+bool bandicoot_wx_goto_open();
+#endif
+
 void post_go_to_atom_window() {
 
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_goto_open()) {
+      add_to_history(std::vector<std::string>(1, "post-go-to-atom-window"));
+      return;
+   }
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       GtkWidget *widget = wrapped_create_goto_atom_window();
       gtk_widget_show(widget);

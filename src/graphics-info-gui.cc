@@ -89,6 +89,11 @@
 #include "guile-fixups.h"
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc). False
+// until the window is in place.
+bool bandicoot_wx_ar_present(const std::string &fit_type, const coot::refinement_results_t &rr);
+#endif
 
 #ifdef __APPLE__
 // Bandicoot native Accept/Reject bar bridges. Declared at namespace scope to
@@ -167,6 +172,12 @@ void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr) 
 // if fit_type is "Torsion General" show the Reverse button.
 //
 void do_accept_reject_dialog(std::string fit_type, const coot::refinement_results_t &rr) {
+
+#ifdef BANDICOOT_UI_WX
+   // the stock dialog cannot take input under wx's event loop
+   if (bandicoot_wx_ar_present(fit_type, rr))
+      return;
+#endif
 
 #ifdef __APPLE__
    // While the native A/R bar is active it replaces Coot's stock dialog: refresh
@@ -945,6 +956,10 @@ graphics_info_t::set_file_for_save_filechooser(GtkWidget *fileselection) const {
 // static
 void
 graphics_info_t::activate_scroll_radio_button_in_display_manager(int imol) {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_display_changed();
+#endif
 
 //    graphics_info_t g;
 //    if (g.display_control_window()) {

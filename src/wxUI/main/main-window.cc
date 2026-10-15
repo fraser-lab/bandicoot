@@ -27,6 +27,10 @@
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/main/top-toolbar.hh"
+#include "wxUI/main/file-actions.hh"
+#include "wxUI/dialogs/accept-reject-dialog.hh"
+#include "wxUI/main/go-to-atom.hh"
+#include "wxUI/main/display-manager.hh"
 #include "wxUI/main/sidebar.hh"
 #include "wxUI/assets/icons.hh"
 
@@ -204,6 +208,9 @@ public:
       rendering = false;
    }
 
+   // Sees each key press first; true if it took the key.
+   std::function<bool(int key_code)> key_filter;
+
    void redraw() {
       if (gl_ready)
          render();
@@ -325,6 +332,7 @@ private:
       if (is_command_combination(e)) { e.Skip(); return; }
 
       int code = e.GetKeyCode();
+      if (key_filter && key_filter(code)) return;
       unsigned int keysym = special_keysym(code);
       if (keysym) { key_press(e, keysym); return; }
 
@@ -405,17 +413,34 @@ public:
 
       wxui::MainMenuHooks hooks;
       hooks.has_capability = [](const std::string &c) { return bandicoot_core_has_capability(c); };
-      hooks.on_select = [](const std::string &action, const std::string &path) {
+      hooks.on_select = [this](const std::string &action, const std::string &path) {
+         // after the menu has closed
+         if (action == "customize_toolbar") { CallAfter([]() { wxui::customize_top_toolbar(); }); return; }
          report_unconnected(path, action);
       };
       SetMenuBar(wxui::build_main_menu(hooks));
-      wxui::build_top_toolbar(this, [](const std::string &action, const std::string &label,
-                                       bool state) {
-         report_unconnected("Toolbar > " + label, action, state);
+      wxui::build_top_toolbar(this, [this](const std::string &action, const std::string &label,
+                                           bool state) {
+         if (wxui::run_file_action(this, action)) return;
+         if (action == "on_go_to_atom_toolbutton_clicked") { wxui::show_go_to_atom(); return; }
+         if (action == "on_display_manager_toolbutton_clicked") { wxui::show_display_manager(); return; }
+         // the window is wx's, so full screen is too (the core's acts on the GTK window)
+         if (action == "bandicoot_action_full_screen_apply") {
+            ShowFullScreen(state, wxFULLSCREEN_NOBORDER | wxFULLSCREEN_NOCAPTION);
+            return;
+         }
+         if (! bandicoot_core_run_action(action, state))
+            report_unconnected("Toolbar > " + label, action, state);
       });
       CreateStatusBar(1);
       Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
       Bind(wxEVT_CLOSE_WINDOW, &MainFrame::on_close, this);
+      // leaving full screen another way (Escape, the window button) lets the
+      // toolbar's Full Screen follow
+      Bind(wxEVT_FULLSCREEN, [this](wxFullScreenEvent &e) {
+         wxui::set_top_toolbar_toggle("bandicoot_action_full_screen_apply", e.IsFullScreen());
+         e.Skip();
+      });
 
       left_slot   = make_slot();
       right_slot  = make_slot();
@@ -446,6 +471,9 @@ public:
       }
       surface = new GLSurface(splitter, attrs);
       splitter->Initialize(surface);
+      setup_accept_reject();
+      wxui::install_go_to_atom(this);
+      wxui::install_display_manager(this);
       transient_area->Hide();
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
@@ -502,6 +530,58 @@ private:
    wxFrame *floater        = nullptr;  // the undocked sidebar's window
    bool docked = true;
    int side = 0;   // where it docks, in Coot's numbering: 0 right, 1 left, 3 bottom
+   wxui::AcceptRejectDialog *accept_reject = nullptr;
+
+   static std::vector<wxui::AcceptRejectDialog::Light>
+   ar_lights(const bandicoot_ar_results &r) {
+      std::vector<wxui::AcceptRejectDialog::Light> v;
+      for (const bandicoot_ar_light &l : r.lights)
+         v.push_back({ wxString::FromUTF8(l.name), wxString::FromUTF8(l.label),
+                       wxColour(l.red, l.green, l.blue) });
+      return v;
+   }
+
+   // The free-floating Accept/Reject window, shown whenever the core has a
+   // fit waiting. Return and Escape on the surface answer it while it is up.
+   void setup_accept_reject() {
+      wxui::AcceptRejectDialog::Hooks h;
+      h.on_action = [](const std::string &action, bool state) {
+         bandicoot_core_run_action(action, state);
+      };
+      h.on_hidden = [](const wxPoint &p) { bandicoot_core_save_ar_position(p.x, p.y); };
+      accept_reject = new wxui::AcceptRejectDialog(this, h);
+
+      bandicoot_ar_view v;
+      v.present = [this](const std::string &fit_type, const bandicoot_ar_results &r,
+                         bool show_reverse, bool auto_clear) {
+         accept_reject->set_status(wxString::FromUTF8(r.status));
+         accept_reject->set_lights(ar_lights(r));
+         if (! accept_reject->IsShown()) {
+            int x, y;
+            if (bandicoot_core_ar_position(x, y))
+               accept_reject->Move(x, y);
+            else
+               accept_reject->CentreOnParent();
+         }
+         accept_reject->present(wxString::FromUTF8(fit_type), show_reverse, auto_clear);
+      };
+      v.update = [this](const bandicoot_ar_results &r) {
+         if (! accept_reject->pending()) return;
+         accept_reject->set_status(wxString::FromUTF8(r.status));
+         accept_reject->set_lights(ar_lights(r));
+      };
+      v.warnings = [this](const std::string &text) {
+         accept_reject->set_warnings(wxString::FromUTF8(text));
+      };
+      bandicoot_core_set_ar_view(v);
+
+      surface->key_filter = [this](int code) {
+         if (! accept_reject->pending()) return false;
+         if (code == WXK_RETURN || code == WXK_NUMPAD_ENTER) { accept_reject->accept(); return true; }
+         if (code == WXK_ESCAPE) { accept_reject->reject(); return true; }
+         return false;
+      };
+   }
 
    wxPanel *slot_for_side() const {
       return side == 1 ? left_slot : side == 3 ? bottom_slot : right_slot;

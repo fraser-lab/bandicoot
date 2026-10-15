@@ -2,9 +2,9 @@
 
 #include "wxUI/widgets/mixed-row.hh"
 #include "wxUI/assets/bevel.hh"
+#include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/palette.hh"
 
-#include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
 #include <wx/dcclient.h>
@@ -66,8 +66,8 @@ wxRadioButton *MixedRow::add_radio(const wxString &label, bool first_in_group) {
    return w;
 }
 
-wxButton *MixedRow::add_button(const wxString &label) {
-   wxButton *w = new wxButton(this, wxID_ANY, label);
+BevelButton *MixedRow::add_button(const wxString &label) {
+   BevelButton *w = new BevelButton(this, wxID_ANY, label);
    add(w);
    return w;
 }
