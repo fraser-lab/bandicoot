@@ -226,8 +226,18 @@ struct bandicoot_ui_view {
    // the core let go of a sidebar toggle (by Coot's widget name), as it
    // un-presses the GTK one when its picks are done or cancelled
    std::function<void(const std::string &widget)> release_sidebar_toggle;
+   // run callback every interval_ms until it returns false (scripts'
+   // timeouts, which in the GTK build ran on GLib's main loop)
+   std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
 };
 void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
+
+// Run Refmac: the models offered (imol, label), the MTZ file used last
+// (empty if none), and the run, which goes on in the background and reports
+// when it is done.
+std::vector<std::pair<int, std::string>> bandicoot_core_refmac_models();
+std::string bandicoot_core_refmac_mtz();
+void bandicoot_core_run_refmac(int imol, const std::string &mtz_file_name);
 
 // Refinement and regularization parameters (the R/RC window).
 struct bandicoot_refine_params {
@@ -299,6 +309,65 @@ void bandicoot_core_chi_finish(bool accept);
 void bandicoot_core_backbone_peptide(double degrees);
 void bandicoot_core_backbone_carbonyl(double degrees);
 void bandicoot_core_backbone_finish(bool accept);
+
+// The choosers the core opens after a pick or a sidebar click: residue
+// type (Simple Mutate, with a Stub option; Mutate & Auto Fit), nucleic-acid
+// base, pointer atom type, Add Alternate Conformation.
+struct bandicoot_chooser_view {
+   std::function<void(bool show_stub)> residue_type;
+   std::function<void()> base;
+   // models (imol, label) and the one to add to
+   std::function<void(const std::vector<std::pair<int, std::string>> &models,
+                      int imol)> pointer_atom_type;
+   // split_type: 0 at the C-alpha, 1 the whole residue, 2 a residue range
+   std::function<void(int split_type)> add_alt_conf;
+   std::function<void()> add_alt_conf_done;  // the pick is made
+};
+void bandicoot_core_set_chooser_view(const bandicoot_chooser_view &view);
+
+// Mutate the picked residue to res_type ("ALA", ...), or by its one-letter
+// code (false, mutating nothing, if it is not a standard amino acid).
+void bandicoot_core_mutate(const std::string &res_type, bool stub);
+bool bandicoot_core_mutate_by_letter(char code, bool stub);
+// Mutate the picked nucleotide to base "A", "C", "G", "T" or "U"; the base
+// chooser closing (any way) ends its pick, as Coot's did.
+void bandicoot_core_mutate_base(const std::string &base);
+void bandicoot_core_base_chooser_closed();
+// Put an atom of this type ("Water", "Ca", "SO4", or typed in) at the
+// screen centre, in molecule imol.
+void bandicoot_core_place_atom(int imol, const std::string &type);
+// Add Alternate Conformation: the split type; cancelled.
+void bandicoot_core_set_alt_conf_split_type(int split_type);
+void bandicoot_core_cancel_add_alt_conf();
+
+// Delete item and Find Waters, and the list of unmodelled blobs Find
+// Waters can leave.
+struct bandicoot_delete_view {
+   // open with this kind of item chosen (see bandicoot_core_delete_kind)
+   std::function<void(int kind)> open;
+   std::function<bool()> is_open;
+   std::function<bool()> keep_active;
+   // the core closes it (after a pick); cleanup: also end the delete pick
+   std::function<void(bool cleanup)> close;
+   // centre-able blobs: x, y, z each
+   std::function<void(const std::vector<std::vector<float>> &blobs)> blobs;
+};
+void bandicoot_core_set_delete_view(const bandicoot_delete_view &view);
+// Delete item: opening arms the pick and says which kind to show first;
+// kind 0 residue, 1 water, 2 atom, 3 side chain, 4 side-chain zone, 5 chain,
+// 6 hydrogens in residue, 7 zone. Closing by hand ends the pick.
+int  bandicoot_core_delete_begin();
+void bandicoot_core_delete_kind(int kind);
+void bandicoot_core_delete_closed();
+// Find Waters: the maps and models offered (imol, label), the values last
+// used, and the search itself.
+struct bandicoot_find_waters_values { float rmsd, min_distance, max_distance; };
+std::vector<std::pair<int, std::string>> bandicoot_core_find_waters_maps();
+std::vector<std::pair<int, std::string>> bandicoot_core_find_waters_models();
+bandicoot_find_waters_values bandicoot_core_find_waters_values();
+void bandicoot_core_find_waters(int imol_map, int imol_model, bool new_molecule,
+                                const bandicoot_find_waters_values &values);
+void bandicoot_core_centre_on(float x, float y, float z);
 
 // Fixed atoms: 0 stop picking, 1 pick atoms to fix, 2 pick atoms to unfix.
 void bandicoot_core_fixed_atom_pick(int mode);

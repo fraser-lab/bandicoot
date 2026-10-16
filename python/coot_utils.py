@@ -957,11 +957,13 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
                 process = subprocess.Popen(cmd_args, stdin=stdin_inp,
                                            stdout=subprocess.PIPE,
                                            stderr=stderr_arg,
-                                           env=local_env)
+                                           env=local_env,
+                                           universal_newlines=True)
             else:
                 process = subprocess.Popen(cmd_args, stdin=stdin_inp,
                                            stdout=log, stderr=stderr_arg,
-                                           env=local_env)
+                                           env=local_env,
+                                           universal_newlines=True)
 
             if pipe_data:
                 for data in data_list:
@@ -969,7 +971,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
                 process.stdin.close()
             else:
                 # file?
-                if isinstance(stdin_inp, file):
+                if hasattr(stdin_inp, 'close'):
                     stdin_inp.close()
 
             if (screen_flag):
@@ -4288,10 +4290,11 @@ def run_concurrently(cmd, args=[], data_list=None, logfile=None, screen_flag=Fal
                 log = open(logfile, 'w')
             try:
                 process = subprocess.Popen(cmd_args, stdin=subprocess.PIPE,
-                                           stdout=log)
+                                           stdout=log, universal_newlines=True)
                 if (data_list):
                     for data in data_list:
                         process.stdin.write(data + "\n")
+                process.stdin.close()
 
                 pid = process.pid            
 

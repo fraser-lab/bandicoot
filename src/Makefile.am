@@ -614,6 +614,10 @@ if UI_WX
 	wxUI/main/refine-dialogs.cc  \
 	wxUI/main/model-dialogs.hh   \
 	wxUI/main/model-dialogs.cc   \
+	wxUI/main/choosers.hh        \
+	wxUI/main/choosers.cc        \
+	wxUI/main/delete-waters.hh   \
+	wxUI/main/delete-waters.cc   \
 	wxUI/dialogs/accept-reject-dialog.hh \
 	wxUI/dialogs/accept-reject-dialog.cc \
 	wxUI/dialogs/toolbar-customizer.hh \

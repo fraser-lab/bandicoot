@@ -51,6 +51,12 @@
 #ifdef BANDICOOT_UI_WX
 // The wx build's Fixed Atoms window (wxUI/bridge/core-bridge.cc).
 void bandicoot_wx_release_fixed_atom_toggles();
+// And its residue-type and base choosers (false if wx has not taken them
+// on), and the end of an Add Alt Conf pick.
+bool bandicoot_wx_residue_chooser(bool show_stub);
+bool bandicoot_wx_base_chooser();
+void bandicoot_wx_add_alt_conf_done();
+bool bandicoot_wx_delete_open();
 #endif
 
 void
@@ -836,7 +842,12 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
    if (state & GDK_CONTROL_MASK)
       destroy_delete_dialog_flag_by_ctrl_press = 0;
    
-   if (g.delete_item_widget) { 
+#ifdef BANDICOOT_UI_WX
+   bool delete_window_up = g.delete_item_widget || bandicoot_wx_delete_open();
+#else
+   bool delete_window_up = g.delete_item_widget;
+#endif
+   if (delete_window_up) { 
       // atom
       if (g.delete_item_atom) {
 	 pick_info naii = atom_pick(event);
@@ -1468,17 +1479,29 @@ graphics_info_t::check_if_in_mutate_define(GdkEventButton *event) {
                         is_nuc = coot::util::is_nucleotide(r);
 	 
                      if (is_nuc) {
+#ifdef BANDICOOT_UI_WX
+                        if (! bandicoot_wx_base_chooser()) {
+#else
+                        {
+#endif
                         GtkWidget *w = create_nucleic_acid_base_chooser_dialog();
 #ifdef __APPLE__
                         bandicoot_register_persistent_dialog(w, "nucleic-acid-base-chooser");
 #endif
                         gtk_widget_show(w);
+                        }
                      } else {
+#ifdef BANDICOOT_UI_WX
+                        if (! bandicoot_wx_residue_chooser(true)) {
+#else
+                        {
+#endif
                         GtkWidget *widget = wrapped_create_residue_type_chooser_window(1);
 #ifdef __APPLE__
                         bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
 #endif
                         gtk_widget_show(widget);
+                        }
                      }
                      g.in_mutate_define = 0;
                      g.residue_type_chooser_auto_fit_flag = 0;
@@ -1510,11 +1533,17 @@ graphics_info_t::check_if_in_mutate_auto_fit_define(GdkEventButton *event) {
       if (naii.success == GL_TRUE) {
          g.mutate_auto_fit_residue_imol = naii.imol;
          g.mutate_auto_fit_residue_atom_index = naii.atom_index;
+#ifdef BANDICOOT_UI_WX
+         if (! bandicoot_wx_residue_chooser(false)) {
+#else
+         {
+#endif
          GtkWidget *widget = wrapped_create_residue_type_chooser_window(0);
 #ifdef __APPLE__
          bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
 #endif
          gtk_widget_show(widget);
+         }
          g.in_mutate_auto_fit_define = 0;
          g.residue_type_chooser_auto_fit_flag = 1;
          pick_pending_flag = 0;
@@ -1602,6 +1631,9 @@ graphics_info_t::check_if_in_add_alt_conf_define(GdkEventButton *event) {
 
 	    split_residue(imol, naii.atom_index);
 	    in_add_alt_conf_define = 0;
+#ifdef BANDICOOT_UI_WX
+	    bandicoot_wx_add_alt_conf_done();
+#endif
 	    if (add_alt_conf_dialog)
 	       gtk_widget_destroy(add_alt_conf_dialog);
 	    pick_pending_flag = 0;
@@ -1628,6 +1660,9 @@ graphics_info_t::check_if_in_add_alt_conf_define(GdkEventButton *event) {
 	       in_add_alt_conf_define = 0;
 	       pick_pending_flag = 0;
 	       normal_cursor();
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_wx_add_alt_conf_done();
+#endif
 	       if (add_alt_conf_dialog)
 		  gtk_widget_destroy(add_alt_conf_dialog);
 	    }

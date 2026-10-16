@@ -79,6 +79,13 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 
 ## P3 — cosmetic / minor
 
+### Simple Mutate on a nucleotide does nothing for the molecule's first atom
+`do_base_mutation()` (`src/c-interface-build-side-chain.cc`) accepts the picked atom only
+if its index is `> 0`, so when the atom clicked is the first atom of the molecule the
+base chooser opens but choosing a base changes nothing, silently. Inherited from Coot 0.9.
+
+- **Workaround:** click any other atom of the nucleotide.
+
 ### Generated restraints depend on the quality of the input geometry
 elbow's target distances partly track the input coordinates, so restraints derived from
 an unrefined ligand can carry targets a ring cannot satisfy, and real-space refinement

@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <string>
@@ -34,6 +35,8 @@
 #include "wxUI/dialogs/message.hh"
 #include "wxUI/main/refine-dialogs.hh"
 #include "wxUI/main/model-dialogs.hh"
+#include "wxUI/main/choosers.hh"
+#include "wxUI/main/delete-waters.hh"
 #include "wxUI/main/sidebar.hh"
 #include "wxUI/assets/icons.hh"
 
@@ -47,6 +50,28 @@ class BandicootApp : public wxApp {
 public:
    // The command line belongs to Bandicoot, not wx; leave it unparsed.
    bool OnInit() override { return true; }
+};
+
+// -------------------------------------------------------------------------
+// a timeout the core asks for: repeats until its callback returns false
+// -------------------------------------------------------------------------
+
+class CallbackTimer : public wxTimer {
+public:
+   explicit CallbackTimer(std::function<bool()> f) : callback(std::move(f)) {}
+   void Notify() override {
+      if (running) return;  // the callback may run the event loop itself
+      running = true;
+      bool more = callback();
+      running = false;
+      if (! more) {
+         Stop();
+         wxTheApp->CallAfter([this]() { delete this; });
+      }
+   }
+private:
+   std::function<bool()> callback;
+   bool running = false;
 };
 
 // -------------------------------------------------------------------------
@@ -479,6 +504,8 @@ public:
       wxui::install_go_to_atom(this);
       wxui::install_display_manager(this);
       wxui::install_model_dialogs(this);
+      wxui::install_choosers(this);
+      wxui::install_delete_waters(this);
       transient_area->Hide();
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
@@ -589,7 +616,8 @@ private:
    }
 
    // What the core asks of the window as a whole: its info dialogs, the
-   // refinement map, and letting go of sidebar and fixed-atom toggles.
+   // refinement map, letting go of sidebar and fixed-atom toggles, and
+   // timeouts.
    void setup_ui_view() {
       bandicoot_ui_view v;
       v.info = [this](const std::string &text) { wxui::info(this, wxString::FromUTF8(text)); };
@@ -597,6 +625,10 @@ private:
       v.release_fixed_atom_toggles = []() { wxui::release_fixed_atom_toggles(); };
       v.release_sidebar_toggle = [this](const std::string &widget) {
          if (sidebar) sidebar->release(widget);
+      };
+      v.timeout_add = [](int interval_ms, std::function<bool()> callback) {
+         CallbackTimer *t = new CallbackTimer(std::move(callback));
+         t->Start(std::max(interval_ms, 1));
       };
       bandicoot_core_set_ui_view(v);
    }
@@ -611,6 +643,8 @@ private:
          // the sidebar's windows that are wx's own
          if (action == "on_model_toolbar_refine_control_button_clicked") { wxui::show_refine_params(this); return; }
          if (action == "on_model_toolbar_fixed_atoms_button_clicked") { wxui::show_fixed_atoms(this); return; }
+         if (action == "on_model_toolbar_find_water_button_clicked") { wxui::show_find_waters(this); return; }
+         if (action == "on_model_toolbar_refmac_button_clicked") { wxui::run_refmac(this); return; }
          if (action == "rot_trans_by") {
             int which = label == "By Chain..." ? 1 : label == "By Molecule..." ? 2 : 0;
             bandicoot_core_rot_trans_by(which);

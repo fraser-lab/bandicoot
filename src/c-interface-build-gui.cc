@@ -117,8 +117,28 @@
 #include "ligand/richardson-rotamer.hh"
 #endif 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Delete item window (wxUI/bridge/core-bridge.cc): whether it
+// is up, whether Keep Delete Active is on, closing it, opening it.
+bool bandicoot_wx_delete_open();
+bool bandicoot_wx_delete_keep_active();
+void bandicoot_wx_delete_close();
+bool bandicoot_wx_delete_present();
+void bandicoot_wx_delete_close_quietly();
+#endif
+
 void do_regularize_kill_delete_dialog() {
    graphics_info_t g;
+#ifdef BANDICOOT_UI_WX
+   // closed without clearing the picks: the refine or regularize pick that
+   // asked for this is already armed
+   if (bandicoot_wx_delete_open()) {
+      bandicoot_wx_delete_close_quietly();
+      g.delete_item_atom = 0;
+      g.delete_item_residue = 0;
+      g.delete_item_residue_hydrogens = 0;
+   }
+#endif
    if (g.delete_item_widget) { 
       gtk_widget_destroy(g.delete_item_widget);
       g.delete_item_widget = NULL;
@@ -152,6 +172,19 @@ void update_go_to_atom_residue_list(int imol) {
 
 /* utility function, moving widget work out of c-interface-build.cc */
 void delete_object_handle_delete_dialog(short int do_delete_dialog) {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_open()) {
+      if (do_delete_dialog) {  // not held open by Ctrl
+         if (bandicoot_wx_delete_keep_active()) {
+            pick_cursor_maybe();
+         } else {
+            bandicoot_wx_delete_close();
+            graphics_draw();
+         }
+      }
+      return;
+   }
+#endif
    if (graphics_info_t::delete_item_widget != NULL) {
       if (do_delete_dialog) { // via ctrl
 
@@ -182,6 +215,10 @@ void delete_object_handle_delete_dialog(short int do_delete_dialog) {
 
 void
 post_delete_item_dialog() {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_present())
+      return;
+#endif
 
    GtkWidget *w = wrapped_create_delete_item_dialog();
    gtk_widget_show(w);
@@ -347,7 +384,19 @@ float estimate_map_weight(int imol_map) {
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Pointer atom type and Add Alternate Conformation windows
+// (wxUI/bridge/core-bridge.cc). False if wx has not taken them on.
+bool bandicoot_wx_pointer_atom_type();
+bool bandicoot_wx_add_alt_conf(int split_type);
+#endif
+
 void place_atom_at_pointer_by_window() { 
+
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_pointer_atom_type())
+      return;
+#endif
 
    // put up a widget which has a OK callback button which does a 
    // g.place_typed_atom_at_pointer();
@@ -595,6 +644,15 @@ void setup_alt_conf_with_dialog(GtkWidget *dialog) {
 
 void altconf() { 
 
+#ifdef BANDICOOT_UI_WX
+   // the window is wx's; the pick is armed as setup_alt_conf_with_dialog() does
+   if (bandicoot_wx_add_alt_conf(graphics_info_t::alt_conf_split_type_number())) {
+      graphics_info_t::in_add_alt_conf_define = 1;
+      graphics_info_t::pick_cursor_maybe();
+      graphics_info_t::pick_pending_flag = 1;
+      return;
+   }
+#endif
    GtkWidget *widget = create_add_alt_conf_dialog();
    setup_alt_conf_with_dialog(widget);
    gtk_widget_show(widget);

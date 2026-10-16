@@ -13,6 +13,7 @@
 #include "Python.h"  // before system includes to stop "POSIX_C_SOURCE" redefined problems
 #endif
 
+#include <cctype>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -32,6 +33,7 @@
 #include "c-interface-ligands-swig.hh"
 #include "coot-utils/coot-package-paths.hh"
 #include "ligand/richardson-rotamer.hh"
+#include "coot-utils/coot-coord-utils.hh"
 
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/surface.hh"
@@ -411,6 +413,13 @@ bool bandicoot_wx_select_map() {
    return true;
 }
 
+int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback) {
+   static int last_id = 0;
+   if (! ui_view.timeout_add) return 0;
+   ui_view.timeout_add(interval_ms, callback);
+   return ++last_id;
+}
+
 void bandicoot_wx_release_fixed_atom_toggles() {
    if (ui_view.release_fixed_atom_toggles) ui_view.release_fixed_atom_toggles();
 }
@@ -729,6 +738,214 @@ void bandicoot_core_backbone_finish(bool accept) {
    if (accept) accept_regularizement();
    destroy_edit_backbone_rama_plot();
    clear_up_moving_atoms();
+}
+
+// ---- choosers
+
+static bandicoot_chooser_view chooser_view;
+
+void bandicoot_core_set_chooser_view(const bandicoot_chooser_view &view) {
+   chooser_view = view;
+}
+
+bool bandicoot_wx_residue_chooser(bool show_stub) {
+   if (! chooser_view.residue_type) return false;
+   chooser_view.residue_type(show_stub);
+   return true;
+}
+
+bool bandicoot_wx_base_chooser() {
+   if (! chooser_view.base) return false;
+   chooser_view.base();
+   return true;
+}
+
+bool bandicoot_wx_pointer_atom_type() {
+   if (! chooser_view.pointer_atom_type) return false;
+   // the molecule last chosen, else the first model, as Coot's menu shows
+   int imol = graphics_info_t::user_pointer_atom_molecule;
+   if (! is_valid_model_molecule(imol)) imol = first_coords_imol();
+   chooser_view.pointer_atom_type(bandicoot_core_goto_molecules(), imol);
+   return true;
+}
+
+bool bandicoot_wx_add_alt_conf(int split_type) {
+   if (! chooser_view.add_alt_conf) return false;
+   chooser_view.add_alt_conf(split_type);
+   return true;
+}
+
+void bandicoot_wx_add_alt_conf_done() {
+   if (chooser_view.add_alt_conf_done) chooser_view.add_alt_conf_done();
+}
+
+void bandicoot_core_mutate(const std::string &res_type, bool stub) {
+   do_mutation(res_type.c_str(), stub ? 1 : 0);
+}
+
+bool bandicoot_core_mutate_by_letter(char code, bool stub) {
+   std::string res_type = coot::util::single_letter_to_3_letter_code(toupper(code));
+   if (! coot::util::is_standard_amino_acid_name(res_type)) return false;
+   bandicoot_core_mutate(res_type, stub);
+   return true;
+}
+
+void bandicoot_core_mutate_base(const std::string &base) {
+   do_base_mutation(base.c_str());
+}
+
+void bandicoot_core_base_chooser_closed() {
+   clear_pending_picks();
+}
+
+void bandicoot_core_place_atom(int imol, const std::string &type) {
+   // the molecule shown is the one added to
+   graphics_info_t::user_pointer_atom_molecule = imol;
+   place_typed_atom_at_pointer(type.c_str());
+}
+
+void bandicoot_core_set_alt_conf_split_type(int split_type) {
+   set_add_alt_conf_split_type_number(split_type);
+}
+
+void bandicoot_core_cancel_add_alt_conf() {
+   unset_add_alt_conf_define();
+   graphics_info_t::pick_pending_flag = 0;
+}
+
+// ---- Delete item, Find Waters
+
+static bandicoot_delete_view delete_view;
+
+void bandicoot_core_set_delete_view(const bandicoot_delete_view &view) {
+   delete_view = view;
+}
+
+bool bandicoot_wx_delete_open() {
+   return delete_view.is_open && delete_view.is_open();
+}
+
+bool bandicoot_wx_delete_keep_active() {
+   return delete_view.keep_active && delete_view.keep_active();
+}
+
+// closed by the core after a pick: as Coot's dialog going, which ended the pick
+void bandicoot_wx_delete_close() {
+   if (delete_view.close) delete_view.close(true);
+}
+
+// closed because refine or regularize was chosen: their pick is already armed
+void bandicoot_wx_delete_close_quietly() {
+   if (delete_view.close) delete_view.close(false);
+}
+
+bool bandicoot_wx_delete_present() {
+   if (! delete_view.open) return false;
+   delete_view.open(bandicoot_core_delete_begin());
+   return true;
+}
+
+int bandicoot_core_delete_begin() {
+   // the kind last used, as Coot's dialog chose its first radio
+   int kind = 0;
+   if (delete_item_mode_is_atom_p())                { set_delete_atom_mode(); kind = 2; }
+   else if (delete_item_mode_is_water_p())          { set_delete_water_mode(); kind = 1; }
+   else if (delete_item_mode_is_sidechain_p())      { set_delete_sidechain_mode(); kind = 3; }
+   else if (delete_item_mode_is_chain_p())          { set_delete_chain_mode(); kind = 5; }
+   else if (delete_item_mode_is_sidechain_range_p()) { set_delete_sidechain_range_mode(); kind = 4; }
+   else                                             { set_delete_residue_mode(); kind = 0; }
+   graphics_info_t::delete_item_water = (kind == 1);  // see bandicoot_core_delete_kind
+   graphics_info_t::pick_pending_flag = 1;
+   pick_cursor_maybe();
+   return kind;
+}
+
+void bandicoot_core_delete_kind(int kind) {
+   switch (kind) {
+   case 0: set_delete_residue_mode(); break;
+   case 1: set_delete_water_mode(); break;
+   case 2: set_delete_atom_mode(); break;
+   case 3: set_delete_sidechain_mode(); break;
+   case 4: set_delete_sidechain_range_mode(); break;
+   case 5: set_delete_chain_mode(); break;
+   case 6: set_delete_residue_hydrogens_mode(); break;
+   case 7: set_delete_residue_zone_mode(); break;
+   }
+   // set_delete_atom_mode() leaves the water flag as it was, so one click
+   // could delete as both; only the chosen kind is on
+   if (kind != 1) graphics_info_t::delete_item_water = 0;
+}
+
+void bandicoot_core_delete_closed() {
+   // as the GTK dialog's Close and its going
+   clear_pending_delete_item();
+   clear_pending_picks();
+   normal_cursor();
+}
+
+static std::vector<std::pair<int, std::string>> full_name_list(bool maps) {
+   // as Coot's Find Waters lists them: number and full name
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      const molecule_class_info_t &m = graphics_info_t::molecules[imol];
+      bool offered = maps ? m.has_xmap() : m.atom_sel.n_selected_atoms > 0;
+      if (offered) v.push_back({ imol, std::to_string(imol) + " " + m.name_ });
+   }
+   return v;
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_find_waters_maps() {
+   return full_name_list(true);
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_find_waters_models() {
+   return full_name_list(false);
+}
+
+// ---- Run Refmac
+
+// defined with Coot's Run Refmac dialog
+void simple_refmac_run(int imol_coords, const std::string &mtz_in_filename);
+
+std::vector<std::pair<int, std::string>> bandicoot_core_refmac_models() {
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol))
+         v.push_back({ imol, chooser_label(imol) });
+   return v;
+}
+
+std::string bandicoot_core_refmac_mtz() {
+   return graphics_info_t::mtz_file_for_refmac;
+}
+
+void bandicoot_core_run_refmac(int imol, const std::string &mtz_file_name) {
+   simple_refmac_run(imol, mtz_file_name);
+}
+
+bandicoot_find_waters_values bandicoot_core_find_waters_values() {
+   return { graphics_info_t::find_waters_sigma_cut_off,
+            graphics_info_t::ligand_water_to_protein_distance_lim_min,
+            graphics_info_t::ligand_water_to_protein_distance_lim_max };
+}
+
+void bandicoot_core_find_waters(int imol_map, int imol_model, bool new_molecule,
+                                const bandicoot_find_waters_values &values) {
+   // kept for next time, as Coot's dialog did
+   set_value_for_find_waters_sigma_cut_off(values.rmsd);
+   set_ligand_water_to_protein_distance_limits(values.min_distance, values.max_distance);
+   execute_find_waters_real(imol_map, imol_model, new_molecule ? 1 : 0, values.rmsd);
+   graphics_draw();
+}
+
+bool bandicoot_wx_blobs(const std::vector<std::vector<float>> &blobs) {
+   if (! delete_view.blobs) return false;
+   delete_view.blobs(blobs);
+   return true;
+}
+
+void bandicoot_core_centre_on(float x, float y, float z) {
+   set_rotation_centre(x, y, z);
 }
 
 // ---- Go To Atom
@@ -1104,6 +1321,16 @@ static bool run_sidebar_action(const std::string &action, bool state) {
    }
    else if (action == "on_model_toolbar_edit_backbone_torsions_toggletoolbutton_toggled")
       setup_backbone_torsion_edit(s);
+   else if (action == "on_model_toolbar_mutate_and_autofit_togglebutton_toggled")
+      setup_mutate_auto_fit(s);
+   else if (action == "on_model_toolbar_simple_mutate_togglebutton_toggled")
+      setup_mutate(s);
+   else if (action == "on_model_toolbar_add_alt_conf_toolbutton_clicked")
+      altconf();
+   else if (action == "on_model_toolbar_add_atom_button_clicked")
+      place_atom_at_pointer();
+   else if (action == "on_model_toolbar_delete_button_clicked")
+      post_delete_item_dialog();  // the wx window, through the core's hook
    else
       return false;
    return true;

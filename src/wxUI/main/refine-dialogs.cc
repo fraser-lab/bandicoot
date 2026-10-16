@@ -5,6 +5,7 @@
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
 #include "wxUI/assets/palette.hh"
+#include "wxUI/dialogs/file-dialogs.hh"
 #include "wxUI/widgets/titled-panel.hh"
 
 #include <wx/checkbox.h>
@@ -293,6 +294,77 @@ void run_select_map(wxWindow *parent) {
    }
 }
 
+// ------------------------------------------------------------ Run Refmac
+
+void run_refmac_dialog(wxWindow *parent) {
+
+   wxDialog d(parent, wxID_ANY, "Run Refmac");
+   d.SetBackgroundColour(palette::face());
+
+   TitledPanel *model_frame = new TitledPanel(&d, "Model Molecule");
+   wxChoice *models = new wxChoice(model_frame->content(), wxID_ANY);
+   std::vector<int> imols;
+   for (const auto &m : bandicoot_core_refmac_models()) {
+      imols.push_back(m.first);
+      models->Append(wxString::FromUTF8(m.second));
+   }
+   if (! imols.empty()) models->SetSelection(0);
+   model_frame->content_sizer()->Add(models, 0, wxEXPAND);
+
+   TitledPanel *mtz_frame = new TitledPanel(&d, "MTZ File");
+   wxWindow *mf = mtz_frame->content();
+   wxBoxSizer *mrow = new wxBoxSizer(wxHORIZONTAL);
+   wxChoice *mtz = new wxChoice(mf, wxID_ANY);
+   std::string last = bandicoot_core_refmac_mtz();
+   if (! last.empty()) {
+      mtz->Append(wxString::FromUTF8(last));
+      mtz->SetSelection(0);
+   }
+   mrow->Add(mtz, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+   BevelButton *file = icon_button(mf, "File...", "stock-menu-open.png");
+   mrow->Add(file, 0, wxALIGN_CENTER_VERTICAL);
+   mtz_frame->content_sizer()->Add(mrow, 0, wxEXPAND);
+
+   BevelButton *cancel = icon_button(&d, "Cancel", "stock-button-cancel.png");
+   BevelButton *ok = icon_button(&d, "OK", "stock-button-ok.png");
+   for (BevelButton *b : { cancel, ok }) b->SetMinSize(wxSize(110, 28));
+   auto update_ok = [&]() { ok->Enable(models->GetSelection() >= 0 && mtz->GetSelection() >= 0); };
+   update_ok();
+
+   file->Bind(wxEVT_BUTTON, [&](wxCommandEvent &) {
+      FileRequest r;
+      r.title = "Select MTZ File";
+      r.types = { { "MTZ", { ".mtz" } } };
+      r.directory = wxString::FromUTF8(bandicoot_core_chooser_directory());
+      std::vector<wxString> paths = open_files(&d, r);
+      if (paths.empty()) return;
+      bandicoot_core_save_chooser_directory(r.directory.utf8_string());
+      mtz->Clear();
+      mtz->Append(paths.front());
+      mtz->SetSelection(0);
+      update_ok();
+   });
+   cancel->Bind(wxEVT_BUTTON, [&d](wxCommandEvent &) { d.EndModal(wxID_CANCEL); });
+   ok->Bind(wxEVT_BUTTON, [&d](wxCommandEvent &) { d.EndModal(wxID_OK); });
+
+   wxBoxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
+   buttons->Add(cancel, 0, wxRIGHT, 12);
+   buttons->Add(ok);
+
+   wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+   outer->Add(model_frame, 0, wxEXPAND | wxALL, 6);
+   outer->Add(mtz_frame, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+   outer->Add(buttons, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+   d.SetSizerAndFit(outer);
+   d.SetSize(wxSize(std::max(d.GetSize().x, 480), d.GetSize().y));
+   d.CentreOnParent();
+
+   if (d.ShowModal() != wxID_OK) return;
+   int i = models->GetSelection();
+   if (i < 0 || i >= int(imols.size()) || mtz->GetSelection() < 0) return;
+   bandicoot_core_run_refmac(imols[i], mtz->GetString(mtz->GetSelection()).utf8_string());
+}
+
 // ------------------------------------------------------------ Fixed Atoms
 
 class FixedAtoms : public wxFrame {
@@ -374,6 +446,10 @@ void show_refine_params(wxWindow *parent) {
 
 void select_refinement_map(wxWindow *parent) {
    run_select_map(parent);
+}
+
+void run_refmac(wxWindow *parent) {
+   run_refmac_dialog(parent);
 }
 
 void show_fixed_atoms(wxWindow *parent) {

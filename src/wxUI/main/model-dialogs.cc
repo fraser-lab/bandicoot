@@ -38,10 +38,11 @@ BevelButton *icon_button(wxWindow *parent, const wxString &label, const char *ic
 // one of two ways: accepted (OK / Apply) or not (Cancel, the close box).
 class MovingAtomsWindow : public wxFrame {
 public:
-   MovingAtomsWindow(const wxString &title, std::function<void(bool)> finish_in)
+   // where: the position kept for this kind of window, between openings
+   MovingAtomsWindow(const wxString &title, std::function<void(bool)> finish_in, wxPoint *where_in)
       : wxFrame(owner, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
                 (wxDEFAULT_FRAME_STYLE & ~wxMAXIMIZE_BOX) | wxFRAME_FLOAT_ON_PARENT),
-        finish(finish_in) {
+        where(where_in), finish(finish_in) {
       panel = new wxPanel(this);
       panel->SetBackgroundColour(palette::face());
       Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent &) { end(false); });
@@ -67,6 +68,7 @@ public:
    void end(bool accept) {
       if (ended) return;
       ended = true;
+      remember();
       Hide();
       if (on_end) on_end();
       if (finish) finish(accept);
@@ -76,13 +78,20 @@ public:
    // dropped without telling the core (another of its kind replaces it)
    void drop() {
       ended = true;
+      remember();
       if (on_end) on_end();
       Destroy();
    }
 
    std::function<void()> on_end;
+   wxPoint *where;
+
+   void place() {
+      if (where && *where != wxDefaultPosition) Move(*where); else CentreOnParent();
+   }
 
 protected:
+   void remember() { if (where) *where = GetPosition(); }
    std::function<void(bool)> finish;
    bool ended = false;
 };
@@ -90,9 +99,13 @@ protected:
 void lay_out(MovingAtomsWindow *w, wxSizer *content) {
    w->panel->SetSizer(content);
    content->SetSizeHints(w);
-   w->CentreOnParent();
+   w->place();
    w->Show();
 }
+
+// each kind of window opens where it was last left
+wxPoint rot_trans_at = wxDefaultPosition, rotamers_at = wxDefaultPosition,
+        edit_chi_at = wxDefaultPosition, edit_backbone_at = wxDefaultPosition;
 
 // ------------------------------------------------ Rotation & Translation
 
@@ -101,7 +114,7 @@ MovingAtomsWindow *rot_trans = nullptr;
 void open_rot_trans() {
    if (rot_trans) rot_trans->drop();
    MovingAtomsWindow *w = new MovingAtomsWindow("Rotation & Translation",
-                                                bandicoot_core_rot_trans_finish);
+                                                bandicoot_core_rot_trans_finish, &rot_trans_at);
    rot_trans = w;
    w->on_end = []() { rot_trans = nullptr; };
 
@@ -126,7 +139,7 @@ void open_rot_trans() {
 class RotamerWindow : public MovingAtomsWindow {
 public:
    RotamerWindow(const std::vector<std::string> &labels, bool alt_conf, float occupancy)
-      : MovingAtomsWindow("Select Rotamer", bandicoot_core_rotamer_finish) {
+      : MovingAtomsWindow("Select Rotamer", bandicoot_core_rotamer_finish, &rotamers_at) {
       list = new ClickThroughList(panel, ClickThroughList::RowType::Radio);
       for (const std::string &l : labels) list->add_item(wxString::FromUTF8(l));
       list->SetMinSize(wxSize(300, 300));
@@ -214,7 +227,7 @@ class ChiWindow : public MovingAtomsWindow {
 public:
    ChiWindow(const std::vector<std::string> &labels, int mode, bool hydrogens)
       : MovingAtomsWindow(mode == 2 ? "Add Alternative Conformer Split by Torsion" : "Edit Chi Angles",
-                          bandicoot_core_chi_finish) {
+                          bandicoot_core_chi_finish, &edit_chi_at) {
       wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
       col->Add(new wxStaticText(panel, wxID_ANY, "Chi Angles Rotation Mode:"), 0,
                wxALIGN_CENTER | wxTOP | wxBOTTOM, 8);
@@ -242,7 +255,7 @@ public:
       reverse->Bind(wxEVT_TOGGLEBUTTON, [](wxCommandEvent &e) {
          bandicoot_core_chi_reverse(e.GetInt() != 0);
       });
-      BevelButton *view = icon_button(panel, "View Rotation Mode", nullptr);
+      BevelButton *view = icon_button(panel, "View Rotation Mode", "stock-button-jump-to.png");
       view->Bind(wxEVT_BUTTON, [](wxCommandEvent &) { bandicoot_core_chi_view_rotation(); });
       BevelButton *help = icon_button(panel, "Help me out here...", "stock-menu-about.png");
       help->Bind(wxEVT_BUTTON, [](wxCommandEvent &) { show_chi_help(); });
@@ -294,7 +307,7 @@ MovingAtomsWindow *edit_backbone = nullptr;
 void open_edit_backbone() {
    if (edit_backbone) edit_backbone->drop();
    MovingAtomsWindow *w = new MovingAtomsWindow("Edit Backbone Torsions",
-                                                bandicoot_core_backbone_finish);
+                                                bandicoot_core_backbone_finish, &edit_backbone_at);
    edit_backbone = w;
    w->on_end = []() { edit_backbone = nullptr; };
    TitledPanel *body = new TitledPanel(w->panel);

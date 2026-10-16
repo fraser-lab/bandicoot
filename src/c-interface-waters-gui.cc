@@ -74,6 +74,12 @@
 
 #include "ligand/wligand.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's list of unmodelled blobs (wxUI/bridge/core-bridge.cc): one
+// x, y, z per blob. False if wx has not taken it on.
+bool bandicoot_wx_blobs(const std::vector<std::vector<float> > &blobs);
+#endif
+
 
 
 
@@ -476,6 +482,16 @@ void find_waters(int imol_for_map,
 
 	 if (graphics_info_t::use_graphics_interface_flag) { 
 	    if (show_blobs_dialog) { 
+#ifdef BANDICOOT_UI_WX
+	       // the list is wx's: one button per blob, centring on it
+	       std::vector<std::vector<float> > blobs;
+	       for (unsigned int i=0; i<lig.big_blobs().size(); i++) {
+		  const clipper::Coord_orth &c = lig.big_blobs()[i].first;
+		  blobs.push_back({ float(c.x()), float(c.y()), float(c.z()) });
+	       }
+	       if (! blobs.empty() && bandicoot_wx_blobs(blobs)) {
+	       } else
+#endif
 	       if (lig.big_blobs().size() > 0) {
 
 		  GtkWidget *dialog = create_ligand_big_blob_dialog();
@@ -524,6 +540,20 @@ void find_waters(int imol_for_map,
 	    g.update_go_to_atom_window_on_changed_mol(imol_for_protein);
             g.update_geometry_graphs(imol_for_protein);
 	 }
+#ifdef BANDICOOT_UI_WX
+	 // the count in a message as well as on the terminal; each water is
+	 // one atom
+	 if (graphics_info_t::use_graphics_interface_flag) {
+	    int n = water_mol.count_atoms();
+	    std::string s = "Found " + std::to_string(n) + (n == 1 ? " water" : " waters");
+	    if (n > 0)
+	       s += new_waters_mol_flag ? ", in a new molecule \"waters\"."
+	                                : ", added to molecule " + std::to_string(imol_for_protein) + ".";
+	    else
+	       s += ".";
+	    graphics_info_t::info_dialog(s);
+	 }
+#endif
       }
    }
 }

@@ -122,6 +122,10 @@ bool bandicoot_wx_ar_warnings(const std::string &text);
 // not taken them on.
 bool bandicoot_wx_rot_trans_present();
 bool bandicoot_wx_rotamers_present(int imol, int atom_index, bool alt_conf);
+// And its Delete item window.
+bool bandicoot_wx_delete_open();
+bool bandicoot_wx_delete_keep_active();
+void bandicoot_wx_delete_close();
 #endif
 
 
@@ -5214,6 +5218,12 @@ graphics_info_t::delete_residue_range(int imol,
       if (! is_valid_model_molecule(imol))
 	 delete_molecule_from_from_display_manager(imol, false);
 
+#ifdef BANDICOOT_UI_WX
+      if (bandicoot_wx_delete_open() && ! bandicoot_wx_delete_keep_active()) {
+	 bandicoot_wx_delete_close();
+	 normal_cursor();
+      }
+#endif
       if (delete_item_widget) {
 	 GtkWidget *checkbutton = lookup_widget(graphics_info_t::delete_item_widget,
 						"delete_item_keep_active_checkbutton");
@@ -5251,6 +5261,12 @@ graphics_info_t::delete_sidechain_range(int imol,
 
    if (is_valid_model_molecule(imol)) {
       molecules[imol].delete_sidechain_range(res_1, res_2);
+#ifdef BANDICOOT_UI_WX
+      if (bandicoot_wx_delete_open() && ! bandicoot_wx_delete_keep_active()) {
+	 bandicoot_wx_delete_close();
+	 normal_cursor();
+      }
+#endif
       if (delete_item_widget) {
 	 GtkWidget *checkbutton = lookup_widget(graphics_info_t::delete_item_widget,
 						"delete_item_keep_active_checkbutton");

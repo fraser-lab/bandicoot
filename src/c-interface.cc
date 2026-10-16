@@ -39,6 +39,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <functional>
 
 #if !defined(_MSC_VER)
 #include <glob.h> // for globbing.  Needed here?
@@ -144,6 +145,9 @@
 void bandicoot_wx_goto_target_changed();
 // And its Display Manager: false if it is not in place.
 bool bandicoot_wx_display_manager_open();
+// A repeating timer on the wx event loop, which stops when the callback
+// returns false; 0 if there is no window to run it.
+int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
 #endif
 
 
@@ -8758,6 +8762,13 @@ static gboolean bandicoot_python_timeout_thunk(gpointer data) {
 int bandicoot_python_timeout_add(int interval_ms, PyObject *callable) {
    if (!callable || !PyCallable_Check(callable)) return 0;
    Py_INCREF(callable);  // released by the thunk when it returns FALSE
+#ifdef BANDICOOT_UI_WX
+   // the wx build runs no GLib main loop, so GLib timeouts would never fire
+   int id = bandicoot_wx_timeout_add(interval_ms, [callable]() {
+      return bandicoot_python_timeout_thunk(callable) != FALSE;
+   });
+   if (id) return id;
+#endif
    return (int) g_timeout_add(interval_ms,
                               bandicoot_python_timeout_thunk,
                               callable);

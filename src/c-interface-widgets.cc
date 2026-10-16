@@ -48,8 +48,20 @@ void do_rot_trans_adjustments(GtkWidget *dialog) {
    g.do_rot_trans_adjustments(dialog);
 }
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Delete item window (wxUI/bridge/core-bridge.cc): whether it
+// is up, whether Keep Delete Active is on, closing it, opening it.
+bool bandicoot_wx_delete_open();
+bool bandicoot_wx_delete_keep_active();
+void bandicoot_wx_delete_close();
+bool bandicoot_wx_delete_present();
+#endif
+
 short int delete_item_widget_is_being_shown() {
    short int r = 0; 
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_open()) return 1;
+#endif
    if (graphics_info_t::delete_item_widget != NULL) {
       r = 1;
    }
@@ -58,6 +70,9 @@ short int delete_item_widget_is_being_shown() {
 
 short int delete_item_widget_keep_active_on() {
    short int r = 0;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_open()) return bandicoot_wx_delete_keep_active() ? 1 : 0;
+#endif
    if (delete_item_widget_is_being_shown()) { 
       GtkWidget *checkbutton = lookup_widget(graphics_info_t::delete_item_widget,
 					     "delete_item_keep_active_checkbutton");
@@ -69,6 +84,12 @@ short int delete_item_widget_keep_active_on() {
 }
 
 void store_delete_item_widget_position() {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_open()) {
+      bandicoot_wx_delete_close();
+      return;
+   }
+#endif
 
    gint upositionx, upositiony;
    gdk_window_get_root_origin (graphics_info_t::delete_item_widget->window,
