@@ -118,6 +118,10 @@ void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
 // The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc).
 bool bandicoot_wx_ar_update(const coot::refinement_results_t &rr);
 bool bandicoot_wx_ar_warnings(const std::string &text);
+// And its Rotation & Translation and Select Rotamer windows. False if wx has
+// not taken them on.
+bool bandicoot_wx_rot_trans_present();
+bool bandicoot_wx_rotamers_present(int imol, int atom_index, bool alt_conf);
 #endif
 
 
@@ -3651,6 +3655,12 @@ graphics_info_t::execute_rotate_translate_ready() { // manual movement
       
    if (good_settings) {
 
+#ifdef BANDICOOT_UI_WX
+      // the sliders are wx's; the moving atoms below are made as for GTK
+      if (! bandicoot_wx_rot_trans_present()) {
+#else
+      {
+#endif
       GtkWidget *widget = create_rotate_translate_obj_dialog();
       GtkWindow *main_window = GTK_WINDOW(lookup_widget(graphics_info_t::glarea,
 							"window1"));
@@ -3665,6 +3675,7 @@ graphics_info_t::execute_rotate_translate_ready() { // manual movement
 				  rotate_translate_y_position);
       }
       gtk_widget_show(widget);
+      }
 
       atom_selection_container_t rt_asc;
       // No! It cannot point to the same mmdb::Atoms.
@@ -4369,6 +4380,12 @@ graphics_info_t::do_rotamers(int atom_index, int imol) {
       bool is_alt_conf_dialog = false;
       if (altconf.length())
 	 is_alt_conf_dialog = true;
+
+#ifdef BANDICOOT_UI_WX
+      // the window is wx's: it lists the rotamers and shows the first
+      if (bandicoot_wx_rotamers_present(imol, atom_index, is_alt_conf_dialog))
+	 return;
+#endif
 
 //       std::cout << "DEBUG:: in do_rotamers() atom_index is " << atom_index
 // 		<< " and alconf is :" <<  altconf << ":" << std::endl;

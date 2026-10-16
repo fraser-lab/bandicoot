@@ -113,6 +113,13 @@
 
 #include "draw.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's windows that edit moving atoms by sliders or choices
+// (wxUI/bridge/core-bridge.cc): while one is up, a drag must not translate
+// the moving atoms, as with the GTK dialogs below.
+bool bandicoot_wx_moving_atoms_window_open();
+#endif
+
 std::vector<molecule_class_info_t> graphics_info_t::molecules;
 std::atomic<bool> molecule_class_info_t::draw_vector_sets_lock(false);
 
@@ -2399,7 +2406,12 @@ gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
 		     // otherwise translate the whole fragment uniformly, and the
 		     // sliders only ever rebuild C/O/N -- leaving the two CA atoms
 		     // permanently displaced and corrupting the model on accept.
-		     if (! info.rotamer_dialog && ! info.edit_backbone_torsions_dialog) {
+#ifdef BANDICOOT_UI_WX
+		     bool wx_window_up = bandicoot_wx_moving_atoms_window_open();
+#else
+		     bool wx_window_up = false;
+#endif
+		     if (! info.rotamer_dialog && ! info.edit_backbone_torsions_dialog && ! wx_window_up) {
 			// e.g. translate an added peptide fragment.
 			info.move_moving_atoms_by_simple_translation(x_as_int,
 								     y_as_int);

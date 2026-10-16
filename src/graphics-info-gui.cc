@@ -93,6 +93,15 @@
 // The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc). False
 // until the window is in place.
 bool bandicoot_wx_ar_present(const std::string &fit_type, const coot::refinement_results_t &rr);
+// Coot's info dialogs, the refinement-map chooser and the model toolbar's
+// toggles, which in the wx build are wx's. False if wx has not taken them on.
+bool bandicoot_wx_info(const std::string &text, bool markup);
+bool bandicoot_wx_select_map();
+void bandicoot_wx_release_sidebar_toggle(const std::string &widget);
+// The Edit Chi Angles and Edit Backbone Torsions windows. Edit Chi returns
+// the number of torsions it lists, or -2 if wx has not taken it on.
+int  bandicoot_wx_edit_chi_present(const std::string &res_type, int mode);
+bool bandicoot_wx_edit_backbone_present();
 #endif
 
 #ifdef __APPLE__
@@ -550,6 +559,11 @@ GtkWidget *
 graphics_info_t::info_dialog(const std::string &s, bool use_markup) {
 
    GtkWidget *w = NULL;
+#ifdef BANDICOOT_UI_WX
+   // a GTK window cannot take input under wx's event loop
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_info(s, use_markup))
+      return w;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       w = wrapped_nothing_bad_dialog(s);
 
@@ -1035,6 +1049,11 @@ graphics_info_t::select_refinement_map_combobox_changed(GtkWidget *combobox, gpo
 void
 graphics_info_t::show_select_map_dialog() {
 
+#ifdef BANDICOOT_UI_WX
+   // the GTK chooser runs modally, which would stop the wx window for good
+   if (use_graphics_interface_flag && bandicoot_wx_select_map())
+      return;
+#endif
    if (use_graphics_interface_flag) {
 
       GtkWidget *widget = create_select_fitting_map_dialog();
@@ -2430,6 +2449,11 @@ graphics_info_t::model_fit_refine_unactive_togglebutton(const std::string &butto
    if (button_name == "model_refine_dialog_fit_terminal_residue_togglebutton")
       toolbar_button_name = "model_toolbar_add_terminal_residue_togglebutton";
 
+#ifdef BANDICOOT_UI_WX
+   if (toolbar_button_name != "not-found")
+      bandicoot_wx_release_sidebar_toggle(toolbar_button_name);
+#endif
+
    // now, button_name may have been
    // model_refine_dialog_edit_phi_psi_togglebutton or
    // model_refine_dialog_edit_backbone_torsions_togglebutton, we
@@ -2471,6 +2495,16 @@ graphics_info_t::wrapped_create_edit_chi_angles_dialog(const std::string &res_ty
                                                        edit_chi_edit_type mode) {
 
    // mode is either EDIT_CHI or RESIDUE_PARTIAL_ALT_LOCS.
+
+#ifdef BANDICOOT_UI_WX
+   {
+      int n = bandicoot_wx_edit_chi_present(res_type, static_cast<int>(mode));
+      if (n != -2) {
+         edit_chi_angles_reverse_fragment = 0; // reset the static, as below
+         return n;
+      }
+   }
+#endif
 
 
    GtkWidget *dialog = create_edit_chi_angles_dialog();
@@ -2907,7 +2941,10 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
                if (next_ca && next_n && this_ca && this_o && this_c) {
 
                   // new addition 25Feb2004
+#ifndef BANDICOOT_UI_WX
+                  // the plot is a GNOME canvas window: none in the wx build yet
                   rama_plot_for_2_phi_psis(imol, atom_index);
+#endif
 
                   mmdb::Manager *mol = new mmdb::Manager;
                   mmdb::Model *model = new mmdb::Model;
@@ -3000,6 +3037,11 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
 //                             << backbone_torsion_end_ca_2.format() << std::endl;
 
                   graphics_draw();
+#ifdef BANDICOOT_UI_WX
+                  if (! bandicoot_wx_edit_backbone_present()) {
+#else
+                  {
+#endif
                   GtkWidget *widget = create_edit_backbone_torsions_dialog();
                   // BANDICOOT (GitHub #12): record the handle so
                   // glarea_motion_notify() can suppress the intermediate-atom
@@ -3011,6 +3053,7 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
         GtkWidget *adj;
         adj = lookup_widget(widget, "edit_backbone_torsions_rotate_carbonyl_adjustment");
         g_signal_emit_by_name(G_OBJECT(adj), "value_changed");
+                  }
 
                } else {
                   std::cout << "WARNING:: not all atoms found in "
@@ -3134,6 +3177,14 @@ graphics_info_t::edit_backbone_peptide_changed_func(GtkAdjustment *adj, GtkWidge
             edit_phi_psi_plot->draw_it(vp);
       }
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+      // no Ramachandran plot window in the wx build yet: the angles go to the terminal
+      if (pp.first.first > -200 || pp.second.first > -200)
+         std::cout << "INFO:: phi/psi " << clipper::Util::rad2d(pp.first.first) << " "
+                   << clipper::Util::rad2d(pp.first.second) << "  next: "
+                   << clipper::Util::rad2d(pp.second.first) << " "
+                   << clipper::Util::rad2d(pp.second.second) << std::endl;
+#endif
       regularize_object_bonds_box.clear_up();
       int imol = 0; // should be fine for backbone edits
       g.make_moving_atoms_graphics_object(imol, *moving_atoms_asc);
@@ -3221,6 +3272,14 @@ graphics_info_t::edit_backbone_carbonyl_changed_func(GtkAdjustment *adj, GtkWidg
       }
 
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+      // no Ramachandran plot window in the wx build yet: the angles go to the terminal
+      if (pp.first.first > -200 || pp.second.first > -200)
+         std::cout << "INFO:: phi/psi " << clipper::Util::rad2d(pp.first.first) << " "
+                   << clipper::Util::rad2d(pp.first.second) << "  next: "
+                   << clipper::Util::rad2d(pp.second.first) << " "
+                   << clipper::Util::rad2d(pp.second.second) << std::endl;
+#endif
       regularize_object_bonds_box.clear_up();
       int imol = 0; // should be fine for backbone edits
       g.make_moving_atoms_graphics_object(imol, *moving_atoms_asc);

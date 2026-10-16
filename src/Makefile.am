@@ -610,6 +610,10 @@ if UI_WX
 	wxUI/main/go-to-atom.cc      \
 	wxUI/main/display-manager.hh \
 	wxUI/main/display-manager.cc \
+	wxUI/main/refine-dialogs.hh  \
+	wxUI/main/refine-dialogs.cc  \
+	wxUI/main/model-dialogs.hh   \
+	wxUI/main/model-dialogs.cc   \
 	wxUI/dialogs/accept-reject-dialog.hh \
 	wxUI/dialogs/accept-reject-dialog.cc \
 	wxUI/dialogs/toolbar-customizer.hh \

@@ -31,6 +31,9 @@
 #include "wxUI/dialogs/accept-reject-dialog.hh"
 #include "wxUI/main/go-to-atom.hh"
 #include "wxUI/main/display-manager.hh"
+#include "wxUI/dialogs/message.hh"
+#include "wxUI/main/refine-dialogs.hh"
+#include "wxUI/main/model-dialogs.hh"
 #include "wxUI/main/sidebar.hh"
 #include "wxUI/assets/icons.hh"
 
@@ -472,8 +475,10 @@ public:
       surface = new GLSurface(splitter, attrs);
       splitter->Initialize(surface);
       setup_accept_reject();
+      setup_ui_view();
       wxui::install_go_to_atom(this);
       wxui::install_display_manager(this);
+      wxui::install_model_dialogs(this);
       transient_area->Hide();
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
@@ -576,11 +581,24 @@ private:
       bandicoot_core_set_ar_view(v);
 
       surface->key_filter = [this](int code) {
-         if (! accept_reject->pending()) return false;
+         if (! accept_reject->pending()) return wxui::model_dialogs_take_key(code);
          if (code == WXK_RETURN || code == WXK_NUMPAD_ENTER) { accept_reject->accept(); return true; }
          if (code == WXK_ESCAPE) { accept_reject->reject(); return true; }
          return false;
       };
+   }
+
+   // What the core asks of the window as a whole: its info dialogs, the
+   // refinement map, and letting go of sidebar and fixed-atom toggles.
+   void setup_ui_view() {
+      bandicoot_ui_view v;
+      v.info = [this](const std::string &text) { wxui::info(this, wxString::FromUTF8(text)); };
+      v.select_map = [this]() { wxui::select_refinement_map(this); };
+      v.release_fixed_atom_toggles = []() { wxui::release_fixed_atom_toggles(); };
+      v.release_sidebar_toggle = [this](const std::string &widget) {
+         if (sidebar) sidebar->release(widget);
+      };
+      bandicoot_core_set_ui_view(v);
    }
 
    wxPanel *slot_for_side() const {
@@ -589,8 +607,17 @@ private:
 
    wxui::Sidebar::Hooks sidebar_hooks() {
       wxui::Sidebar::Hooks h;
-      h.on_select = [](const std::string &action, const std::string &label, bool state) {
-         report_unconnected("Sidebar > " + label, action, state);
+      h.on_select = [this](const std::string &action, const std::string &label, bool state) {
+         // the sidebar's windows that are wx's own
+         if (action == "on_model_toolbar_refine_control_button_clicked") { wxui::show_refine_params(this); return; }
+         if (action == "on_model_toolbar_fixed_atoms_button_clicked") { wxui::show_fixed_atoms(this); return; }
+         if (action == "rot_trans_by") {
+            int which = label == "By Chain..." ? 1 : label == "By Molecule..." ? 2 : 0;
+            bandicoot_core_rot_trans_by(which);
+            return;
+         }
+         if (! bandicoot_core_run_action(action, state))
+            report_unconnected("Sidebar > " + label, action, state);
       };
       h.icon_states = []() {
          std::vector<wxui::Sidebar::IconState> v;

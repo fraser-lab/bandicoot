@@ -4964,6 +4964,9 @@ graphics_info_t::watch_cursor() {
 
    if (use_graphics_interface_flag) {
 #ifdef BANDICOOT_UI_WX
+      // No GTK event pumping here: under wx's event loop it runs AppKit
+      // event handling (and its autorelease pools) inside wx's own, which
+      // corrupts them.
       bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_WATCH);
 #else
       GdkCursorType c = GDK_WATCH;
@@ -4971,10 +4974,10 @@ graphics_info_t::watch_cursor() {
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
-#endif
       while (gtk_events_pending()) {
 	 gtk_main_iteration();
       }
+#endif
    }
 }
 

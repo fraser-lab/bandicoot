@@ -305,6 +305,20 @@ void Sidebar::populate() {
    }
 }
 
+void Sidebar::release(const std::string &widget) {
+   for (const SidebarEntry &e : entries) {
+      if (e.kind != E::ToggleTool || ! e.widget || widget != e.widget) continue;
+      for (auto &n : named) {
+         if (n.first != widget) continue;
+         ButtonBase *b = dynamic_cast<ButtonBase *>(n.second);
+         if (! b || ! b->is_toggle() || ! b->is_on()) return;
+         b->set_on(false);
+         if (hooks.on_select) hooks.on_select(e.action, e.label, false);
+         return;
+      }
+   }
+}
+
 void Sidebar::show_settings_menu() {
 
    wxMenu menu;

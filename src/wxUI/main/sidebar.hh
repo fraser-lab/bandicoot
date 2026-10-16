@@ -59,6 +59,9 @@ public:
 
    // Show and hide tools as the core says.
    void refresh_icons();
+   // Un-press the toggle with this Coot widget name, running its action as
+   // switched off, as Coot's toolbar does when the core lets go of it.
+   void release(const std::string &widget);
 
    // The size that shows every tool without scrolling.
    wxSize natural_size() const;

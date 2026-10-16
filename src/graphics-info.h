@@ -748,8 +748,11 @@ class graphics_info_t {
    clipper::Coord_orth moving_atoms_centre() const;
 
    void set_edit_backbone_adjustments(GtkWidget *widget);
+public:
+   // public for the wx build's Edit Backbone Torsions sliders
    static void edit_backbone_peptide_changed_func (GtkAdjustment *adj, GtkWidget *window); // callback
    static void edit_backbone_carbonyl_changed_func(GtkAdjustment *adj, GtkWidget *window); // callback
+private:
 
    void check_and_warn_inverted_chirals_and_cis_peptides() const;
 

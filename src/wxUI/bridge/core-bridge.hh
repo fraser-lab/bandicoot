@@ -215,6 +215,95 @@ struct bandicoot_dm_geometry { int x, y, width, height, split; };
 bool bandicoot_core_dm_geometry(bandicoot_dm_geometry &g);
 void bandicoot_core_save_dm_geometry(const bandicoot_dm_geometry &g);
 
+// Things the core asks of the window as a whole.
+struct bandicoot_ui_view {
+   std::function<void(const std::string &text)> info;  // Coot's info dialogs
+   // choose the refinement map, waiting for the answer as Coot's chooser
+   // did (the tools that ask go on with whatever was chosen)
+   std::function<void()> select_map;
+   // a fixed-atom pick is done: un-press Fix Atom / Unfix Atom
+   std::function<void()> release_fixed_atom_toggles;
+   // the core let go of a sidebar toggle (by Coot's widget name), as it
+   // un-presses the GTK one when its picks are done or cancelled
+   std::function<void(const std::string &widget)> release_sidebar_toggle;
+};
+void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
+
+// Refinement and regularization parameters (the R/RC window).
+struct bandicoot_refine_params {
+   bool torsions, planar_peptides, trans_peptides, rama;
+   int secondary_structure;  // 0 none, 1 alpha helix, 2 beta strand
+   float weight;             // the map weight
+   double lj_epsilon, gm_alpha, torsion_weight;
+   float rama_weight;
+   bool more_control_shown;
+};
+bandicoot_refine_params bandicoot_core_refine_params();
+void bandicoot_core_set_torsion_restraints(bool on);
+void bandicoot_core_set_planar_peptide_restraints(bool on);
+void bandicoot_core_set_trans_peptide_restraints(bool on);
+void bandicoot_core_set_rama_restraints(bool on);
+void bandicoot_core_set_secondary_structure_restraints(int type);
+void bandicoot_core_set_refinement_weight(float w);
+// The map weight as estimated from the refinement map, which also becomes
+// the weight. False, leaving w alone, when there is no refinement map.
+bool bandicoot_core_estimate_refinement_weight(float &w);
+// The More Control values, by the label they are shown under, from the
+// text chosen; each takes effect at once on a running refinement.
+void bandicoot_core_set_refine_control(const std::string &which, const std::string &value);
+void bandicoot_core_set_more_control_shown(bool shown);
+
+// The refinement map, and the maps it can be (imol, label).
+std::vector<std::pair<int, std::string>> bandicoot_core_maps_for_fitting();
+int bandicoot_core_refinement_map();  // -1 if none
+void bandicoot_core_set_refinement_map(int imol);
+
+// Windows that edit the moving atoms after a pick: Rotation & Translation,
+// Select Rotamer, Edit Chi Angles, Edit Backbone Torsions. The core opens
+// them; while any is up, a drag in the graphics does not move the atoms
+// bodily (see open_windows).
+struct bandicoot_moving_atoms_view {
+   std::function<void()> rot_trans;
+   // rotamer labels, best first; alt_conf: show the new alt conf occupancy
+   std::function<void(const std::vector<std::string> &labels, bool alt_conf,
+                      float occupancy)> rotamers;
+   // chi labels; mode 1 is the alt-conf split by torsion, retitled
+   std::function<void(const std::vector<std::string> &labels, int mode,
+                      bool hydrogens)> edit_chi;
+   std::function<void()> edit_backbone;
+   std::function<bool()> open_windows;
+};
+void bandicoot_core_set_moving_atoms_view(const bandicoot_moving_atoms_view &view);
+
+// Rotate Translate's drop-down: 0 by residue range, 1 by chain, 2 by
+// molecule; picking starts at once, as Coot's menu did.
+void bandicoot_core_rot_trans_by(int which);
+// Rotation & Translation: slider i (x, y, z translation, then x, y, z
+// rotation) set to v, in the slider's units.
+void bandicoot_core_rot_trans_slider(int i, double v);
+void bandicoot_core_rot_trans_finish(bool accept);
+// Select Rotamer: show rotamer i (0-based), the new alt conf's occupancy.
+void bandicoot_core_rotamer_show(int i);
+void bandicoot_core_rotamer_occupancy(float v);
+void bandicoot_core_rotamer_finish(bool accept);
+// Edit Chi Angles: drag torsion i (0-based); flash it; the hydrogen torsions
+// listed or not (returning the new labels); reverse which part moves; view
+// rotation (no torsion dragged).
+void bandicoot_core_chi_choose(int i);
+void bandicoot_core_chi_flash(int i);
+std::vector<std::string> bandicoot_core_chi_hydrogens(bool on);
+void bandicoot_core_chi_reverse(bool on);
+void bandicoot_core_chi_view_rotation();
+void bandicoot_core_chi_finish(bool accept);
+// Edit Backbone Torsions: the peptide or carbonyl rotation, in degrees.
+void bandicoot_core_backbone_peptide(double degrees);
+void bandicoot_core_backbone_carbonyl(double degrees);
+void bandicoot_core_backbone_finish(bool accept);
+
+// Fixed atoms: 0 stop picking, 1 pick atoms to fix, 2 pick atoms to unfix.
+void bandicoot_core_fixed_atom_pick(int mode);
+void bandicoot_core_clear_fixed_atoms();
+
 // Runs a toolbar, menu or sidebar action by its action name; state is a
 // toggle's new state (true for a push button). False if the wx build does not
 // run that action yet.

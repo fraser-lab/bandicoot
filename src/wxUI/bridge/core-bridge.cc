@@ -31,6 +31,7 @@
 #include "drag-and-drop.hh"
 #include "c-interface-ligands-swig.hh"
 #include "coot-utils/coot-package-paths.hh"
+#include "ligand/richardson-rotamer.hh"
 
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/surface.hh"
@@ -330,6 +331,9 @@ static bandicoot_ar_results ar_results(const coot::refinement_results_t &rr) {
 
    // the stock dialog's wording
    bandicoot_ar_results r;
+   // Fits that run no refinement (Torsion General, Rigid Body Fit, ...) hand
+   // over empty results, whose default "no progress" is no error of theirs.
+   if (! rr.found_restraints_flag) return r;
 #ifdef HAVE_GSL
    if (rr.progress == GSL_ENOPROG)       r.status = "Failed - Error: No Progress";
    else if (rr.progress == GSL_CONTINUE) r.status = "Running...";
@@ -373,6 +377,358 @@ bool bandicoot_core_ar_position(int &x, int &y) {
 void bandicoot_core_save_ar_position(int x, int y) {
    graphics_info_t::accept_reject_dialog_x_position = x;
    graphics_info_t::accept_reject_dialog_y_position = y;
+}
+
+// ---- the window as a whole
+
+static bandicoot_ui_view ui_view;
+
+void bandicoot_core_set_ui_view(const bandicoot_ui_view &view) {
+   ui_view = view;
+}
+
+// Coot's text, which may carry Pango markup, as plain text.
+static std::string without_markup(const std::string &s) {
+   std::string out;
+   bool in_tag = false;
+   for (char c : s) {
+      if (c == '<') in_tag = true;
+      else if (c == '>') in_tag = false;
+      else if (! in_tag) out += c;
+   }
+   return out;
+}
+
+bool bandicoot_wx_info(const std::string &text, bool markup) {
+   if (! ui_view.info) return false;
+   ui_view.info(markup ? without_markup(text) : text);
+   return true;
+}
+
+bool bandicoot_wx_select_map() {
+   if (! ui_view.select_map) return false;
+   ui_view.select_map();
+   return true;
+}
+
+void bandicoot_wx_release_fixed_atom_toggles() {
+   if (ui_view.release_fixed_atom_toggles) ui_view.release_fixed_atom_toggles();
+}
+
+// ---- refinement parameters, the refinement map, fixed atoms
+
+bandicoot_refine_params bandicoot_core_refine_params() {
+   bandicoot_refine_params p;
+   p.torsions        = graphics_info_t::do_torsion_restraints;
+   p.planar_peptides = planar_peptide_restraints_state();
+   p.trans_peptides  = graphics_info_t::do_trans_peptide_restraints;
+   p.rama            = graphics_info_t::do_rama_restraints;
+   p.secondary_structure = secondary_structure_restraints_type();
+   p.weight          = graphics_info_t::geometry_vs_map_weight;
+   p.lj_epsilon      = graphics_info_t::lennard_jones_epsilon;
+   p.gm_alpha        = graphics_info_t::geman_mcclure_alpha;
+   p.torsion_weight  = graphics_info_t::torsion_restraints_weight;
+   p.rama_weight     = graphics_info_t::rama_restraints_weight;
+   p.more_control_shown = graphics_info_t::refine_params_dialog_extra_control_frame_is_visible;
+   return p;
+}
+
+void bandicoot_core_set_torsion_restraints(bool on) {
+   graphics_info_t::do_torsion_restraints = on ? 1 : 0;
+}
+
+void bandicoot_core_set_planar_peptide_restraints(bool on) {
+   if (on) add_planar_peptide_restraints(); else remove_planar_peptide_restraints();
+}
+
+void bandicoot_core_set_trans_peptide_restraints(bool on) {
+   set_use_trans_peptide_restraints(on ? 1 : 0);
+}
+
+void bandicoot_core_set_rama_restraints(bool on) {
+   set_refine_ramachandran_angles(on ? 1 : 0);
+}
+
+void bandicoot_core_set_secondary_structure_restraints(int type) {
+   set_secondary_structure_restraints_type(type);
+}
+
+void bandicoot_core_set_refinement_weight(float w) {
+   set_matrix(w);
+}
+
+bool bandicoot_core_estimate_refinement_weight(float &w) {
+   graphics_info_t g;
+   int imol_map = g.Imol_Refinement_Map();
+   if (! is_valid_map_molecule(imol_map)) return false;
+   w = g.get_estimated_map_weight(imol_map);
+   set_matrix(w);
+   return true;
+}
+
+void bandicoot_core_set_refine_control(const std::string &which, const std::string &value) {
+   // the GTK combo positions are stored too; -1, as these lists are not GTK's
+   const char *t = value.c_str();
+   if (which == "Overall weight")              set_refinement_overall_weight_from_text(t);
+   else if (which == "Lennard-Jones epsilon")  set_refinement_lennard_jones_epsilon_from_text(-1, t);
+   else if (which == "Rama Restraints weight") set_refinement_ramachandran_restraints_weight_from_text(-1, t);
+   else if (which == "Geman-McClure alpha")    set_refinement_geman_mcclure_alpha_from_text(-1, t);
+   else if (which == "Torsions weight")        set_refinement_torsion_weight_from_text(-1, t);
+}
+
+void bandicoot_core_set_more_control_shown(bool shown) {
+   set_refine_params_dialog_more_control_frame_is_active(shown ? 1 : 0);
+}
+
+// A molecule as the GTK choosers label it: number, then the name cut to its
+// last characters.
+static std::string chooser_label(int imol) {
+   const unsigned int n_max = graphics_info_t::go_to_atom_menu_label_n_chars_max;
+   std::string name = graphics_info_t::molecules[imol].name_;
+   if (name.length() > n_max)
+      name = "..." + name.substr(name.length() - n_max);
+   return std::to_string(imol) + "  " + name;
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_maps_for_fitting() {
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_map_molecule(imol))
+         v.push_back({ imol, chooser_label(imol) });
+   return v;
+}
+
+int bandicoot_core_refinement_map() {
+   graphics_info_t g;
+   return g.Imol_Refinement_Map();
+}
+
+void bandicoot_core_set_refinement_map(int imol) {
+   graphics_info_t g;
+   g.set_refinement_map(imol);
+}
+
+void bandicoot_core_fixed_atom_pick(int mode) {
+   if (mode == 0) setup_fixed_atom_pick(0, 0);
+   else           setup_fixed_atom_pick(1, mode == 2 ? 1 : 0);
+}
+
+void bandicoot_core_clear_fixed_atoms() {
+   clear_fixed_atoms_all();
+}
+
+void bandicoot_wx_release_sidebar_toggle(const std::string &widget) {
+   if (ui_view.release_sidebar_toggle) ui_view.release_sidebar_toggle(widget);
+}
+
+// ---- windows that edit the moving atoms
+
+static bandicoot_moving_atoms_view ma_view;
+
+void bandicoot_core_set_moving_atoms_view(const bandicoot_moving_atoms_view &view) {
+   ma_view = view;
+}
+
+bool bandicoot_wx_moving_atoms_window_open() {
+   return ma_view.open_windows && ma_view.open_windows();
+}
+
+// The core's slider handlers take a GTK adjustment and read its value; a
+// bare adjustment (no widget) carries the wx slider's value to them.
+template <typename F>
+static void with_adjustment(double v, F f) {
+   GtkObject *adj = gtk_adjustment_new(v, -1.0e6, 1.0e6, 0.1, 1.0, 0.0);
+   g_object_ref_sink(adj);
+   f(GTK_ADJUSTMENT(adj));
+   g_object_unref(adj);
+}
+
+bool bandicoot_wx_rot_trans_present() {
+   if (! ma_view.rot_trans) return false;
+   ma_view.rot_trans();
+   return true;
+}
+
+void bandicoot_core_rot_trans_slider(int i, double v) {
+   with_adjustment(v, [i](GtkAdjustment *a) {
+      graphics_info_t::rot_trans_adjustment_changed(a, GINT_TO_POINTER(i));
+   });
+}
+
+void bandicoot_core_rot_trans_finish(bool accept) {
+   // as the GTK dialog's OK and Cancel
+   rot_trans_reset_previous();
+   if (accept) {
+      accept_regularizement();
+      clear_up_moving_atoms();
+   } else {
+      clear_up_moving_atoms();
+      normal_cursor();
+   }
+}
+
+// The rotamer list as Coot labels it: number, name, probability, chi 1.
+static std::vector<std::string> rotamer_labels(int imol, int atom_index) {
+   std::vector<std::string> v;
+   graphics_info_t g;
+   mmdb::Atom *at = graphics_info_t::molecules[imol].atom_sel.atom_selection[atom_index];
+   coot::richardson_rotamer d(at->residue, at->altLoc, graphics_info_t::molecules[imol].atom_sel.mol,
+                              g.rotamer_lowest_probability, 0);
+   std::vector<float> p = d.probabilities();
+   for (unsigned int i=0; i<p.size(); i++)
+      v.push_back(coot::util::int_to_string(i+1) + ":  " + d.rotamer_name(i) + "  "
+                  + coot::util::float_to_string(p[i]) + "% Chi_1 = "
+                  + coot::util::float_to_string(d.Chi1(i)));
+   return v;
+}
+
+static int rotamer_imol = -1;
+static bool rotamer_alt_conf = false;
+
+bool bandicoot_wx_rotamers_present(int imol, int atom_index, bool alt_conf) {
+   if (! ma_view.rotamers) return false;
+   graphics_info_t g;
+   rotamer_imol = imol;
+   rotamer_alt_conf = alt_conf;
+   std::vector<std::string> labels = rotamer_labels(imol, atom_index);
+   // the first rotamer is shown at once; none for GLY, ALA and the like
+   if (g.generate_moving_atoms_from_rotamer(0))
+      ma_view.rotamers(labels, alt_conf, g.add_alt_conf_new_atoms_occupancy);
+   return true;
+}
+
+void bandicoot_core_rotamer_show(int i) {
+   graphics_info_t g;
+   g.generate_moving_atoms_from_rotamer(i);
+}
+
+void bandicoot_core_rotamer_occupancy(float v) {
+   with_adjustment(v, [](GtkAdjustment *a) {
+      graphics_info_t::new_alt_conf_occ_adjustment_changed(a, nullptr);
+   });
+}
+
+extern "C" void bandicoot_clear_probe_dot_objects(void);
+
+void bandicoot_core_rotamer_finish(bool accept) {
+   // as the GTK dialog's OK and Cancel
+   if (accept) {
+      accept_regularizement();
+      clear_moving_atoms_object();
+   } else {
+      clear_up_moving_atoms();
+      bandicoot_clear_probe_dot_objects();
+      graphics_draw();
+      if (rotamer_alt_conf) {
+         // the new alt conf goes again
+         set_undo_molecule(rotamer_imol);
+         apply_undo();
+      }
+   }
+}
+
+// The rotatable torsions as Coot lists them, in the order the chi indexing
+// expects (non-const torsions of the monomer's restraints).
+static std::string chi_res_type;
+static int chi_mode = 0;
+
+static std::vector<std::string> chi_labels(const std::string &res_type) {
+   std::vector<std::string> v;
+   graphics_info_t g;
+   std::pair<short int, coot::dictionary_residue_restraints_t> p =
+      g.Geom_p()->get_monomer_restraints(res_type, 0);
+   if (! p.first) return v;
+   for (const coot::dict_torsion_restraint_t &t :
+           p.second.get_non_const_torsions(graphics_info_t::find_hydrogen_torsions_flag)) {
+      if (t.is_const()) continue;
+      v.push_back("  " + t.id() + "  " + t.atom_id_2_4c() + " <--> " + t.atom_id_3_4c()
+                  + "  ref: " + coot::util::float_to_string(t.angle())
+                  + "  per: " + coot::util::int_to_string(t.periodicity()));
+   }
+   return v;
+}
+
+int bandicoot_wx_edit_chi_present(const std::string &res_type, int mode) {
+   if (! ma_view.edit_chi) return -2;
+   chi_res_type = res_type;
+   chi_mode = mode;
+   graphics_info_t g;
+   std::pair<short int, coot::dictionary_residue_restraints_t> p =
+      g.Geom_p()->get_monomer_restraints(res_type, 0);
+   if (! p.first) return -1;  // as GTK: no restraints, no torsions
+   std::vector<std::string> labels = chi_labels(res_type);
+   ma_view.edit_chi(labels, mode, graphics_info_t::find_hydrogen_torsions_flag);
+   return int(labels.size());
+}
+
+void bandicoot_core_chi_choose(int i) {
+   graphics_info_t g;
+   g.edit_chi_current_chi = i + 1;
+   g.in_edit_chi_mode_flag = 1;
+   if (chi_mode == static_cast<int>(graphics_info_t::RESIDUE_PARTIAL_ALT_LOCS)) {
+      g.residue_partial_alt_locs_split_residue(i, false);
+      graphics_draw();
+   }
+}
+
+void bandicoot_core_chi_flash(int i) {
+   graphics_info_t g;
+   if (chi_mode == static_cast<int>(graphics_info_t::RESIDUE_PARTIAL_ALT_LOCS))
+      g.setup_flash_bond(graphics_info_t::imol_residue_partial_alt_locs,
+                         graphics_info_t::residue_partial_alt_locs_spec, i);
+   else
+      g.setup_flash_bond_using_moving_atom_internal(i);
+}
+
+std::vector<std::string> bandicoot_core_chi_hydrogens(bool on) {
+   set_find_hydrogen_torsions(on ? 1 : 0);
+   return chi_labels(chi_res_type);
+}
+
+void bandicoot_core_chi_reverse(bool on) {
+   set_edit_chi_angles_reverse_fragment_state(on ? 1 : 0);
+}
+
+void bandicoot_core_chi_view_rotation() {
+   set_graphics_edit_current_chi(0);
+}
+
+void bandicoot_core_chi_finish(bool accept) {
+   // as the GTK dialog's Apply and Cancel, then its closing
+   if (accept) {
+      accept_regularizement();
+   } else {
+      clear_up_moving_atoms();
+      bandicoot_clear_probe_dot_objects();
+      graphics_draw();
+   }
+   unset_moving_atom_move_chis();
+   set_show_chi_angle_bond(0);
+}
+
+bool bandicoot_wx_edit_backbone_present() {
+   if (! ma_view.edit_backbone) return false;
+   ma_view.edit_backbone();
+   return true;
+}
+
+void bandicoot_core_backbone_peptide(double degrees) {
+   with_adjustment(degrees, [](GtkAdjustment *a) {
+      graphics_info_t::edit_backbone_peptide_changed_func(a, nullptr);
+   });
+}
+
+void bandicoot_core_backbone_carbonyl(double degrees) {
+   with_adjustment(degrees, [](GtkAdjustment *a) {
+      graphics_info_t::edit_backbone_carbonyl_changed_func(a, nullptr);
+   });
+}
+
+void bandicoot_core_backbone_finish(bool accept) {
+   // as the GTK dialog's OK and Cancel, then its closing
+   if (accept) accept_regularizement();
+   destroy_edit_backbone_rama_plot();
+   clear_up_moving_atoms();
 }
 
 // ---- Go To Atom
@@ -557,18 +913,10 @@ bandicoot_goto_target bandicoot_core_goto_target() {
 }
 
 std::vector<std::pair<int, std::string>> bandicoot_core_goto_molecules() {
-
-   // as the GTK menu labels them: number and name, the name cut to its
-   // last characters
    std::vector<std::pair<int, std::string>> v;
-   const unsigned int n_max = graphics_info_t::go_to_atom_menu_label_n_chars_max;
-   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
-      if (! graphics_info_t::molecules[imol].has_model()) continue;
-      std::string name = graphics_info_t::molecules[imol].name_;
-      if (name.length() > n_max)
-         name = "..." + name.substr(name.length() - n_max);
-      v.push_back({ imol, std::to_string(imol) + "  " + name });
-   }
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (graphics_info_t::molecules[imol].has_model())
+         v.push_back({ imol, chooser_label(imol) });
    return v;
 }
 
@@ -717,9 +1065,61 @@ static bool run_accept_reject_action(const std::string &action, bool state) {
    return true;
 }
 
+// The sidebar's tools that need no dialog of their own, as the GTK model
+// toolbar's callbacks run them. A toggle's state arms or disarms its pick.
+static bool run_sidebar_action(const std::string &action, bool state) {
+
+   int s = state ? 1 : 0;
+   if (action == "on_model_toolbar_refine_togglebutton_toggled")
+      do_refine(s);
+   else if (action == "on_model_toolbar_regularize_togglebutton_toggled")
+      do_regularize(s);
+   else if (action == "on_model_toolbar_rigid_body_fit_togglebutton_toggled")
+      do_rigid_body_refine(s);
+   else if (action == "on_model_toolbar_auto_fit_rotamer_togglebutton_toggled")
+      setup_auto_fit_rotamer(s);
+   else if (action == "on_model_toolbar_torsion_general_toggletoolbutton_toggled")
+      setup_torsion_general(s);
+   else if (action == "on_model_toolbar_flip_peptide_togglebutton_toggled")
+      do_pepflip(s);
+   else if (action == "on_model_toolbar_sidechain_180_togglebutton_toggled")
+      setup_180_degree_flip(s);
+   else if (action == "on_model_toolbar_add_terminal_residue_togglebutton_toggled")
+      do_add_terminal_residue(s);
+   else if (action == "on_model_toolbar_clear_pending_picks_button_clicked")
+      clear_pending_picks();
+   else if (action == "on_model_toolbar_undo_button_clicked")
+      apply_undo();
+   else if (action == "on_model_toolbar_redo_button_clicked")
+      apply_redo();
+   else if (action == "on_model_toolbar_select_map_button_clicked")
+      show_select_map_dialog();  // the wx chooser, through the core's hook
+   else if (action == "on_model_toolbar_rot_trans_toolbutton_clicked")
+      do_rot_trans_setup(1);
+   else if (action == "on_model_toolbar_rotamers_togglebutton_toggled")
+      setup_rotamers(s);
+   else if (action == "on_model_toolbar_edit_chi_angles_togglebutton_toggled") {
+      setup_edit_chi_angles(s);
+      if (! s) set_show_chi_angle_bond(0);
+   }
+   else if (action == "on_model_toolbar_edit_backbone_torsions_toggletoolbutton_toggled")
+      setup_backbone_torsion_edit(s);
+   else
+      return false;
+   return true;
+}
+
+void bandicoot_core_rot_trans_by(int which) {
+   // Coot's ROT_TRANS_TYPE_ZONE, _CHAIN, _MOLECULE are 12, 13, 14
+   set_rot_trans_object_type(12 + which);
+   do_rot_trans_setup(1);
+}
+
 bool bandicoot_core_run_action(const std::string &action, bool state) {
 
    if (run_accept_reject_action(action, state))
+      return true;
+   if (run_sidebar_action(action, state))
       return true;
 
    if (action == "bandicoot_action_sphere_refine")

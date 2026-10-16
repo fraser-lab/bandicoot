@@ -48,6 +48,11 @@
 #include "bandicoot_appkit.h"
 #endif
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Fixed Atoms window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_release_fixed_atom_toggles();
+#endif
+
 void
 graphics_info_t::clear_pending_picks() {
    a_is_pressed = 0;
@@ -2038,7 +2043,15 @@ graphics_info_t::check_if_in_fixed_atom_define(GdkEventButton *event,
 	 
 	 if (! (state & GDK_CONTROL_MASK)) { 
 	    // Ctrl key is not pressed.
+#ifdef BANDICOOT_UI_WX
+	    // the dialog is wx's: let go of its Fix / Unfix buttons
+	    bandicoot_wx_release_fixed_atom_toggles();
+	    in_fixed_atom_define = coot::FIXED_ATOM_NO_PICK;
+	    normal_cursor();
+	    if (false) {
+#else
 	    if (!fixed_atom_dialog) {
+#endif
 	       std::cout << "Ooops fixed atom dialog has gone!" << std::endl;
 	    } else { 
 	       GtkWidget *button1 = lookup_widget(fixed_atom_dialog,   "fix_atom_togglebutton");
