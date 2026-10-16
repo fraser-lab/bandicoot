@@ -153,7 +153,10 @@ void append_submenu(wxMenu *menu, wxMenu *sub, const std::string &label) {
    menu->Append(mi);
 }
 
-struct Selection { std::string action, path; };
+struct Selection {
+   std::string action, path;
+   int imol = -1;  // a molecule submenu's molecule
+};
 
 void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string &path,
           const MainMenuHooks &hooks, std::shared_ptr<std::map<int, Selection>> ids) {
@@ -176,6 +179,28 @@ void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string
          wxMenu *sub = new wxMenu;
          sub->Append(wxID_ANY, "No molecules")->Enable(false);
          append_submenu(menu, sub, e.label);
+         // filled with the molecules loaded when it opens
+         std::string list = e.action;
+         auto molecules = hooks.molecules;
+         if (molecules && hooks.has_molecule_list && hooks.has_molecule_list(list)) {
+            sub->Bind(wxEVT_MENU_OPEN, [sub, list, here, molecules, ids](wxMenuEvent &ev) {
+               ev.Skip();
+               if (ev.GetMenu() != sub) return;
+               std::vector<std::pair<int, std::string>> mols = molecules(list);
+               while (sub->GetMenuItemCount() > 0) {
+                  wxMenuItem *old = sub->FindItemByPosition(0);
+                  ids->erase(old->GetId());
+                  sub->Destroy(old);
+               }
+               if (mols.empty())
+                  sub->Append(wxID_ANY, "No molecules")->Enable(false);
+               for (const auto &m : mols) {
+                  wxMenuItem *mi = sub->Append(wxID_ANY, wxString::FromUTF8(m.second));
+                  Selection sel{ list, here + " > " + m.second, m.first };
+                  (*ids)[mi->GetId()] = sel;
+               }
+            });
+         }
          break;
       }
       case Kind::Item:
@@ -449,12 +474,17 @@ wxMenuBar *build_main_menu(const MainMenuHooks &hooks) {
    wxMenuBar *bar = new wxMenuBar;
    auto ids = std::make_shared<std::map<int, Selection>>();
    auto on_select = hooks.on_select;
+   auto on_molecule = hooks.on_molecule;
    // Events from an item reach the menus above it and then the window, so one
    // handler per top-level menu sees every item.
-   auto handler = [ids, on_select](wxCommandEvent &ev) {
+   auto handler = [ids, on_select, on_molecule](wxCommandEvent &ev) {
       auto it = ids->find(ev.GetId());
       if (it == ids->end()) { ev.Skip(); return; }  // not one of ours, e.g. Quit
-      if (on_select) on_select(it->second.action, it->second.path);
+      if (it->second.imol >= 0) {
+         if (on_molecule) on_molecule(it->second.action, it->second.imol);
+      } else if (on_select) {
+         on_select(it->second.action, it->second.path);
+      }
    };
 
    for (const MenuEntry &top : entries) {

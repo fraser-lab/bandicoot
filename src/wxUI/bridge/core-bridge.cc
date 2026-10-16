@@ -28,6 +28,8 @@
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
 #include "c-interface-refine.h"
+#include "c-interface-preferences.h"
+#include "coot-preferences.h"
 #include "cc-interface.hh"
 #include "drag-and-drop.hh"
 #include "c-interface-ligands-swig.hh"
@@ -345,7 +347,7 @@ static bandicoot_ar_results ar_results(const coot::refinement_results_t &rr) {
    for (const coot::refinement_lights_info_t &li : rr.lights) {
       GdkColor c = li.name == "Rama" ? colour_by_rama_plot_distortion(li.value, li.rama_type)
                                      : colour_by_distortion(li.value);
-      r.lights.push_back({ li.name, li.label, (unsigned char) (c.red >> 8),
+      r.lights.push_back({ li.name, li.label, li.value, (unsigned char) (c.red >> 8),
                            (unsigned char) (c.green >> 8), (unsigned char) (c.blue >> 8) });
    }
    return r;
@@ -368,6 +370,36 @@ bool bandicoot_wx_ar_warnings(const std::string &text) {
    if (! ar_view.warnings) return false;
    ar_view.warnings(text);
    return true;
+}
+
+void bandicoot_wx_ar_dismiss() {
+   if (ar_view.dismiss) ar_view.dismiss();
+}
+
+void bandicoot_wx_ar_settings_changed() {
+   if (ar_view.settings_changed) ar_view.settings_changed();
+}
+
+bool bandicoot_core_ar_docked() {
+   return graphics_info_t::accept_reject_dialog_docked_flag == coot::DIALOG_DOCKED;
+}
+
+bool bandicoot_core_ar_always_shown() {
+   return graphics_info_t::accept_reject_dialog_docked_show_flag == coot::DIALOG_DOCKED_SHOW;
+}
+
+void bandicoot_core_set_ar_docked(bool docked) {
+   int state = docked ? coot::DIALOG_DOCKED : coot::DIALOG;
+   set_accept_reject_dialog_docked(state);
+   preferences_internal_change_value_int(PREFERENCES_ACCEPT_DIALOG_DOCKED, state);
+   save_preferences();
+}
+
+void bandicoot_core_set_ar_always_shown(bool always) {
+   int state = always ? coot::DIALOG_DOCKED_SHOW : coot::DIALOG_DOCKED_HIDE;
+   set_accept_reject_dialog_docked_show(state);
+   preferences_internal_change_value_int(PREFERENCES_ACCEPT_DIALOG_DOCKED_SHOW, state);
+   save_preferences();
 }
 
 bool bandicoot_core_ar_position(int &x, int &y) {
@@ -964,8 +996,96 @@ void bandicoot_wx_goto_target_changed() {
    if (goto_view.target_changed) goto_view.target_changed();
 }
 
+// ---- Sequence View
+
+static bandicoot_sequence_view_hooks seq_hooks;
+
+void bandicoot_core_set_sequence_view_hooks(const bandicoot_sequence_view_hooks &hooks) {
+   seq_hooks = hooks;
+}
+
+void bandicoot_wx_sequence_view_changed(int imol) {
+   if (seq_hooks.model_changed) seq_hooks.model_changed(imol);
+}
+
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at) {
+   if (! at || ! seq_hooks.highlight) return;
+   seq_hooks.highlight(imol, at->GetChainID(), at->GetSeqNum(), at->GetInsCode());
+}
+
+// Coot's colours by secondary structure (X11 names in Coot's view).
+static void secondary_structure_colour(int sse, bandicoot_seq_residue &r) {
+   unsigned int rgb = 0x000000;
+   switch (sse) {
+   case mmdb::SSE_Strand: rgb = 0xcd2626; break;  // firebrick3
+   case mmdb::SSE_Bulge:  rgb = 0xff3030; break;  // firebrick1
+   case mmdb::SSE_3Turn:  rgb = 0x0000cd; break;  // MediumBlue
+   case mmdb::SSE_4Turn:  rgb = 0x36648b; break;  // SteelBlue4
+   case mmdb::SSE_5Turn:  rgb = 0x104e8b; break;  // DodgerBlue4
+   case mmdb::SSE_Helix:  rgb = 0x000080; break;  // navy
+   default: break;
+   }
+   r.red = (rgb >> 16) & 0xff;
+   r.green = (rgb >> 8) & 0xff;
+   r.blue = rgb & 0xff;
+}
+
+bandicoot_sequence bandicoot_core_sequence(int imol) {
+   bandicoot_sequence seq;
+   if (! is_valid_model_molecule(imol)) return seq;
+   molecule_class_info_t &m = graphics_info_t::molecules[imol];
+   seq.title = "Molecule Number " + std::to_string(imol) + ": " + m.name_for_display_manager();
+   mmdb::Manager *mol = m.atom_sel.mol;
+   mmdb::Model *model_p = mol ? mol->GetModel(1) : nullptr;
+   if (! model_p) return seq;
+   model_p->CalcSecStructure(1);
+   int nchains = model_p->GetNumberOfChains();
+   for (int ich=0; ich<nchains; ich++) {
+      mmdb::Chain *chain_p = model_p->GetChain(ich);
+      bandicoot_seq_chain c;
+      c.chain_id = chain_p->GetChainID();
+      int nres = chain_p->GetNumberOfResidues();
+      for (int ir=0; ir<nres; ir++) {
+         mmdb::Residue *r = chain_p->GetResidue(ir);
+         if (! r) continue;
+         bandicoot_seq_residue sr;
+         sr.resno = r->GetSeqNum();
+         sr.ins_code = r->GetInsCode();
+         sr.res_name = r->GetResName();
+         std::string one = coot::util::three_letter_to_one_letter_with_specials(sr.res_name);
+         sr.letter = one.empty() ? 'X' : one[0];
+         secondary_structure_colour(r->SSE, sr);
+         c.residues.push_back(sr);
+      }
+      seq.chains.push_back(c);
+   }
+   return seq;
+}
+
+void bandicoot_core_sequence_view_centre(int imol, const std::string &chain, int resno,
+                                         const std::string &ins_code) {
+   bandicoot_core_goto_residue(imol, { std::string(), chain, ins_code, resno }, true);
+}
+
+extern "C" void bandicoot_save_sequence_view_docked(int docked);
+extern "C" int  bandicoot_load_sequence_view_docked(void);
+extern "C" int  bandicoot_load_sequence_view_max_chains(void);
+
+bool bandicoot_core_sequence_view_docked() {
+   return bandicoot_load_sequence_view_docked() != 0;
+}
+
+void bandicoot_core_save_sequence_view_docked(bool docked) {
+   bandicoot_save_sequence_view_docked(docked ? 1 : 0);
+}
+
+int bandicoot_core_sequence_view_max_chains() {
+   return bandicoot_load_sequence_view_max_chains();
+}
+
 void bandicoot_wx_goto_model_changed(int imol) {
    if (goto_view.model_changed) goto_view.model_changed(imol);
+   bandicoot_wx_sequence_view_changed(imol);
 }
 
 void bandicoot_wx_goto_molecules_changed(int imol) {
@@ -987,6 +1107,7 @@ bool bandicoot_wx_display_manager_open() {
 void bandicoot_wx_molecules_changed() {
    bandicoot_wx_goto_molecules_changed(-1);
    if (dm_view.molecules_changed) dm_view.molecules_changed();
+   if (seq_hooks.molecules_changed) seq_hooks.molecules_changed();
 }
 
 void bandicoot_wx_display_changed() {
@@ -1168,10 +1289,15 @@ std::vector<bandicoot_goto_atom> bandicoot_core_goto_atoms(int imol, const std::
    return v;
 }
 
+// Centres on the Go To target, which becomes the sequence views' current
+// residue, as centring by the pointer or the keyboard makes it.
 static void goto_centre() {
    graphics_info_t g;
-   if (g.try_centre_from_new_go_to_atom())
-      g.update_things_on_move_and_redraw();
+   if (! g.try_centre_from_new_go_to_atom()) return;
+   g.update_things_on_move_and_redraw();
+   bandicoot_goto_target t = bandicoot_core_goto_target();
+   if (seq_hooks.highlight && t.imol >= 0)
+      seq_hooks.highlight(t.imol, t.chain, t.resno, t.ins_code);
 }
 
 void bandicoot_core_goto_residue(int imol, const bandicoot_goto_residue &residue, bool centre) {

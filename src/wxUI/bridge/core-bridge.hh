@@ -107,6 +107,7 @@ bool bandicoot_core_auto_open_dataset(const std::string &file_name, std::string 
 struct bandicoot_ar_light {
    std::string name;    // "Bonds", "Angles", ...
    std::string label;   // the text shown beside it
+   float value;         // the distortion it is coloured by
    unsigned char red, green, blue;  // coloured by distortion
 };
 struct bandicoot_ar_results {
@@ -121,8 +122,20 @@ struct bandicoot_ar_view {
    std::function<void(const bandicoot_ar_results &results)> update;
    // chiral-volume and cis-peptide warnings; empty clears them
    std::function<void(const std::string &text)> warnings;
+   // the fit ended other than by the window's buttons: stand down
+   std::function<void()> dismiss;
+   // docked or not, or always shown or not, changed (by a script or a
+   // saved preference)
+   std::function<void()> settings_changed;
 };
 void bandicoot_core_set_ar_view(const bandicoot_ar_view &view);
+// Docked: the bar above the surface answers fits instead of the window.
+// Always shown: the docked bar stays up between fits. Both are Coot's
+// preferences and are saved with them.
+bool bandicoot_core_ar_docked();
+bool bandicoot_core_ar_always_shown();
+void bandicoot_core_set_ar_docked(bool docked);
+void bandicoot_core_set_ar_always_shown(bool always);
 // Where the window was left, kept with the state as the GTK dialog's was.
 // False if it has never been placed.
 bool bandicoot_core_ar_position(int &x, int &y);
@@ -178,6 +191,40 @@ void bandicoot_core_set_goto_view(const bandicoot_goto_view &view);
 // Where the window was left, kept with the state. False if never placed.
 bool bandicoot_core_goto_position(int &x, int &y);
 void bandicoot_core_save_goto_position(int x, int y);
+
+// Sequence View: a model's chains as one-letter sequences, residues
+// coloured by secondary structure, as Coot's view shows them.
+struct bandicoot_seq_residue {
+   int resno;
+   std::string ins_code, res_name;
+   char letter;                        // '~' for water
+   unsigned char red, green, blue;     // by secondary structure
+};
+struct bandicoot_seq_chain {
+   std::string chain_id;
+   std::vector<bandicoot_seq_residue> residues;
+};
+struct bandicoot_sequence {
+   std::string title;                  // "Molecule Number 0: 1abc.pdb"
+   std::vector<bandicoot_seq_chain> chains;
+};
+bandicoot_sequence bandicoot_core_sequence(int imol);
+// Centre on a residue (its central atom) and make it the Go To target.
+void bandicoot_core_sequence_view_centre(int imol, const std::string &chain, int resno,
+                                         const std::string &ins_code);
+// Docked or in a window of its own, and how many chains a docked view shows
+// when it opens; both saved with Bandicoot's preferences.
+bool bandicoot_core_sequence_view_docked();
+void bandicoot_core_save_sequence_view_docked(bool docked);
+int  bandicoot_core_sequence_view_max_chains();
+struct bandicoot_sequence_view_hooks {
+   std::function<void(int imol)> model_changed;   // imol's residues changed
+   std::function<void()> molecules_changed;      // a molecule was added or closed
+   // the current residue moved to this one
+   std::function<void(int imol, const std::string &chain, int resno,
+                      const std::string &ins_code)> highlight;
+};
+void bandicoot_core_set_sequence_view_hooks(const bandicoot_sequence_view_hooks &hooks);
 
 // Display Manager: the loaded maps and models and their display state.
 struct bandicoot_dm_molecule {

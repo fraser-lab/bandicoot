@@ -126,8 +126,16 @@ AcceptRejectDialog::AcceptRejectDialog(wxWindow *parent, const Hooks &h)
    reject_button->SetMinSize(wxSize(80, 28));
    accept_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { accept(); });
    reject_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { reject(); });
+   BevelButton *dock_button = new BevelButton(panel, wxID_ANY, "Dock");
+   dock_button->SetToolTip("Answer fits in a bar above the graphics instead");
+   dock_button->SetMinSize(wxSize(dock_button->GetBestSize().x, 28));
+   dock_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+      // once the click is done: docking hides this window
+      CallAfter([this]() { if (hooks.dock) hooks.dock(); });
+   });
    buttons->Add(accept_button, 0, wxRIGHT, 12);
-   buttons->Add(reject_button, 0);
+   buttons->Add(reject_button, 0, wxRIGHT, 12);
+   buttons->Add(dock_button, 0);
 
    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
    outer->Add(body, 1, wxEXPAND | wxALL, 8);
@@ -206,15 +214,20 @@ void AcceptRejectDialog::run(const std::string &action, bool state) {
    if (hooks.on_action) hooks.on_action(action, state);
 }
 
-// Hidden before the action runs: accepting can start work that presents
-// the window again.
-void AcceptRejectDialog::finish(const std::string &action) {
+void AcceptRejectDialog::stand_down() {
    if (! IsShown()) return;
    wxPoint where = GetPosition();
    Hide();
    lights_panel->Hide();
    set_warnings(wxEmptyString);
    if (hooks.on_hidden) hooks.on_hidden(where);
+}
+
+// Hidden before the action runs: accepting can start work that presents
+// the window again.
+void AcceptRejectDialog::finish(const std::string &action) {
+   if (! IsShown()) return;
+   stand_down();
    run(action);
 }
 

@@ -5566,6 +5566,10 @@ void set_filename_for_filechooserselection(GtkWidget *fileselection,
 }
 
 // functions to dock the accept/reject dialog
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject bar and window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_ar_settings_changed();
+#endif
 #ifdef __APPLE__
 // Defined in graphics-info-gui.cc: re-applies the docked-A/R preference to
 // Bandicoot's native bar (shows/hides it, sets active state).
@@ -5573,6 +5577,12 @@ void bandicoot_ar_sync_prefs(void);
 #endif
 
 void set_accept_reject_dialog_docked(int istate){
+#ifdef BANDICOOT_UI_WX
+   // there is no GTK dialog or bar to change
+   graphics_info_t::accept_reject_dialog_docked_flag = istate;
+   bandicoot_wx_ar_settings_changed();
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
      // we should destroy/hide the dialog if existing
      if (graphics_info_t::accept_reject_dialog) {
@@ -5601,6 +5611,11 @@ int accept_reject_dialog_docked_state(){
 
 // functions to show/hide/sensitise docked accept/reject dialog
 void set_accept_reject_dialog_docked_show(int state){
+#ifdef BANDICOOT_UI_WX
+   graphics_info_t::accept_reject_dialog_docked_show_flag = state;
+   bandicoot_wx_ar_settings_changed();
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
 	  graphics_info_t::accept_reject_dialog_docked_show_flag = state;
 	  if (state == 0) {

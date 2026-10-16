@@ -21,6 +21,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,8 @@
 #include "wxUI/main/top-toolbar.hh"
 #include "wxUI/main/file-actions.hh"
 #include "wxUI/dialogs/accept-reject-dialog.hh"
+#include "wxUI/main/accept-reject-bar.hh"
+#include "wxUI/main/sequence-view.hh"
 #include "wxUI/main/go-to-atom.hh"
 #include "wxUI/main/display-manager.hh"
 #include "wxUI/dialogs/message.hh"
@@ -446,6 +449,11 @@ public:
          if (action == "customize_toolbar") { CallAfter([]() { wxui::customize_top_toolbar(); }); return; }
          report_unconnected(path, action);
       };
+      hooks.has_molecule_list = [](const std::string &list) { return list == "sequence_view1"; };
+      hooks.molecules = [](const std::string &) { return bandicoot_core_goto_molecules(); };
+      hooks.on_molecule = [this](const std::string &list, int imol) {
+         if (list == "sequence_view1") CallAfter([this, imol]() { open_sequence_view(imol); });
+      };
       SetMenuBar(wxui::build_main_menu(hooks));
       wxui::build_top_toolbar(this, [this](const std::string &action, const std::string &label,
                                            bool state) {
@@ -487,6 +495,23 @@ public:
       transient_area = new wxPanel(splitter);
       transient_area->SetSizer(new wxBoxSizer(wxVERTICAL));
       transient_area->SetDropTarget(new SurfaceDropTarget);
+      // The sash sizes the docked sequence view, between one chain and all
+      // of them; the Accept/Reject bar has one height, so with only that up
+      // the sash does not move.
+      splitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGING, [this](wxSplitterEvent &e) {
+         if (sv_docked) {
+            int bar = ar_bar_height();
+            int h = std::clamp(e.GetSashPosition() - bar, sv_docked->height_for_rows(1),
+                               sv_docked->height_for_rows(sv_docked->chain_count()));
+            e.SetSashPosition(h + bar);
+            sv_height = h;
+         } else if (ar_bar && ar_bar->IsShown()) {
+            e.SetSashPosition(-1);
+         }
+      });
+      splitter->Bind(wxEVT_SPLITTER_DOUBLECLICKED, [this](wxSplitterEvent &e) {
+         if (sv_docked || (ar_bar && ar_bar->IsShown())) e.Veto();
+      });
 
       wxGLAttributes attrs;
       attrs.PlatformDefaults().RGBA().DoubleBuffer().Depth(24)
@@ -499,14 +524,15 @@ public:
       }
       surface = new GLSurface(splitter, attrs);
       splitter->Initialize(surface);
+      transient_area->Hide();
       setup_accept_reject();
+      setup_sequence_views();
       setup_ui_view();
       wxui::install_go_to_atom(this);
       wxui::install_display_manager(this);
       wxui::install_model_dialogs(this);
       wxui::install_choosers(this);
       wxui::install_delete_waters(this);
-      transient_area->Hide();
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
       middle->Add(left_slot,  0, wxEXPAND);
@@ -552,6 +578,8 @@ public:
       if (state && ! splitter->IsSplit()) {
          transient_area->Show();
          splitter->SplitHorizontally(transient_area, surface, height);
+      } else if (state) {
+         splitter->SetSashPosition(height);
       }
       if (! state && splitter->IsSplit())
          splitter->Unsplit(transient_area);
@@ -563,6 +591,17 @@ private:
    bool docked = true;
    int side = 0;   // where it docks, in Coot's numbering: 0 right, 1 left, 3 bottom
    wxui::AcceptRejectDialog *accept_reject = nullptr;
+   wxui::AcceptRejectBar *ar_bar = nullptr;
+
+   // The fit waiting for an answer, kept so that docking or undocking moves
+   // it between the bar and the window.
+   struct PendingFit {
+      bool active = false;
+      std::string fit_type;
+      bool show_reverse = false, auto_clear = false;
+      bandicoot_ar_results results;
+      std::string warnings;
+   } fit;
 
    static std::vector<wxui::AcceptRejectDialog::Light>
    ar_lights(const bandicoot_ar_results &r) {
@@ -573,21 +612,164 @@ private:
       return v;
    }
 
-   // The free-floating Accept/Reject window, shown whenever the core has a
-   // fit waiting. Return and Escape on the surface answer it while it is up.
-   void setup_accept_reject() {
-      wxui::AcceptRejectDialog::Hooks h;
-      h.on_action = [](const std::string &action, bool state) {
-         bandicoot_core_run_action(action, state);
-      };
-      h.on_hidden = [](const wxPoint &p) { bandicoot_core_save_ar_position(p.x, p.y); };
-      accept_reject = new wxui::AcceptRejectDialog(this, h);
+   static std::vector<wxui::AcceptRejectBar::Light>
+   ar_bar_lights(const bandicoot_ar_results &r) {
+      std::vector<wxui::AcceptRejectBar::Light> v;
+      for (const bandicoot_ar_light &l : r.lights)
+         v.push_back({ wxString::FromUTF8(l.name), l.value, wxString::FromUTF8(l.label),
+                       wxColour(l.red, l.green, l.blue) });
+      return v;
+   }
 
-      bandicoot_ar_view v;
-      v.present = [this](const std::string &fit_type, const bandicoot_ar_results &r,
-                         bool show_reverse, bool auto_clear) {
-         accept_reject->set_status(wxString::FromUTF8(r.status));
-         accept_reject->set_lights(ar_lights(r));
+   bool ar_pending() const { return accept_reject->pending() || ar_bar->pending(); }
+
+   int ar_bar_height() const {
+      return ar_bar && ar_bar->IsShown() ? ar_bar->GetBestSize().y : 0;
+   }
+
+   // The area above the surface holds the docked sequence view, at the
+   // height last given it, over the Accept/Reject bar, which is up while
+   // docked and either always shown or answering a fit; it is closed when
+   // neither is there.
+   void place_transient_bars() {
+      bool bar_shown = bandicoot_core_ar_docked() &&
+                       (bandicoot_core_ar_always_shown() || ar_bar->pending());
+      ar_bar->Show(bar_shown);
+      int h = ar_bar_height() + (sv_docked ? sv_height : 0);
+      if (h > 0) {
+         transient_area->Layout();
+         show_transient_area(true, h);
+         transient_area->Layout();
+      } else {
+         show_transient_area(false);
+      }
+   }
+
+   // ---- sequence views: one docked, any number in windows of their own
+
+   wxui::SequenceView *sv_docked = nullptr;
+   int sv_height = 0;
+   std::map<int, std::pair<wxFrame *, wxui::SequenceView *>> sv_windows;
+
+   wxui::SequenceView *find_sequence_view(int imol) {
+      if (sv_docked && sv_docked->molecule() == imol) return sv_docked;
+      auto it = sv_windows.find(imol);
+      return it == sv_windows.end() ? nullptr : it->second.second;
+   }
+
+   // Draw > Sequence View: shown docked or in a window, as the preference
+   // says; a view already open for the molecule is brought forward.
+   void open_sequence_view(int imol) {
+      if (sv_windows.count(imol)) { sv_windows[imol].first->Raise(); return; }
+      if (sv_docked && sv_docked->molecule() == imol) return;
+      if (bandicoot_core_sequence_view_docked()) dock_sequence_view(imol);
+      else float_sequence_view(imol);
+   }
+
+   wxui::SequenceView::Hooks sequence_view_hooks(int imol, bool docked) {
+      wxui::SequenceView::Hooks h;
+      h.toggle_docked = [this, imol, docked]() {
+         bandicoot_core_save_sequence_view_docked(! docked);
+         if (docked) float_sequence_view(imol);
+         else dock_sequence_view(imol);
+      };
+      h.close = [this, imol]() { close_sequence_view(imol); };
+      return h;
+   }
+
+   // Docking replaces any view already docked, as in the GTK build.
+   void dock_sequence_view(int imol) {
+      close_sequence_view(imol);
+      if (sv_docked) close_sequence_view(sv_docked->molecule());
+      sv_docked = new wxui::SequenceView(transient_area, imol, true, sequence_view_hooks(imol, true));
+      transient_area->GetSizer()->Insert(0, sv_docked, 1, wxEXPAND);
+      int rows = std::min(sv_docked->chain_count(), bandicoot_core_sequence_view_max_chains());
+      sv_height = sv_docked->height_for_rows(rows);
+      place_transient_bars();
+   }
+
+   void float_sequence_view(int imol) {
+      close_sequence_view(imol);
+      wxFrame *w = new wxFrame(this, wxID_ANY, "Sequence View", wxDefaultPosition, wxDefaultSize,
+                               wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
+      wxui::SequenceView *view = new wxui::SequenceView(w, imol, false, sequence_view_hooks(imol, false));
+      int rows = std::min(view->chain_count(), 30);
+      w->SetClientSize(wxSize(800, view->height_for_rows(rows)));
+      w->SetMinClientSize(wxSize(160, view->height_for_rows(1)));
+      w->Bind(wxEVT_CLOSE_WINDOW, [this, imol](wxCloseEvent &) { close_sequence_view(imol); });
+      sv_windows[imol] = { w, view };
+      w->CentreOnParent();
+      w->Show();
+   }
+
+   void close_sequence_view(int imol) {
+      auto it = sv_windows.find(imol);
+      if (it != sv_windows.end()) {
+         wxFrame *w = it->second.first;
+         sv_windows.erase(it);
+         w->Destroy();
+      }
+      if (sv_docked && sv_docked->molecule() == imol) {
+         wxui::SequenceView *v = sv_docked;
+         sv_docked = nullptr;
+         transient_area->GetSizer()->Detach(v);
+         v->Destroy();
+         place_transient_bars();
+      }
+   }
+
+   // A model changed: its views are redrawn once the change is done.
+   std::set<int> sv_pending;
+   void sequence_model_changed(int imol) {
+      if (! find_sequence_view(imol)) return;
+      bool first = sv_pending.empty();
+      sv_pending.insert(imol);
+      if (! first) return;
+      CallAfter([this]() {
+         std::set<int> pending;
+         pending.swap(sv_pending);
+         for (int imol : pending)
+            if (wxui::SequenceView *v = find_sequence_view(imol)) v->rebuild();
+         if (sv_docked) {
+            int most = sv_docked->height_for_rows(sv_docked->chain_count());
+            if (sv_height > most) { sv_height = most; place_transient_bars(); }
+         }
+      });
+   }
+
+   // Views of molecules that have been closed go with them.
+   void sequence_molecules_changed() {
+      std::set<int> models;
+      for (const auto &m : bandicoot_core_goto_molecules()) models.insert(m.first);
+      std::vector<int> gone;
+      if (sv_docked && ! models.count(sv_docked->molecule())) gone.push_back(sv_docked->molecule());
+      for (const auto &w : sv_windows)
+         if (! models.count(w.first)) gone.push_back(w.first);
+      for (int imol : gone) close_sequence_view(imol);
+   }
+
+   void setup_sequence_views() {
+      bandicoot_sequence_view_hooks h;
+      h.model_changed = [this](int imol) { sequence_model_changed(imol); };
+      h.molecules_changed = [this]() { CallAfter([this]() { sequence_molecules_changed(); }); };
+      h.highlight = [this](int imol, const std::string &chain, int resno, const std::string &ins) {
+         if (wxui::SequenceView *v = find_sequence_view(imol)) v->highlight(chain, resno, ins);
+      };
+      bandicoot_core_set_sequence_view_hooks(h);
+   }
+
+   // Shows the pending fit in the bar or the window, as docked.
+   void show_fit() {
+      if (bandicoot_core_ar_docked()) {
+         ar_bar->set_status(wxString::FromUTF8(fit.results.status));
+         ar_bar->set_lights(ar_bar_lights(fit.results));
+         ar_bar->set_warnings(wxString::FromUTF8(fit.warnings));
+         ar_bar->present(fit.auto_clear);
+         place_transient_bars();
+      } else {
+         accept_reject->set_status(wxString::FromUTF8(fit.results.status));
+         accept_reject->set_lights(ar_lights(fit.results));
+         accept_reject->set_warnings(wxString::FromUTF8(fit.warnings));
          if (! accept_reject->IsShown()) {
             int x, y;
             if (bandicoot_core_ar_position(x, y))
@@ -595,23 +777,106 @@ private:
             else
                accept_reject->CentreOnParent();
          }
-         accept_reject->present(wxString::FromUTF8(fit_type), show_reverse, auto_clear);
+         accept_reject->present(wxString::FromUTF8(fit.fit_type), fit.show_reverse,
+                                fit.auto_clear);
+      }
+   }
+
+   // Docked or always-shown changed: a waiting fit moves to where it is
+   // now answered.
+   void ar_settings_changed() {
+      if (fit.active) {
+         bool docked_now = bandicoot_core_ar_docked();
+         if (docked_now && accept_reject->pending()) {
+            accept_reject->stand_down();
+            show_fit();
+         } else if (! docked_now && ar_bar->pending()) {
+            ar_bar->stand_down();
+            show_fit();
+         }
+      }
+      place_transient_bars();
+   }
+
+   // Accept/Reject: the docked bar above the surface or the free-floating
+   // window, as Coot's docked preference says, answers whenever the core
+   // has a fit waiting. Return and Escape on the surface answer it too.
+   void setup_accept_reject() {
+      wxui::AcceptRejectDialog::Hooks h;
+      h.on_action = [this](const std::string &action, bool state) {
+         if (action == "on_accept_reject_refinement_accept_button_clicked" ||
+             action == "on_accept_reject_refinement_reject_button_clicked")
+            fit.active = false;
+         bandicoot_core_run_action(action, state);
+      };
+      h.on_hidden = [](const wxPoint &p) { bandicoot_core_save_ar_position(p.x, p.y); };
+      h.dock = []() { bandicoot_core_set_ar_docked(true); };
+      accept_reject = new wxui::AcceptRejectDialog(this, h);
+
+      wxui::AcceptRejectBar::Hooks bh;
+      bh.on_action = [this](const std::string &action, bool state) {
+         if (action == "on_accept_reject_refinement_atom_pull_autoclear_checkbutton_toggled")
+            fit.auto_clear = state;
+         bandicoot_core_run_action(action, state);
+      };
+      bh.on_idle = [this]() {
+         fit.active = false;
+         place_transient_bars();
+      };
+      bh.always_shown = []() { return bandicoot_core_ar_always_shown(); };
+      bh.set_always_shown = [](bool always) { bandicoot_core_set_ar_always_shown(always); };
+      bh.undock = []() { bandicoot_core_set_ar_docked(false); };
+      ar_bar = new wxui::AcceptRejectBar(transient_area, bh);
+      transient_area->GetSizer()->Add(ar_bar, 0, wxEXPAND);
+
+      bandicoot_ar_view v;
+      v.present = [this](const std::string &fit_type, const bandicoot_ar_results &r,
+                         bool show_reverse, bool auto_clear) {
+         fit.active = true;
+         fit.fit_type = fit_type;
+         fit.show_reverse = show_reverse;
+         fit.auto_clear = auto_clear;
+         fit.results = r;
+         fit.warnings.clear();
+         show_fit();
       };
       v.update = [this](const bandicoot_ar_results &r) {
-         if (! accept_reject->pending()) return;
-         accept_reject->set_status(wxString::FromUTF8(r.status));
-         accept_reject->set_lights(ar_lights(r));
+         if (! fit.active) return;
+         fit.results.status = r.status;
+         if (! r.lights.empty()) fit.results.lights = r.lights;
+         if (ar_bar->pending()) {
+            ar_bar->set_status(wxString::FromUTF8(r.status));
+            ar_bar->set_lights(ar_bar_lights(r));
+         } else if (accept_reject->pending()) {
+            accept_reject->set_status(wxString::FromUTF8(r.status));
+            accept_reject->set_lights(ar_lights(r));
+         }
       };
       v.warnings = [this](const std::string &text) {
+         fit.warnings = text;
+         ar_bar->set_warnings(wxString::FromUTF8(text));
          accept_reject->set_warnings(wxString::FromUTF8(text));
       };
+      v.dismiss = [this]() {
+         fit.active = false;
+         ar_bar->stand_down();
+         accept_reject->stand_down();
+         place_transient_bars();
+      };
+      v.settings_changed = [this]() { ar_settings_changed(); };
       bandicoot_core_set_ar_view(v);
+      place_transient_bars();
 
       surface->key_filter = [this](int code) {
-         if (! accept_reject->pending()) return wxui::model_dialogs_take_key(code);
-         if (code == WXK_RETURN || code == WXK_NUMPAD_ENTER) { accept_reject->accept(); return true; }
-         if (code == WXK_ESCAPE) { accept_reject->reject(); return true; }
-         return false;
+         if (! ar_pending()) return wxui::model_dialogs_take_key(code);
+         bool enter = code == WXK_RETURN || code == WXK_NUMPAD_ENTER;
+         if (! enter && code != WXK_ESCAPE) return false;
+         if (ar_bar->pending()) {
+            if (enter) ar_bar->accept(); else ar_bar->reject();
+         } else {
+            if (enter) accept_reject->accept(); else accept_reject->reject();
+         }
+         return true;
       };
    }
 

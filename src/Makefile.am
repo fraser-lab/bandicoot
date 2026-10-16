@@ -618,6 +618,10 @@ if UI_WX
 	wxUI/main/choosers.cc        \
 	wxUI/main/delete-waters.hh   \
 	wxUI/main/delete-waters.cc   \
+	wxUI/main/accept-reject-bar.hh \
+	wxUI/main/accept-reject-bar.cc \
+	wxUI/main/sequence-view.hh \
+	wxUI/main/sequence-view.cc \
 	wxUI/dialogs/accept-reject-dialog.hh \
 	wxUI/dialogs/accept-reject-dialog.cc \
 	wxUI/dialogs/toolbar-customizer.hh \

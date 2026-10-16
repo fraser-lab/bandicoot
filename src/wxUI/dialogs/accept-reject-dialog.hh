@@ -5,7 +5,8 @@
 // and the tools that act on the moving atoms. Every control reports through
 // on_action with the Coot action name it stands for; the owner runs it.
 //
-// The window is kept and reused: Accept, Reject and closing it hide it.
+// The window is kept and reused: Accept, Reject and closing it hide it. Its
+// Dock button hands fits to the docked bar (accept-reject-bar.hh).
 
 #ifndef BANDICOOT_WXUI_ACCEPT_REJECT_DIALOG_HH
 #define BANDICOOT_WXUI_ACCEPT_REJECT_DIALOG_HH
@@ -36,6 +37,8 @@ public:
       std::function<void(const std::string &action, bool state)> on_action;
       // the window was hidden where it stood
       std::function<void(const wxPoint &where)> on_hidden;
+      // the Dock button: answer fits with the docked bar instead
+      std::function<void()> dock;
    };
 
    AcceptRejectDialog(wxWindow *parent, const Hooks &hooks);
@@ -51,6 +54,8 @@ public:
    // as the buttons; for the keyboard's Return and Escape
    void accept();
    void reject();
+   // Hidden with nothing run: the fit ended elsewhere, or went to the bar.
+   void stand_down();
 
 private:
    Hooks hooks;

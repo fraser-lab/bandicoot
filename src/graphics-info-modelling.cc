@@ -118,6 +118,7 @@ void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
 // The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc).
 bool bandicoot_wx_ar_update(const coot::refinement_results_t &rr);
 bool bandicoot_wx_ar_warnings(const std::string &text);
+void bandicoot_wx_ar_dismiss();
 // And its Rotation & Translation and Select Rotamer windows. False if wx has
 // not taken them on.
 bool bandicoot_wx_rot_trans_present();
@@ -751,6 +752,9 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function_and_draw()
                       << std::endl;
          g.clear_up_moving_atoms(); // get the restraints lock, deletes last_restraints
          g.clear_moving_atoms_object();
+#ifdef BANDICOOT_UI_WX
+         bandicoot_wx_ar_dismiss();
+#endif
          if (accept_reject_dialog_docked_flag == coot::DIALOG) {
 	       // this calls clear_up_moving_atoms() and clears atom pull restraint.
 	       // Null guard + immediate-null: accept_reject_dialog becomes a

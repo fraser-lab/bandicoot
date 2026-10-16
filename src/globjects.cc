@@ -118,6 +118,8 @@
 // (wxUI/bridge/core-bridge.cc): while one is up, a drag must not translate
 // the moving atoms, as with the GTK dialogs below.
 bool bandicoot_wx_moving_atoms_window_open();
+// The wx build's sequence views.
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
 #endif
 
 std::vector<molecule_class_info_t> graphics_info_t::molecules;
@@ -4219,6 +4221,9 @@ gint glarea_button_release(GtkWidget *widget, GdkEventButton *event) {
                      mmdb::Atom *at = g.molecules[im].get_atom(nearest_atom_index_info);
                      g.setRotationCentre(nearest_atom_index_info.atom_index, nearest_atom_index_info.imol);
                      g.sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(im));
+#ifdef BANDICOOT_UI_WX
+                     bandicoot_wx_sequence_view_highlight(im, at);
+#endif
                   } else {
                      mmdb::Atom *at = g.get_moving_atom(nearest_atom_index_info);
                      if (at) {

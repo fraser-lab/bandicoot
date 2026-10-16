@@ -66,6 +66,8 @@
 void bandicoot_wx_goto_target_changed();
 void bandicoot_wx_goto_model_changed(int imol);
 void bandicoot_wx_goto_molecules_changed(int imol);
+// And its sequence views.
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
 #endif
 
 // After this function, we call try_centre_from_new_go_to_atom(); 
@@ -391,6 +393,9 @@ graphics_info_t::intelligent_near_atom_centring(GtkWidget *go_to_atom_window,
                                                       };
 
          sequence_view_highlight_residue_maybe(next_atom, get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+         bandicoot_wx_sequence_view_highlight(imol, next_atom);
+#endif
       }
    }
    return 1;

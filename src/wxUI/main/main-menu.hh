@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 class wxMenuBar;
@@ -40,6 +41,12 @@ struct MainMenuHooks {
    std::function<void(const std::string &action, const std::string &path)> on_select;
    // unset: every item is shown
    std::function<bool(const std::string &capability)> has_capability;
+   // Whether a molecule submenu is connected (else it stays a placeholder),
+   // and its molecules (imol, label), asked for each time it opens.
+   std::function<bool(const std::string &list)> has_molecule_list;
+   std::function<std::vector<std::pair<int, std::string>>(const std::string &list)> molecules;
+   // a molecule was chosen from a molecule submenu
+   std::function<void(const std::string &list, int imol)> on_molecule;
 };
 
 wxMenuBar *build_main_menu(const MainMenuHooks &hooks);

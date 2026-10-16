@@ -2135,6 +2135,11 @@ PyObject *closest_atom_raw_py() {
 
 #include "nsv.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's sequence views (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
+#endif
+
 /*! \brief update the Go To Atom widget entries to atom closest to
   screen centre. */
 void update_go_to_atom_from_current_position() {
@@ -2171,6 +2176,9 @@ void update_go_to_atom_from_current_position() {
 
       mmdb::Atom *at = g.molecules[imol].get_atom(atom_spec);
       sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_sequence_view_highlight(imol, at);
+#endif
    }
 }
 
@@ -2202,6 +2210,9 @@ update_sequence_view_current_position_highlight_from_active_atom() {
       graphics_info_t g;
       mmdb::Atom *at = g.molecules[imol].get_atom(atom_spec);
       sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_sequence_view_highlight(imol, at);
+#endif
    }
 
 }
