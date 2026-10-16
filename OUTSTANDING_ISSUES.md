@@ -86,6 +86,30 @@ base chooser opens but choosing a base changes nothing, silently. Inherited from
 
 - **Workaround:** click any other atom of the nucleotide.
 
+### Opening data without map coefficients makes no map
+An MTZ file without phases, opened with File > Open MTZ, mmCIF, fcf or phs... or with
+Auto Open MTZ, goes to Coot's calculate-phases route, which asks for a model through a
+Python dialog that was never ported, so nothing happens. An mmCIF file holding observed
+structure factors only is read, found to have no calculated amplitudes, and left with a
+warning on the terminal. Both inherited from Coot 0.9.
+
+- **Workaround:** open the MTZ file written by refinement (it carries map coefficients),
+  or refine first with Run Refmac.
+
+### Some data files do nothing when opened as a dataset
+File > Open MTZ, mmCIF, fcf or phs... offers `.mmcif`, `.cif.gz` and CNS files, but only
+`.mtz`, `.cif`, `.fcf`, `.phs` and `.pha` are read; the others are passed over silently.
+Coot 0.9's CNS route here is disabled. Inherited from Coot 0.9.
+
+- **Workaround:** rename `.mmcif` to `.cif`, uncompress `.cif.gz`, and open CNS map
+  coefficients with Auto Open MTZ.
+
+### Search Monomer Library ignores "Include Monomers with Minimal Descriptions"
+The check box has no effect: the search treats every monomer the same either way.
+Inherited from Coot 0.9.
+
+- **Workaround:** none needed; the results are the same.
+
 ### Generated restraints depend on the quality of the input geometry
 elbow's target distances partly track the input coordinates, so restraints derived from
 an unrefined ligand can carry targets a ring cannot satisfy, and real-space refinement

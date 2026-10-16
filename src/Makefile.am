@@ -622,6 +622,8 @@ if UI_WX
 	wxUI/main/accept-reject-bar.cc \
 	wxUI/main/sequence-view.hh \
 	wxUI/main/sequence-view.cc \
+	wxUI/main/file-menu.hh \
+	wxUI/main/file-menu.cc \
 	wxUI/dialogs/accept-reject-dialog.hh \
 	wxUI/dialogs/accept-reject-dialog.cc \
 	wxUI/dialogs/toolbar-customizer.hh \
@@ -630,6 +632,8 @@ if UI_WX
 	wxUI/main/sidebar.cc         \
 	wxUI/main/mac-menu.hh        \
 	wxUI/main/mac-menu.mm        \
+	wxUI/dialogs/file-panel-size.hh \
+	wxUI/dialogs/file-panel-size.mm \
 	wxUI/assets/icons.hh         \
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \

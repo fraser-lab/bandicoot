@@ -102,6 +102,10 @@
 #include "lbg-interface.hh"          // Ligand menu: SMILES/Residue -> 2D
 #include "sdf-interface.hh"          // Ligand menu: SMILES -> 3D, chemical features
 #include "c-interface-ligands.hh"    // Ligand menu: contact dots for ligand
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/bridge/core-bridge.hh"  // the wx build's results list
+bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_result_row> &rows);
+#endif
 #include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
@@ -2230,6 +2234,39 @@ void bandicoot_interesting_things_py(const char *title, PyObject *baddie_list) {
    PyObject *blist = PySequence_List(baddie_list);
    if (! blist) { PyErr_Clear(); return; }
    Py_ssize_t n = PyList_Size(blist);
+
+#ifdef BANDICOOT_UI_WX
+   {
+      // the same rows, for the wx build's list
+      std::vector<bandicoot_result_row> rows;
+      for (Py_ssize_t i = 0; i < n; i++) {
+         PyObject *item = PyList_GetItem(blist, i);   // borrowed
+         if (! item || ! PyList_Check(item)) continue;
+         Py_ssize_t li = PyList_Size(item);
+         bandicoot_result_row row;
+         row.label = bandicoot_py_str(PyList_GetItem(item, 0));
+         if (li == 4) {
+            row.at_point = true;
+            row.x = PyFloat_AsDouble(PyList_GetItem(item, 1));
+            row.y = PyFloat_AsDouble(PyList_GetItem(item, 2));
+            row.z = PyFloat_AsDouble(PyList_GetItem(item, 3));
+         } else if (li >= 6) {
+            row.imol  = (int) PyInt_AsLong(PyList_GetItem(item, 1));
+            row.chain = bandicoot_py_str(PyList_GetItem(item, 2));
+            row.resno = (int) PyInt_AsLong(PyList_GetItem(item, 3));
+            row.atom  = bandicoot_py_str(PyList_GetItem(item, 5));
+         } else {
+            continue;
+         }
+         rows.push_back(row);
+      }
+      PyErr_Clear();
+      if (bandicoot_wx_results(title ? title : "Results", rows)) {
+         Py_DECREF(blist);
+         return;
+      }
+   }
+#endif
 
    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
    gtk_window_set_title(GTK_WINDOW(window), title ? title : "Results");

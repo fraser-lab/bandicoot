@@ -1,48 +1,87 @@
 // src/wxUI/dialogs/file-dialogs.cc
 
 #include "wxUI/dialogs/file-dialogs.hh"
+#include "wxUI/dialogs/file-panel-size.hh"
 
 #include <wx/dirdlg.h>
 #include <wx/filedlg.h>
-#include <wx/filedlgcustomize.h>
+#include <wx/checkbox.h>
+#include <wx/choice.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
 #include <wx/filename.h>
 
 namespace wxui {
 
 namespace {
 
-// Adds the request's check boxes and drop-downs to the panel, and reads their
-// values back when it closes with a file.
-class ExtrasHook : public wxFileDialogCustomizeHook {
-public:
-   explicit ExtrasHook(FileRequest &r) : request(r) {}
+// The request's check boxes and drop-downs, one to a row and aligned with
+// each other on the right, below the file list. They keep their own width:
+// one that follows the panel's would also become the panel's least width. The panel is made through a plain
+// function pointer, so the request being shown is held here while it is up.
+FileRequest *shown_request = nullptr;
 
-   void AddCustomControls(wxFileDialogCustomize &customizer) override {
-      for (const CheckOption &c : request.checks) {
-         wxFileDialogCheckBox *box = customizer.AddCheckBox(c.label);
+class ExtrasPanel : public wxPanel {
+public:
+   explicit ExtrasPanel(wxWindow *parent) : wxPanel(parent) {
+      wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+      for (const CheckOption &c : shown_request->checks) {
+         wxCheckBox *box = new wxCheckBox(this, wxID_ANY, c.label);
          box->SetValue(c.value);
          boxes.push_back(box);
+         col->Add(box, 0, wxALIGN_RIGHT | wxTOP, 4);
       }
-      for (const ChoiceOption &c : request.choices) {
-         customizer.AddStaticText(c.label);
-         wxFileDialogChoice *ch = customizer.AddChoice(c.items.size(), c.items.data());
+      for (const ChoiceOption &c : shown_request->choices) {
+         wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
+         row->Add(new wxStaticText(this, wxID_ANY, c.label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+         wxChoice *ch = new wxChoice(this, wxID_ANY);
+         for (const wxString &item : c.items) ch->Append(item);
          ch->SetSelection(c.value);
          menus.push_back(ch);
+         row->Add(ch, 0, wxALIGN_CENTER_VERTICAL);
+         col->Add(row, 0, wxALIGN_RIGHT | wxTOP, 4);
       }
+      wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+      outer->Add(col, 0, wxALIGN_RIGHT | wxRIGHT | wxBOTTOM, 12);
+      SetSizer(outer);
+      Fit();
    }
 
-   void TransferDataFromCustomControls() override {
-      for (size_t i = 0; i < boxes.size(); i++)
-         request.checks[i].value = boxes[i]->GetValue();
-      for (size_t i = 0; i < menus.size(); i++)
-         request.choices[i].value = menus[i]->GetSelection();
+   void read_back(FileRequest &request) const {
+      for (size_t i = 0; i < boxes.size(); i++) request.checks[i].value = boxes[i]->GetValue();
+      for (size_t i = 0; i < menus.size(); i++) request.choices[i].value = menus[i]->GetSelection();
    }
 
 private:
-   FileRequest &request;
-   std::vector<wxFileDialogCheckBox *> boxes;
-   std::vector<wxFileDialogChoice *> menus;
+   std::vector<wxCheckBox *> boxes;
+   std::vector<wxChoice *> menus;
 };
+
+wxWindow *make_extras(wxWindow *parent) {
+   return new ExtrasPanel(parent);
+}
+
+bool has_extras(const FileRequest &r) {
+   return ! r.checks.empty() || ! r.choices.empty();
+}
+
+// Shows d with the request's extras, reading them back if a file was chosen.
+int show_with_extras(wxFileDialog &d, FileRequest &request) {
+   if (has_extras(request)) {
+      shown_request = &request;
+      d.SetExtraControlCreator(make_extras);
+   }
+   limit_file_panel_size();
+   int result = d.ShowModal();
+   if (has_extras(request)) {
+      if (result == wxID_OK)
+         if (ExtrasPanel *extras = dynamic_cast<ExtrasPanel *>(d.GetExtraControl()))
+            extras->read_back(request);
+      shown_request = nullptr;
+   }
+   return result;
+}
 
 wxString patterns_for(const FileType &t) {
    wxString p;
@@ -79,12 +118,9 @@ std::vector<wxString> open_files(wxWindow *parent, FileRequest &request) {
    wxFileDialog d(parent, request.title, request.directory, wxEmptyString,
                   wildcard_for(request.types, true), style);
    d.SetFilterIndex(request.type_index);
-   ExtrasHook hook(request);
-   if (! request.checks.empty() || ! request.choices.empty())
-      d.SetCustomizeHook(hook);
 
    std::vector<wxString> paths;
-   if (d.ShowModal() != wxID_OK) return paths;
+   if (show_with_extras(d, request) != wxID_OK) return paths;
    wxArrayString chosen;
    if (request.multiple) d.GetPaths(chosen); else chosen.Add(d.GetPath());
    for (const wxString &p : chosen) paths.push_back(p);
@@ -98,11 +134,8 @@ wxString save_file(wxWindow *parent, FileRequest &request) {
    wxFileDialog d(parent, request.title, request.directory, request.file_name,
                   wildcard_for(request.types, false), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
    d.SetFilterIndex(request.type_index);
-   ExtrasHook hook(request);
-   if (! request.checks.empty() || ! request.choices.empty())
-      d.SetCustomizeHook(hook);
 
-   if (d.ShowModal() != wxID_OK) return wxEmptyString;
+   if (show_with_extras(d, request) != wxID_OK) return wxEmptyString;
    wxString path = d.GetPath();
    request.type_index = d.GetFilterIndex();
    remember_directory(request, path);
@@ -111,6 +144,7 @@ wxString save_file(wxWindow *parent, FileRequest &request) {
 
 wxString choose_folder(wxWindow *parent, const wxString &title, const wxString &start) {
    wxDirDialog d(parent, title, start, wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+   limit_file_panel_size();
    return d.ShowModal() == wxID_OK ? d.GetPath() : wxString();
 }
 

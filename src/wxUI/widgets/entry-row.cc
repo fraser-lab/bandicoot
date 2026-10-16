@@ -16,8 +16,12 @@ EntryRow::EntryRow(wxWindow *parent, const wxString &label, const wxString &init
    wxBoxSizer *h = new wxBoxSizer(wxHORIZONTAL);
    if (! label.empty())
       h->Add(new wxStaticText(this, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+   // drawn white with a dark edge: on the grey dialogs the native field
+   // otherwise all but disappears
    text = new wxTextCtrl(this, wxID_ANY, initial, wxDefaultPosition, wxDefaultSize,
-                         wxTE_PROCESS_ENTER);
+                         wxTE_PROCESS_ENTER | wxBORDER_SIMPLE);
+   text->SetBackgroundColour(*wxWHITE);
+   text->SetForegroundColour(*wxBLACK);
    h->Add(text, 1, wxALIGN_CENTER_VERTICAL);
 
    auto fire = [this]() { if (on_button) on_button(get_text()); };

@@ -1,7 +1,8 @@
 // src/wxUI/main/file-actions.hh
 //
-// Actions that open a file chooser and hand the chosen file to the core:
-// the toolbar's Open Coords, Auto-open MTZ and Open Map.
+// The File menu's actions (and the toolbar's Open Coords, Auto-open MTZ and
+// Open Map, which are the same): file choosers that hand the chosen file to
+// the core, and the windows in file-menu.hh.
 
 #ifndef BANDICOOT_WXUI_FILE_ACTIONS_HH
 #define BANDICOOT_WXUI_FILE_ACTIONS_HH
@@ -12,6 +13,7 @@ class wxWindow;
 
 namespace wxui {
 
+bool is_file_action(const std::string &action);
 // False if action is not one of these.
 bool run_file_action(wxWindow *parent, const std::string &action);
 

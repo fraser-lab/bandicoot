@@ -30,6 +30,10 @@
 #include "c-interface-refine.h"
 #include "c-interface-preferences.h"
 #include "coot-preferences.h"
+#include "cmtz-interface.hh"
+#include "cc-interface-scripting.hh"
+#include "get-monomer.hh"
+#include "read-cif.h"
 #include "cc-interface.hh"
 #include "drag-and-drop.hh"
 #include "c-interface-ligands-swig.hh"
@@ -323,6 +327,140 @@ bool bandicoot_core_auto_open_dataset(const std::string &file_name, std::string 
    return false;
 }
 
+// ---- File menu: datasets
+
+bandicoot_dataset_step bandicoot_core_open_dataset(const std::string &file_name) {
+   // as the GTK build's dataset chooser and column selector decide
+   const char *f = file_name.c_str();
+   if (is_mtz_file_p(f)) {
+      if (mtz_file_has_phases_p(f))
+         return bandicoot_dataset_step::columns;
+      calc_phases_generic(f);
+      return bandicoot_dataset_step::done;
+   }
+   std::string ext = coot::util::file_name_extension(file_name);
+   if (ext == ".phs" || ext == ".pha") {
+      graphics_store_phs_filename(f);
+      return bandicoot_dataset_step::phs;
+   }
+   if (ext == ".fcf" || ext == ".cif") {
+      int imol = try_read_cif_file(f);
+      if (ext == ".fcf" && is_valid_map_molecule(imol)) {
+         graphics_info_t g;
+         g.scroll_wheel_map = imol;
+      }
+      return bandicoot_dataset_step::done;
+   }
+   return bandicoot_dataset_step::unreadable;
+}
+
+static std::vector<std::string> column_labels(const std::vector<coot::mtz_type_label> &v) {
+   std::vector<std::string> labels;
+   for (const coot::mtz_type_label &l : v) labels.push_back(l.column_label);
+   return labels;
+}
+
+bool bandicoot_core_mtz_columns(const std::string &file_name, bandicoot_mtz_columns &c) {
+   coot::mtz_column_types_info_t info = coot::get_mtz_columns(file_name);
+   if (! info.read_success) return false;
+   // the amplitudes Coot's expert mode lists: F, then anomalous differences
+   c.amplitudes = column_labels(info.f_cols);
+   for (const std::string &d : column_labels(info.d_cols)) c.amplitudes.push_back(d);
+   c.phases  = column_labels(info.phi_cols);
+   c.weights = column_labels(info.weight_cols);
+   c.fobs    = column_labels(info.f_cols);
+   c.sigfobs = column_labels(info.sigf_cols);
+   c.r_free  = column_labels(info.r_free_cols);
+   c.preferred_amplitude = info.get_prefered_f_col_idx();
+   c.preferred_phase     = info.get_prefered_phi_col_idx();
+   return true;
+}
+
+int bandicoot_core_make_map_from_mtz(const bandicoot_map_from_mtz &r) {
+   return make_and_draw_map_with_reso_with_refmac_params(
+      r.file_name.c_str(), r.amplitudes.c_str(), r.phases.c_str(),
+      r.use_weights ? r.weights.c_str() : "",
+      r.use_weights, r.is_difference_map, r.refmac_labels,
+      r.fobs.c_str(), r.sigfobs.c_str(), r.r_free.c_str(), ! r.r_free.empty(),
+      0, r.use_resolution_limits, r.low_resolution, r.high_resolution);
+}
+
+void bandicoot_core_read_phs(const std::string &file_name, int imol) {
+   read_phs_and_make_map_using_cell_symm_from_mol(file_name.c_str(), imol);
+}
+
+// ---- File menu: dictionaries
+
+std::vector<std::string> bandicoot_core_dictionary_extensions() {
+   return extensions(graphics_info_t::dictionary_glob_extensions);
+}
+
+bool bandicoot_core_dictionary_generates_molecule() {
+   return graphics_info_t::cif_dictionary_file_selector_create_molecule_flag;
+}
+
+void bandicoot_core_import_dictionary(const std::string &file_name, int molecule, bool generate) {
+   int imol_enc = molecule;
+   if (molecule == -2) imol_enc = coot::protein_geometry::IMOL_ENC_AUTO;
+   if (molecule == -1) imol_enc = coot::protein_geometry::IMOL_ENC_ANY;
+   if (molecule == -3) imol_enc = coot::protein_geometry::IMOL_ENC_UNSET;
+   handle_cif_dictionary_for_molecule(file_name.c_str(), imol_enc, generate ? 1 : 0);
+}
+
+// ---- File menu: monomers
+
+int bandicoot_core_get_monomer(const std::string &comp_id) {
+   return get_monomer(comp_id);
+}
+
+int bandicoot_core_get_monomer_from_network(const std::string &comp_id) {
+   return get_monomer_molecule_by_network_and_dict_gen(comp_id);
+}
+
+int bandicoot_core_get_sbase_monomer(const std::string &comp_id) {
+   return get_sbase_monomer(comp_id.c_str());
+}
+
+std::vector<std::pair<std::string, std::string>>
+bandicoot_core_search_monomers(const std::string &text, bool minimal, bool sbase) {
+   if (sbase) {
+      graphics_info_t g;
+      return g.Geom_p()->matching_ccp4srs_residues_names(text);
+   }
+   return monomer_lib_3_letter_codes_matching(text, minimal ? 1 : 0);
+}
+
+std::string comp_id_depiction_png(const std::string &comp_id, int imol, unsigned int image_size);
+
+std::string bandicoot_core_monomer_depiction(const std::string &comp_id, unsigned int size) {
+   return comp_id_depiction_png(comp_id, 0, size);
+}
+
+// ---- File menu: fetching
+
+void bandicoot_core_fetch_by_accession(bandicoot_accession_kind kind, const std::string &code_in) {
+   // as the GTK window's Get it: trailing space trimmed, otherwise as typed
+   std::string code = coot::util::remove_trailing_whitespace(code_in);
+   switch (kind) {
+   case bandicoot_accession_kind::pdb:
+      get_coords_for_accession_code(code);
+      break;
+   case bandicoot_accession_kind::pdb_and_map_eds:
+      safe_python_command("get_eds_pdb_and_mtz(" + single_quote(code) + ")");
+      break;
+   case bandicoot_accession_kind::pdb_and_map_pdb_redo:
+      safe_python_command("get_pdb_redo(" + single_quote(code) + ")");
+      break;
+   case bandicoot_accession_kind::alphafold_uniprot:
+      fetch_alphafold_model_for_uniprot_id(code);
+      break;
+   }
+}
+
+void bandicoot_core_fetch_and_superpose_alphafold() {
+   fetch_and_superpose_alphafold_models_using_active_molecule();
+}
+
 // ---- Accept/Reject
 
 static bandicoot_ar_view ar_view;
@@ -437,6 +575,23 @@ bool bandicoot_wx_info(const std::string &text, bool markup) {
    if (! ui_view.info) return false;
    ui_view.info(markup ? without_markup(text) : text);
    return true;
+}
+
+bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_result_row> &rows) {
+   if (! ui_view.results) return false;
+   ui_view.results(title, rows);
+   return true;
+}
+
+void bandicoot_core_go_to_result(const bandicoot_result_row &row) {
+   // as the GTK list's buttons, recorded before the move
+   bandicoot_record_navigation("results-list", row.label.c_str());
+   if (row.at_point) {
+      set_rotation_centre(row.x, row.y, row.z);
+   } else {
+      set_go_to_atom_molecule(row.imol);
+      set_go_to_atom_chain_residue_atom_name(row.chain.c_str(), row.resno, row.atom.c_str());
+   }
 }
 
 bool bandicoot_wx_select_map() {

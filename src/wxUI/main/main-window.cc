@@ -36,6 +36,7 @@
 #include "wxUI/main/go-to-atom.hh"
 #include "wxUI/main/display-manager.hh"
 #include "wxUI/dialogs/message.hh"
+#include "wxUI/dialogs/click-through-dialog.hh"
 #include "wxUI/main/refine-dialogs.hh"
 #include "wxUI/main/model-dialogs.hh"
 #include "wxUI/main/choosers.hh"
@@ -447,6 +448,7 @@ public:
       hooks.on_select = [this](const std::string &action, const std::string &path) {
          // after the menu has closed
          if (action == "customize_toolbar") { CallAfter([]() { wxui::customize_top_toolbar(); }); return; }
+         if (run_menu_action(action)) return;
          report_unconnected(path, action);
       };
       hooks.has_molecule_list = [](const std::string &list) { return list == "sequence_view1"; };
@@ -643,6 +645,35 @@ private:
       } else {
          show_transient_area(false);
       }
+   }
+
+   // A main-menu item wx has taken on, run once the menu has closed. False
+   // if it is not one of them.
+   bool run_menu_action(const std::string &action) {
+      if (wxui::is_file_action(action)) {
+         CallAfter([this, action]() { wxui::run_file_action(this, action); });
+         return true;
+      }
+      return false;
+   }
+
+   // A results list; with nothing in it, a "No ... found" message instead
+   // (the title without a trailing colon names what was looked for).
+   void show_results(const std::string &title, const std::vector<bandicoot_result_row> &rows) {
+      if (rows.empty()) {
+         std::string t = title;
+         if (! t.empty() && t.back() == ':') t.pop_back();
+         wxui::info(this, t.empty() ? wxString("Nothing found")
+                                    : "No " + wxString::FromUTF8(t) + " found");
+         return;
+      }
+      wxui::ClickThroughDialog *d = new wxui::ClickThroughDialog(this, wxString::FromUTF8(title));
+      for (const bandicoot_result_row &r : rows) d->list()->add_item(wxString::FromUTF8(r.label));
+      d->list()->on_click = [rows](size_t i) {
+         if (i < rows.size()) bandicoot_core_go_to_result(rows[i]);
+      };
+      d->CentreOnParent();
+      d->Show();
    }
 
    // ---- sequence views: one docked, any number in windows of their own
@@ -887,6 +918,9 @@ private:
       bandicoot_ui_view v;
       v.info = [this](const std::string &text) { wxui::info(this, wxString::FromUTF8(text)); };
       v.select_map = [this]() { wxui::select_refinement_map(this); };
+      v.results = [this](const std::string &title, const std::vector<bandicoot_result_row> &rows) {
+         show_results(title, rows);
+      };
       v.release_fixed_atom_toggles = []() { wxui::release_fixed_atom_toggles(); };
       v.release_sidebar_toggle = [this](const std::string &widget) {
          if (sidebar) sidebar->release(widget);

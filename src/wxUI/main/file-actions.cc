@@ -4,9 +4,14 @@
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/dialogs/file-dialogs.hh"
 #include "wxUI/dialogs/message.hh"
+#include "wxUI/dialogs/form-dialogs.hh"
+#include "wxUI/main/file-menu.hh"
 
 #include <wx/filename.h>
+#include <wx/utils.h>
 
+#include <functional>
+#include <map>
 #include <vector>
 
 namespace wxui {
@@ -65,18 +70,117 @@ void open_map_action(wxWindow *parent) {
    bandicoot_core_read_map(choice.path.utf8_string(), choice.is_difference_map);
 }
 
+void open_dataset_action(wxWindow *parent) {
+   FileRequest r;
+   r.title = "Select Dataset File";
+   r.types = { file_type("Data", bandicoot_core_data_extensions()) };
+   r.directory = chooser_directory();
+   std::vector<wxString> paths = open_files(parent, r);
+   if (paths.empty()) return;
+   save_chooser_directory(r.directory);
+   std::string file = paths.front().utf8_string();
+
+   switch (bandicoot_core_open_dataset(file)) {
+   case bandicoot_dataset_step::columns:
+      show_column_labels(parent, file);
+      break;
+   case bandicoot_dataset_step::phs: {
+      // a .phs file carries no cell or symmetry: a molecule supplies them
+      MoleculeChooser::molecule_list models = bandicoot_core_goto_molecules();
+      if (models.empty()) {
+         info(parent, ".phs files additionally need cell and symmetry.\n"
+                      "We need a coordinates file to assign them.\n\n"
+                      "(Note that this will not read coordinates -\njust the cell and symmetry)");
+         break;
+      }
+      ChooserDialog *d = new ChooserDialog(parent, "Cell and Symmetry",
+                                           "Take the cell and symmetry from:", models);
+      d->on_ok = [file](int imol) { bandicoot_core_read_phs(file, imol); };
+      d->CentreOnParent();
+      d->Show();
+      break;
+   }
+   case bandicoot_dataset_step::done:
+      break;
+   case bandicoot_dataset_step::unreadable:
+      error(parent, "Could not open dataset", wxFileName(paths.front()).GetFullName(),
+            "Open dataset: " + file + ": not an MTZ, mmCIF, fcf or phs file");
+      break;
+   }
+}
+
+void import_dictionary_action(wxWindow *parent) {
+   FileRequest r;
+   r.title = "Select Cif Dictionary File";
+   r.types = { file_type("Dictionaries", bandicoot_core_dictionary_extensions()) };
+   r.directory = chooser_directory();
+   // Coot's Select Mol: Auto, All, then each model (shown, as in Coot,
+   // when no model is loaded too)
+   MoleculeChooser::molecule_list models = bandicoot_core_goto_molecules();
+   ChoiceOption mol;
+   mol.label = "Select Mol";
+   if (models.empty()) {
+      mol.items = { "No molecules" };
+   } else {
+      mol.items = { "Auto", "All" };
+      for (const auto &m : models) mol.items.push_back(wxString::FromUTF8(m.second));
+   }
+   r.choices.push_back(mol);
+   CheckOption generate;
+   generate.label = "Generate a Molecule";
+   generate.value = bandicoot_core_dictionary_generates_molecule();
+   r.checks.push_back(generate);
+
+   std::vector<wxString> paths = open_files(parent, r);
+   if (paths.empty()) return;
+   save_chooser_directory(r.directory);
+   int molecule = -3;  // no molecules
+   if (! models.empty()) {
+      int i = r.choices[0].value;
+      molecule = i == 0 ? -2 : i == 1 ? -1 : models[i - 2].first;
+   }
+   bandicoot_core_import_dictionary(paths.front().utf8_string(), molecule, r.checks[0].value);
+}
+
+// The File menu's items, by the GTK build's handler names; the toolbar's
+// Open Coords, Auto-open MTZ and Open Map share the first three.
+const std::map<std::string, std::function<void(wxWindow *)>> &file_actions() {
+   static const std::map<std::string, std::function<void(wxWindow *)>> actions = {
+      { "on_coords_toolbutton_clicked",    open_coordinates_action },
+      { "on_open_coordinates1_activate",   open_coordinates_action },
+      { "bandicoot_action_auto_open_mtz",  auto_open_mtz_action },
+      { "on_auto_open_mtz_activate",       auto_open_mtz_action },
+      { "bandicoot_action_open_map",       open_map_action },
+      { "on_open_map1_activate",           open_map_action },
+      { "on_open_dataset1_activate",       open_dataset_action },
+      { "on_import_cif_dictionary1_activate", import_dictionary_action },
+      { "on_get_monomer1_activate",        [](wxWindow *p) { show_get_monomer(p); } },
+      { "on_search_monomer_library1_activate", [](wxWindow *p) { show_monomer_search(p); } },
+      { "on_get_pdb_using_code1_activate", [](wxWindow *p) {
+           show_accession_code(p, int(bandicoot_accession_kind::pdb)); } },
+      { "on_get_pdb_and_map_using_eds1_activate", [](wxWindow *p) {
+           show_accession_code(p, int(bandicoot_accession_kind::pdb_and_map_eds)); } },
+      { "on_fetch_pdb_and_map_using_pdbredo1_activate", [](wxWindow *p) {
+           show_accession_code(p, int(bandicoot_accession_kind::pdb_and_map_pdb_redo)); } },
+      { "on_fetch_alphafold_model_using_uniprot_id1_activate", [](wxWindow *p) {
+           show_accession_code(p, int(bandicoot_accession_kind::alphafold_uniprot)); } },
+      { "on_fetch_corresponding_alphafold_model_and_superpose1_activate", [](wxWindow *) {
+           wxBusyCursor busy;
+           bandicoot_core_fetch_and_superpose_alphafold(); } },
+   };
+   return actions;
+}
+
 } // namespace
 
-bool run_file_action(wxWindow *parent, const std::string &action) {
+bool is_file_action(const std::string &action) {
+   return file_actions().count(action) > 0;
+}
 
-   if (action == "on_coords_toolbutton_clicked")
-      open_coordinates_action(parent);
-   else if (action == "bandicoot_action_auto_open_mtz")
-      auto_open_mtz_action(parent);
-   else if (action == "bandicoot_action_open_map")
-      open_map_action(parent);
-   else
-      return false;
+bool run_file_action(wxWindow *parent, const std::string &action) {
+   auto it = file_actions().find(action);
+   if (it == file_actions().end()) return false;
+   it->second(parent);
    return true;
 }
 

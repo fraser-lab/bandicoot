@@ -192,6 +192,60 @@ void bandicoot_core_set_goto_view(const bandicoot_goto_view &view);
 bool bandicoot_core_goto_position(int &x, int &y);
 void bandicoot_core_save_goto_position(int x, int y);
 
+// ---- File menu
+
+// Datasets (File > Open MTZ, mmCIF, fcf or phs...). What a chosen file
+// needs next, as Coot decides it.
+enum class bandicoot_dataset_step {
+   columns,       // an MTZ with map coefficients: choose its columns
+   phs,           // an XtalView .phs file: take a cell and symmetry from a molecule
+   done,          // read (or handed on) as it is
+   unreadable     // not a dataset Bandicoot can read
+};
+bandicoot_dataset_step bandicoot_core_open_dataset(const std::string &file_name);
+// An MTZ file's columns by type, and Coot's preferred amplitudes and phases.
+struct bandicoot_mtz_columns {
+   std::vector<std::string> amplitudes;  // F, then anomalous differences (D)
+   std::vector<std::string> phases, weights, fobs, sigfobs, r_free;
+   int preferred_amplitude = 0, preferred_phase = 0;
+};
+bool bandicoot_core_mtz_columns(const std::string &file_name, bandicoot_mtz_columns &columns);
+struct bandicoot_map_from_mtz {
+   std::string file_name, amplitudes, phases, weights;
+   bool use_weights = false, is_difference_map = false;
+   bool refmac_labels = false;           // keep labels for structure factor calculation
+   std::string fobs, sigfobs, r_free;
+   bool use_resolution_limits = false;
+   float low_resolution = 9999.9f, high_resolution = -1.0f;
+};
+int bandicoot_core_make_map_from_mtz(const bandicoot_map_from_mtz &request);
+// A .phs file read with the cell and symmetry of molecule imol.
+void bandicoot_core_read_phs(const std::string &file_name, int imol);
+
+// Dictionaries (File > Import CIF dictionary...). molecule: -2 Auto, -1 All,
+// a model's number, or -3 when no molecule is loaded.
+std::vector<std::string> bandicoot_core_dictionary_extensions();
+bool bandicoot_core_dictionary_generates_molecule();
+void bandicoot_core_import_dictionary(const std::string &file_name, int molecule, bool generate_molecule);
+
+// Monomers (Get Monomer..., Search Monomer Library...). Each returns the
+// new molecule's number, or -1.
+int bandicoot_core_get_monomer(const std::string &comp_id);
+int bandicoot_core_get_monomer_from_network(const std::string &comp_id);
+int bandicoot_core_get_sbase_monomer(const std::string &comp_id);
+// (comp id, name) for each monomer whose name holds every word of text
+std::vector<std::pair<std::string, std::string>>
+bandicoot_core_search_monomers(const std::string &text, bool minimal_descriptions, bool sbase);
+// A monomer's 2D depiction as PNG data; empty if it cannot be drawn.
+std::string bandicoot_core_monomer_depiction(const std::string &comp_id, unsigned int size);
+
+// Fetching by accession code (the Fetch items).
+enum class bandicoot_accession_kind { pdb, pdb_and_map_eds, pdb_and_map_pdb_redo, alphafold_uniprot };
+void bandicoot_core_fetch_by_accession(bandicoot_accession_kind kind, const std::string &code);
+// The AlphaFold models matching the active molecule's UniProt references,
+// superposed on it.
+void bandicoot_core_fetch_and_superpose_alphafold();
+
 // Sequence View: a model's chains as one-letter sequences, residues
 // coloured by secondary structure, as Coot's view shows them.
 struct bandicoot_seq_residue {
@@ -263,8 +317,23 @@ bool bandicoot_core_dm_geometry(bandicoot_dm_geometry &g);
 void bandicoot_core_save_dm_geometry(const bandicoot_dm_geometry &g);
 
 // Things the core asks of the window as a whole.
+// A results list's row (validation checks, PDB-REDO's changes, ...): a
+// point, or an atom of a molecule.
+struct bandicoot_result_row {
+   std::string label;
+   bool at_point = false;
+   float x = 0, y = 0, z = 0;
+   int imol = -1;
+   std::string chain, atom;
+   int resno = 0;
+};
+// Go where a row points.
+void bandicoot_core_go_to_result(const bandicoot_result_row &row);
+
 struct bandicoot_ui_view {
    std::function<void(const std::string &text)> info;  // Coot's info dialogs
+   // a results list (empty: nothing was found)
+   std::function<void(const std::string &title, const std::vector<bandicoot_result_row> &rows)> results;
    // choose the refinement map, waiting for the answer as Coot's chooser
    // did (the tools that ask go on with whatever was chosen)
    std::function<void()> select_map;
