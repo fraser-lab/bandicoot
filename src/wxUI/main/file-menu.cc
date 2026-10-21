@@ -5,15 +5,18 @@
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
 #include "wxUI/assets/palette.hh"
+#include "wxUI/dialogs/file-dialogs.hh"
 #include "wxUI/dialogs/form-dialogs.hh"
 #include "wxUI/dialogs/message.hh"
 #include "wxUI/widgets/entry-row.hh"
 #include "wxUI/widgets/titled-panel.hh"
 
+#include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
 #include <wx/dcbuffer.h>
 #include <wx/dialog.h>
+#include <wx/filename.h>
 #include <wx/frame.h>
 #include <wx/mstream.h>
 #include <wx/scrolwin.h>
@@ -382,6 +385,145 @@ void show_accession_code(wxWindow *parent, int kind_number) {
    d->CentreOnParent();
    d->Show();
    code->SetFocus();
+}
+
+// ------------------------------------------------------------ Recover Session
+
+void show_recover_session(wxWindow *parent) {
+   std::vector<bandicoot_backup> backups = bandicoot_core_recoverable_backups();
+   if (backups.empty()) {
+      info(parent, "Nothing to recover");
+      return;
+   }
+   for (const bandicoot_backup &b : backups) {
+      wxDialog *d = new wxDialog(parent, wxID_ANY, "Recover Coordinates");
+      d->SetBackgroundColour(palette::face());
+      TitledPanel *frame = new TitledPanel(d);
+      wxWindow *c = frame->content();
+      for (const std::string &line : { std::string("Read Coordinates:"), b.name,
+                                       std::string("Backup Coordinates:"), b.backup_file_name })
+         frame->content_sizer()->Add(new wxStaticText(c, wxID_ANY, wxString::FromUTF8(line)),
+                                     0, wxBOTTOM, 6);
+      wxStdDialogButtonSizer *buttons = d->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+      buttons->GetAffirmativeButton()->SetLabel("Recover");
+
+      d->Bind(wxEVT_BUTTON, [d, b](wxCommandEvent &) {
+         bandicoot_core_recover_from_backup(b);
+         d->Destroy();
+      }, wxID_OK);
+      d->Bind(wxEVT_BUTTON, [d](wxCommandEvent &) { d->Destroy(); }, wxID_CANCEL);
+      d->Bind(wxEVT_CLOSE_WINDOW, [d](wxCloseEvent &) { d->Destroy(); });
+
+      wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+      outer->Add(frame, 1, wxEXPAND | wxALL, 10);
+      outer->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+      d->SetSizerAndFit(outer);
+      d->CentreOnParent();
+      d->Show();
+   }
+}
+
+// ------------------------------------------------------------ Export Map
+
+namespace {
+
+void export_map_to_file(wxWindow *parent, int imol, bool fragment, float radius) {
+   FileRequest r;
+   r.title = "Export Map";
+   r.directory = wxString::FromUTF8(bandicoot_core_chooser_directory());
+   wxString path = save_file(parent, r);
+   if (path.empty()) return;
+   std::string file = path.utf8_string();
+   bool written;
+   {
+      wxBusyCursor busy;
+      written = fragment ? bandicoot_core_export_map_fragment(imol, radius, file)
+                         : bandicoot_core_export_map(imol, file);
+   }
+   if (! written)
+      error(parent, "Could not export map to", wxFileName(path).GetFullName(),
+            "Export Map: map " + std::to_string(imol) + " not written to " + file);
+}
+
+} // namespace
+
+void show_export_map(wxWindow *parent, bool fragment) {
+   MoleculeChooser::molecule_list maps = bandicoot_core_maps_for_fitting();
+   if (maps.empty()) {
+      info(parent, "No maps to export");
+      return;
+   }
+   EntryDialog *d = new EntryDialog(parent, "Export Map", wxEmptyString, maps);
+   d->chooser()->set_imol(bandicoot_core_export_map_default());
+   if (fragment) {
+      EntryRow *radius = d->add_field("Export Map within", "10");
+      radius->GetSizer()->Add(new wxStaticText(radius, wxID_ANY,
+                                 wxString::FromUTF8("\xC3\x85ngstr\xC3\xB6ms of the screen centre")),
+                              0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+      radius->Layout();
+      d->Fit();
+   }
+   d->on_ok = [parent, fragment](EntryDialog &dialog) {
+      int imol = dialog.get_imol();
+      double radius = 0;
+      if (fragment && (! dialog.field(0)->get_double(radius) || radius <= 0)) {
+         wxBell();
+         return false;
+      }
+      // the file panel follows once this window has gone
+      parent->CallAfter([parent, imol, fragment, radius]() {
+         export_map_to_file(parent, imol, fragment, float(radius));
+      });
+      return true;
+   };
+   d->CentreOnParent();
+   d->Show();
+}
+
+// ------------------------------------------------------------ Delete Molecules
+
+void show_delete_molecules(wxWindow *parent) {
+   MoleculeChooser::molecule_list molecules = bandicoot_core_models_and_maps();
+   wxDialog *d = new wxDialog(parent, wxID_ANY, "Delete Molecules", wxDefaultPosition,
+                              wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+   d->SetBackgroundColour(palette::face());
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(d, wxID_ANY, "Delete?   Name"), 0, wxLEFT | wxTOP | wxBOTTOM, 10);
+
+   wxScrolledWindow *list = new wxScrolledWindow(d, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                 wxVSCROLL | wxBORDER_THEME);
+   wxBoxSizer *rows = new wxBoxSizer(wxVERTICAL);
+   std::vector<std::pair<int, wxCheckBox *>> boxes;
+   for (const auto &m : molecules) {
+      wxCheckBox *b = new wxCheckBox(list, wxID_ANY, wxString::FromUTF8(m.second));
+      rows->Add(b, 0, wxALL, 4);
+      boxes.push_back({ m.first, b });
+   }
+   list->SetSizer(rows);
+   list->SetScrollRate(0, 10);
+   // as tall as the list, up to seven rows; longer lists scroll
+   wxSize all = rows->CalcMin();
+   int row_height = boxes.empty() ? 24 : boxes.front().second->GetBestSize().y + 8;
+   list->SetMinSize(wxSize(std::max(all.x + 24, 300), std::min(all.y, 7 * row_height) + 4));
+   col->Add(list, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
+
+   wxStdDialogButtonSizer *buttons = d->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+   buttons->GetAffirmativeButton()->SetLabel("Delete Marked Molecules && Maps");
+   col->Add(buttons, 0, wxEXPAND | wxALL, 10);
+
+   d->Bind(wxEVT_BUTTON, [d, boxes](wxCommandEvent &) {
+      std::vector<int> marked;
+      for (const auto &b : boxes)
+         if (b.second->IsChecked()) marked.push_back(b.first);
+      d->Destroy();
+      for (int imol : marked) bandicoot_core_close_molecule(imol);
+   }, wxID_OK);
+   d->Bind(wxEVT_BUTTON, [d](wxCommandEvent &) { d->Destroy(); }, wxID_CANCEL);
+   d->Bind(wxEVT_CLOSE_WINDOW, [d](wxCloseEvent &) { d->Destroy(); });
+
+   d->SetSizerAndFit(col);
+   d->CentreOnParent();
+   d->Show();
 }
 
 } // namespace wxui

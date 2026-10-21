@@ -9,6 +9,7 @@
 #define BANDICOOT_WXUI_PALETTE_HH
 
 #include <wx/colour.h>
+#include <wx/gdicmn.h>
 
 namespace wxui {
 namespace palette {

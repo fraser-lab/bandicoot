@@ -624,6 +624,10 @@ if UI_WX
 	wxUI/main/sequence-view.cc \
 	wxUI/main/file-menu.hh \
 	wxUI/main/file-menu.cc \
+	wxUI/main/edit-menu.hh \
+	wxUI/main/edit-menu.cc \
+	wxUI/main/preferences.hh \
+	wxUI/main/preferences.cc \
 	wxUI/dialogs/accept-reject-dialog.hh \
 	wxUI/dialogs/accept-reject-dialog.cc \
 	wxUI/dialogs/toolbar-customizer.hh \
@@ -634,6 +638,8 @@ if UI_WX
 	wxUI/main/mac-menu.mm        \
 	wxUI/dialogs/file-panel-size.hh \
 	wxUI/dialogs/file-panel-size.mm \
+	wxUI/dialogs/colour-panel.hh \
+	wxUI/dialogs/colour-panel.mm \
 	wxUI/assets/icons.hh         \
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \
@@ -645,6 +651,8 @@ if UI_WX
 	wxUI/assets/bevel.cc         \
 	wxUI/assets/button-base.hh   \
 	wxUI/assets/button-base.cc   \
+	wxUI/assets/arrow-button.hh  \
+	wxUI/assets/arrow-button.cc  \
 	wxUI/assets/bevel-button.hh  \
 	wxUI/assets/bevel-button.cc  \
 	wxUI/assets/toolbar-button.hh \

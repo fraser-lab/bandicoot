@@ -29,6 +29,8 @@
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/main/top-toolbar.hh"
+#include "wxUI/main/edit-menu.hh"
+#include "wxUI/main/preferences.hh"
 #include "wxUI/main/file-actions.hh"
 #include "wxUI/dialogs/accept-reject-dialog.hh"
 #include "wxUI/main/accept-reject-bar.hh"
@@ -451,10 +453,21 @@ public:
          if (run_menu_action(action)) return;
          report_unconnected(path, action);
       };
-      hooks.has_molecule_list = [](const std::string &list) { return list == "sequence_view1"; };
-      hooks.molecules = [](const std::string &) { return bandicoot_core_goto_molecules(); };
+      hooks.has_molecule_list = [](const std::string &list) {
+         return list == "sequence_view1" || list == "map_colour1";
+      };
+      hooks.molecules = [](const std::string &list) {
+         return list == "map_colour1" ? bandicoot_core_maps_for_fitting()
+                                      : bandicoot_core_goto_molecules();
+      };
       hooks.on_molecule = [this](const std::string &list, int imol) {
          if (list == "sequence_view1") CallAfter([this, imol]() { open_sequence_view(imol); });
+         if (list == "map_colour1") CallAfter([this, imol]() { wxui::show_map_colour(this, imol); });
+      };
+      hooks.is_checked = [](const std::string &action) {
+         if (action == "on_background_black1_activate") return bandicoot_core_background_is_black() ? 1 : 0;
+         if (action == "on_background_white1_activate") return bandicoot_core_background_is_black() ? 0 : 1;
+         return -1;
       };
       SetMenuBar(wxui::build_main_menu(hooks));
       wxui::build_top_toolbar(this, [this](const std::string &action, const std::string &label,
@@ -535,6 +548,8 @@ public:
       wxui::install_model_dialogs(this);
       wxui::install_choosers(this);
       wxui::install_delete_waters(this);
+      wxui::install_file_actions(this);
+      wxui::install_edit_menu(this);
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
       middle->Add(left_slot,  0, wxEXPAND);
@@ -568,6 +583,36 @@ public:
       if (save) bandicoot_core_save_sidebar_docked(state);
       if (state == docked && sidebar) return;
       place_sidebar(state);
+   }
+
+   // What Preferences changes here: the sidebar's place and icon size, and
+   // how sequence views are shown.
+   wxui::PreferencesHooks preferences_hooks() {
+      wxui::PreferencesHooks h;
+      h.sidebar_docked = [this]() { return docked; };
+      h.set_sidebar_docked = [this](bool state) { set_sidebar_docked(state, true); };
+      h.sidebar_side = [this]() { return side; };
+      h.set_sidebar_side = [this](int s) {
+         side = s;
+         bandicoot_core_save_sidebar_position(s);
+         bandicoot_core_save_sidebar_docked(true);
+         place_sidebar(true);
+      };
+      h.set_sidebar_icon_size = [this](int points) {
+         bandicoot_core_save_sidebar_icon_size(points);
+         place_sidebar(docked);
+      };
+      h.sequence_view_docking_changed = [this](bool dock) {
+         if (dock && ! sv_docked && ! sv_windows.empty()) dock_sequence_view(sv_windows.begin()->first);
+         if (! dock && sv_docked) float_sequence_view(sv_docked->molecule());
+      };
+      h.sequence_view_rows_changed = [this]() {
+         if (! sv_docked) return;
+         int rows = std::min(sv_docked->chain_count(), bandicoot_core_sequence_view_max_chains());
+         sv_height = sv_docked->height_for_rows(rows);
+         place_transient_bars();
+      };
+      return h;
    }
 
    // Called once this window is on screen.
@@ -652,6 +697,14 @@ private:
    bool run_menu_action(const std::string &action) {
       if (wxui::is_file_action(action)) {
          CallAfter([this, action]() { wxui::run_file_action(this, action); });
+         return true;
+      }
+      if (action == "on_preferences1_activate") {
+         CallAfter([this]() { wxui::show_preferences(this, preferences_hooks()); });
+         return true;
+      }
+      if (wxui::is_edit_action(action)) {
+         CallAfter([this, action]() { wxui::run_edit_action(this, action); });
          return true;
       }
       return false;

@@ -88,7 +88,9 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   coords-open.svg mtz-open.svg map-open.svg \
   refine-sphere-1.svg refine-sphere-plus-1.svg regularize-sphere-1.svg regularize-sphere-plus-1.svg \
   refine-tandem-1.svg probe-clash-local.svg auto-fit-rotamer-backrub.svg hydrogen-toggle.svg \
-  hydrogen-toggle-on.svg probe-clash-on.svg auto-fit-rotamer-backrub-on.svg
+  hydrogen-toggle-on.svg probe-clash-on.svg auto-fit-rotamer-backrub-on.svg \
+  preferences-general.svg preferences-bonds.svg preferences-maps.svg preferences-colours.svg \
+  preferences-others.svg
 
 if CLIPPER_TOP8000
 dist_cootpixmap_DATA += \

@@ -35,11 +35,11 @@ private:
    void on_paint(wxPaintEvent &e);
 };
 
-// A slider over a range of real values, showing the current value.
-class TitledSlider : public TitledPanel {
+// A slider over a range of real values between a left and a right arrow,
+// each of which moves it one step, with the current value after them.
+class StepSlider : public wxPanel {
 public:
-   TitledSlider(wxWindow *parent, const wxString &title,
-                double min, double max, double step, double value, int decimals = 2);
+   StepSlider(wxWindow *parent, double min, double max, double step, double value, int decimals = 2);
 
    double get_value() const;
    void set_value(double value);
@@ -52,6 +52,22 @@ private:
    wxSlider *slider;
    wxStaticText *readout;
    void show_value();
+   void step_by(int steps);
+};
+
+// A StepSlider in a titled frame.
+class TitledSlider : public TitledPanel {
+public:
+   TitledSlider(wxWindow *parent, const wxString &title,
+                double min, double max, double step, double value, int decimals = 2);
+
+   double get_value() const;
+   void set_value(double value);
+
+   std::function<void(double value)> on_change;
+
+private:
+   StepSlider *control;
 };
 
 // One choice from several, laid out vertically or in a row.

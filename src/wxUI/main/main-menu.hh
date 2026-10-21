@@ -47,6 +47,9 @@ struct MainMenuHooks {
    std::function<std::vector<std::pair<int, std::string>>(const std::string &list)> molecules;
    // a molecule was chosen from a molecule submenu
    std::function<void(const std::string &list, int imol)> on_molecule;
+   // A check or radio item's state in the core, asked each time its menu
+   // opens: 1 on, 0 off, -1 not known (the item keeps its own state).
+   std::function<int(const std::string &action)> is_checked;
 };
 
 wxMenuBar *build_main_menu(const MainMenuHooks &hooks);

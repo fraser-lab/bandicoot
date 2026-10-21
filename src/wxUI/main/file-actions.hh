@@ -17,6 +17,9 @@ bool is_file_action(const std::string &action);
 // False if action is not one of these.
 bool run_file_action(wxWindow *parent, const std::string &action);
 
+// Lets the core open the save panel once a symmetry atom is picked.
+void install_file_actions(wxWindow *parent);
+
 } // namespace wxui
 
 #endif // BANDICOOT_WXUI_FILE_ACTIONS_HH

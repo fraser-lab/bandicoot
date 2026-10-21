@@ -84,7 +84,7 @@ const std::map<std::string, const char *> item_icons = {
    { "on_density_size1_activate", "stock-menu-preferences.png" },
    { "on_edit_merge_molecules1_activate", "merge-molecules.svg" },
    { "on_pink_pointer_size1_activate", "pink-pointer.svg" },
-   { "on_preferences1_activate", "stock-menu-preferences.png" },
+   { "on_preferences1_activate", "preferences-general.svg" },
    { "on_edit_replace_fragment1_activate", "stock-menu-refresh.png" },
    { "on_edit_renumber_residues1_activate", "renumber-residues.svg" },
    { "on_edit_replace_residue1_activate", "stock-menu-refresh.png" },
@@ -216,6 +216,17 @@ void fill(wxMenu *menu, const std::vector<MenuEntry> &entries, const std::string
          menu->Append(mi);
          if (kind != wxITEM_NORMAL) mi->Check(e.checked);
          (*ids)[mi->GetId()] = Selection{ e.action, here };
+         // a radio item is turned off by checking another, so only "on" is set
+         if (kind != wxITEM_NORMAL && hooks.is_checked) {
+            auto is_checked = hooks.is_checked;
+            std::string action = e.action;
+            menu->Bind(wxEVT_MENU_OPEN, [menu, mi, action, is_checked, kind](wxMenuEvent &ev) {
+               ev.Skip();
+               if (ev.GetMenu() != menu) return;
+               int state = is_checked(action);
+               if (state == 1 || (state == 0 && kind == wxITEM_CHECK)) mi->Check(state == 1);
+            });
+         }
          break;
       }
       }
@@ -277,7 +288,6 @@ const std::vector<MenuEntry> entries = {
             radio("White", "on_background_white1_activate", false),
          }),
          separator(),
-         item("Settings...", "on_edit_settings_activate"),
          item("Preferences...", "on_preferences1_activate"),
       }),
       submenu("Calculate", {

@@ -36,6 +36,8 @@
 #include "read-cif.h"
 #include "cc-interface.hh"
 #include "drag-and-drop.hh"
+#include "save-coords-options.hh"
+#include "ligand/primitive-chi-angles.hh"
 #include "c-interface-ligands-swig.hh"
 #include "coot-utils/coot-package-paths.hh"
 #include "ligand/richardson-rotamer.hh"
@@ -201,7 +203,8 @@ std::vector<bandicoot_sidebar_icon> bandicoot_core_sidebar_icons() {
    std::vector<bandicoot_sidebar_icon> v;
    if (graphics_info_t::model_toolbar_icons)
       for (const coot::preferences_icon_info_t &i : *graphics_info_t::model_toolbar_icons)
-         v.push_back({ i.icon_widget, i.show_hide_flag == 1, i.default_show_flag == 1 });
+         v.push_back({ i.icon_widget, i.show_hide_flag == 1, i.default_show_flag == 1,
+                       i.icon_text, i.icon_filename });
    return v;
 }
 
@@ -460,6 +463,1236 @@ void bandicoot_core_fetch_by_accession(bandicoot_accession_kind kind, const std:
 void bandicoot_core_fetch_and_superpose_alphafold() {
    fetch_and_superpose_alphafold_models_using_active_molecule();
 }
+
+// ---- File menu: saving coordinates
+
+// The save panel enforces a filter's extensions, so only the plain ones are
+// offered: no compressed variants, no case duplicates.
+static std::vector<bandicoot_coords_format> coords_formats(bool symmetry) {
+   std::vector<bandicoot_coords_format> v;
+   for (const auto &e : coot::save_coords_options_t::menu_entries(symmetry)) {
+      bandicoot_coords_format f;
+      f.label = e.second;
+      for (const std::string &p : coot::save_coords_options_t::filename_patterns_for(e.first)) {
+         std::string ext = p.substr(1);  // "*.pdb" -> ".pdb"
+         if (ext.find('.', 1) != std::string::npos) continue;
+         if (coot::util::downcase(ext) != ext) continue;
+         f.extensions.push_back(ext);
+      }
+      v.push_back(f);
+   }
+   return v;
+}
+
+static int format_index(coot::coord_file_format_t format, bool symmetry) {
+   const auto entries = coot::save_coords_options_t::menu_entries(symmetry);
+   for (unsigned int i = 0; i < entries.size(); i++)
+      if (entries[i].first == format) return int(i);
+   return 0;
+}
+
+// Where coordinates were last saved; the working directory until then, as
+// in Coot. Only the GTK choosers read the core's own record of it.
+static std::string last_save_directory;
+
+static std::string save_directory() {
+   return last_save_directory.empty() ? coot::util::current_working_dir() : last_save_directory;
+}
+
+// A model is saved in the format it was read in, unless the user picks another.
+static coot::coord_file_format_t own_format(int imol) {
+   return graphics_info_t::molecules[imol].get_input_molecule_was_in_mmcif_state()
+      ? coot::coord_file_format_t::MMCIF : coot::coord_file_format_t::PDB;
+}
+
+static bandicoot_save_coords save_request(int imol, bool symmetry, coot::coord_file_format_t format,
+                                          const std::string &file_name) {
+   bandicoot_save_coords r;
+   r.imol = imol;
+   r.symmetry = symmetry;
+   r.formats = coords_formats(symmetry);
+   r.format = format_index(format, symmetry);
+   r.file_name = coot::save_coords_options_t::apply_format_to_filename(file_name, format);
+   r.directory = save_directory();
+   return r;
+}
+
+int bandicoot_core_save_coords_default_molecule() {
+   int imol = first_unsaved_coords_imol();
+   return imol >= 0 ? imol : first_coords_imol();
+}
+
+bandicoot_save_coords bandicoot_core_save_coords_request(int imol) {
+   if (! is_valid_model_molecule(imol)) return bandicoot_save_coords();
+   graphics_info_t::save_imol = imol;
+   return save_request(imol, false, own_format(imol),
+                       graphics_info_t::molecules[imol].stripped_save_name_suggestion());
+}
+
+// The symmetry mate last picked: its operator and shifts.
+static coot::save_coords_options_t picked_symmetry;
+
+bool bandicoot_core_save_coords(const bandicoot_save_coords &request, const std::string &path) {
+   coot::save_coords_options_t opts;
+   if (request.symmetry) opts = picked_symmetry;
+   opts.imol = request.imol;
+   opts.is_symmetry = request.symmetry;
+   const auto entries = coot::save_coords_options_t::menu_entries(request.symmetry);
+   if (request.format >= 0 && request.format < int(entries.size()))
+      opts.format = entries[request.format].first;
+   opts.hydrogens = request.hydrogens;
+   opts.aniso = request.aniso;
+   opts.conect = graphics_info_t::write_conect_records_flag;
+
+   std::string file_name = coot::save_coords_options_t::apply_format_to_filename(path, opts.format);
+   if (file_name != path)
+      std::cout << "INFO:: adjusting " << path << " to " << file_name
+                << " to match the chosen format" << std::endl;
+   last_save_directory = coot::util::file_name_directory(file_name);
+   return opts.execute(file_name) == 0;
+}
+
+static bandicoot_save_view save_view;
+
+void bandicoot_core_set_save_view(const bandicoot_save_view &view) {
+   save_view = view;
+}
+
+void bandicoot_core_pick_symmetry_save() {
+   setup_save_symmetry_coords();
+}
+
+bool bandicoot_wx_save_symmetry_coords(const coot::save_coords_options_t &opts,
+                                       const std::string &file_name) {
+   if (! save_view.symmetry_picked) return false;
+   picked_symmetry = opts;
+   save_view.symmetry_picked(save_request(opts.imol, true, opts.format, file_name));
+   return true;
+}
+
+// ---- File menu: state, recovery, maps, deleting
+
+std::string bandicoot_core_save_state_name() {
+   return graphics_info_t::save_state_file_name;
+}
+
+void bandicoot_core_save_state(const std::string &path) {
+   save_state_file(path.c_str());
+   set_save_state_file_name(path.c_str());
+}
+
+std::vector<bandicoot_backup> bandicoot_core_recoverable_backups() {
+   std::vector<bandicoot_backup> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      if (! graphics_info_t::molecules[imol].has_model()) continue;
+      coot::backup_file_info info = graphics_info_t::molecules[imol].recent_backup_file_info();
+      if (! info.status) continue;
+      bandicoot_backup b;
+      b.imol = imol;
+      b.name = info.name;
+      b.backup_file_name = info.backup_file_name;
+      v.push_back(b);
+   }
+   return v;
+}
+
+void bandicoot_core_recover_from_backup(const bandicoot_backup &backup) {
+   if (! is_valid_model_molecule(backup.imol)) return;
+   graphics_info_t::molecules[backup.imol].execute_restore_from_recent_backup(
+      backup.backup_file_name, coot::util::current_working_dir());
+   graphics_draw();
+}
+
+int bandicoot_core_export_map_default() {
+   return imol_refinement_map();
+}
+
+bool bandicoot_core_export_map(int imol, const std::string &path) {
+   return export_map(imol, path.c_str()) == 1;
+}
+
+bool bandicoot_core_export_map_fragment(int imol, float radius, const std::string &path) {
+   graphics_info_t g;
+   coot::Cartesian rc = g.RotationCentre();
+   return export_map_fragment(imol, rc.x(), rc.y(), rc.z(), radius, path.c_str()) == 1;
+}
+
+static bool has_model_or_map(int imol) {
+   const molecule_class_info_t &m = graphics_info_t::molecules[imol];
+   return m.has_model() || m.has_xmap() || m.has_nxmap();
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_models_and_maps() {
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (has_model_or_map(imol))
+         v.push_back({ imol, std::to_string(imol) + "  " +
+                             graphics_info_t::molecules[imol].name_for_display_manager() });
+   return v;
+}
+
+// ---- Edit menu: model edits
+
+std::vector<std::string> bandicoot_core_chain_ids(int imol) {
+   std::vector<std::string> v;
+   if (! is_valid_model_molecule(imol)) return v;
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+   mmdb::Model *model = mol ? mol->GetModel(1) : nullptr;
+   if (! model) return v;
+   for (int i=0; i<model->GetNumberOfChains(); i++)
+      if (mmdb::Chain *chain = model->GetChain(i))
+         v.push_back(chain->GetChainID());
+   return v;
+}
+
+bool bandicoot_core_change_chain_id(int imol, const std::string &from_chain,
+                                    const std::string &to_chain, bool use_range,
+                                    int from_resno, int to_resno, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) return false;
+   std::pair<int, std::string> r =
+      graphics_info_t::molecules[imol].change_chain_id(from_chain, to_chain, use_range,
+                                                       from_resno, to_resno);
+   if (r.first != 1) {
+      why_not = r.second;
+      return false;
+   }
+   update_go_to_atom_window_on_changed_mol(imol);
+   graphics_draw();
+   return true;
+}
+
+int bandicoot_core_copy_molecule(int imol) {
+   return is_valid_model_molecule(imol) ? copy_molecule(imol) : -1;
+}
+
+int bandicoot_core_copy_fragment(int imol, const std::string &atom_selection) {
+   return is_valid_model_molecule(imol)
+      ? new_molecule_by_atom_selection(imol, atom_selection.c_str()) : -1;
+}
+
+int bandicoot_core_merge_target_default() {
+   int imol = graphics_info_t::merge_molecules_master_molecule;
+   return is_valid_model_molecule(imol) ? imol : first_coords_imol();
+}
+
+void bandicoot_core_merge_molecules(const std::vector<int> &add, int into) {
+   if (add.empty() || ! is_valid_model_molecule(into)) return;
+   graphics_info_t::merge_molecules_master_molecule = into;
+   if (merge_molecules_by_vector(add, into).first)
+      graphics_draw();
+}
+
+bool bandicoot_core_replace_fragment(int imol_target, int imol_fragment,
+                                     const std::string &atom_selection, std::string &why_not) {
+   if (! is_valid_model_molecule(imol_target) || ! is_valid_model_molecule(imol_fragment)) {
+      why_not = "not a model molecule";
+      return false;
+   }
+   // the core reports success even when the selection is empty
+   mmdb::Manager *mol = graphics_info_t::molecules[imol_fragment].atom_sel.mol;
+   int handle = mol->NewSelection();
+   mol->Select(handle, mmdb::STYPE_ATOM, atom_selection.c_str(), mmdb::SKEY_OR);
+   int n_selected = mol->GetSelLength(handle);
+   mol->DeleteSelection(handle);
+   if (n_selected == 0) {
+      why_not = "no atoms in selection " + atom_selection;
+      return false;
+   }
+   replace_fragment(imol_target, imol_fragment, atom_selection.c_str());
+   return true;
+}
+
+bool bandicoot_core_replace_active_residue(const std::string &comp_id, std::string &why_not) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t>> aa = active_atom_spec();
+   if (! aa.first) {
+      why_not = "no active residue";
+      return false;
+   }
+   int imol = aa.second.first;
+   const coot::atom_spec_t &spec = aa.second.second;
+   // mutate_by_overlap reports its failures only on the console, so success
+   // is judged by the residue's new type
+   safe_python_command("mutate_by_overlap(" + std::to_string(imol) + ", " + single_quote(spec.chain_id) +
+                       ", " + std::to_string(spec.res_no) + ", " + single_quote(comp_id) + ")");
+   std::string now = residue_name(imol, spec.chain_id.c_str(), spec.res_no, "");
+   if (now != comp_id) {
+      why_not = spec.chain_id + " " + std::to_string(spec.res_no) + " is still " + now;
+      return false;
+   }
+   return true;
+}
+
+bool bandicoot_core_active_residue_number(int &resno) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t>> aa = active_atom_spec();
+   if (! aa.first) return false;
+   resno = aa.second.second.res_no;
+   return true;
+}
+
+bool bandicoot_core_renumber_residues(const bandicoot_renumber &r) {
+   if (! is_valid_model_molecule(r.imol)) return false;
+   mmdb::Chain *chain_p = graphics_info_t::molecules[r.imol].get_chain(r.chain);
+   if (! chain_p) return false;
+   int start = r.start, end = r.end;
+   if (r.from_n_terminus) {
+      std::pair<bool, int> n = coot::util::min_resno_in_chain(chain_p);
+      if (! n.first) return false;
+      start = n.second;
+   }
+   if (r.to_c_terminus) {
+      std::pair<bool, int> c = coot::util::max_resno_in_chain(chain_p);
+      if (! c.first) return false;
+      end = c.second;
+   }
+   return renumber_residue_range(r.imol, r.chain.c_str(), start, end, r.offset) != 0;
+}
+
+// ---- Edit menu: display settings
+
+std::vector<bandicoot_bond_colour> bandicoot_core_bond_colours() {
+   std::vector<bandicoot_bond_colour> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      if (! graphics_info_t::molecules[imol].has_model()) continue;
+      bandicoot_bond_colour c;
+      c.imol = imol;
+      c.label = "Molecule " + std::to_string(imol) + " " +
+                graphics_info_t::molecules[imol].name_for_display_manager();
+      c.rotation = graphics_info_t::molecules[imol].bonds_colour_map_rotation;
+      v.push_back(c);
+   }
+   return v;
+}
+
+void bandicoot_core_set_bond_colour_rotation(int imol, float degrees) {
+   if (! is_valid_model_molecule(imol)) return;
+   graphics_info_t::molecules[imol].bonds_colour_map_rotation = degrees;
+   graphics_draw();
+}
+
+bool bandicoot_core_bond_colour_carbons_only() {
+   return graphics_info_t::rotate_colour_map_on_read_pdb_c_only_flag;
+}
+
+void bandicoot_core_set_bond_colour_carbons_only(bool on) {
+   set_colour_map_rotation_on_read_pdb_c_only_flag(on ? 1 : 0);
+}
+
+int bandicoot_core_bond_parameters_molecule() {
+   int imol = graphics_info_t::bond_parameters_molecule;
+   return is_valid_model_molecule(imol) ? imol : first_coords_imol();
+}
+
+void bandicoot_core_set_bond_parameters_molecule(int imol) {
+   graphics_info_t::bond_parameters_molecule = imol;
+}
+
+int bandicoot_core_bond_width(int imol) {
+   return is_valid_model_molecule(imol) ? graphics_info_t::molecules[imol].bond_thickness() : 3;
+}
+
+void bandicoot_core_set_bond_width(int imol, int width) {
+   if (! is_valid_model_molecule(imol)) return;
+   set_bond_thickness(imol, width);
+   // intermediate atoms stay fatter than the bonds they would hide behind
+   if (graphics_info_t::bond_thickness_intermediate_atoms < width + 2)
+      graphics_info_t::bond_thickness_intermediate_atoms = width + 2;
+}
+
+bool bandicoot_core_draws_hydrogens(int imol) {
+   return is_valid_model_molecule(imol) && graphics_info_t::molecules[imol].draw_hydrogens();
+}
+
+void bandicoot_core_set_draws_hydrogens(int imol, bool on) {
+   if (! is_valid_model_molecule(imol)) return;
+   set_draw_hydrogens(imol, on ? 1 : 0);
+   graphics_info_t g;
+   g.update_environment_distances_by_rotation_centre_maybe(imol);
+   graphics_draw();
+}
+
+bandicoot_rgb bandicoot_core_map_colour(int imol) {
+   bandicoot_rgb c;
+   if (! is_valid_map_molecule(imol)) return c;
+   double **col = graphics_info_t::molecules[imol].map_colour;
+   if (! col || ! col[0]) return c;
+   c.r = col[0][0]; c.g = col[0][1]; c.b = col[0][2];
+   return c;
+}
+
+void bandicoot_core_set_map_colour(int imol, const bandicoot_rgb &colour) {
+   if (! is_valid_map_molecule(imol)) return;
+   gdouble col[4] = { colour.r, colour.g, colour.b, 1.0 };
+   handle_map_colour_change(imol, col);
+}
+
+void bandicoot_core_remember_map_colour(int imol) {
+   if (is_valid_map_molecule(imol)) save_previous_map_colour(imol);
+}
+
+void bandicoot_core_restore_map_colour(int imol) {
+   if (is_valid_map_molecule(imol)) restore_previous_map_colour(imol);
+}
+
+bandicoot_rgb bandicoot_core_skeleton_colour() {
+   bandicoot_rgb c;
+   c.r = graphics_info_t::skeleton_colour[0];
+   c.g = graphics_info_t::skeleton_colour[1];
+   c.b = graphics_info_t::skeleton_colour[2];
+   return c;
+}
+
+void bandicoot_core_set_skeleton_colour(const bandicoot_rgb &colour) {
+   graphics_info_t::skeleton_colour[0] = colour.r;
+   graphics_info_t::skeleton_colour[1] = colour.g;
+   graphics_info_t::skeleton_colour[2] = colour.b;
+   graphics_draw();
+}
+
+// The core's own text for an entry, which it allocates with malloc.
+static std::string core_text(char *text) {
+   std::string s = text ? coot::util::remove_trailing_whitespace(text) : std::string();
+   free(text);
+   return s;
+}
+
+static std::string number_text(double v) {
+   char text[64];
+   snprintf(text, sizeof(text), "%g", v);
+   return text;
+}
+
+bandicoot_map_parameters bandicoot_core_map_parameters() {
+   bandicoot_map_parameters p;
+   p.radius_xray = core_text(get_text_for_density_size_widget());
+   p.radius_em = core_text(get_text_for_density_size_em_widget());
+   p.increment = core_text(get_text_for_iso_level_increment_entry(0));
+   p.diff_increment = core_text(get_text_for_diff_map_iso_level_increment_entry(0));
+   p.sampling_rate = core_text(get_text_for_map_sampling_rate_text());
+   p.dynamic_sampling = graphics_info_t::dynamic_map_resampling;
+   p.dynamic_size = graphics_info_t::dynamic_map_size_display;
+   return p;
+}
+
+void bandicoot_core_set_map_radius(bool em, double radius) {
+   std::string t = number_text(radius);
+   if (em) set_density_size_em_from_widget(t.c_str());
+   else    set_density_size_from_widget(t.c_str());
+}
+
+void bandicoot_core_set_map_parameters(double radius_xray, double radius_em, double increment,
+                                       double diff_increment, double sampling_rate) {
+   bandicoot_core_set_map_radius(false, radius_xray);
+   bandicoot_core_set_map_radius(true, radius_em);
+   // the increments apply to every map
+   set_iso_level_increment_from_text(number_text(increment).c_str(), 0);
+   set_diff_map_iso_level_increment_from_text(number_text(diff_increment).c_str(), 0);
+   set_map_sampling_rate_text(number_text(sampling_rate).c_str());
+}
+
+void bandicoot_core_set_dynamic_map_sampling(bool on) {
+   if (bool(graphics_info_t::dynamic_map_resampling) != on) toggle_dynamic_map_sampling();
+}
+
+void bandicoot_core_set_dynamic_map_size(bool on) {
+   if (bool(graphics_info_t::dynamic_map_size_display) != on) toggle_dynamic_map_display_size();
+}
+
+std::string bandicoot_core_skeleton_box_radius() {
+   return core_text(get_text_for_skeleton_box_size_entry());
+}
+
+void bandicoot_core_set_skeleton_box_radius(double radius) {
+   set_skeleton_box_size_from_widget(number_text(radius).c_str());
+}
+
+std::string bandicoot_core_skeletonization_level() {
+   return core_text(get_text_for_skeletonization_level_entry());
+}
+
+void bandicoot_core_set_skeletonization_level(double level) {
+   set_skeletonization_level_from_widget(number_text(level).c_str());
+}
+
+int bandicoot_core_font_size() {
+   return get_font_size();
+}
+
+void bandicoot_core_set_font_size(int size) {
+   set_font_size(size);
+}
+
+std::string bandicoot_core_pointer_size() {
+   return core_text(get_text_for_rotation_centre_cube_size());
+}
+
+void bandicoot_core_set_pointer_size(double size) {
+   set_rotation_centre_size(float(size));
+}
+
+bool bandicoot_core_background_is_black() {
+   return background_is_black_p();
+}
+
+void bandicoot_core_set_background_black(bool black) {
+   double v = black ? 0.0 : 1.0;
+   set_background_colour(v, v, v);
+}
+
+// ---- Edit menu: Restraints
+
+std::vector<std::string> bandicoot_core_restraint_monomer_types() {
+   graphics_info_t g;
+   return g.Geom_p()->monomer_types();
+}
+
+static std::string float_text(double v) {
+   char text[64];
+   snprintf(text, sizeof(text), "%f", v);
+   return text;
+}
+
+static bandicoot_restraint_table restraint_table(const std::string &title,
+                                                 const std::vector<std::string> &columns) {
+   bandicoot_restraint_table t;
+   t.title = title;
+   t.columns = columns;
+   return t;
+}
+
+bool bandicoot_core_monomer_restraints(const std::string &comp_id,
+                                       std::vector<bandicoot_restraint_table> &tables) {
+   graphics_info_t g;
+   std::pair<bool, coot::dictionary_residue_restraints_t> p =
+      g.Geom_p()->get_monomer_restraints(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   if (! p.first) return false;
+   const coot::dictionary_residue_restraints_t &r = p.second;
+   tables.clear();
+
+   // the atom counts are all atoms, then the non-hydrogens, as the dictionary holds them
+   bandicoot_restraint_table info = restraint_table("Info",
+      { "Comp ID", "3LetCode", "Name", "Group", "# Atoms", "# Non-H Atoms", "Desc Lev" });
+   std::string tlc = r.residue_info.three_letter_code;
+   if (tlc.empty()) tlc = r.residue_info.comp_id.substr(0, 3);
+   info.rows.push_back({ r.residue_info.comp_id, tlc, r.residue_info.name, r.residue_info.group,
+                         std::to_string(r.residue_info.number_atoms_all),
+                         std::to_string(r.residue_info.number_atoms_nh),
+                         r.residue_info.description_level });
+   tables.push_back(info);
+
+   bandicoot_restraint_table atoms = restraint_table("Atoms",
+      { "Atom Name", "Element", "Energy Type", "Formal Charge" });
+   for (const coot::dict_atom &a : r.atom_info)
+      atoms.rows.push_back({ a.atom_id_4c, a.type_symbol, a.type_energy,
+                             std::to_string(a.formal_charge.first ? a.formal_charge.second : 0) });
+   tables.push_back(atoms);
+
+   bandicoot_restraint_table bonds = restraint_table("Bonds",
+      { "Atom Name 1", "Atom Name 2", "Type", "Bond Length", "ESD" });
+   for (const coot::dict_bond_restraint_t &b : r.bond_restraint) {
+      double dist = 0.0, esd = 0.0;
+      try { dist = b.value_dist(); esd = b.value_esd(); }
+      catch (const std::runtime_error &) { }  // a bond without a target length
+      bonds.rows.push_back({ b.atom_id_1_4c(), b.atom_id_2_4c(), b.type(),
+                             float_text(dist), float_text(esd) });
+   }
+   tables.push_back(bonds);
+
+   bandicoot_restraint_table angles = restraint_table("Angles",
+      { "Atom Name 1", "Atom Name 2", "Atom Name 3", "Angle", "ESD" });
+   for (const coot::dict_angle_restraint_t &a : r.angle_restraint)
+      angles.rows.push_back({ a.atom_id_1_4c(), a.atom_id_2_4c(), a.atom_id_3_4c(),
+                              float_text(a.angle()), float_text(a.esd()) });
+   tables.push_back(angles);
+
+   bandicoot_restraint_table torsions = restraint_table("Torsions",
+      { "Tors ID", "Atom Name 1", "Atom Name 2", "Atom Name 3", "Atom Name 4",
+        "Torsion", "ESD", "Period" });
+   for (const coot::dict_torsion_restraint_t &t : r.torsion_restraint)
+      torsions.rows.push_back({ t.id(), t.atom_id_1_4c(), t.atom_id_2_4c(), t.atom_id_3_4c(),
+                                t.atom_id_4_4c(), float_text(t.angle()), float_text(t.esd()),
+                                std::to_string(t.periodicity()) });
+   tables.push_back(torsions);
+
+   bandicoot_restraint_table chirals = restraint_table("Chirals",
+      { "Chiral ID", "Centre Atom", "Atom 1", "Atom 2", "Atom 3", "Sign" });
+   for (const coot::dict_chiral_restraint_t &c : r.chiral_restraint)
+      chirals.rows.push_back({ c.Chiral_Id(), c.atom_id_c_4c(), c.atom_id_1_4c(), c.atom_id_2_4c(),
+                               c.atom_id_3_4c(),
+                               coot::protein_geometry::make_chiral_volume_string(c.volume_sign) });
+   tables.push_back(chirals);
+
+   // as many atom columns as the largest plane has
+   int max_atoms = 0;
+   for (const coot::dict_plane_restraint_t &pl : r.plane_restraint)
+      max_atoms = std::max(max_atoms, pl.n_atoms());
+   std::vector<std::string> plane_columns = { "Plane ID" };
+   for (int i = 1; i <= max_atoms; i++) plane_columns.push_back("Atom " + std::to_string(i));
+   plane_columns.push_back("ESD");
+   bandicoot_restraint_table planes = restraint_table("Planes", plane_columns);
+   for (const coot::dict_plane_restraint_t &pl : r.plane_restraint) {
+      std::vector<std::string> row = { pl.plane_id };
+      for (int i = 0; i < max_atoms; i++) row.push_back(i < pl.n_atoms() ? pl[i].first : std::string());
+      row.push_back(float_text(pl.n_atoms() > 0 ? pl.dist_esd(0) : 0.02));
+      planes.rows.push_back(row);
+   }
+   tables.push_back(planes);
+   return true;
+}
+
+// The cell, or "" past the end of a short row.
+static std::string cell(const std::vector<std::string> &row, size_t i) {
+   return i < row.size() ? row[i] : std::string();
+}
+
+static bool cell_number(const std::vector<std::string> &row, size_t i, double &v) {
+   std::string t = coot::util::remove_whitespace(cell(row, i));
+   if (t.empty()) return false;
+   char *end = nullptr;
+   v = strtod(t.c_str(), &end);
+   return end && *end == '\0';
+}
+
+// The restraints the tables describe, starting from the dictionary's own so
+// that what the tables do not show is kept. Rows are checked as Coot checked
+// them; one that fails is left out.
+static bool restraints_from_tables(const std::string &comp_id,
+                                   const std::vector<bandicoot_restraint_table> &tables,
+                                   coot::dictionary_residue_restraints_t &r, std::string &why_not) {
+   if (tables.size() != 7) { why_not = "the editor's tables are incomplete"; return false; }
+   graphics_info_t g;
+   std::pair<bool, coot::dictionary_residue_restraints_t> p =
+      g.Geom_p()->get_monomer_restraints(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   r = p.first ? p.second : coot::dictionary_residue_restraints_t(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   int skipped = 0;
+
+   // Info
+   if (tables[0].rows.empty()) { why_not = "the Info row is missing"; return false; }
+   const std::vector<std::string> &info = tables[0].rows.front();
+   double n_all, n_nh;
+   std::string new_comp_id = coot::util::remove_whitespace(cell(info, 0));
+   std::string tlc = cell(info, 1);
+   if (coot::util::remove_whitespace(tlc).empty()) tlc = new_comp_id;
+   if (new_comp_id.empty() || ! cell_number(info, 4, n_all) || n_all <= 0 ||
+       ! cell_number(info, 5, n_nh) || n_nh <= 0 || cell(info, 6).empty()) {
+      why_not = "the Info row needs a Comp ID, both atom counts and a description level";
+      return false;
+   }
+   r.residue_info.comp_id = new_comp_id;
+   r.residue_info.three_letter_code = tlc;
+   r.residue_info.name = cell(info, 2);
+   r.residue_info.group = cell(info, 3);
+   r.residue_info.number_atoms_all = int(n_all);
+   r.residue_info.number_atoms_nh = int(n_nh);
+   r.residue_info.description_level = cell(info, 6);
+
+   // Atoms: an atom still named as before keeps its coordinates and the rest
+   std::vector<coot::dict_atom> atoms;
+   for (const auto &row : tables[1].rows) {
+      std::string name = cell(row, 0), element = cell(row, 1), energy = cell(row, 2);
+      double charge = 0;
+      if (name.empty() || element.empty() || energy.empty()) { skipped++; continue; }
+      if (! cell(row, 3).empty() && ! cell_number(row, 3, charge)) { skipped++; continue; }
+      coot::dict_atom a(name, name, element, energy, std::pair<bool, float>(false, 0.0f));
+      for (const coot::dict_atom &old : r.atom_info)
+         if (old.atom_id_4c == name) { a = old; break; }
+      a.type_symbol = element;
+      a.type_energy = energy;
+      a.formal_charge = std::pair<bool, int>(true, int(charge));
+      atoms.push_back(a);
+   }
+   r.atom_info = atoms;
+
+   r.bond_restraint.clear();
+   for (const auto &row : tables[2].rows) {
+      double dist, esd;
+      if (cell(row, 0).empty() || cell(row, 1).empty() || cell(row, 2).empty() ||
+          ! cell_number(row, 3, dist) || dist <= 0 || ! cell_number(row, 4, esd) || esd <= 0) {
+         skipped++; continue;
+      }
+      r.bond_restraint.push_back(coot::dict_bond_restraint_t(cell(row, 0), cell(row, 1), cell(row, 2),
+                                                             dist, esd, 0.0, 0.0, false));
+   }
+
+   r.angle_restraint.clear();
+   for (const auto &row : tables[3].rows) {
+      double angle, esd;
+      if (cell(row, 0).empty() || cell(row, 1).empty() || cell(row, 2).empty() ||
+          ! cell_number(row, 3, angle) || angle <= 0 || ! cell_number(row, 4, esd) || esd <= 0) {
+         skipped++; continue;
+      }
+      r.angle_restraint.push_back(coot::dict_angle_restraint_t(cell(row, 0), cell(row, 1), cell(row, 2),
+                                                               angle, esd));
+   }
+
+   r.torsion_restraint.clear();
+   for (const auto &row : tables[4].rows) {
+      double torsion, esd, period;
+      if (cell(row, 0).empty() || cell(row, 1).empty() || cell(row, 2).empty() ||
+          cell(row, 3).empty() || cell(row, 4).empty() || ! cell_number(row, 5, torsion) ||
+          ! cell_number(row, 6, esd) || esd < 0 || ! cell_number(row, 7, period) || period < 0) {
+         skipped++; continue;
+      }
+      r.torsion_restraint.push_back(coot::dict_torsion_restraint_t(cell(row, 0), cell(row, 1),
+                                       cell(row, 2), cell(row, 3), cell(row, 4), torsion, esd,
+                                       int(period)));
+   }
+
+   r.chiral_restraint.clear();
+   for (const auto &row : tables[5].rows) {
+      bool complete = true;
+      for (size_t i = 0; i < 5; i++) if (cell(row, i).empty()) complete = false;
+      int sign = coot::protein_geometry::chiral_volume_string_to_chiral_sign(cell(row, 5));
+      if (! complete || sign <= -999) { skipped++; continue; }
+      r.chiral_restraint.push_back(coot::dict_chiral_restraint_t(cell(row, 0), cell(row, 1),
+                                       cell(row, 2), cell(row, 3), cell(row, 4), sign));
+   }
+   r.assign_chiral_volume_targets();
+
+   r.plane_restraint.clear();
+   size_t esd_column = tables[6].columns.empty() ? 0 : tables[6].columns.size() - 1;
+   for (const auto &row : tables[6].rows) {
+      std::vector<std::string> plane_atoms;
+      for (size_t i = 1; i < esd_column; i++)
+         if (! coot::util::remove_whitespace(cell(row, i)).empty()) plane_atoms.push_back(cell(row, i));
+      double esd;
+      if (cell(row, 0).empty() || plane_atoms.empty() || ! cell_number(row, esd_column, esd) || esd <= 0) {
+         skipped++; continue;
+      }
+      r.plane_restraint.push_back(coot::dict_plane_restraint_t(cell(row, 0), plane_atoms, esd));
+   }
+
+   if (skipped > 0)
+      std::cout << "INFO:: restraints for " << comp_id << ": " << skipped
+                << " incomplete row(s) left out" << std::endl;
+   return true;
+}
+
+bool bandicoot_core_apply_restraints(const std::string &comp_id,
+                                     const std::vector<bandicoot_restraint_table> &tables,
+                                     std::string &why_not) {
+   coot::dictionary_residue_restraints_t r(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   if (! restraints_from_tables(comp_id, tables, r, why_not)) return false;
+   graphics_info_t g;
+   const std::string &type = r.residue_info.comp_id;
+   bool replaced = g.Geom_p()->replace_monomer_restraints(type, coot::protein_geometry::IMOL_ENC_ANY, r);
+   g.redraw_molecules_with_residue(type);
+   std::cout << "INFO:: restraints for \"" << type << "\" were "
+             << (replaced ? "replaced" : "added") << std::endl;
+   return true;
+}
+
+bool bandicoot_core_save_restraints(const std::string &comp_id,
+                                    const std::vector<bandicoot_restraint_table> &tables,
+                                    const std::string &path, std::string &why_not) {
+   coot::dictionary_residue_restraints_t r(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   if (! restraints_from_tables(comp_id, tables, r, why_not)) return false;
+   r.write_cif(path);
+   return true;
+}
+
+// ---- Edit menu: Preferences
+
+void bandicoot_core_save_preferences() {
+   save_preferences();
+}
+
+// Coot's default for a preference, or fallback if it has none.
+static const coot::preference_info_t *preference_default(int type) {
+   for (const coot::preference_info_t &p : graphics_info_t::preferences_internal_default)
+      if (p.preference_type == type) return &p;
+   return nullptr;
+}
+
+static int default_int(int type, int fallback) {
+   const coot::preference_info_t *p = preference_default(type);
+   return p ? p->ivalue1 : fallback;
+}
+
+static float default_float(int type, float fallback) {
+   const coot::preference_info_t *p = preference_default(type);
+   return p ? p->fvalue1 : fallback;
+}
+
+bandicoot_general_preferences bandicoot_core_general_preference_defaults() {
+   bandicoot_general_preferences d;
+   d.ar_docked = default_int(PREFERENCES_ACCEPT_DIALOG_DOCKED, coot::DIALOG_DOCKED) == coot::DIALOG_DOCKED;
+   d.ar_always_shown = default_int(PREFERENCES_ACCEPT_DIALOG_DOCKED_SHOW, coot::DIALOG_DOCKED_HIDE)
+                       == coot::DIALOG_DOCKED_SHOW;
+   d.sidebar_style = default_int(PREFERENCES_MODEL_TOOLBAR_STYLE, 1);
+   d.recentre_on_read = default_int(PREFERENCES_RECENTRE_PDB, 1) != 0;
+   d.smooth_scroll = default_int(PREFERENCES_SMOOTH_SCROLL, 1) != 0;
+   d.smooth_scroll_steps = default_int(PREFERENCES_SMOOTH_SCROLL_STEPS, 40);
+   d.smooth_scroll_limit = default_float(PREFERENCES_SMOOTH_SCROLL_LIMIT, 10.0f);
+   d.flat_trackball = default_int(PREFERENCES_VT_SURFACE, 2) == 1;
+   return d;
+}
+
+extern "C" void bandicoot_save_sequence_view_max_chains(int n);
+
+void bandicoot_core_save_sequence_view_max_chains(int n) {
+   bandicoot_save_sequence_view_max_chains(n);
+}
+
+void bandicoot_core_set_sidebar_style(int style) {
+   preferences_internal_change_value_int(PREFERENCES_MODEL_TOOLBAR_STYLE, style);
+   set_model_toolbar_style(style);
+}
+
+void bandicoot_core_set_sidebar_icon_shown(int pos, bool shown) {
+   if (shown) show_model_toolbar_icon(pos);
+   else       hide_model_toolbar_icon(pos);
+}
+
+void bandicoot_core_set_recentre_on_read(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_RECENTRE_PDB, on ? 1 : 0);
+   set_recentre_on_read_pdb(on ? 1 : 0);
+}
+
+bool bandicoot_core_smooth_scroll() {
+   return graphics_info_t::smooth_scroll == 1;
+}
+
+int bandicoot_core_smooth_scroll_steps() {
+   return graphics_info_t::smooth_scroll_steps;
+}
+
+float bandicoot_core_smooth_scroll_limit() {
+   return graphics_info_t::smooth_scroll_limit;
+}
+
+void bandicoot_core_set_smooth_scroll(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_SMOOTH_SCROLL, on ? 1 : 0);
+   set_smooth_scroll_flag(on ? 1 : 0);
+}
+
+void bandicoot_core_set_smooth_scroll_steps(int steps) {
+   preferences_internal_change_value_int(PREFERENCES_SMOOTH_SCROLL_STEPS, steps);
+   set_smooth_scroll_steps(steps);
+}
+
+void bandicoot_core_set_smooth_scroll_limit(float angstroms) {
+   preferences_internal_change_value_float(PREFERENCES_SMOOTH_SCROLL_LIMIT, angstroms);
+   graphics_info_t::smooth_scroll_limit = angstroms;
+}
+
+bool bandicoot_core_flat_trackball() {
+   return vt_surface_status() == 1;
+}
+
+void bandicoot_core_set_flat_trackball(bool flat) {
+   int mode = flat ? 1 : 2;
+   preferences_internal_change_value_int(PREFERENCES_VT_SURFACE, mode);
+   vt_surface(mode);
+}
+
+// in c-interface-preferences.cc, which holds the scheme table
+std::vector<std::string> bandicoot_bond_scheme_labels();
+int bandicoot_bond_scheme_row(int bonds_box_type);
+
+bandicoot_display_preferences bandicoot_core_display_preferences() {
+   bandicoot_display_preferences p;
+   p.bond_width = graphics_info_t::default_bond_width;
+   p.scale_bond_width_to_occupancy = graphics_info_t::scale_bond_width_to_occupancy;
+   p.bond_scheme = bandicoot_bond_scheme_row(graphics_info_t::default_bonds_box_type);
+   p.bond_colour_rotation = graphics_info_t::rotate_colour_map_on_read_pdb;
+   p.carbons_only = graphics_info_t::rotate_colour_map_on_read_pdb_c_only_flag;
+   p.altloc_conf_a_offset = graphics_info_t::altloc_conf_a_colour_offset;
+   p.altloc_colour_difference = graphics_info_t::altloc_colour_difference;
+   p.map_radius = graphics_info_t::box_radius_xray;
+   p.map_increment = graphics_info_t::iso_level_increment;
+   p.diff_map_increment = graphics_info_t::diff_map_iso_level_increment;
+   p.map_sampling_rate = graphics_info_t::map_sampling_rate;
+   p.dynamic_map_sampling = graphics_info_t::dynamic_map_resampling;
+   p.dynamic_map_size = graphics_info_t::dynamic_map_size_display;
+   p.o_difference_map_colours = graphics_info_t::swap_difference_map_colours;
+   p.map_colour_rotation = graphics_info_t::rotate_colour_map_for_map;
+   p.active_map_drag = get_active_map_drag_flag();
+   p.mark_cis_peptides_bad = graphics_info_t::mark_cis_peptides_as_bad_flag;
+   p.background.r = graphics_info_t::background_colour[0];
+   p.background.g = graphics_info_t::background_colour[1];
+   p.background.b = graphics_info_t::background_colour[2];
+   return p;
+}
+
+bandicoot_display_preferences bandicoot_core_display_preference_defaults() {
+   bandicoot_display_preferences now = bandicoot_core_display_preferences();
+   bandicoot_display_preferences d;
+   d.bond_width = default_int(PREFERENCES_BONDS_THICKNESS, now.bond_width);
+   d.scale_bond_width_to_occupancy = default_int(PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY,
+                                                 now.scale_bond_width_to_occupancy) != 0;
+   const coot::preference_info_t *scheme = preference_default(PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME);
+   d.bond_scheme = scheme ? bandicoot_bond_scheme_row(scheme->ivalue1) : now.bond_scheme;
+   d.bond_colour_rotation = default_float(PREFERENCES_BOND_COLOURS_MAP_ROTATION, now.bond_colour_rotation);
+   d.carbons_only = default_int(PREFERENCES_BOND_COLOUR_ROTATION_C_ONLY, now.carbons_only) != 0;
+   d.altloc_conf_a_offset = default_float(PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET, now.altloc_conf_a_offset);
+   d.altloc_colour_difference = default_float(PREFERENCES_ALTLOC_COLOUR_DIFFERENCE,
+                                              now.altloc_colour_difference);
+   d.map_radius = default_float(PREFERENCES_MAP_RADIUS, now.map_radius);
+   d.map_increment = default_float(PREFERENCES_MAP_ISOLEVEL_INCREMENT, now.map_increment);
+   d.diff_map_increment = default_float(PREFERENCES_DIFF_MAP_ISOLEVEL_INCREMENT, now.diff_map_increment);
+   d.map_sampling_rate = default_float(PREFERENCES_MAP_SAMPLING_RATE, now.map_sampling_rate);
+   d.dynamic_map_sampling = default_int(PREFERENCES_DYNAMIC_MAP_SAMPLING, now.dynamic_map_sampling) != 0;
+   d.dynamic_map_size = default_int(PREFERENCES_DYNAMIC_MAP_SIZE_DISPLAY, now.dynamic_map_size) != 0;
+   d.o_difference_map_colours = default_int(PREFERENCES_SWAP_DIFF_MAP_COLOURS,
+                                            now.o_difference_map_colours) != 0;
+   d.map_colour_rotation = default_float(PREFERENCES_MAP_COLOURS_MAP_ROTATION, now.map_colour_rotation);
+   d.active_map_drag = default_int(PREFERENCES_MAP_DRAG, now.active_map_drag) != 0;
+   d.mark_cis_peptides_bad = default_int(PREFERENCES_MARK_CIS_BAD, now.mark_cis_peptides_bad) != 0;
+   const coot::preference_info_t *bg = preference_default(PREFERENCES_BG_COLOUR);
+   if (bg) {
+      d.background.r = bg->fvalue1;
+      d.background.g = bg->fvalue2;
+      d.background.b = bg->fvalue3;
+   } else {
+      d.background = now.background;
+   }
+   return d;
+}
+
+std::vector<std::string> bandicoot_core_bond_scheme_labels() {
+   return bandicoot_bond_scheme_labels();
+}
+
+void bandicoot_core_set_default_bond_width(int pixels) {
+   preferences_internal_change_value_int(PREFERENCES_BONDS_THICKNESS, pixels);
+   set_default_bond_thickness(pixels);
+}
+
+void bandicoot_core_set_scale_bond_width_to_occupancy(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY, on ? 1 : 0);
+   set_scale_bond_width_to_occupancy(on ? 1 : 0);
+}
+
+void bandicoot_core_set_default_bond_scheme(int index) {
+   bandicoot_set_default_bond_scheme_from_combo_index(index);
+}
+
+void bandicoot_core_set_bond_colour_rotation_on_read(float degrees) {
+   preferences_internal_change_value_float(PREFERENCES_BOND_COLOURS_MAP_ROTATION, degrees);
+   set_colour_map_rotation_on_read_pdb(degrees);
+}
+
+void bandicoot_core_set_carbons_only_preference(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_BOND_COLOUR_ROTATION_C_ONLY, on ? 1 : 0);
+   set_colour_map_rotation_on_read_pdb_c_only_flag(on ? 1 : 0);
+}
+
+void bandicoot_core_set_altloc_conf_a_offset(float degrees) {
+   preferences_internal_change_value_float(PREFERENCES_ALTLOC_CONF_A_COLOUR_OFFSET, degrees);
+   set_altloc_conf_a_colour_offset(degrees);
+}
+
+void bandicoot_core_set_altloc_colour_difference(float degrees) {
+   preferences_internal_change_value_float(PREFERENCES_ALTLOC_COLOUR_DIFFERENCE, degrees);
+   set_altloc_colour_difference(degrees);
+}
+
+void bandicoot_core_set_map_radius_preference(float angstroms) {
+   preferences_internal_change_value_float(PREFERENCES_MAP_RADIUS, angstroms);
+   set_map_radius(angstroms);
+}
+
+void bandicoot_core_set_map_increment_preference(float increment) {
+   preferences_internal_change_value_float(PREFERENCES_MAP_ISOLEVEL_INCREMENT, increment);
+   set_iso_level_increment(increment);
+}
+
+void bandicoot_core_set_diff_map_increment_preference(float increment) {
+   preferences_internal_change_value_float(PREFERENCES_DIFF_MAP_ISOLEVEL_INCREMENT, increment);
+   set_diff_map_iso_level_increment(increment);
+}
+
+void bandicoot_core_set_map_sampling_rate_preference(float rate) {
+   preferences_internal_change_value_float(PREFERENCES_MAP_SAMPLING_RATE, rate);
+   set_map_sampling_rate(rate);
+}
+
+void bandicoot_core_set_dynamic_map_sampling_preference(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_DYNAMIC_MAP_SAMPLING, on ? 1 : 0);
+   if (on) set_dynamic_map_sampling_on();
+   else    set_dynamic_map_sampling_off();
+}
+
+void bandicoot_core_set_dynamic_map_size_preference(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_DYNAMIC_MAP_SIZE_DISPLAY, on ? 1 : 0);
+   if (on) set_dynamic_map_size_display_on();
+   else    set_dynamic_map_size_display_off();
+}
+
+void bandicoot_core_set_o_difference_map_colours(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_SWAP_DIFF_MAP_COLOURS, on ? 1 : 0);
+   set_swap_difference_map_colours(on ? 1 : 0);
+}
+
+void bandicoot_core_set_map_colour_rotation_on_read(float degrees) {
+   preferences_internal_change_value_float(PREFERENCES_MAP_COLOURS_MAP_ROTATION, degrees);
+   set_colour_map_rotation_for_map(degrees);
+}
+
+void bandicoot_core_set_active_map_drag(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_MAP_DRAG, on ? 1 : 0);
+   set_active_map_drag_flag(on ? 1 : 0);
+}
+
+void bandicoot_core_set_mark_cis_peptides_bad(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_MARK_CIS_BAD, on ? 1 : 0);
+   set_mark_cis_peptides_as_bad(on ? 1 : 0);
+}
+
+void bandicoot_core_set_background_preference(const bandicoot_rgb &colour) {
+   preferences_internal_change_value_float3(PREFERENCES_BG_COLOUR, colour.r, colour.g, colour.b);
+   set_background_colour(colour.r, colour.g, colour.b);
+}
+
+// in c-interface-preferences.cc, with the files they keep
+void bandicoot_read_pandda_config(std::string &cifs_dir, bool &split);
+void bandicoot_write_pandda_config(const std::string &cifs_dir, bool split);
+int bandicoot_load_pandda_uimode();
+void bandicoot_save_pandda_uimode(int mode);
+void bandicoot_load_ligand_behaviour(int *auto_rename, int *show_rename,
+                                     int *auto_generate, int *show_generate, int *apply_all);
+void bandicoot_write_ligand_behaviour(int auto_rename, int show_rename,
+                                      int auto_generate, int show_generate, int apply_all);
+
+bandicoot_rgb bandicoot_core_default_font_colour() {
+   bandicoot_rgb c;
+   c.r = 1.0f; c.g = 0.8f; c.b = 0.8f;
+   return c;
+}
+
+bandicoot_other_preferences bandicoot_core_other_preferences() {
+   bandicoot_other_preferences p;
+   p.antialias = graphics_info_t::do_anti_aliasing_flag;
+   p.font_size = graphics_info_t::atom_label_font_size;
+   p.font_colour.r = graphics_info_t::font_colour.red;
+   p.font_colour.g = graphics_info_t::font_colour.green;
+   p.font_colour.b = graphics_info_t::font_colour.blue;
+   p.console_commands = graphics_info_t::console_display_commands.display_commands_flag;
+   p.pointer_size = graphics_info_t::rotation_centre_cube_size;
+   p.refinement_speed = graphics_info_t::dragged_refinement_steps_per_frame;
+   p.spin_speed = graphics_info_t::idle_function_rotate_angle;
+   p.pick_radius = graphics_info_t::pick_atom_dist_cutoff;
+   p.symmetry_pick_radius = graphics_info_t::symm_pick_atom_dist_cutoff;
+   p.intermediate_pick_far = graphics_info_t::intermediate_pick_far_cutoff;
+   p.intermediate_pick_near = graphics_info_t::intermediate_pick_near_cutoff;
+   bandicoot_read_pandda_config(p.pandda_cifs_dir, p.pandda_split);
+   p.pandda_basic = bandicoot_load_pandda_uimode() == 1;
+   int auto_rename = 0, show_rename = 1, auto_generate = 0, show_generate = 1, apply_all = 0;
+   bandicoot_load_ligand_behaviour(&auto_rename, &show_rename, &auto_generate, &show_generate, &apply_all);
+   p.auto_rename = auto_rename;
+   p.ask_rename = show_rename;
+   p.auto_generate = auto_generate;
+   p.ask_generate = show_generate;
+   p.apply_restraints_to_all = apply_all;
+   return p;
+}
+
+bandicoot_other_preferences bandicoot_core_other_preference_defaults() {
+   bandicoot_other_preferences now = bandicoot_core_other_preferences();
+   bandicoot_other_preferences d;
+   d.antialias = default_int(PREFERENCES_ANTIALIAS, now.antialias) != 0;
+   d.font_size = default_int(PREFERENCES_FONT_SIZE, now.font_size);
+   const coot::preference_info_t *fc = preference_default(PREFERENCES_FONT_COLOUR);
+   if (fc) {
+      d.font_colour.r = fc->fvalue1;
+      d.font_colour.g = fc->fvalue2;
+      d.font_colour.b = fc->fvalue3;
+   } else {
+      d.font_colour = bandicoot_core_default_font_colour();
+   }
+   d.console_commands = default_int(PREFERENCES_CONSOLE_COMMANDS, now.console_commands) != 0;
+   d.pointer_size = default_float(PREFERENCES_PINK_POINTER, now.pointer_size);
+   d.refinement_speed = default_int(PREFERENCES_REFINEMENT_SPEED, now.refinement_speed);
+   d.spin_speed = default_float(PREFERENCES_SPIN_SPEED, now.spin_speed);
+   // Bandicoot's own settings: the values it starts with when nothing is saved
+   d.pick_radius = 0.6f;
+   d.symmetry_pick_radius = 0.4f;
+   d.intermediate_pick_far = 0.04f;
+   d.intermediate_pick_near = 0.8f;
+   d.pandda_cifs_dir = now.pandda_cifs_dir;
+   d.pandda_split = false;
+   d.pandda_basic = false;
+   d.auto_rename = false;
+   d.ask_rename = true;
+   d.auto_generate = false;
+   d.ask_generate = true;
+   d.apply_restraints_to_all = false;
+   return d;
+}
+
+std::vector<std::string> bandicoot_core_other_font_labels() {
+   // the names Coot gives sizes 4 to 7
+   return { "Times Roman 10", "Times Roman 24", "Fixed 8/13", "Fixed 9/15" };
+}
+
+void bandicoot_core_set_antialias(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_ANTIALIAS, on ? 1 : 0);
+   set_do_anti_aliasing(on ? 1 : 0);
+}
+
+void bandicoot_core_set_font_size_preference(int size) {
+   preferences_internal_change_value_int(PREFERENCES_FONT_SIZE, size);
+   set_font_size(size);
+}
+
+void bandicoot_core_set_font_colour_preference(const bandicoot_rgb &colour) {
+   preferences_internal_change_value_float3(PREFERENCES_FONT_COLOUR, colour.r, colour.g, colour.b);
+   set_font_colour(colour.r, colour.g, colour.b);
+}
+
+void bandicoot_core_set_console_commands(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_CONSOLE_COMMANDS, on ? 1 : 0);
+   set_console_display_commands_state(on ? 1 : 0);
+}
+
+void bandicoot_core_set_pointer_size_preference(float angstroms) {
+   preferences_internal_change_value_float(PREFERENCES_PINK_POINTER, angstroms);
+   set_rotation_centre_size(angstroms);
+}
+
+void bandicoot_core_set_refinement_speed(int steps_per_frame) {
+   preferences_internal_change_value_int(PREFERENCES_REFINEMENT_SPEED, steps_per_frame);
+   set_dragged_refinement_steps_per_frame(steps_per_frame);
+}
+
+void bandicoot_core_set_spin_speed(float degrees) {
+   preferences_internal_change_value_float(PREFERENCES_SPIN_SPEED, degrees);
+   set_idle_function_rotate_angle(degrees);
+}
+
+void bandicoot_core_set_pick_radius(float angstroms) {
+   set_pick_atom_distance_cutoff(angstroms);
+}
+
+void bandicoot_core_set_symmetry_pick_radius(float angstroms) {
+   set_symmetry_pick_atom_distance_cutoff(angstroms);
+}
+
+void bandicoot_core_set_intermediate_pick_radii(float far_angstroms, float near_angstroms) {
+   set_intermediate_pick_distance_cutoffs(far_angstroms, near_angstroms);
+}
+
+void bandicoot_core_set_pandda_config(const std::string &cifs_dir, bool split) {
+   bandicoot_write_pandda_config(cifs_dir, split);
+}
+
+void bandicoot_core_set_pandda_basic(bool basic) {
+   bandicoot_save_pandda_uimode(basic ? 1 : 0);
+}
+
+void bandicoot_core_set_ligand_behaviour(bool auto_rename, bool ask_rename, bool auto_generate,
+                                         bool ask_generate, bool apply_restraints_to_all) {
+   bandicoot_write_ligand_behaviour(auto_rename, ask_rename, auto_generate, ask_generate,
+                                    apply_restraints_to_all);
+}
+
+// ---- Edit menu: Residue Info
+
+static bandicoot_residue_info_view residue_info_view;
+
+void bandicoot_core_set_residue_info_view(const bandicoot_residue_info_view &view) {
+   residue_info_view = view;
+}
+
+void bandicoot_core_pick_residue_info() {
+   do_residue_info_dialog();
+}
+
+// As Coot labels an atom row: chain/resno[ins] resname/name[ segid]
+static std::string residue_atom_label(mmdb::Atom *at) {
+   std::string label = std::string(at->GetChainID()) + "/" + std::to_string(at->GetSeqNum());
+   label += at->GetInsCode();
+   label += " " + std::string(at->GetResName()) + "/" + at->name;
+   if (std::string(at->segID) != "") label += " " + std::string(at->segID);
+   return label;
+}
+
+static void fill_residue_info(int imol, mmdb::Residue *residue, bandicoot_residue_info &info) {
+   info = bandicoot_residue_info();
+   info.imol = imol;
+   info.molecule_label = "Molecule: " + std::to_string(imol) + " " +
+                         graphics_info_t::molecules[imol].name_;
+   graphics_info_t g;
+   std::pair<bool, std::string> name = g.Geom_p()->get_monomer_name(residue->GetResName(), imol);
+   if (name.first) info.residue_name = name.second;
+   info.default_b_factor = graphics_info_t::default_new_atoms_b_factor;
+
+   mmdb::PPAtom atoms = nullptr;
+   int n_atoms = 0;
+   residue->GetAtomTable(atoms, n_atoms);
+   for (int i=0; i<n_atoms; i++) {
+      mmdb::Atom *at = atoms[i];
+      bandicoot_residue_atom a;
+      a.label = residue_atom_label(at);
+      a.chain = at->GetChainID();
+      a.resno = at->GetSeqNum();
+      a.ins_code = at->GetInsCode();
+      a.atom_name = at->name;
+      a.alt_conf = at->altLoc;
+      a.occupancy = at->occupancy;
+      a.b_factor = at->tempFactor;
+      info.atoms.push_back(a);
+   }
+
+   // the first alt conf's chis, as Coot shows them
+   try {
+      coot::primitive_chi_angles chi_angles(residue);
+      std::vector<coot::alt_confed_chi_angles> chis = chi_angles.get_chi_angles();
+      if (! chis.empty()) {
+         for (const auto &chi : chis[0].chi_angles) {
+            std::string line = "Chi " + std::to_string(chi.first) + ":  ";
+            if (! chis[0].alt_conf.empty()) line += " alt conf: " + chis[0].alt_conf + " ";
+            line += coot::util::float_to_string(chi.second) + " degrees";
+            info.chi_angles.push_back(line);
+         }
+      }
+   }
+   catch (const std::runtime_error &e) {
+      std::cout << e.what() << std::endl;
+   }
+}
+
+bool bandicoot_wx_residue_info(int imol, int atom_index) {
+   if (! residue_info_view.show) return false;
+   if (imol < 0 || imol >= graphics_info_t::n_molecules()) return true;
+   molecule_class_info_t &m = graphics_info_t::molecules[imol];
+   if (! m.has_model() || atom_index < 0 || atom_index >= m.atom_sel.n_selected_atoms) return true;
+   output_residue_info_as_text(atom_index, imol);
+   bandicoot_residue_info info;
+   fill_residue_info(imol, m.atom_sel.atom_selection[atom_index]->residue, info);
+   residue_info_view.show(info);
+   return true;
+}
+
+bool bandicoot_core_residue_info(int imol, const std::string &chain, int resno,
+                                 const std::string &ins_code, bandicoot_residue_info &info) {
+   if (! is_valid_model_molecule(imol)) return false;
+   mmdb::Residue *residue =
+      graphics_info_t::molecules[imol].get_residue(chain, resno, ins_code);
+   if (! residue) return false;
+   fill_residue_info(imol, residue, info);
+   return true;
+}
+
+void bandicoot_core_apply_atom_edits(int imol, const std::vector<bandicoot_residue_atom> &before,
+                                     const std::vector<bandicoot_residue_atom> &after) {
+   if (! is_valid_model_molecule(imol) || before.size() != after.size()) return;
+   std::vector<coot::select_atom_info> edits;
+   for (size_t i=0; i<before.size(); i++) {
+      const bandicoot_residue_atom &b = before[i], &a = after[i];
+      coot::select_atom_info e(int(i), imol, b.chain, b.resno, b.ins_code, b.atom_name, b.alt_conf);
+      bool edited = false;
+      // as Coot: changes below its two-decimal display are not edits
+      if (std::abs(a.occupancy - b.occupancy) > 0.009) { e.add_occ_edit(a.occupancy); edited = true; }
+      if (std::abs(a.b_factor - b.b_factor) > 0.009) { e.add_b_factor_edit(a.b_factor); edited = true; }
+      if (a.alt_conf != b.alt_conf) { e.add_altloc_edit(a.alt_conf); edited = true; }
+      if (edited) edits.push_back(e);
+   }
+   if (edits.empty()) return;
+   graphics_info_t::molecules[imol].apply_atom_edits(edits);
+   graphics_draw();
+}
+
 
 // ---- Accept/Reject
 

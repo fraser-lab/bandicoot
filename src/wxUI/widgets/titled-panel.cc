@@ -1,6 +1,7 @@
 // src/wxUI/widgets/titled-panel.cc
 
 #include "wxUI/widgets/titled-panel.hh"
+#include "wxUI/assets/arrow-button.hh"
 #include "wxUI/assets/bevel.hh"
 #include "wxUI/assets/palette.hh"
 
@@ -11,6 +12,7 @@
 #include <wx/slider.h>
 #include <wx/stattext.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace wxui {
@@ -67,20 +69,25 @@ void TitledPanel::on_paint(wxPaintEvent &) {
 
 // ---------------------------------------------------------------- TitledSlider
 
-TitledSlider::TitledSlider(wxWindow *parent, const wxString &title,
-                           double min_in, double max_in, double step_in, double value,
-                           int decimals_in)
-   : TitledPanel(parent, title), min(min_in), step(step_in > 0 ? step_in : 1.0),
-     decimals(decimals_in) {
+// ----------------------------------------------------------------- StepSlider
 
+StepSlider::StepSlider(wxWindow *parent, double min_in, double max_in, double step_in,
+                       double value, int decimals_in)
+   : wxPanel(parent), min(min_in), step(step_in > 0 ? step_in : 1.0), decimals(decimals_in) {
+
+   SetBackgroundColour(parent->GetBackgroundColour());
    int steps = int(std::lround((max_in - min_in) / step));
-   slider = new wxSlider(content(), wxID_ANY, 0, 0, steps > 0 ? steps : 1);
-   readout = new wxStaticText(content(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+   ArrowButton *left = new ArrowButton(this, wxID_ANY, ArrowButton::Direction::Left);
+   slider = new wxSlider(this, wxID_ANY, 0, 0, steps > 0 ? steps : 1);
+   ArrowButton *right = new ArrowButton(this, wxID_ANY, ArrowButton::Direction::Right);
+   readout = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
                               wxDefaultSize, wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
    wxBoxSizer *h = new wxBoxSizer(wxHORIZONTAL);
+   h->Add(left, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
    h->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
+   h->Add(right, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
    h->Add(readout, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
-   content_sizer()->Add(h, 0, wxEXPAND);
+   SetSizer(h);
 
    // size the readout for the widest value it will show
    wxString widest = wxString::Format("%.*f", decimals, std::fabs(min_in) > std::fabs(max_in) ? min_in : max_in);
@@ -91,19 +98,50 @@ TitledSlider::TitledSlider(wxWindow *parent, const wxString &title,
       show_value();
       if (on_change) on_change(get_value());
    });
+   left->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { step_by(-1); });
+   right->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { step_by(1); });
 }
 
-double TitledSlider::get_value() const {
+double StepSlider::get_value() const {
    return min + slider->GetValue() * step;
 }
 
-void TitledSlider::set_value(double value) {
+void StepSlider::set_value(double value) {
    slider->SetValue(int(std::lround((value - min) / step)));
    show_value();
 }
 
-void TitledSlider::show_value() {
+void StepSlider::show_value() {
    readout->SetLabel(wxString::Format("%.*f", decimals, get_value()));
+}
+
+// An arrow's step, which applies as a move of the slider would; nothing
+// happens at either end.
+void StepSlider::step_by(int steps) {
+   int v = std::clamp(slider->GetValue() + steps, slider->GetMin(), slider->GetMax());
+   if (v == slider->GetValue()) return;
+   slider->SetValue(v);
+   show_value();
+   if (on_change) on_change(get_value());
+}
+
+// --------------------------------------------------------------- TitledSlider
+
+TitledSlider::TitledSlider(wxWindow *parent, const wxString &title,
+                           double min, double max, double step, double value, int decimals)
+   : TitledPanel(parent, title) {
+
+   control = new StepSlider(content(), min, max, step, value, decimals);
+   content_sizer()->Add(control, 0, wxEXPAND);
+   control->on_change = [this](double v) { if (on_change) on_change(v); };
+}
+
+double TitledSlider::get_value() const {
+   return control->get_value();
+}
+
+void TitledSlider::set_value(double value) {
+   control->set_value(value);
 }
 
 // ---------------------------------------------------------------- RadioGroup

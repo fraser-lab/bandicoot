@@ -46,6 +46,7 @@ public:
    EntryRow *add_field(const wxString &label, const wxString &initial = wxEmptyString);
    EntryRow *field(size_t index) const { return index < fields.size() ? fields[index] : nullptr; }
    int get_imol() const;  // -1 without a chooser
+   MoleculeChooser *chooser() const { return molecule_chooser; }  // null without one
 
    // return false to keep the dialog open (e.g. after reporting a bad value)
    std::function<bool(EntryDialog &)> on_ok;

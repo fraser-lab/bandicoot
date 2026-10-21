@@ -2415,9 +2415,9 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
 
         print("BL DEBUG:: in overlap_by_main_chain : ---------------- imol-mov: %s imol-ref: %s" %(imol_mov, imol_ref))
         clear_lsq_matches()
-        map(lambda atom_name:
+        for atom_name in [" CA ", " N  ", " C  "]:
             add_lsq_atom_pair([chain_id_ref, res_no_ref, ins_code_ref, atom_name, ""],
-                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name, ""]), [" CA ", " N  ", " C  "])
+                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name, ""])
         apply_lsq_matches(imol_ref, imol_mov)
 
     def is_purine(res_name):
@@ -2463,8 +2463,8 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
                 atom_list_2 = purine_to_pyrimidine_set
 
         for atom_name_1, atom_name_2 in zip(atom_list_1, atom_list_2):
-            add_lsq_atom_pair(chain_id_ref, res_no_ref, ins_code_ref, atom_name_1, "",
-                              chain_id_mov, res_no_mov, ins_code_mov, atom_name_2, "")
+            add_lsq_atom_pair([chain_id_ref, res_no_ref, ins_code_ref, atom_name_1, ""],
+                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name_2, ""])
 
         print("applying matches!")
         apply_lsq_matches(imol_ref, imol_mov)

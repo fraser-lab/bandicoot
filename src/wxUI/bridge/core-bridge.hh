@@ -59,6 +59,7 @@ struct bandicoot_sidebar_icon {
    std::string widget;
    bool shown;
    bool shown_by_default;
+   std::string label, icon_file;  // as the Preferences list names them
 };
 std::vector<bandicoot_sidebar_icon> bandicoot_core_sidebar_icons();
 // The Settings menu's Main Icons (true) or All Icons (false).
@@ -245,6 +246,330 @@ void bandicoot_core_fetch_by_accession(bandicoot_accession_kind kind, const std:
 // The AlphaFold models matching the active molecule's UniProt references,
 // superposed on it.
 void bandicoot_core_fetch_and_superpose_alphafold();
+
+// Saving coordinates (Save Coordinates..., Save Symmetry Coordinates...).
+struct bandicoot_coords_format {
+   std::string label;                    // "PDB"
+   std::vector<std::string> extensions;  // ".pdb", ".ent"
+};
+struct bandicoot_save_coords {
+   int imol = -1;
+   bool symmetry = false;    // a picked symmetry mate; the core holds its operator
+   std::vector<bandicoot_coords_format> formats;  // offered, in order
+   int format = 0;           // the molecule's own format at first
+   std::string file_name;    // suggested, with the format's extension
+   std::string directory;    // where coordinates were last saved
+   bool hydrogens = true, aniso = true;
+};
+// The model offered first: the first with unsaved changes, else the first.
+int bandicoot_core_save_coords_default_molecule();
+bandicoot_save_coords bandicoot_core_save_coords_request(int imol);
+// The file's extension is made to match the chosen format. False if nothing
+// was written.
+bool bandicoot_core_save_coords(const bandicoot_save_coords &request, const std::string &path);
+// Save Symmetry Coordinates: wait for a click on a symmetry atom, then call
+// the view with the request for it.
+void bandicoot_core_pick_symmetry_save();
+struct bandicoot_save_view {
+   std::function<void(const bandicoot_save_coords &request)> symmetry_picked;
+};
+void bandicoot_core_set_save_view(const bandicoot_save_view &view);
+
+// Save State...: the state file's name (as last saved, else Coot's default).
+std::string bandicoot_core_save_state_name();
+void bandicoot_core_save_state(const std::string &path);
+
+// Recover Session...: the models that have a backup newer than the file they
+// were read from.
+struct bandicoot_backup {
+   int imol = -1;
+   std::string name, backup_file_name;
+};
+std::vector<bandicoot_backup> bandicoot_core_recoverable_backups();
+void bandicoot_core_recover_from_backup(const bandicoot_backup &backup);
+
+// Export Map... / Export Map Fragment...: the map offered first; the whole
+// map, or the part within radius of the screen centre. False if nothing was
+// written.
+int bandicoot_core_export_map_default();
+bool bandicoot_core_export_map(int imol, const std::string &path);
+bool bandicoot_core_export_map_fragment(int imol, float radius, const std::string &path);
+
+// Delete Molecules and Maps...: every model and map (imol, label as the
+// Display Manager names it); bandicoot_core_close_molecule deletes one.
+std::vector<std::pair<int, std::string>> bandicoot_core_models_and_maps();
+
+// ---- Edit menu
+
+// A model's chain IDs, in order.
+std::vector<std::string> bandicoot_core_chain_ids(int imol);
+
+// Change Chain IDs: the whole chain, or residues from_resno to to_resno.
+// False, with the reason, if the core refused.
+bool bandicoot_core_change_chain_id(int imol, const std::string &from_chain,
+                                    const std::string &to_chain, bool use_range,
+                                    int from_resno, int to_resno, std::string &why_not);
+
+// Copy Molecule, Copy Fragment: the new molecule's number, or -1.
+int bandicoot_core_copy_molecule(int imol);
+int bandicoot_core_copy_fragment(int imol, const std::string &atom_selection);
+
+// Replace Fragment: the atoms an mmdb selection picks from imol_fragment
+// replace their counterparts in imol_target. False, with the reason, if
+// nothing was replaced.
+bool bandicoot_core_replace_fragment(int imol_target, int imol_fragment,
+                                     const std::string &atom_selection, std::string &why_not);
+// Replace Residue: the active residue becomes one of type comp_id, fitted by
+// overlap. False, with the reason, if it was not replaced.
+bool bandicoot_core_replace_active_residue(const std::string &comp_id, std::string &why_not);
+
+// Merge Molecules: the target offered first; molecules equal to the target
+// are skipped.
+int bandicoot_core_merge_target_default();
+void bandicoot_core_merge_molecules(const std::vector<int> &add, int into);
+
+// Renumber Residues: the active atom's residue number (false if there is no
+// active atom); renumber chain's residues by offset, from start (or the
+// N-terminus) to end (or the C-terminus). False if the core refused, e.g.
+// when the new numbers overlap existing residues.
+bool bandicoot_core_active_residue_number(int &resno);
+struct bandicoot_renumber {
+   int imol = -1;
+   std::string chain;
+   bool from_n_terminus = true, to_c_terminus = true;
+   int start = 0, end = 0, offset = 0;
+};
+bool bandicoot_core_renumber_residues(const bandicoot_renumber &request);
+
+// Residue Info: pick an atom; the core then calls the view with its residue.
+struct bandicoot_residue_atom {
+   std::string label;            // "B/209 HIS/ N  "
+   std::string chain, ins_code, atom_name, alt_conf;
+   int resno = 0;
+   float occupancy = 1.0f, b_factor = 0.0f;
+};
+struct bandicoot_residue_info {
+   int imol = -1;
+   std::string molecule_label;   // "Molecule: 3 /path/model.pdb"
+   std::string residue_name;     // "HISTIDINE", if the dictionary has it
+   std::vector<bandicoot_residue_atom> atoms;
+   std::vector<std::string> chi_angles;  // "Chi 1:  alt conf: A -60.61 degrees"
+   float default_b_factor = 30.0f;
+};
+void bandicoot_core_pick_residue_info();
+struct bandicoot_residue_info_view {
+   std::function<void(const bandicoot_residue_info &info)> show;
+};
+void bandicoot_core_set_residue_info_view(const bandicoot_residue_info_view &view);
+// The residue as it is now (false if it has gone).
+bool bandicoot_core_residue_info(int imol, const std::string &chain, int resno,
+                                 const std::string &ins_code, bandicoot_residue_info &info);
+// after: before's atoms with their occupancy, B-factor and alt conf edited.
+void bandicoot_core_apply_atom_edits(int imol, const std::vector<bandicoot_residue_atom> &before,
+                                     const std::vector<bandicoot_residue_atom> &after);
+
+// Bond Colours: each model's colour rotation, in degrees; whether it
+// recolours carbons only.
+struct bandicoot_bond_colour {
+   int imol = -1;
+   std::string label;       // "Molecule 0 model.pdb"
+   float rotation = 0.0f;
+};
+std::vector<bandicoot_bond_colour> bandicoot_core_bond_colours();
+void bandicoot_core_set_bond_colour_rotation(int imol, float degrees);
+bool bandicoot_core_bond_colour_carbons_only();
+void bandicoot_core_set_bond_colour_carbons_only(bool on);
+
+// Bond Parameters: the model shown first (the one last shown, while it is
+// loaded); its bond width in pixels, and whether it draws hydrogens. Changes
+// apply at once.
+int bandicoot_core_bond_parameters_molecule();
+void bandicoot_core_set_bond_parameters_molecule(int imol);
+int bandicoot_core_bond_width(int imol);
+void bandicoot_core_set_bond_width(int imol, int width);
+bool bandicoot_core_draws_hydrogens(int imol);
+void bandicoot_core_set_draws_hydrogens(int imol, bool on);
+
+// Colours as red, green, blue from 0 to 1. A map's colour can be put back to
+// what it was when last remembered.
+struct bandicoot_rgb { float r = 0, g = 0, b = 0; };
+bandicoot_rgb bandicoot_core_map_colour(int imol);
+void bandicoot_core_set_map_colour(int imol, const bandicoot_rgb &colour);
+void bandicoot_core_remember_map_colour(int imol);
+void bandicoot_core_restore_map_colour(int imol);
+bandicoot_rgb bandicoot_core_skeleton_colour();
+void bandicoot_core_set_skeleton_colour(const bandicoot_rgb &colour);
+
+// Map Parameters, as Coot shows them (radii in A, increments in e/A^3).
+struct bandicoot_map_parameters {
+   std::string radius_xray, radius_em, increment, diff_increment, sampling_rate;
+   bool dynamic_sampling = false, dynamic_size = false;
+};
+bandicoot_map_parameters bandicoot_core_map_parameters();
+void bandicoot_core_set_map_radius(bool em, double radius);
+// Everything but the dynamic options, which apply as they are ticked.
+void bandicoot_core_set_map_parameters(double radius_xray, double radius_em, double increment,
+                                       double diff_increment, double sampling_rate);
+void bandicoot_core_set_dynamic_map_sampling(bool on);
+void bandicoot_core_set_dynamic_map_size(bool on);
+
+// Skeleton Box Radius (A) and Skeletonization Level (e/A^3), as Coot shows
+// them; setting the level recalculates the skeletons.
+std::string bandicoot_core_skeleton_box_radius();
+void bandicoot_core_set_skeleton_box_radius(double radius);
+std::string bandicoot_core_skeletonization_level();
+void bandicoot_core_set_skeletonization_level(double level);
+
+// Font Size of atom labels: 1 small, 2 medium, 3 large.
+int bandicoot_core_font_size();
+void bandicoot_core_set_font_size(int size);
+
+// Pink Pointer Size (A), as Coot shows it.
+std::string bandicoot_core_pointer_size();
+void bandicoot_core_set_pointer_size(double size);
+
+// Background Colour: black or white.
+bool bandicoot_core_background_is_black();
+void bandicoot_core_set_background_black(bool black);
+
+// Restraints: the monomer types the dictionary holds, and one monomer's
+// restraints as seven editable tables -- Info, Atoms, Bonds, Angles,
+// Torsions, Chirals, Planes -- with values written as Coot shows them.
+struct bandicoot_restraint_table {
+   std::string title;
+   std::vector<std::string> columns;
+   std::vector<std::vector<std::string>> rows;
+};
+std::vector<std::string> bandicoot_core_restraint_monomer_types();
+bool bandicoot_core_monomer_restraints(const std::string &comp_id,
+                                       std::vector<bandicoot_restraint_table> &tables);
+// From the edited tables (comp_id: the monomer they were opened for). A row
+// that does not make a restraint is left out; what the tables do not show
+// (coordinates, descriptors) is kept. Apply replaces the dictionary's
+// restraints; save writes them to an mmCIF file. False, with the reason, if
+// the Info row does not describe a monomer.
+bool bandicoot_core_apply_restraints(const std::string &comp_id,
+                                     const std::vector<bandicoot_restraint_table> &tables,
+                                     std::string &why_not);
+bool bandicoot_core_save_restraints(const std::string &comp_id,
+                                    const std::vector<bandicoot_restraint_table> &tables,
+                                    const std::string &path, std::string &why_not);
+
+// Preferences. Each setter applies its setting at once and records it with
+// Coot's preferences; save writes them to the preferences file. The
+// Bandicoot-only settings (sidebar, sequence view) keep their own files and
+// are saved as they change.
+void bandicoot_core_save_preferences();
+struct bandicoot_general_preferences {
+   bool ar_docked = true, ar_always_shown = false;
+   bool sequence_view_docked = true;
+   int sequence_view_max_chains = 5;
+   bool sidebar_docked = true;
+   int sidebar_position = 0;   // Coot's numbering: 0 right, 1 left, 3 bottom
+   int sidebar_style = 1;      // 1 icons, 2 icons and text, 3 text
+   int sidebar_icon_size = 12;
+   bool recentre_on_read = true;
+   bool smooth_scroll = true;
+   int smooth_scroll_steps = 40;
+   float smooth_scroll_limit = 10.0f;
+   bool flat_trackball = false;
+};
+// What Reset Defaults returns the General settings to.
+bandicoot_general_preferences bandicoot_core_general_preference_defaults();
+void bandicoot_core_save_sequence_view_max_chains(int n);
+void bandicoot_core_set_sidebar_style(int style);
+// The sidebar tool at pos (in bandicoot_core_sidebar_icons order) shown or not.
+void bandicoot_core_set_sidebar_icon_shown(int pos, bool shown);
+void bandicoot_core_set_recentre_on_read(bool on);
+bool bandicoot_core_smooth_scroll();
+int bandicoot_core_smooth_scroll_steps();
+float bandicoot_core_smooth_scroll_limit();
+void bandicoot_core_set_smooth_scroll(bool on);
+void bandicoot_core_set_smooth_scroll_steps(int steps);
+void bandicoot_core_set_smooth_scroll_limit(float angstroms);
+// The virtual trackball: flat (turntable) or spherical (Coot's default).
+bool bandicoot_core_flat_trackball();
+void bandicoot_core_set_flat_trackball(bool flat);
+
+// The Bonds, Maps, Geometry and Colours settings. Angles in degrees, the map
+// radius in A, increments in e/A^3.
+struct bandicoot_display_preferences {
+   int bond_width = 0;                       // pixels, 1 to 20
+   bool scale_bond_width_to_occupancy = false;
+   int bond_scheme = -1;                     // in bandicoot_core_bond_scheme_labels(), -1 if none fits
+   float bond_colour_rotation = 0;           // a new molecule's turn of the colour map
+   bool carbons_only = false;
+   float altloc_conf_a_offset = 0, altloc_colour_difference = 0;
+   float map_radius = 0, map_increment = 0, diff_map_increment = 0, map_sampling_rate = 0;
+   bool dynamic_map_sampling = false, dynamic_map_size = false;
+   bool o_difference_map_colours = false;   // swapped: O's colours rather than Coot's
+   float map_colour_rotation = 0;            // a new map's turn of the colour map
+   bool active_map_drag = false;
+   bool mark_cis_peptides_bad = false;
+   bandicoot_rgb background;
+};
+bandicoot_display_preferences bandicoot_core_display_preferences();
+// What Reset Defaults returns these settings to.
+bandicoot_display_preferences bandicoot_core_display_preference_defaults();
+// The schemes newly read coordinates can be drawn in.
+std::vector<std::string> bandicoot_core_bond_scheme_labels();
+void bandicoot_core_set_default_bond_width(int pixels);
+void bandicoot_core_set_scale_bond_width_to_occupancy(bool on);
+void bandicoot_core_set_default_bond_scheme(int index);
+void bandicoot_core_set_bond_colour_rotation_on_read(float degrees);
+void bandicoot_core_set_carbons_only_preference(bool on);
+void bandicoot_core_set_altloc_conf_a_offset(float degrees);
+void bandicoot_core_set_altloc_colour_difference(float degrees);
+void bandicoot_core_set_map_radius_preference(float angstroms);
+void bandicoot_core_set_map_increment_preference(float increment);
+void bandicoot_core_set_diff_map_increment_preference(float increment);
+void bandicoot_core_set_map_sampling_rate_preference(float rate);
+void bandicoot_core_set_dynamic_map_sampling_preference(bool on);
+void bandicoot_core_set_dynamic_map_size_preference(bool on);
+void bandicoot_core_set_o_difference_map_colours(bool on);
+void bandicoot_core_set_map_colour_rotation_on_read(float degrees);
+void bandicoot_core_set_active_map_drag(bool on);
+void bandicoot_core_set_mark_cis_peptides_bad(bool on);
+void bandicoot_core_set_background_preference(const bandicoot_rgb &colour);
+
+// The Others settings. The Coot ones are recorded with Coot's preferences;
+// Pick Atom, PanDDA and Ligands keep Bandicoot's own files and are saved as
+// they change.
+struct bandicoot_other_preferences {
+   bool antialias = false;
+   int font_size = 0;                        // 1 small, 2 medium, 3 large, 4 on: the other fonts
+   bandicoot_rgb font_colour;
+   bool console_commands = false;
+   float pointer_size = 0;                   // A
+   int refinement_speed = 0;                 // steps per frame
+   float spin_speed = 0;                     // degrees per frame
+   float pick_radius = 0, symmetry_pick_radius = 0;              // A
+   float intermediate_pick_far = 0, intermediate_pick_near = 0;  // A
+   std::string pandda_cifs_dir;
+   bool pandda_split = false, pandda_basic = false;
+   bool auto_rename = false, ask_rename = false, auto_generate = false, ask_generate = false;
+   bool apply_restraints_to_all = false;
+};
+bandicoot_other_preferences bandicoot_core_other_preferences();
+// What Reset Defaults returns these settings to; the PanDDA directory is kept.
+bandicoot_other_preferences bandicoot_core_other_preference_defaults();
+// The label fonts beyond small, medium and large, from font size 4 on.
+std::vector<std::string> bandicoot_core_other_font_labels();
+bandicoot_rgb bandicoot_core_default_font_colour();
+void bandicoot_core_set_antialias(bool on);
+void bandicoot_core_set_font_size_preference(int size);
+void bandicoot_core_set_font_colour_preference(const bandicoot_rgb &colour);
+void bandicoot_core_set_console_commands(bool on);
+void bandicoot_core_set_pointer_size_preference(float angstroms);
+void bandicoot_core_set_refinement_speed(int steps_per_frame);
+void bandicoot_core_set_spin_speed(float degrees);
+void bandicoot_core_set_pick_radius(float angstroms);
+void bandicoot_core_set_symmetry_pick_radius(float angstroms);
+void bandicoot_core_set_intermediate_pick_radii(float far_angstroms, float near_angstroms);
+void bandicoot_core_set_pandda_config(const std::string &cifs_dir, bool split);
+void bandicoot_core_set_pandda_basic(bool basic);
+void bandicoot_core_set_ligand_behaviour(bool auto_rename, bool ask_rename, bool auto_generate,
+                                         bool ask_generate, bool apply_restraints_to_all);
 
 // Sequence View: a model's chains as one-letter sequences, residues
 // coloured by secondary structure, as Coot's view shows them.

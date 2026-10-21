@@ -57,6 +57,12 @@ bool bandicoot_wx_residue_chooser(bool show_stub);
 bool bandicoot_wx_base_chooser();
 void bandicoot_wx_add_alt_conf_done();
 bool bandicoot_wx_delete_open();
+// And its save panel for a picked symmetry mate (false if wx has not taken
+// it on).
+bool bandicoot_wx_save_symmetry_coords(const coot::save_coords_options_t &opts,
+                                       const std::string &file_name);
+// And its Residue Info window for a picked atom.
+bool bandicoot_wx_residue_info(int imol, int atom_index);
 #endif
 
 void
@@ -379,6 +385,9 @@ graphics_info_t::check_if_in_residue_info_define(GdkEventButton *event) {
 	 int im = nearest_atom_index_info.imol; 
 	 // std::cout << "info: clicked on imol: " << im << std::endl;
 	 // a c-interface-info function...
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_residue_info(im, nearest_atom_index_info.atom_index))
+#endif
 	 output_residue_info_dialog(im, nearest_atom_index_info.atom_index); 
 	 info.in_residue_info_define = 0;
 	 normal_cursor();
@@ -1913,8 +1922,6 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	                       ? coot::coord_file_format_t::MMCIF
 	                       : coot::coord_file_format_t::PDB;
 
-	 GtkWidget *w = coot_save_coords_chooser_new(opts);
-
 // 	 std::string filename = "molecule-";
 // 	 filename += int_to_string(naii.imol);
 	 int imol = naii.imol;
@@ -1953,6 +1960,13 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	 // save time either way; this just stops the two disagreeing on sight.
 	 filename += coot::save_coords_options_t::extension_for(opts.format);
 
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_save_symmetry_coords(opts, filename)) {
+#else
+	 {
+#endif
+	 GtkWidget *w = coot_save_coords_chooser_new(opts);
+
 	 // Open in the directory the user last saved into, the same one Save
 	 // Coordinates uses. Without this the symmetry save starts wherever the
 	 // process happens to be, because it never went through
@@ -1974,8 +1988,9 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
          
          add_filename_filter_button(w, COOT_COORDS_FILE_SELECTION);
 
-	 normal_cursor();
 	 gtk_widget_show(w);
+	 }
+	 normal_cursor();
 	 pick_pending_flag = 0;
       }
    } 

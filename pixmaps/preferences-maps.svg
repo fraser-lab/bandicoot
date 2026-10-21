@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21.25 22.22">
+  <g>
+    <rect x="12.57" y="10.46" width=".47" height="3.82" transform="translate(-1.1 23.48) rotate(-82.64)" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <rect x="7.83" y="6.32" width=".47" height="3.82" transform="translate(17.91 14.2) rotate(165.61)" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <rect x="6.92" y="13.12" width=".47" height="3.82" transform="translate(8.67 -1.55) rotate(30.7)" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="16.56" cy="12.85" r="1.88" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="9" cy="11.88" r="1.88" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="7.13" cy="4.59" r="1.88" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="5.23" cy="18.26" r="1.88" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  </g>
+  <path d="M3.78,1.47C4.95.32,6.73-.07,8.35.21c1.63.29,3.28,1.42,3.49,3.07.09.67-.07,1.36-.06,2.04s.26,1.44.88,1.73c.58.27,1.26.04,1.88-.12.71-.18,1.44-.25,2.17-.16,2.62.32,4.7,3.01,4.38,5.62s-2.95,4.72-5.58,4.47c-1.24-.12-2.61-.65-3.63.06-.47.32-.75.85-1.08,1.31-1.07,1.51-2.75,2.47-4.44,3.2-.89.39-1.84.73-2.81.64-1.8-.16-3.22-1.88-3.39-3.68s.69-3.59,1.94-4.89c1.52-1.58,3.94-3.45,2.39-5.81-.68-1.03-1.67-1.72-1.84-3.03-.15-1.16.31-2.39,1.13-3.2Z" fill="#3f68b1" opacity=".75" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+</svg>

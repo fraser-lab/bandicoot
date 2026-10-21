@@ -142,6 +142,68 @@ void import_dictionary_action(wxWindow *parent) {
    bandicoot_core_import_dictionary(paths.front().utf8_string(), molecule, r.checks[0].value);
 }
 
+// The save panel, with the request's formats as its file types.
+void save_coordinates_panel(wxWindow *parent, bandicoot_save_coords request) {
+   std::vector<FileType> formats;
+   for (const bandicoot_coords_format &f : request.formats)
+      formats.push_back(file_type(f.label.c_str(), f.extensions));
+   SaveCoordinatesChoice choice;
+   choice.format = request.format;
+   choice.save_hydrogens = request.hydrogens;
+   choice.save_aniso = request.aniso;
+   wxString dir = wxString::FromUTF8(request.directory);
+   if (! save_coordinates(parent, formats, dir, wxString::FromUTF8(request.file_name), choice))
+      return;
+   request.format = choice.format;
+   request.hydrogens = choice.save_hydrogens;
+   request.aniso = choice.save_aniso;
+   std::string path = choice.path.utf8_string();
+   bool saved;
+   {
+      wxBusyCursor busy;
+      saved = bandicoot_core_save_coords(request, path);
+   }
+   if (! saved)
+      error(parent, "Could not save coordinates to", wxFileName(choice.path).GetFullName(),
+            "Save Coordinates: molecule " + std::to_string(request.imol) + " not written to " + path);
+}
+
+void save_coordinates_action(wxWindow *parent) {
+   MoleculeChooser::molecule_list models = bandicoot_core_goto_molecules();
+   if (models.empty()) {
+      info(parent, "No coordinates to save");
+      return;
+   }
+   ChooserDialog *d = new ChooserDialog(parent, "Save Coordinates Molecule Selector",
+                                        "Select Molecule Number to Save:", models);
+   d->chooser()->set_imol(bandicoot_core_save_coords_default_molecule());
+   if (wxWindow *ok = d->FindWindow(wxID_OK)) ok->SetLabel("Select Filename...");
+   d->Fit();
+   // the file panel follows once the selector has gone
+   d->on_ok = [parent](int imol) {
+      parent->CallAfter([parent, imol]() {
+         save_coordinates_panel(parent, bandicoot_core_save_coords_request(imol));
+      });
+   };
+   d->CentreOnParent();
+   d->Show();
+}
+
+void save_state_action(wxWindow *parent) {
+   // a bare name (Coot's default) is in the working directory
+   wxFileName name(wxString::FromUTF8(bandicoot_core_save_state_name()));
+   name.MakeAbsolute();
+   FileRequest r;
+   r.title = "Select File-name for State File";
+   r.directory = name.GetPath();
+   r.file_name = name.GetFullName();
+   wxString path = save_file(parent, r);
+   if (path.empty()) return;
+   bandicoot_core_save_state(path.utf8_string());
+}
+
+wxWindow *owner = nullptr;
+
 // The File menu's items, by the GTK build's handler names; the toolbar's
 // Open Coords, Auto-open MTZ and Open Map share the first three.
 const std::map<std::string, std::function<void(wxWindow *)>> &file_actions() {
@@ -167,6 +229,16 @@ const std::map<std::string, std::function<void(wxWindow *)>> &file_actions() {
       { "on_fetch_corresponding_alphafold_model_and_superpose1_activate", [](wxWindow *) {
            wxBusyCursor busy;
            bandicoot_core_fetch_and_superpose_alphafold(); } },
+      { "on_save_coordinates1_activate",   save_coordinates_action },
+      { "on_save_symmetry_coordinates1_activate", [](wxWindow *) {
+           bandicoot_core_pick_symmetry_save(); } },
+      { "on_save_state1_activate",         save_state_action },
+      { "on_recover_session1_activate",    [](wxWindow *p) { show_recover_session(p); } },
+      { "on_export_map1_activate",         [](wxWindow *p) { show_export_map(p, false); } },
+      { "on_export_map_fragment1_activate", [](wxWindow *p) { show_export_map(p, true); } },
+      { "on_close_molecule1_activate",     [](wxWindow *p) { show_delete_molecules(p); } },
+      // closing the main window asks about unsaved changes first
+      { "on_exit1_activate",               [](wxWindow *p) { wxGetTopLevelParent(p)->Close(); } },
    };
    return actions;
 }
@@ -182,6 +254,16 @@ bool run_file_action(wxWindow *parent, const std::string &action) {
    if (it == file_actions().end()) return false;
    it->second(parent);
    return true;
+}
+
+void install_file_actions(wxWindow *parent) {
+   owner = parent;
+   bandicoot_save_view v;
+   // after the click that picked the atom has been handled
+   v.symmetry_picked = [](const bandicoot_save_coords &request) {
+      owner->CallAfter([request]() { save_coordinates_panel(owner, request); });
+   };
+   bandicoot_core_set_save_view(v);
 }
 
 } // namespace wxui
