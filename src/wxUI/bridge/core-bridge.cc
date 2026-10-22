@@ -13,7 +13,9 @@
 #include "Python.h"  // before system includes to stop "POSIX_C_SOURCE" redefined problems
 #endif
 
+#include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -42,6 +44,7 @@
 #include "coot-utils/coot-package-paths.hh"
 #include "ligand/richardson-rotamer.hh"
 #include "coot-utils/coot-coord-utils.hh"
+#include "utils/coot-utils.hh"
 
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/surface.hh"
@@ -1840,6 +1843,41 @@ int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback) {
    return ++last_id;
 }
 
+bool bandicoot_wx_radio_choice(const std::string &title,
+                               const std::vector<std::pair<std::string, std::string>> &choices,
+                               int selected,
+                               const std::string &accept_label, const std::string &accept_command,
+                               const std::string &reject_label, const std::string &reject_command) {
+   if (! ui_view.radio_choice || choices.empty()) return false;
+   bandicoot_radio_choice c;
+   c.title = title;
+   c.choices = choices;
+   c.selected = (selected >= 0 && selected < int(choices.size())) ? selected : 0;
+   c.accept_label = accept_label;
+   c.accept_command = accept_command;
+   c.reject_label = reject_label;
+   c.reject_command = reject_command;
+   ui_view.radio_choice(c);
+   return true;
+}
+
+bool bandicoot_wx_button_choice(const std::string &title,
+                                const std::vector<std::pair<std::string, std::string>> &buttons,
+                                const std::string &close_label, const std::string &close_command) {
+   if (! ui_view.button_choice || buttons.empty()) return false;
+   bandicoot_button_choice c;
+   c.title = title;
+   c.buttons = buttons;
+   c.close_label = close_label;
+   c.close_command = close_command;
+   ui_view.button_choice(c);
+   return true;
+}
+
+void bandicoot_core_run_python(const std::string &command) {
+   if (! command.empty()) safe_python_command(command);
+}
+
 void bandicoot_wx_release_fixed_atom_toggles() {
    if (ui_view.release_fixed_atom_toggles) ui_view.release_fixed_atom_toggles();
 }
@@ -1935,6 +1973,321 @@ int bandicoot_core_refinement_map() {
 void bandicoot_core_set_refinement_map(int imol) {
    graphics_info_t g;
    g.set_refinement_map(imol);
+}
+
+// ---- Calculate menu: maps
+
+float bandicoot_core_map_sharpening_limit() {
+   return graphics_info_t::map_sharpening_scale_limit;
+}
+
+float bandicoot_core_map_sharpening(int imol) {
+   return is_valid_map_molecule(imol) ? graphics_info_t::molecules[imol].sharpen_b_factor() : 0.0f;
+}
+
+void bandicoot_core_sharpen_map(int imol, float b_factor) {
+   if (! is_valid_map_molecule(imol)) return;
+   graphics_info_t::imol_map_sharpening = imol;
+   sharpen(imol, b_factor);
+}
+
+float bandicoot_core_optimal_sharpening(int imol, bool &converged) {
+   float b = optimal_B_kurtosis(imol);
+   // the search ends at the scale's limit when it finds no optimum
+   converged = std::fabs(b - graphics_info_t::map_sharpening_scale_limit) > 0.1f;
+   return b;
+}
+
+int bandicoot_core_skeleton_map() {
+   graphics_info_t::set_initial_map_for_skeletonize();
+   return is_valid_map_molecule(graphics_info_t::map_for_skeletonize) ? graphics_info_t::map_for_skeletonize : -1;
+}
+
+bool bandicoot_core_map_skeletonized(int imol) {
+   return is_valid_map_molecule(imol) && graphics_info_t::molecules[imol].xskel_is_filled;
+}
+
+void bandicoot_core_set_map_skeleton(int imol, bool on, bool prune) {
+   if (! is_valid_map_molecule(imol)) return;
+   graphics_info_t::map_for_skeletonize = imol;
+   if (on) graphics_info_t::skeletonize_map(imol, prune ? 1 : 0);
+   else    graphics_info_t::unskeletonize_map(imol);
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_ncs_models() {
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol) && graphics_info_t::molecules[imol].has_ncs_p())
+         v.push_back({ imol, chooser_label(imol) });
+   return v;
+}
+
+void bandicoot_core_make_ncs_maps(int imol_model, int imol_map) {
+   make_dynamically_transformed_ncs_maps(imol_model, imol_map, 0);
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps() {
+   std::vector<std::pair<int, std::string>> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_map_molecule(imol) && map_is_difference_map(imol))
+         v.push_back({ imol, chooser_label(imol) });
+   return v;
+}
+
+void bandicoot_core_update_maps(int imol_model, int imol_map, int imol_difference_map, bool automatic) {
+   if (! is_valid_model_molecule(imol_model) || ! is_valid_map_molecule(imol_map)) return;
+   if (automatic) set_auto_updating_sfcalc_genmap(imol_model, imol_map, imol_difference_map);
+   else           sfcalc_genmap(imol_model, imol_map, imol_difference_map);
+}
+
+// ---- Calculate menu: superpose and move
+
+void bandicoot_core_move_molecule_here(int imol) {
+   if (! is_valid_model_molecule(imol)) return;
+   move_molecule_to_screen_centre_internal(imol);
+   add_to_history({ "move-molecule-here", clipper::String(imol) });
+}
+
+bandicoot_lsq bandicoot_core_lsq_remembered() {
+   const lsq_dialog_values_t &v = graphics_info_t::lsq_dialog_values;
+   bandicoot_lsq l;
+   l.imol_reference = v.reference_molecule_number;
+   l.imol_moving = v.moving_molecule_number;
+   l.reference_start = v.ref_res_range_start;
+   l.reference_end = v.ref_res_range_end;
+   l.moving_start = v.mov_res_range_start;
+   l.moving_end = v.mov_res_range_end;
+   l.reference_chain = v.chain_id_ref;
+   l.moving_chain = v.chain_id_mov;
+   return l;
+}
+
+void bandicoot_core_remember_lsq(const bandicoot_lsq &l) {
+   lsq_dialog_values_t &v = graphics_info_t::lsq_dialog_values;
+   v.reference_molecule_number = l.imol_reference;
+   v.moving_molecule_number = l.imol_moving;
+   v.ref_res_range_start = l.reference_start;
+   v.ref_res_range_end = l.reference_end;
+   v.mov_res_range_start = l.moving_start;
+   v.mov_res_range_end = l.moving_end;
+   v.chain_id_ref = l.reference_chain;
+   v.chain_id_mov = l.moving_chain;
+}
+
+bool bandicoot_core_lsq_fit(const bandicoot_lsq &l, std::string &why_not) {
+   if (! is_valid_model_molecule(l.imol_reference) || ! is_valid_model_molecule(l.imol_moving)) {
+      why_not = "not a model molecule";
+      return false;
+   }
+   bandicoot_core_remember_lsq(l);
+   int imol_moving = l.imol_moving;
+   if (l.move_copy) {
+      imol_moving = copy_molecule(imol_moving);
+      graphics_info_t::lsq_mov_imol = imol_moving;
+   }
+   clear_lsq_matches();
+   add_lsq_match(l.reference_start, l.reference_end, l.reference_chain.c_str(),
+                 l.moving_start, l.moving_end, l.moving_chain.c_str(), l.match);
+   if (! apply_lsq_matches_simple(l.imol_reference, imol_moving)) {
+      why_not = "no atoms matched in those ranges";
+      return false;
+   }
+   return true;
+}
+
+void bandicoot_core_ssm_superpose(int imol_reference, int imol_moving, const std::string &reference_chain,
+                                  const std::string &moving_chain, bool move_copy) {
+   if (! is_valid_model_molecule(imol_reference) || ! is_valid_model_molecule(imol_moving)) return;
+   bool by_reference_chain = ! reference_chain.empty();
+   bool by_moving_chain = ! moving_chain.empty();
+   // a model is never moved onto itself: the copy moves instead, as in Coot
+   if (imol_reference == imol_moving) {
+      if (! by_reference_chain || ! by_moving_chain || reference_chain == moving_chain)
+         move_copy = true;
+   }
+   superpose_with_chain_selection(imol_reference, imol_moving,
+                                  by_reference_chain ? reference_chain.c_str() : "empty",
+                                  by_moving_chain ? moving_chain.c_str() : "empty",
+                                  by_reference_chain, by_moving_chain, move_copy);
+}
+
+bool bandicoot_core_align_and_mutate(int imol, const std::string &chain, const std::string &sequence,
+                                     bool autofit, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) {
+      why_not = "not a model molecule";
+      return false;
+   }
+   graphics_info_t g;
+   if (autofit && g.Imol_Refinement_Map() == -1) {
+      why_not = "autofit needs a refinement map";
+      return false;
+   }
+   g.mutate_chain(imol, chain, sequence, autofit, false);
+   g.update_geometry_graphs(g.molecules[imol].atom_sel, imol);
+   graphics_draw();
+   return true;
+}
+
+// ---- Calculate menu: direct items and scripts
+
+bool bandicoot_core_fps_shown() {
+   return graphics_info_t::GetFPSFlag() != 0;
+}
+
+void bandicoot_core_show_fps(bool on) {
+   set_fps_flag(on ? 1 : 0);
+}
+
+bool bandicoot_core_load_tutorial(std::string &why_not) {
+   std::string data = coot::util::append_dir_dir(coot::package_data_dir(), "data");
+   for (const char *f : { "tutorial-modern.pdb", "rnasa-1.8-all_refmac1.mtz" }) {
+      std::string path = coot::util::append_dir_file(data, f);
+      if (! coot::file_exists(path)) {
+         why_not = path;
+         return false;
+      }
+   }
+   load_tutorial_model_and_data();
+   return true;
+}
+
+void bandicoot_core_run_script(const std::string &path) {
+   if (! path.empty()) run_script(path.c_str());
+}
+
+// The console's engine is _bandicoot_console_eval (python/bandicoot_console.py),
+// in __main__ so that what a run defines lasts to the next one.
+std::string bandicoot_core_console_run(const std::string &code, bool &had_error) {
+   std::string output;
+   had_error = false;
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   PyObject *main_module = PyImport_AddModule("__main__");                       // borrowed
+   PyObject *func = main_module ? PyDict_GetItemString(PyModule_GetDict(main_module),
+                                                       "_bandicoot_console_eval") // borrowed
+                                : nullptr;
+   if (! func || ! PyCallable_Check(func)) {
+      had_error = true;
+      output = "Bandicoot: the console engine did not load (python/bandicoot_console.py).\n";
+   } else {
+      PyObject *rv = PyObject_CallFunction(func, "s", code.c_str());               // new
+      if (rv && PyTuple_Check(rv) && PyTuple_Size(rv) == 2) {
+         had_error = PyObject_IsTrue(PyTuple_GetItem(rv, 0)) == 1;
+         PyObject *text = PyTuple_GetItem(rv, 1);
+         if (text && PyUnicode_Check(text)) output = PyUnicode_AsUTF8(text);
+      } else {
+         PyErr_Print();
+         had_error = true;
+         output = "Bandicoot: error calling the console engine (see the terminal).\n";
+      }
+      Py_XDECREF(rv);
+   }
+   PyGILState_Release(gstate);
+   return output;
+}
+
+// ---- Calculate menu: PanDDA Inspect
+
+void set_refinement_lennard_jones_epsilon(float epsilon);  // c-interface-refine.cc
+int bandicoot_load_pandda_uimode();                        // c-interface-preferences.cc
+
+static int pandda_saved_restraint_warnings = 1;
+static bool pandda_open = false;
+
+void bandicoot_core_pandda_opened() {
+   safe_python_command("import bandicoot_pandda");
+   // a softer contact term, so a ligand refined into PanDDA density is not
+   // held off the protein
+   set_refinement_lennard_jones_epsilon(0.1f);
+   if (! pandda_open) pandda_saved_restraint_warnings = show_ligand_restraint_warnings_state();
+   pandda_open = true;
+   set_show_ligand_restraint_warnings(0);
+}
+
+void bandicoot_core_pandda_closed() {
+   if (! pandda_open) return;
+   pandda_open = false;
+   set_show_ligand_restraint_warnings(pandda_saved_restraint_warnings);
+}
+
+std::string bandicoot_core_pandda_call(const std::string &call) {
+   std::string s;
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   // not released: the call can hand back Py_None without a reference of its own
+   PyObject *r = safe_python_command_with_return("bandicoot_pandda." + call);
+   if (r && PyUnicode_Check(r)) s = PyUnicode_AsUTF8(r);
+   PyGILState_Release(gstate);
+   return s;
+}
+
+bool bandicoot_core_pandda_basic_ui() {
+   return bandicoot_load_pandda_uimode() == 1;
+}
+
+static std::function<void(const std::string &)> pandda_view;
+
+void bandicoot_core_set_pandda_view(std::function<void(const std::string &folder)> open) {
+   pandda_view = std::move(open);
+}
+
+bool bandicoot_wx_pandda(const std::string &folder) {
+   if (! pandda_view) return false;
+   pandda_view(folder);
+   return true;
+}
+
+std::string bandicoot_core_plain_sequence(const std::string &text) {
+   return coot::util::plain_text_to_sequence(text);
+}
+
+bool bandicoot_core_mutate_residue_range(const bandicoot_range_sequence &r, bool autofit, std::string &why_not) {
+   if (! is_valid_model_molecule(r.imol)) {
+      why_not = "not a model molecule";
+      return false;
+   }
+   int first = std::min(r.first, r.last), last = std::max(r.first, r.last);
+   std::string sequence = coot::util::plain_text_to_sequence(r.sequence);
+   int n = last - first + 1;
+   if (int(sequence.length()) != n) {
+      why_not = "the sequence has " + std::to_string(sequence.length()) + " residues, the range " +
+                std::to_string(n);
+      return false;
+   }
+   graphics_info_t g;
+   if (autofit && g.Imol_Refinement_Map() == -1) {
+      why_not = "autofit needs a refinement map";
+      return false;
+   }
+   // the scripting functions, as Coot's own dialog runs them
+   std::string function = autofit ? "mutate_and_autofit_residue_range" : "mutate_residue_range";
+   safe_python_command(function + "(" + std::to_string(r.imol) + ", " + single_quote(r.chain) + ", " +
+                       std::to_string(first) + ", " + std::to_string(last) + ", " + single_quote(sequence) + ")");
+   update_go_to_atom_window_on_changed_mol(r.imol);
+   g.update_geometry_graphs(g.molecules[r.imol].atom_sel, r.imol);
+   return true;
+}
+
+bool bandicoot_core_fit_loop(const bandicoot_range_sequence &r, bool ramachandran_restraints,
+                             std::string &why_not, std::string &warning) {
+   if (! is_valid_model_molecule(r.imol)) {
+      why_not = "not a model molecule";
+      return false;
+   }
+   graphics_info_t g;
+   if (g.Imol_Refinement_Map() == -1) {
+      why_not = "fitting a loop needs a refinement map";
+      return false;
+   }
+   std::string sequence = coot::util::plain_text_to_sequence(r.sequence);
+   int n = std::abs(r.last - r.first) + 1;
+   if (! sequence.empty() && int(sequence.length()) != n) {
+      sequence = std::string(n, 'A');
+      warning = "Mis-matched sequence length. Using Poly-Ala.";
+   }
+   // the range's order is the direction the loop is built in
+   safe_python_command("fit_gap(" + std::to_string(r.imol) + ", " + single_quote(r.chain) + ", " +
+                       std::to_string(r.first) + ", " + std::to_string(r.last) + ", " + single_quote(sequence) +
+                       ", " + std::to_string(ramachandran_restraints ? 1 : 0) + ")");
+   return true;
 }
 
 void bandicoot_core_fixed_atom_pick(int mode) {

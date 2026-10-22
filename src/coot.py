@@ -4317,6 +4317,12 @@ def get_remote_control_port_number():
 def bandicoot_python_timeout_add(interval_ms, callable):
     return _coot.bandicoot_python_timeout_add(interval_ms, callable)
 
+def bandicoot_radio_choice_py(title, choices, selected, accept_label, accept_command, reject_label, reject_command):
+    return _coot.bandicoot_radio_choice_py(title, choices, selected, accept_label, accept_command, reject_label, reject_command)
+
+def bandicoot_button_choice_py(title, buttons, close_label, close_command):
+    return _coot.bandicoot_button_choice_py(title, buttons, close_label, close_command)
+
 def bandicoot_rotation_centre_py():
     return _coot.bandicoot_rotation_centre_py()
 

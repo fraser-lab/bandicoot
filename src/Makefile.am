@@ -624,8 +624,14 @@ if UI_WX
 	wxUI/main/sequence-view.cc \
 	wxUI/main/file-menu.hh \
 	wxUI/main/file-menu.cc \
+	wxUI/main/calculate-menu.hh \
+	wxUI/main/calculate-menu.cc \
 	wxUI/main/edit-menu.hh \
 	wxUI/main/edit-menu.cc \
+	wxUI/main/pandda-inspect.hh \
+	wxUI/main/pandda-inspect.cc \
+	wxUI/main/python-console.hh \
+	wxUI/main/python-console.cc \
 	wxUI/main/preferences.hh \
 	wxUI/main/preferences.cc \
 	wxUI/dialogs/accept-reject-dialog.hh \

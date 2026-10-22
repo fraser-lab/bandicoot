@@ -655,6 +655,24 @@ struct bandicoot_result_row {
 // Go where a row points.
 void bandicoot_core_go_to_result(const bandicoot_result_row &row);
 
+// A script's radio-button choice: choosing an option runs its Python command
+// (often a preview), and Accept or Reject runs theirs and ends the choice.
+struct bandicoot_radio_choice {
+   std::string title;
+   std::vector<std::pair<std::string, std::string>> choices;  // label, command
+   int selected = 0;
+   std::string accept_label, accept_command, reject_label, reject_command;
+};
+// A script's column of buttons: each runs its Python command, and the close
+// button runs its own and ends the window.
+struct bandicoot_button_choice {
+   std::string title;
+   std::vector<std::pair<std::string, std::string>> buttons;  // label, command
+   std::string close_label, close_command;
+};
+// Run a script's Python command.
+void bandicoot_core_run_python(const std::string &command);
+
 struct bandicoot_ui_view {
    std::function<void(const std::string &text)> info;  // Coot's info dialogs
    // a results list (empty: nothing was found)
@@ -670,6 +688,10 @@ struct bandicoot_ui_view {
    // run callback every interval_ms until it returns false (scripts'
    // timeouts, which in the GTK build ran on GLib's main loop)
    std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
+   // a script's choice among radio buttons (its own pygtk one cannot appear)
+   std::function<void(const bandicoot_radio_choice &choice)> radio_choice;
+   // a script's column of buttons (its own pygtk one cannot appear)
+   std::function<void(const bandicoot_button_choice &choice)> button_choice;
 };
 void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
 
@@ -708,6 +730,101 @@ void bandicoot_core_set_more_control_shown(bool shown);
 std::vector<std::pair<int, std::string>> bandicoot_core_maps_for_fitting();
 int bandicoot_core_refinement_map();  // -1 if none
 void bandicoot_core_set_refinement_map(int imol);
+
+// Map Sharpening/Blurring: a map's B-factor in A^2 (negative sharpens,
+// positive blurs), within plus or minus the limit.
+float bandicoot_core_map_sharpening_limit();
+float bandicoot_core_map_sharpening(int imol);
+void bandicoot_core_sharpen_map(int imol, float b_factor);
+// The B-factor that makes the map sharpest; converged false when the search
+// found none and the value may be bogus.
+float bandicoot_core_optimal_sharpening(int imol, bool &converged);
+
+// Map Skeleton: the map to start from (-1 if none), whether a map has its
+// skeleton, and turning it on (optionally pruned of side chains) or off.
+int bandicoot_core_skeleton_map();
+bool bandicoot_core_map_skeletonized(int imol);
+void bandicoot_core_set_map_skeleton(int imol, bool on, bool prune);
+
+// NCS Maps: the models with NCS, and maps of each NCS copy's density.
+std::vector<std::pair<int, std::string>> bandicoot_core_ncs_models();
+void bandicoot_core_make_ncs_maps(int imol_model, int imol_map);
+
+// Updating Maps: recalculate a difference map from a model and a map with
+// data attached, once or each time the model changes.
+std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps();
+void bandicoot_core_update_maps(int imol_model, int imol_map, int imol_difference_map, bool automatic);
+
+// Move Molecule Here: centre a model on the screen centre.
+void bandicoot_core_move_molecule_here(int imol);
+
+// LSQ Superpose: a residue range of one chain fitted onto another's. The
+// values are remembered from one opening of the window to the next.
+struct bandicoot_lsq {
+   int imol_reference = -1, imol_moving = -1;
+   int reference_start = 1, reference_end = 999, moving_start = 1, moving_end = 999;
+   std::string reference_chain, moving_chain;
+   int match = 0;         // 0 all atoms, 1 main chain, 2 C-alphas
+   bool move_copy = false;
+};
+bandicoot_lsq bandicoot_core_lsq_remembered();
+void bandicoot_core_remember_lsq(const bandicoot_lsq &lsq);
+// False, with the reason, if no fit was made.
+bool bandicoot_core_lsq_fit(const bandicoot_lsq &lsq, std::string &why_not);
+
+// SSM Superpose: the moving model (or its copy) laid onto the reference by
+// secondary structure, each optionally by one chain (empty: all chains).
+void bandicoot_core_ssm_superpose(int imol_reference, int imol_moving, const std::string &reference_chain,
+                                  const std::string &moving_chain, bool move_copy);
+
+// Align & Mutate: a chain aligned to a one-letter sequence and mutated to
+// match it. False, with the reason, if nothing was done.
+bool bandicoot_core_align_and_mutate(int imol, const std::string &chain, const std::string &sequence,
+                                     bool autofit, std::string &why_not);
+
+// Mutate Residue Range and Fit Loop by Rama Search: a residue range of one
+// chain (either way round) and a one-letter sequence for it.
+struct bandicoot_range_sequence {
+   int imol = -1;
+   std::string chain;
+   int first = 0, last = 0;
+   std::string sequence;   // as typed
+};
+// The residues a typed sequence holds, as Coot reads it.
+std::string bandicoot_core_plain_sequence(const std::string &text);
+// False, with the reason, if nothing was mutated.
+bool bandicoot_core_mutate_residue_range(const bandicoot_range_sequence &r, bool autofit, std::string &why_not);
+// False, with the reason, if no loop was fitted. warning is set when the
+// sequence did not fit the range and poly-Ala was built instead.
+bool bandicoot_core_fit_loop(const bandicoot_range_sequence &r, bool ramachandran_restraints,
+                             std::string &why_not, std::string &warning);
+
+// Frames/Sec: the rate reported in the status bar while the view redraws.
+bool bandicoot_core_fps_shown();
+void bandicoot_core_show_fps(bool on);
+// Load Tutorial Model and Data: the tutorial model and its two maps. False,
+// with the file missing, if the data are not installed.
+bool bandicoot_core_load_tutorial(std::string &why_not);
+// Run Script: a Python (or Scheme) file, as Coot runs one.
+void bandicoot_core_run_script(const std::string &path);
+// The Python console: run code in the console's lasting namespace; output
+// holds what it printed (or the error), had_error says which.
+std::string bandicoot_core_console_run(const std::string &code, bool &had_error);
+
+// PanDDA Inspect, driven by python/bandicoot_pandda.py. Opening readies the
+// driver and quiets the per-dataset ligand restraint questions, which a
+// PanDDA folder would otherwise raise once per dataset; closing gives them
+// back as they were.
+void bandicoot_core_pandda_opened();
+void bandicoot_core_pandda_closed();
+// A driver call (e.g. "next_event()") and the string it returns: a status
+// such as "PanDDA 3/12 ...", an error starting "PanDDA: ", or a value.
+std::string bandicoot_core_pandda_call(const std::string &call);
+// The UI the panel opens in, from Preferences: true for Basic, false for Full.
+bool bandicoot_core_pandda_basic_ui();
+// The core asks for the panel (the --pandda launcher), with a folder to load
+// (empty for none).
+void bandicoot_core_set_pandda_view(std::function<void(const std::string &folder)> open);
 
 // Windows that edit the moving atoms after a pick: Rotation & Translation,
 // Select Rotamer, Edit Chi Angles, Edit Backbone Torsions. The core opens

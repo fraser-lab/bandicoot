@@ -71,7 +71,7 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
          if (loop_len >= 6):
             start_resno1 = min([start_resno, stop_resno])
             stop_resno2  = max([start_resno, stop_resno])
-            stop_resno1  = start_resno1 + loop_len/2 - 1
+            stop_resno1  = start_resno1 + loop_len//2 - 1
             start_resno2 = stop_resno1 + 1
             sequence1    = sequence[0:loop_len//2]
             sequence2    = sequence[loop_len//2:len(sequence)]
@@ -133,17 +133,25 @@ def fit_gap(imol, chain_id, start_resno, stop_resno,
                      max_result = fragment_list[i+1][1]
 
             fragment_list.append([imol_fragment_backup, -99999.])
-            close_ls    = map(lambda xy: "close_molecule(" + str(xy[0]) + ")", fragment_list)
+            close_ls    = ["close_molecule(" + str(xy[0]) + ")" for xy in fragment_list]
             go_function = "(" + ', '.join(close_ls) + ")"
             cancel_function = "(delete_residue_range(" + str(imol) + ", \"" + str(chain_id) + "\", " + str(min(start_resno, stop_resno)) + ", " + str(max(start_resno, stop_resno)) + "), replace_fragment(" + str(imol) + ", " + str(imol_fragment_backup) + ", \"" + atom_selection + "\"), " + ', '.join(close_ls) + ")"
             
             
             # only show if more than 1 loop left
             if (len(buttons) >1):
-               dialog_box_of_radiobuttons("Select Loop", [200, 100],
-                                          buttons, "  Accept  ",
-                                          go_function, selected_button,
-                                          "  Reject  ", cancel_function)
+               # a native window where there is one (the pygtk one is inert)
+               if not bandicoot_radio_choice_py("Select Loop", buttons, selected_button,
+                                                "Accept", go_function,
+                                                "Reject", cancel_function):
+                  dialog_box_of_radiobuttons("Select Loop", [200, 100],
+                                             buttons, "  Accept  ",
+                                             go_function, selected_button,
+                                             "  Reject  ", cancel_function)
+            else:
+               # one loop left, already in place: the fragments are not needed
+               for imol_fragment, result in fragment_list:
+                  close_molecule(imol_fragment)
 
          else:
             # no pygtk take best one

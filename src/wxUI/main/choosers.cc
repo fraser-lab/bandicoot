@@ -7,11 +7,14 @@
 #include "wxUI/assets/palette.hh"
 #include "wxUI/widgets/titled-panel.hh"
 
+#include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
+#include <wx/dialog.h>
 #include <wx/frame.h>
 #include <wx/panel.h>
 #include <wx/radiobut.h>
+#include <wx/scrolwin.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
@@ -309,6 +312,91 @@ void install_choosers(wxWindow *parent) {
    v.add_alt_conf = [](int split_type) { open_add_alt_conf(split_type); };
    v.add_alt_conf_done = []() { add_alt_conf_done(); };
    bandicoot_core_set_chooser_view(v);
+}
+
+// The chosen option's command runs as it is chosen, the first time once the
+// script that asked has returned. Closing the window counts as Reject, which
+// puts back what the options changed.
+void show_radio_choice(wxWindow *parent, const bandicoot_radio_choice &c) {
+   wxDialog *d = new wxDialog(parent, wxID_ANY, wxString::FromUTF8(c.title));
+   d->SetBackgroundColour(palette::face());
+   std::vector<wxString> labels;
+   for (const auto &choice : c.choices) labels.push_back(wxString::FromUTF8(choice.first));
+   RadioGroup *options = new RadioGroup(d, wxEmptyString, labels, c.selected);
+   std::vector<std::string> commands;
+   for (const auto &choice : c.choices) commands.push_back(choice.second);
+   options->on_change = [commands](int i) {
+      if (i >= 0 && i < int(commands.size())) bandicoot_core_run_python(commands[i]);
+   };
+
+   wxStdDialogButtonSizer *buttons = new wxStdDialogButtonSizer();
+   wxButton *accept = new wxButton(d, wxID_OK, wxString::FromUTF8(c.accept_label.empty() ? "OK" : c.accept_label));
+   buttons->AddButton(accept);
+   if (! c.reject_label.empty())
+      buttons->AddButton(new wxButton(d, wxID_CANCEL, wxString::FromUTF8(c.reject_label)));
+   buttons->Realize();
+
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(options, 1, wxEXPAND | wxBOTTOM, 10);
+   col->Add(buttons, 0, wxEXPAND);
+   wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+   outer->Add(col, 1, wxEXPAND | wxALL, 10);
+   d->SetSizerAndFit(outer);
+
+   std::string accept_command = c.accept_command, reject_command = c.reject_command;
+   d->Bind(wxEVT_BUTTON, [d, accept_command](wxCommandEvent &) {
+      bandicoot_core_run_python(accept_command);
+      d->Destroy();
+   }, wxID_OK);
+   auto reject = [d, reject_command]() {
+      bandicoot_core_run_python(reject_command);
+      d->Destroy();
+   };
+   d->Bind(wxEVT_BUTTON, [reject](wxCommandEvent &) { reject(); }, wxID_CANCEL);
+   d->Bind(wxEVT_CLOSE_WINDOW, [reject](wxCloseEvent &) { reject(); });
+   d->CentreOnParent();
+   d->Show();
+   std::string first = commands[options->get_selection()];
+   d->CallAfter([first]() { bandicoot_core_run_python(first); });
+}
+
+// Each button runs its command and the window stays; Close (or the close box)
+// runs the close command and ends it.
+void show_button_choice(wxWindow *parent, const bandicoot_button_choice &c) {
+   wxDialog *d = new wxDialog(parent, wxID_ANY, wxString::FromUTF8(c.title), wxDefaultPosition, wxDefaultSize,
+                              wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+   d->SetBackgroundColour(palette::face());
+   wxScrolledWindow *list = new wxScrolledWindow(d, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL);
+   list->SetBackgroundColour(palette::face());
+   list->SetScrollRate(0, 10);
+   wxBoxSizer *rows = new wxBoxSizer(wxVERTICAL);
+   for (const auto &b : c.buttons) {
+      BevelButton *button = new BevelButton(list, wxID_ANY, wxString::FromUTF8(b.first));
+      std::string command = b.second;
+      button->Bind(wxEVT_BUTTON, [command](wxCommandEvent &) { bandicoot_core_run_python(command); });
+      rows->Add(button, 0, wxEXPAND | wxBOTTOM, 4);
+   }
+   list->SetSizer(rows);
+   wxSize all = rows->CalcMin();
+   list->SetMinSize(wxSize(std::max(all.x + 20, 300), std::min(all.y + 4, 420)));
+
+   wxButton *close = new wxButton(d, wxID_CANCEL, wxString::FromUTF8(c.close_label.empty() ? "Close" : c.close_label));
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(list, 1, wxEXPAND | wxBOTTOM, 10);
+   col->Add(close, 0, wxALIGN_RIGHT);
+   wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+   outer->Add(col, 1, wxEXPAND | wxALL, 10);
+   d->SetSizerAndFit(outer);
+
+   std::string close_command = c.close_command;
+   auto finish = [d, close_command]() {
+      bandicoot_core_run_python(close_command);
+      d->Destroy();
+   };
+   d->Bind(wxEVT_BUTTON, [finish](wxCommandEvent &) { finish(); }, wxID_CANCEL);
+   d->Bind(wxEVT_CLOSE_WINDOW, [finish](wxCloseEvent &) { finish(); });
+   d->CentreOnParent();
+   d->Show();
 }
 
 } // namespace wxui

@@ -6714,6 +6714,21 @@ int get_remote_control_port_number();
     that drive Coot via gobject.timeout_add actually run on the main
     thread (where the GL context lives) instead of a daemon thread. */
 int bandicoot_python_timeout_add(int interval_ms, PyObject *callable);
+/*! \brief Bandicoot: a choice among radio buttons, for the scripts whose own
+    (pygtk) chooser cannot appear. choices is a list of [label, command];
+    choosing one runs its Python command, and Accept or Reject runs theirs
+    and closes. Returns 1 if the window was shown, 0 if there is no native
+    window to show it in. */
+int bandicoot_radio_choice_py(const char *title, PyObject *choices, int selected,
+                              const char *accept_label, const char *accept_command,
+                              const char *reject_label, const char *reject_command);
+/*! \brief Bandicoot: a column of buttons, for the scripts whose own (pygtk)
+    window of buttons cannot appear. buttons is a list of [label, command];
+    each button runs its Python command, and the close button runs its own
+    and closes. Returns 1 if the window was shown, 0 if there is no native
+    window to show it in. */
+int bandicoot_button_choice_py(const char *title, PyObject *buttons,
+                               const char *close_label, const char *close_command);
 /*! \brief Bandicoot v0.2.0.1: the rotation centre as [x, y, z], without
     adding the read to the command history or echoing it to the console.
     For callers that sample the view repeatedly. */

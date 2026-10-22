@@ -300,7 +300,6 @@ const std::vector<MenuEntry> entries = {
          item("Load Tutorial Model and Data", "on_calculate_load_tutorial_model_and_data1_activate"),
          item("Ligand Builder", "on_ligand_builder1_activate"),
          item("LSQ Superpose...", "on_lsq_superpose1_activate"),
-         item("Map Tools...", "on_calculate_map_tools_activate"),
          item("Map Sharpening/Blurring...", "on_map_sharpening1_activate"),
          item("Map Skeleton...", "on_skeleton1_activate"),
          item("Move Molecule Here...", "on_move_molecule_here1_activate"),
@@ -310,7 +309,6 @@ const std::vector<MenuEntry> entries = {
          item("SSM Superpose...", "on_ssm_superposition1_activate"),
          submenu("Scripting...", {
             item("Python...", "on_scripting_python1_activate"),
-            item("Scheme...", "on_scripting_scheme1_activate"),
          }),
          item("Updating Maps...", "on_calculate_updating_maps1_activate"),
          item("PanDDA Inspect...", "on_pandda_inspect1_activate"),

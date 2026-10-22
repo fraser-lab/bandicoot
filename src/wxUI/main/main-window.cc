@@ -29,6 +29,8 @@
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/main/top-toolbar.hh"
+#include "wxUI/main/calculate-menu.hh"
+#include "wxUI/main/pandda-inspect.hh"
 #include "wxUI/main/edit-menu.hh"
 #include "wxUI/main/preferences.hh"
 #include "wxUI/main/file-actions.hh"
@@ -550,6 +552,7 @@ public:
       wxui::install_delete_waters(this);
       wxui::install_file_actions(this);
       wxui::install_edit_menu(this);
+      wxui::install_pandda_inspect(this);
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
       middle->Add(left_slot,  0, wxEXPAND);
@@ -705,6 +708,10 @@ private:
       }
       if (wxui::is_edit_action(action)) {
          CallAfter([this, action]() { wxui::run_edit_action(this, action); });
+         return true;
+      }
+      if (wxui::is_calculate_action(action)) {
+         CallAfter([this, action]() { wxui::run_calculate_action(this, action); });
          return true;
       }
       return false;
@@ -982,6 +989,8 @@ private:
          CallbackTimer *t = new CallbackTimer(std::move(callback));
          t->Start(std::max(interval_ms, 1));
       };
+      v.radio_choice = [this](const bandicoot_radio_choice &c) { wxui::show_radio_choice(this, c); };
+      v.button_choice = [this](const bandicoot_button_choice &c) { wxui::show_button_choice(this, c); };
       bandicoot_core_set_ui_view(v);
    }
 

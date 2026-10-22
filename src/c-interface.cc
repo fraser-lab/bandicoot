@@ -148,6 +148,17 @@ bool bandicoot_wx_display_manager_open();
 // A repeating timer on the wx event loop, which stops when the callback
 // returns false; 0 if there is no window to run it.
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+// A radio-button choice whose options and buttons run Python commands; false
+// if there is no window to show it in.
+bool bandicoot_wx_radio_choice(const std::string &title,
+                               const std::vector<std::pair<std::string, std::string>> &choices,
+                               int selected,
+                               const std::string &accept_label, const std::string &accept_command,
+                               const std::string &reject_label, const std::string &reject_command);
+// A column of buttons that run Python commands; false if there is no window to show it in.
+bool bandicoot_wx_button_choice(const std::string &title,
+                                const std::vector<std::pair<std::string, std::string>> &buttons,
+                                const std::string &close_label, const std::string &close_command);
 #endif
 
 
@@ -8772,6 +8783,49 @@ int bandicoot_python_timeout_add(int interval_ms, PyObject *callable) {
    return (int) g_timeout_add(interval_ms,
                               bandicoot_python_timeout_thunk,
                               callable);
+}
+
+int bandicoot_radio_choice_py(const char *title, PyObject *choices, int selected,
+                              const char *accept_label, const char *accept_command,
+                              const char *reject_label, const char *reject_command) {
+#ifdef BANDICOOT_UI_WX
+   if (! choices || ! PyList_Check(choices)) return 0;
+   std::vector<std::pair<std::string, std::string>> v;
+   for (Py_ssize_t i=0; i<PyList_Size(choices); i++) {
+      PyObject *item = PyList_GetItem(choices, i);
+      if (! PyList_Check(item) || PyList_Size(item) < 2) return 0;
+      PyObject *label = PyList_GetItem(item, 0);
+      PyObject *command = PyList_GetItem(item, 1);
+      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return 0;
+      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
+   }
+   return bandicoot_wx_radio_choice(title ? title : "", v, selected,
+                                    accept_label ? accept_label : "", accept_command ? accept_command : "",
+                                    reject_label ? reject_label : "", reject_command ? reject_command : "")
+      ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+int bandicoot_button_choice_py(const char *title, PyObject *buttons,
+                               const char *close_label, const char *close_command) {
+#ifdef BANDICOOT_UI_WX
+   if (! buttons || ! PyList_Check(buttons)) return 0;
+   std::vector<std::pair<std::string, std::string>> v;
+   for (Py_ssize_t i=0; i<PyList_Size(buttons); i++) {
+      PyObject *item = PyList_GetItem(buttons, i);
+      if (! PyList_Check(item) || PyList_Size(item) < 2) return 0;
+      PyObject *label = PyList_GetItem(item, 0);
+      PyObject *command = PyList_GetItem(item, 1);
+      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return 0;
+      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
+   }
+   return bandicoot_wx_button_choice(title ? title : "", v, close_label ? close_label : "",
+                                     close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
 }
 
 // The scripting-API reader, rotation_centre_position(), is added to the command

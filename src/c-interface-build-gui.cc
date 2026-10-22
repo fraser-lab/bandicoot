@@ -4715,8 +4715,17 @@ static void bandicoot_pandda_rebuild_body() {
    }
 }
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's PanDDA Inspect window (wxUI/bridge/core-bridge.cc); false if
+// there is none to open.
+bool bandicoot_wx_pandda(const std::string &folder);
+#endif
+
 extern "C" void bandicoot_pandda_dialog() {
    if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_pandda(std::string())) return;
+#endif
 #ifdef USE_PYTHON
    // import once so the button commands are single expressions (their return
    // value reaches the status label, and they aren't double-executed).
@@ -4771,6 +4780,9 @@ extern "C" void bandicoot_pandda_dialog() {
 
 // Entry point for the --pandda launcher: open the dialog and load `dir`.
 extern "C" void bandicoot_pandda_dialog_with_folder(const char *dir) {
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_pandda(dir ? dir : "")) return;
+#endif
    bandicoot_pandda_dialog();
    if (dir && *dir)
       bandicoot_pandda_load_folder(dir);
