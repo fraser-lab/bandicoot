@@ -98,6 +98,7 @@ bool bandicoot_wx_ar_present(const std::string &fit_type, const coot::refinement
 bool bandicoot_wx_info(const std::string &text, bool markup);
 bool bandicoot_wx_select_map();
 void bandicoot_wx_release_sidebar_toggle(const std::string &widget);
+void bandicoot_wx_release_tools_toggle(const std::string &widget);
 // The Edit Chi Angles and Edit Backbone Torsions windows. Edit Chi returns
 // the number of torsions it lists, or -2 if wx has not taken it on.
 int  bandicoot_wx_edit_chi_present(const std::string &res_type, int mode);
@@ -2479,6 +2480,9 @@ graphics_info_t::model_fit_refine_unactive_togglebutton(const std::string &butto
 void
 graphics_info_t::other_modelling_tools_unactive_togglebutton(const std::string &button_name) const {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_tools_toggle(button_name);
+#endif
    if (other_modelling_tools_dialog) {
       GtkWidget *toggle_button = lookup_widget(other_modelling_tools_dialog,
                                                button_name.c_str());
@@ -4681,6 +4685,25 @@ wrapped_create_multi_residue_torsion_dialog(const std::vector<std::pair<mmdb::At
 
    return w;
 }
+
+#ifdef BANDICOOT_UI_WX
+// static
+void
+graphics_info_t::select_multi_residue_torsion_bond(const coot::atom_spec_t &first,
+                                                   const coot::atom_spec_t &second) {
+   if (! moving_atoms_asc || ! moving_atoms_asc->mol) return;
+   int index_1 = -1, index_2 = -1;
+   for (int i = 0; i < moving_atoms_asc->n_selected_atoms; i++) {
+      coot::atom_spec_t s(moving_atoms_asc->atom_selection[i]);
+      if (s == first)  index_1 = i;
+      if (s == second) index_2 = i;
+      if (index_1 != -1 && index_2 != -1) {
+         multi_residue_torsion_rotating_atom_index_pair = std::make_pair(index_1, index_2);
+         return;
+      }
+   }
+}
+#endif
 
 // static
 void

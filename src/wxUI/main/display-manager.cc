@@ -82,7 +82,7 @@ private:
 
 DisplayManager::DisplayManager(wxWindow *parent)
    : wxFrame(parent, wxID_ANY, "Display Manager", wxDefaultPosition, wxSize(900, 480),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT) {
+             wxDEFAULT_FRAME_STYLE) {
 
    wxPanel *panel = new wxPanel(this);
    panel->SetBackgroundColour(palette::face());

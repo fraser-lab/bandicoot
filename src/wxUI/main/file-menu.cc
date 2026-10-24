@@ -284,7 +284,7 @@ private:
 void show_monomer_search(wxWindow *parent) {
 
    wxFrame *w = new wxFrame(parent, wxID_ANY, "Search Monomer Library", wxDefaultPosition, wxDefaultSize,
-                            wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
+                            wxDEFAULT_FRAME_STYLE);
    wxPanel *p = new wxPanel(w);
    p->SetBackgroundColour(palette::face());
    wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);

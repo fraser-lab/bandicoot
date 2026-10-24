@@ -14,7 +14,7 @@ ClickThroughDialog::ClickThroughDialog(wxWindow *parent, const wxString &title,
                                        ClickThroughList::RowType type,
                                        const wxString &header_text)
    : wxFrame(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
-             wxDEFAULT_FRAME_STYLE | (parent ? wxFRAME_FLOAT_ON_PARENT : 0)) {
+             wxDEFAULT_FRAME_STYLE) {
 
    wxPanel *p = new wxPanel(this);
    p->SetBackgroundColour(palette::face());

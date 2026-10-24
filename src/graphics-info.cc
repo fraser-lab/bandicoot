@@ -515,6 +515,9 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
    cif_dictionary_read_number++;
    if (rmit.success > 0) {
       cif_dictionary_filename_vec->push_back(cif_dictionary_filename);
+      std::vector<std::string> held = coot::comp_ids_in_dictionary_cif(cif_dictionary_filename);
+      std::sort(held.begin(), held.end());
+      cif_dictionary_scope_vec.push_back(std::make_pair(held, imol_enc));
       if (show_no_bonds_dialog_maybe_flag) {
 	 display_density_level_this_image = 1;
 	 std::string s;

@@ -63,6 +63,8 @@ bool bandicoot_wx_save_symmetry_coords(const coot::save_coords_options_t &opts,
                                        const std::string &file_name);
 // And its Residue Info window for a picked atom.
 bool bandicoot_wx_residue_info(int imol, int atom_index);
+// And its Other Modelling Tools toggles (by Coot's widget name).
+void bandicoot_wx_release_tools_toggle(const std::string &widget);
 #endif
 
 void
@@ -2130,6 +2132,9 @@ graphics_info_t::check_if_in_base_pairing_define(GdkEventButton *event) {
 	 int res_no = at->GetSeqNum();
 	 std::string chain_id = at->GetChainID();
 	 watson_crick_pair(naii.imol, chain_id.c_str(), res_no);
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_wx_release_tools_toggle("other_tools_base_pair_toggle_button");
+#endif
 	 if (other_modelling_tools_dialog) {
 	    GtkWidget *w = lookup_widget(other_modelling_tools_dialog,
 					 "other_tools_base_pair_toggle_button");

@@ -119,36 +119,6 @@ void show_map_sharpening(wxWindow *parent) {
    show(d, col);
 }
 
-// ------------------------------------------------------------ Map Skeleton
-
-// On / Off shows the chosen map's skeleton as it is; OK applies the choice.
-void show_map_skeleton(wxWindow *parent) {
-   MoleculeChooser::molecule_list maps = bandicoot_core_maps_for_fitting();
-   if (maps.empty()) {
-      info(parent, "No maps to skeletonize");
-      return;
-   }
-   wxDialog *d = new_dialog(parent, "Map Skeleton");
-   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
-   col->Add(new wxStaticText(d, wxID_ANY, "Skeletonize Map:"), 0, wxALIGN_CENTER | wxBOTTOM, 6);
-   MoleculeChooser *chooser = new MoleculeChooser(d, wxEmptyString, maps);
-   choose_start(chooser, bandicoot_core_skeleton_map());
-   col->Add(chooser, 0, wxEXPAND | wxBOTTOM, 8);
-   RadioGroup *on_off = new RadioGroup(d, wxEmptyString, { "On", "Off" },
-                                       bandicoot_core_map_skeletonized(chooser->get_imol()) ? 0 : 1);
-   col->Add(on_off, 0, wxEXPAND | wxBOTTOM, 8);
-   wxCheckBox *prune = new wxCheckBox(d, wxID_ANY, "Prune sidechains");
-   col->Add(prune, 0, wxBOTTOM, 10);
-   col->Add(dialog_buttons(d), 0, wxEXPAND);
-
-   chooser->on_change = [on_off](int imol) { on_off->set_selection(bandicoot_core_map_skeletonized(imol) ? 0 : 1); };
-   d->Bind(wxEVT_BUTTON, [d, chooser, on_off, prune](wxCommandEvent &) {
-      bandicoot_core_set_map_skeleton(chooser->get_imol(), on_off->get_selection() == 0, prune->IsChecked());
-      d->Destroy();
-   }, wxID_OK);
-   show(d, col);
-}
-
 // ------------------------------------------------------------ NCS Maps
 
 void show_ncs_maps(wxWindow *parent) {
@@ -636,7 +606,7 @@ void show_fit_loop_by_database(wxWindow *parent) {
 const std::map<std::string, std::function<void(wxWindow *)>> &calculate_actions() {
    static const std::map<std::string, std::function<void(wxWindow *)>> actions = {
       { "on_map_sharpening1_activate",          show_map_sharpening },
-      { "on_skeleton1_activate",                show_map_skeleton },
+      { "on_skeleton1_activate",                [](wxWindow *p) { show_map_skeleton(p, wxEmptyString, nullptr); } },
       { "on_ncs_maps1_activate",                show_ncs_maps },
       { "on_calculate_updating_maps1_activate", show_updating_maps },
       { "on_move_molecule_here1_activate",      show_move_molecule_here },
@@ -656,6 +626,39 @@ const std::map<std::string, std::function<void(wxWindow *)>> &calculate_actions(
 }
 
 } // namespace
+
+// ------------------------------------------------------------ Map Skeleton
+
+// On / Off shows the chosen map's skeleton as it is; OK applies the choice.
+void show_map_skeleton(wxWindow *parent, const wxString &note, std::function<void()> after_ok) {
+   MoleculeChooser::molecule_list maps = bandicoot_core_maps_for_fitting();
+   if (maps.empty()) {
+      info(parent, "No maps to skeletonize");
+      return;
+   }
+   wxDialog *d = new_dialog(parent, "Map Skeleton");
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   if (! note.empty()) col->Add(new wxStaticText(d, wxID_ANY, note), 0, wxALIGN_CENTER | wxBOTTOM, 10);
+   col->Add(new wxStaticText(d, wxID_ANY, "Skeletonize Map:"), 0, wxALIGN_CENTER | wxBOTTOM, 6);
+   MoleculeChooser *chooser = new MoleculeChooser(d, wxEmptyString, maps);
+   choose_start(chooser, bandicoot_core_skeleton_map());
+   col->Add(chooser, 0, wxEXPAND | wxBOTTOM, 8);
+   RadioGroup *on_off = new RadioGroup(d, wxEmptyString, { "On", "Off" },
+                                       bandicoot_core_map_skeletonized(chooser->get_imol()) ? 0 : 1);
+   col->Add(on_off, 0, wxEXPAND | wxBOTTOM, 8);
+   wxCheckBox *prune = new wxCheckBox(d, wxID_ANY, "Prune sidechains");
+   col->Add(prune, 0, wxBOTTOM, 10);
+   col->Add(dialog_buttons(d), 0, wxEXPAND);
+
+   chooser->on_change = [on_off](int imol) { on_off->set_selection(bandicoot_core_map_skeletonized(imol) ? 0 : 1); };
+   d->Bind(wxEVT_BUTTON, [d, chooser, on_off, prune, after_ok](wxCommandEvent &) {
+      bandicoot_core_set_map_skeleton(chooser->get_imol(), on_off->get_selection() == 0, prune->IsChecked());
+      d->Destroy();
+      if (after_ok) after_ok();
+   }, wxID_OK);
+   show(d, col);
+}
+
 
 bool is_calculate_action(const std::string &action) {
    return calculate_actions().count(action) > 0;

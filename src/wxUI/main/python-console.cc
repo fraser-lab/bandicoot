@@ -23,7 +23,7 @@ class PythonConsole : public wxFrame {
 public:
    explicit PythonConsole(wxWindow *parent)
       : wxFrame(parent, wxID_ANY, "Bandicoot Python Scripting", wxDefaultPosition, wxSize(720, 560),
-                wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT) {
+                wxDEFAULT_FRAME_STYLE) {
       SetBackgroundColour(palette::face());
       wxSplitterWindow *split = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                                      wxSP_LIVE_UPDATE | wxSP_3DSASH);

@@ -28,6 +28,7 @@
 #include "compat/coot-sysdep.h"
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <string>
@@ -45,6 +46,13 @@
                                         // is_valid_model_molecule()
 #ifdef USE_PYTHON
 #include "cc-interface-scripting.hh"   // safe_python_command_with_return()
+#endif
+
+#ifdef BANDICOOT_UI_WX
+// The wx build's chooser (wxUI/bridge/core-bridge.cc). False if wx has not
+// taken it on.
+bool bandicoot_wx_choose_molecules(const std::string &file_name, const std::vector<int> &targets,
+                                   std::vector<int> &chosen);
 #endif
 
 namespace {
@@ -578,6 +586,9 @@ std::vector<int> choose_molecules_for_dictionary(const std::string &file_name,
                                                  const std::vector<int> &targets) {
 
    std::vector<int> chosen;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_choose_molecules(file_name, targets, chosen)) return chosen;
+#endif
    graphics_info_t g;
 
    GtkWidget *d =
@@ -816,10 +827,59 @@ int bandicoot_import_restraints_sweep(const char *file_name_in,
    return r;
 }
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's window (wxUI/bridge/core-bridge.cc): show_all as the menu
+// asks, fresh the components a load has just brought (ticked again), and
+// whether to say so when there is nothing to list. False if there is no
+// window to show it in.
+bool bandicoot_wx_restraints(bool show_all, const std::vector<std::string> &fresh, bool announce_empty);
+bool bandicoot_generate_restraints_for_wx(bool show_all, const std::vector<std::string> &wanted,
+                                          std::function<void(const std::string &)> progress,
+                                          std::string &report);
+#endif
+
+#ifdef BANDICOOT_UI_WX
+int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+
+// the same preferences, but generation and the window are the wx build's
+static void restraints_notify_wx(int imol, const std::vector<std::string> &comp_ids) {
+
+   // only what still has no dictionary: a session file reads its dictionaries
+   // after its molecules
+   if (! is_valid_model_molecule(imol)) return;
+   graphics_info_t g;
+   std::vector<std::string> missing = g.molecules[imol].no_dictionary_for_residue_type_as_yet(*g.Geom_p());
+   std::vector<std::string> still;
+   for (unsigned int i=0; i<comp_ids.size(); i++)
+      if (std::find(missing.begin(), missing.end(), comp_ids[i]) != missing.end())
+         still.push_back(comp_ids[i]);
+   if (still.empty()) return;
+
+   int auto_generate = 0, show_generate = 1;
+   bandicoot_load_ligand_behaviour(NULL, NULL, &auto_generate, &show_generate, NULL);
+   if (auto_generate) {
+      std::string report;
+      bandicoot_generate_restraints_for_wx(false, still, nullptr, report);
+      if (! report.empty()) info_dialog(report.c_str());
+      return;
+   }
+   if (! show_generate) return;
+   if (! graphics_info_t::show_ligand_restraint_warnings_flag) return;
+   bandicoot_wx_restraints(false, still, false);
+}
+#endif
+
 void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_ids) {
 
    if (! graphics_info_t::use_graphics_interface_flag) return;
    if (comp_ids.empty()) return;
+
+#ifdef BANDICOOT_UI_WX
+   // from the event loop, so that the script or load in progress (a session
+   // restore, say) has finished reading dictionaries first
+   if (bandicoot_wx_timeout_add(1, [imol, comp_ids]() { restraints_notify_wx(imol, comp_ids); return false; }))
+      return;
+#endif
 
    // Preferences -> Others -> Ligands:
    //   auto_generate Yes -> generate now, no dialog
@@ -863,6 +923,9 @@ void bandicoot_restraints_notify(int imol, const std::vector<std::string> &comp_
 void bandicoot_restraints_dialog() {
 
    if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_restraints(true, std::vector<std::string>(), true)) return;
+#endif
 
    // Modelling -> Generate Ligand Restraints: EVERY ligand in EVERY loaded
    // molecule, labelled by file, with anything already described arriving
@@ -872,3 +935,105 @@ void bandicoot_restraints_dialog() {
    show_all_mode = true;
    show_dialog(true);
 }
+
+#ifdef BANDICOOT_UI_WX
+// ---- for the wx build's window --------------------------------------------
+//
+// The same rows and the same generation as above, without the GTK dialog: the
+// wx window draws the rows and reports the progress itself.
+
+// Each row's comp id, label, and whether it arrives ticked (nothing
+// describes it yet).
+void bandicoot_restraint_rows_for_wx(bool show_all, std::vector<std::string> &comp_ids,
+                                     std::vector<std::string> &labels, std::vector<bool> &needed) {
+   comp_ids.clear(); labels.clear(); needed.clear();
+   std::vector<row_t> rows = live_rows(show_all);
+   for (unsigned int i=0; i<rows.size(); i++) {
+      comp_ids.push_back(rows[i].comp_id);
+      labels.push_back(row_label(rows[i]));
+      needed.push_back(rows[i].state == ROW_NEEDS);
+   }
+}
+
+// Generates for each wanted component, in every molecule that holds it. False
+// if no generator could be found (the reason is in report); otherwise report
+// holds the failures and caveats, empty when there were none.
+bool bandicoot_generate_restraints_for_wx(bool show_all, const std::vector<std::string> &wanted,
+                                          std::function<void(const std::string &)> progress,
+                                          std::string &report) {
+   report.clear();
+   if (generator_name().empty()) {
+      std::cout << "WARNING:: no restraint generator: neither phenix.elbow "
+                << "nor acedrg could be found" << std::endl;
+      report = "No restraint generator was found.\n\n"
+               "Bandicoot looked for phenix.elbow and acedrg, both on\n"
+               "PATH and in the environment your login shell provides.\n"
+               "Install Phenix or CCP4, or read in a dictionary with\n"
+               "File -> Import CIF dictionary...";
+      return false;
+   }
+
+   std::vector<std::string> failed, warned;
+   int generated = 0, dropped = 0;
+   for (unsigned int i=0; i<wanted.size(); i++) {
+      // re-validated just before running, as the GTK dialog does
+      std::vector<int> imols;
+      std::vector<row_t> rows = live_rows(show_all);
+      for (unsigned int j=0; j<rows.size(); j++)
+         if (rows[j].comp_id == wanted[i]) { imols = rows[j].imols; break; }
+      if (imols.empty()) { dropped++; continue; }
+
+      if (progress) {
+         std::string m = "Generating restraints for " + wanted[i];
+         if (wanted.size() > 1)
+            m += " (" + coot::util::int_to_string(i + 1) + " of " +
+                 coot::util::int_to_string(wanted.size()) + ")";
+         progress(m + "...");
+      }
+      bool any_ok = false;
+      for (unsigned int k=0; k<imols.size(); k++) {
+         if (! is_valid_model_molecule(imols[k])) continue;
+         std::string status = generate_one(imols[k], wanted[i]);
+         const std::string where = wanted[i] + " (molecule " + coot::util::int_to_string(imols[k]) + ")";
+         if (status == "ok") {
+            any_ok = true;
+         } else if (status.compare(0, 5, "warn:") == 0) {
+            any_ok = true;
+            warned.push_back(where + ": " + status.substr(5));
+         } else if (status.compare(0, 5, "fail:") == 0) {
+            failed.push_back(where + ": " + status.substr(5));
+         } else {
+            failed.push_back(where + ": restraint generation did not run");
+         }
+      }
+      if (any_ok) generated++;
+   }
+
+   if (generated > 0) {
+      graphics_info_t g;
+      for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+         if (is_valid_model_molecule(imol))
+            g.molecules[imol].make_bonds_type_checked();
+      graphics_draw();
+   }
+   std::cout << "INFO:: restraint generation: " << generated << " generated, "
+             << failed.size() << " failed, " << dropped << " no longer needed" << std::endl;
+
+   if (! failed.empty()) {
+      report += "Restraints could not be generated for:\n\n";
+      for (unsigned int i=0; i<failed.size(); i++) {
+         std::cout << "WARNING:: " << failed[i] << std::endl;
+         report += "    " + failed[i] + "\n";
+      }
+   }
+   if (! warned.empty()) {
+      if (! report.empty()) report += "\n";
+      report += "Generated, with a caveat:\n\n";
+      for (unsigned int i=0; i<warned.size(); i++) {
+         std::cout << "WARNING:: " << warned[i] << std::endl;
+         report += "    " + warned[i] + "\n";
+      }
+   }
+   return true;
+}
+#endif // BANDICOOT_UI_WX

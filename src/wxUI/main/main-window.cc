@@ -30,6 +30,8 @@
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/main/top-toolbar.hh"
 #include "wxUI/main/calculate-menu.hh"
+#include "wxUI/main/modelling-menu.hh"
+#include "wxUI/main/other-tools.hh"
 #include "wxUI/main/pandda-inspect.hh"
 #include "wxUI/main/edit-menu.hh"
 #include "wxUI/main/preferences.hh"
@@ -553,6 +555,7 @@ public:
       wxui::install_file_actions(this);
       wxui::install_edit_menu(this);
       wxui::install_pandda_inspect(this);
+      wxui::install_modelling_menu(this);
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
       middle->Add(left_slot,  0, wxEXPAND);
@@ -714,6 +717,14 @@ private:
          CallAfter([this, action]() { wxui::run_calculate_action(this, action); });
          return true;
       }
+      if (wxui::is_modelling_action(action)) {
+         CallAfter([this, action]() { wxui::run_modelling_action(this, action); });
+         return true;
+      }
+      if (bandicoot_core_is_modelling_direct(action)) {
+         CallAfter([action]() { bandicoot_core_modelling_direct(action); });
+         return true;
+      }
       return false;
    }
 
@@ -782,7 +793,7 @@ private:
    void float_sequence_view(int imol) {
       close_sequence_view(imol);
       wxFrame *w = new wxFrame(this, wxID_ANY, "Sequence View", wxDefaultPosition, wxDefaultSize,
-                               wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
+                               wxDEFAULT_FRAME_STYLE);
       wxui::SequenceView *view = new wxui::SequenceView(w, imol, false, sequence_view_hooks(imol, false));
       int rows = std::min(view->chain_count(), 30);
       w->SetClientSize(wxSize(800, view->height_for_rows(rows)));
@@ -985,12 +996,19 @@ private:
       v.release_sidebar_toggle = [this](const std::string &widget) {
          if (sidebar) sidebar->release(widget);
       };
+      v.release_tools_toggle = [](const std::string &widget) { wxui::release_tools_toggle(widget); };
+      v.multi_torsion = [this](const std::vector<std::string> &bonds) { wxui::show_multi_torsion(this, bonds); };
       v.timeout_add = [](int interval_ms, std::function<bool()> callback) {
          CallbackTimer *t = new CallbackTimer(std::move(callback));
          t->Start(std::max(interval_ms, 1));
       };
       v.radio_choice = [this](const bandicoot_radio_choice &c) { wxui::show_radio_choice(this, c); };
       v.button_choice = [this](const bandicoot_button_choice &c) { wxui::show_button_choice(this, c); };
+      v.question = [this](const std::string &q) { return wxui::confirm(this, wxString::FromUTF8(q), "Yes", "No"); };
+      v.choose_molecules = [this](const std::string &title, const std::string &header,
+                                  const std::vector<std::pair<int, std::string>> &molecules) {
+         return wxui::choose_molecules(this, title, header, molecules);
+      };
       bandicoot_core_set_ui_view(v);
    }
 
@@ -1132,10 +1150,8 @@ private:
             std::cout << "INFO:: unsaved changes in molecule " << u << std::endl;
             list += u + "\n";
          }
-         wxMessageDialog d(this, list, "Quit with unsaved changes?",
-                           wxYES_NO | wxNO_DEFAULT | wxICON_WARNING);
-         d.SetYesNoLabels("Quit", "Cancel");
-         if (d.ShowModal() != wxID_YES) {
+         if (! wxui::confirm(this, "Quit with unsaved changes?", "Quit", "Cancel",
+                             wxString::FromUTF8(list))) {
             e.Veto();
             return;
          }
@@ -1170,8 +1186,16 @@ bool bandicoot_wx_init(int &argc, char **argv) {
    return wxTheApp->CallOnInit();
 }
 
+#ifdef __APPLE__
+extern "C" void bandicoot_set_dock_icon(const char *path);
+#endif
+
 void bandicoot_wx_create_main_window(const std::string &title) {
 
+#ifdef __APPLE__
+   // drawn by macOS, which renders the whole SVG (wx's renderer skips embedded images)
+   bandicoot_set_dock_icon((std::string(bandicoot_core_pixmaps_dir()) + "/bandicoot.svg").c_str());
+#endif
    main_frame = new MainFrame(wxString::FromUTF8(title));
    wxTheApp->SetTopWindow(main_frame);
    main_frame->Show();

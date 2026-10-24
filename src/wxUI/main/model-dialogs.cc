@@ -41,7 +41,7 @@ public:
    // where: the position kept for this kind of window, between openings
    MovingAtomsWindow(const wxString &title, std::function<void(bool)> finish_in, wxPoint *where_in)
       : wxFrame(owner, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
-                (wxDEFAULT_FRAME_STYLE & ~wxMAXIMIZE_BOX) | wxFRAME_FLOAT_ON_PARENT),
+                (wxDEFAULT_FRAME_STYLE & ~wxMAXIMIZE_BOX)),
         where(where_in), finish(finish_in) {
       panel = new wxPanel(this);
       panel->SetBackgroundColour(palette::face());

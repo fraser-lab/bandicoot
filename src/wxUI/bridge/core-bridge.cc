@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <map>
 #include <cctype>
 #include <cmath>
 #include <cstring>
@@ -31,6 +32,7 @@
 #include "c-interface-gtk-widgets.h"
 #include "c-interface-refine.h"
 #include "c-interface-preferences.h"
+#include "callbacks.h"   // the Modelling menu's op ids
 #include "coot-preferences.h"
 #include "cmtz-interface.hh"
 #include "cc-interface-scripting.hh"
@@ -1830,6 +1832,26 @@ void bandicoot_core_go_to_result(const bandicoot_result_row &row) {
    }
 }
 
+int bandicoot_wx_question(const std::string &text) {
+   if (! ui_view.question) return -1;
+   return ui_view.question(text) ? 1 : 0;
+}
+
+// Restraints read from one file fit several loaded molecules: which get them.
+bool bandicoot_wx_choose_molecules(const std::string &file_name, const std::vector<int> &targets,
+                                   std::vector<int> &chosen) {
+   if (! ui_view.choose_molecules) return false;
+   std::vector<std::pair<int, std::string>> molecules;
+   for (int imol : targets)
+      if (is_valid_model_molecule(imol))
+         molecules.push_back({ imol, std::to_string(imol) + "  " +
+                                     graphics_info_t::molecules[imol].name_for_display_manager() });
+   chosen = ui_view.choose_molecules("Apply Restraints",
+                                     "More than one molecule compatible with these restraints found:\n" +
+                                     coot::util::file_name_non_directory(file_name), molecules);
+   return true;
+}
+
 bool bandicoot_wx_select_map() {
    if (! ui_view.select_map) return false;
    ui_view.select_map();
@@ -2185,6 +2207,469 @@ std::string bandicoot_core_console_run(const std::string &code, bool &had_error)
    return output;
 }
 
+// ---- Modelling menu
+
+// The GTK build's Modelling menu sends these through the same dispatcher.
+static const std::map<std::string, int> &modelling_direct_ops() {
+   static const std::map<std::string, int> ops = {
+      { "BMOD_ADD_HYDROGENS",          BMOD_ADD_HYDROGENS },
+      { "BMOD_ADD_HYDROGENS_REFMAC",   BMOD_ADD_HYDROGENS_REFMAC },
+      { "BMOD_ASSIGN_HETATMS_RESIDUE", BMOD_ASSIGN_HETATMS_RESIDUE },
+      { "BMOD_INVERT_CHIRAL",          BMOD_INVERT_CHIRAL },
+      { "BMOD_PHOSPHORYLATE",          BMOD_PHOSPHORYLATE },
+      { "BMOD_WHATS_THIS",             BMOD_WHATS_THIS },
+      { "BMOD_MORPH_FIT_7",            BMOD_MORPH_FIT_7 },
+      { "BMOD_MORPH_FIT_11",           BMOD_MORPH_FIT_11 },
+      { "BMOD_MORPH_FIT_SS",           BMOD_MORPH_FIT_SS },
+      { "BMOD_FIND_HELICES",           BMOD_FIND_HELICES },
+      { "BMOD_FIND_STRANDS",           BMOD_FIND_STRANDS },
+      { "BMOD_BACKRUB_ON",             BMOD_BACKRUB_ON },
+      { "BMOD_BACKRUB_OFF",            BMOD_BACKRUB_OFF },
+      { "BMOD_DUPLICATE_RANGE",        BMOD_DUPLICATE_RANGE },
+      { "BMOD_SYMM_SHIFT_REF_CHAIN",   BMOD_SYMM_SHIFT_REF_CHAIN },
+      { "BMOD_FETCH_PDBE_THIS_LIGAND", BMOD_FETCH_PDBE_THIS_LIGAND },
+   };
+   return ops;
+}
+
+static const std::map<std::string, int> &glyco_direct_ops();
+
+bool bandicoot_core_is_modelling_direct(const std::string &id) {
+   return modelling_direct_ops().count(id) > 0 || glyco_direct_ops().count(id) > 0;
+}
+
+static const std::map<std::string, int> &glyco_direct_ops() {
+   static const std::map<std::string, int> ops = {
+      { "BGLYCO_SET_DEFAULT_B",          BGLYCO_SET_DEFAULT_B },
+      { "BGLYCO_NLINK_NAG_NAG_BMA",      BGLYCO_NLINK_NAG_NAG_BMA },
+      { "BGLYCO_ADD_HIGH_MANNOSE",       BGLYCO_ADD_HIGH_MANNOSE },
+      { "BGLYCO_ADD_HYBRID_MAMMAL",      BGLYCO_ADD_HYBRID_MAMMAL },
+      { "BGLYCO_ADD_COMPLEX_MAMMAL",     BGLYCO_ADD_COMPLEX_MAMMAL },
+      { "BGLYCO_ADD_COMPLEX_PLANT",      BGLYCO_ADD_COMPLEX_PLANT },
+      { "BGLYCO_DELETE_ALL",             BGLYCO_DELETE_ALL },
+      { "BGLYCO_TORSION_FIT",            BGLYCO_TORSION_FIT },
+      { "BGLYCO_TORSION_FIT_REFINE",     BGLYCO_TORSION_FIT_REFINE },
+      { "BGLYCO_SYNTH_PYRANOSE_PLANES",  BGLYCO_SYNTH_PYRANOSE_PLANES },
+      { "BGLYCO_UNIMODAL_RING_TORSIONS", BGLYCO_UNIMODAL_RING_TORSIONS },
+      { "BGLYCO_DISPLAY_EXTRA_REST",     BGLYCO_DISPLAY_EXTRA_REST },
+      { "BGLYCO_UNDISPLAY_EXTRA_REST",   BGLYCO_UNDISPLAY_EXTRA_REST },
+      { "BGLYCO_EXTRACT_TREE",           BGLYCO_EXTRACT_TREE },
+   };
+   return ops;
+}
+
+bool bandicoot_core_modelling_direct(const std::string &id) {
+   auto it = modelling_direct_ops().find(id);
+   if (it != modelling_direct_ops().end()) {
+      bandicoot_modelling_dispatch(it->second);
+      return true;
+   }
+   auto g = glyco_direct_ops().find(id);
+   if (g != glyco_direct_ops().end()) {
+      bandicoot_glyco_dispatch(g->second);
+      return true;
+   }
+   return false;
+}
+
+bool bandicoot_core_rename_active_residue(const std::string &name, std::string &why_not) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t>> aa = active_atom_spec();
+   if (! aa.first) { why_not = "no residue at the screen centre"; return false; }
+   const coot::atom_spec_t &spec = aa.second.second;
+   set_residue_name(aa.second.first, spec.chain_id.c_str(), spec.res_no, spec.ins_code.c_str(), name.c_str());
+   return true;
+}
+
+bool bandicoot_core_monomer_from_dictionary(const std::string &comp_id, std::string &why_not) {
+   int imol = get_monomer_from_dictionary(comp_id, 0);   // the dictionary's own coordinates
+   if (! is_valid_model_molecule(imol)) imol = get_monomer(comp_id);
+   if (! is_valid_model_molecule(imol)) {
+      why_not = "no dictionary entry or monomer for " + comp_id;
+      return false;
+   }
+   return true;
+}
+
+bool bandicoot_core_new_molecule_by_sphere(int imol, float radius, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   int made = new_molecule_by_sphere_selection(imol, rotation_centre_position(0), rotation_centre_position(1),
+                                               rotation_centre_position(2), radius, 0);
+   if (! is_valid_model_molecule(made)) { why_not = "no atoms within that radius"; return false; }
+   return true;
+}
+
+bool bandicoot_core_new_molecule_by_symop(int imol, const std::string &symop, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   try {
+      // the same shift to the origin Coot applies before a symmetry copy
+      clipper::Coord_frac cf = coot::util::shift_to_origin(graphics_info_t::molecules[imol].atom_sel.mol);
+      int made = new_molecule_by_symop(imol, symop.c_str(), int(lround(cf.u())), int(lround(cf.v())),
+                                       int(lround(cf.w())));
+      if (! is_valid_model_molecule(made)) { why_not = "could not apply " + symop; return false; }
+   } catch (const std::runtime_error &rte) {
+      why_not = rte.what();
+      return false;
+   }
+   return true;
+}
+
+bool bandicoot_core_residue_type_selection(int imol, const std::string &residue_type, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   int made = new_molecule_by_residue_type_selection(imol, residue_type.c_str());
+   if (! is_valid_model_molecule(made)) { why_not = "no " + residue_type + " residues"; return false; }
+   update_go_to_atom_window_on_new_mol();
+   return true;
+}
+
+void bandicoot_core_fetch_pdbe_ligand(const std::string &comp_id) {
+   // the name and SMILES come from the PDBe dictionary it reads
+   safe_python_command("get_SMILES_for_comp_id_from_pdbe(" + single_quote(comp_id) + ")");
+   get_monomer(comp_id.c_str());
+   graphics_info_t g;
+   std::pair<bool, std::string> name = g.Geom_p()->get_monomer_name(comp_id, coot::protein_geometry::IMOL_ENC_ANY);
+   std::string smiles = SMILES_for_comp_id(comp_id);
+   std::cout << "INFO:: PDBe " << comp_id << "   name: " << (name.first ? name.second : std::string("(none found)"))
+             << "   SMILES: " << (smiles.empty() ? std::string("(none found)") : smiles) << std::endl;
+   std::string s = comp_id + ":  " + (name.first && ! name.second.empty() ? name.second
+                                                                           : std::string("<no PDBe description found>"));
+   if (! smiles.empty()) s += "   [SMILES in console]";
+   add_status_bar_text(s.c_str());
+}
+
+// in restraints-gui.cc, with the rows' rules
+void bandicoot_restraint_rows_for_wx(bool show_all, std::vector<std::string> &comp_ids,
+                                     std::vector<std::string> &labels, std::vector<bool> &needed);
+bool bandicoot_generate_restraints_for_wx(bool show_all, const std::vector<std::string> &wanted,
+                                          std::function<void(const std::string &)> progress,
+                                          std::string &report);
+void bandicoot_restraints_dialog();
+
+std::vector<bandicoot_restraint_row> bandicoot_core_restraint_rows(bool show_all) {
+   std::vector<std::string> ids, labels;
+   std::vector<bool> needed;
+   bandicoot_restraint_rows_for_wx(show_all, ids, labels, needed);
+   std::vector<bandicoot_restraint_row> rows;
+   for (size_t i = 0; i < ids.size(); i++) rows.push_back({ ids[i], labels[i], needed[i] });
+   return rows;
+}
+
+bool bandicoot_core_generate_restraints(bool show_all, const std::vector<std::string> &comp_ids,
+                                        std::function<void(const std::string &)> progress,
+                                        std::string &report) {
+   return bandicoot_generate_restraints_for_wx(show_all, comp_ids, progress, report);
+}
+
+static std::function<void(bool, const std::vector<std::string> &, bool)> restraints_view;
+
+void bandicoot_core_set_restraints_view(
+   std::function<void(bool show_all, const std::vector<std::string> &fresh, bool announce_empty)> open) {
+   restraints_view = std::move(open);
+}
+
+bool bandicoot_wx_restraints(bool show_all, const std::vector<std::string> &fresh, bool announce_empty) {
+   if (! restraints_view) return false;
+   restraints_view(show_all, fresh, announce_empty);
+   return true;
+}
+
+void bandicoot_core_open_ligand_restraints() {
+   bandicoot_restraints_dialog();
+}
+
+bool bandicoot_core_modelling_on_model(const std::string &id, int imol) {
+   static const std::map<std::string, std::function<void(int)>> ops = {
+      { "BMOD_ARRANGE_WATERS",     [](int i) { move_waters_to_around_protein(i); } },
+      { "BMOD_MERGE_WATER_CHAINS", [](int i) { safe_python_command("merge_solvent_chains(" + std::to_string(i) + ")"); } },
+      { "BMOD_RENUMBER_WATERS",    [](int i) { renumber_waters(i); } },
+      { "BMOD_ASSIGN_HETATM_MOL",  [](int i) { assign_hetatms(i); } },
+      { "BMOD_FIX_NOMENCLATURE",   [](int i) { fix_nomenclature_errors(i); } },
+      { "BMOD_REORDER_CHAINS",     [](int i) { sort_chains(i); } },
+      { "BMOD_RIGID_BODY_FIT_MOL", [](int i) { rigid_body_refine_by_atom_selection(i, "//"); } },
+      { "BMOD_USE_SEGIDS",         [](int i) { exchange_chain_ids_for_seg_ids(i); } },
+      // the checks list what they find in the results window
+      { "BMOD_RES_ALT_CONFS",      [](int i) { safe_python_command("alt_confs_gui(" + std::to_string(i) + ")"); } },
+      { "BMOD_RES_CIS_PEPTIDES",   [](int i) { safe_python_command("cis_peptides_gui(" + std::to_string(i) + ")"); } },
+      { "BMOD_RES_MISSING_ATOMS",  [](int i) { safe_python_command("missing_atoms_gui(" + std::to_string(i) + ")"); } },
+      { "BMOD_RES_ZERO_OCC",       [](int i) { safe_python_command("zero_occ_atoms_gui(" + std::to_string(i) + ")"); } },
+   };
+   auto it = ops.find(id);
+   if (it == ops.end() || ! is_valid_model_molecule(imol)) return false;
+   it->second(imol);
+   graphics_draw();
+   return true;
+}
+
+// A Python string literal for any text, file names included.
+static std::string python_literal(const std::string &s) {
+   std::string r("'");
+   for (char c : s) {
+      if (c == '\\' || c == '\'') r += '\\';
+      r += c;
+   }
+   return r + "'";
+}
+
+static bool residue_exists(int imol, const std::string &chain, int resno) {
+   std::string c = chain, ins;
+   return does_residue_exist_p(imol, &c[0], resno, &ins[0]) == 1;
+}
+
+bool bandicoot_core_rigid_body_fit_range(int imol, const std::string &chain, int first, int last,
+                                         std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! residue_exists(imol, chain, first) || ! residue_exists(imol, chain, last)) {
+      why_not = "no such residues in chain " + chain;
+      return false;
+   }
+   safe_python_command("rigid_body_refine_by_residue_ranges(" + std::to_string(imol) + ", [[" +
+                       python_literal(chain) + ", " + std::to_string(first) + ", " + std::to_string(last) + "]])");
+   return true;
+}
+
+bool bandicoot_core_superpose_ligands(int imol_reference, const std::string &chain_reference, int resno_reference,
+                                      int imol_moving, const std::string &chain_moving, int resno_moving,
+                                      std::string &why_not) {
+   if (! residue_exists(imol_reference, chain_reference, resno_reference)) {
+      why_not = "no reference ligand " + chain_reference + " " + std::to_string(resno_reference);
+      return false;
+   }
+   if (! residue_exists(imol_moving, chain_moving, resno_moving)) {
+      why_not = "no moving ligand " + chain_moving + " " + std::to_string(resno_moving);
+      return false;
+   }
+   safe_python_command("overlay_my_ligands(" + std::to_string(imol_moving) + ", " + python_literal(chain_moving) +
+                       ", " + std::to_string(resno_moving) + ", " + std::to_string(imol_reference) + ", " +
+                       python_literal(chain_reference) + ", " + std::to_string(resno_reference) + ")");
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_associate_sequence(int imol, const std::string &chain, const std::string &file, bool pir,
+                                       bool all_protein_chains, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   if (! coot::file_exists(file)) { why_not = "no file " + file; return false; }
+   safe_python_command("bandicoot_associate_sequence(" + std::to_string(imol) + ", " + python_literal(chain) + ", " +
+                       python_literal(file) + ", " + (pir ? "'PIR'" : "'FASTA'") + ", " +
+                       (all_protein_chains ? "True" : "False") + ")");
+   return true;
+}
+
+bool bandicoot_core_cootaneer(int imol, const std::string &file, bool fit_protein_after, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! file.empty() && ! coot::file_exists(file)) { why_not = "no file " + file; return false; }
+   safe_python_command("bandicoot_cootaneer(" + std::to_string(imol) + ", " + python_literal(file) + ", " +
+                       (fit_protein_after ? "True" : "False") + ")");
+   graphics_draw();
+   return true;
+}
+
+std::vector<std::string> bandicoot_core_solvent_comp_ids() {
+   return { "EDO", "GOL", "DMS", "ACT", "MPD", "CIT", "SO4", "PO4",
+            "TRS", "TAM", "PEG", "PG4", "PE8", "EBE", "BTB" };
+}
+
+void bandicoot_core_add_solvent(int imol, const std::string &comp_id) {
+   if (! is_valid_model_molecule(imol) || comp_id.empty()) return;
+   safe_python_command("bandicoot_add_solvent_ligand(" + std::to_string(imol) + ", " + python_literal(comp_id) + ")");
+   graphics_draw();
+}
+
+void bandicoot_core_tools_pick(const std::string &widget, bool on) {
+   if (widget == "cis_trans_conversion_toggle_button")
+      do_cis_trans_conversion_setup(on ? 1 : 0);
+   else if (widget == "model_refine_dialog_db_main_togglebutton")
+      do_db_main(on ? 1 : 0);
+   else if (widget == "reverse_fragment_direction_togglebutton")
+      setup_reverse_direction(on ? 1 : 0);
+   else if (widget == "other_tools_base_pair_toggle_button")
+      setup_base_pairing(on ? 1 : 0);
+}
+
+void bandicoot_core_make_link_pick() {
+   bandicoot_make_link_interactive();
+}
+
+bool bandicoot_core_place_helix_here(std::string &why_not) {
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! is_valid_model_molecule(place_helix_here())) { why_not = "no helix fits the density here"; return false; }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_place_strand_here(int n_residues, std::string &why_not) {
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! is_valid_model_molecule(place_strand_here(n_residues, 15))) {
+      why_not = "no strand fits the density here";
+      return false;
+   }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_active_molecule_tool(const std::string &tool, std::string &why_not) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t>> aa = active_atom_spec();
+   if (! aa.first) { why_not = "no molecule at the screen centre"; return false; }
+   int imol = aa.second.first;
+   if (tool == "Fill Partial Residues")
+      fill_partial_residues(imol);
+   else if (tool == "Delete Hydrogen Atoms")
+      delete_hydrogens(imol);
+   else if (tool == "Delete Side-chains for Active Chain")
+      delete_sidechains_for_chain(imol, aa.second.second.chain_id.c_str());
+   else
+      return false;
+   graphics_draw();
+   return true;
+}
+
+void bandicoot_core_set_undo_molecule(int imol) {
+   set_undo_molecule(imol);
+}
+
+bool bandicoot_core_find_secondary_structure(bool helices, int helix_template, int helix_length,
+                                             bool strands, int strand_template, int strand_length,
+                                             float radius, std::string &why_not) {
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! helices && ! strands) { why_not = "neither helices nor strands are asked for"; return false; }
+   int imol = find_secondary_structure_local(helices, helix_length, helix_template,
+                                             strands, strand_length, strand_template, radius);
+   if (! is_valid_model_molecule(imol)) { why_not = "no secondary structure found"; return false; }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_find_nucleic_acids(float radius, std::string &why_not) {
+   if (! is_valid_map_molecule(imol_refinement_map())) { why_not = "no refinement map is set"; return false; }
+   if (! is_valid_model_molecule(find_nucleic_acids_local(radius))) {
+      why_not = "no nucleic acid found";
+      return false;
+   }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_add_oxt(int imol, const std::string &chain, bool c_terminus, int resno,
+                            std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "not a model molecule"; return false; }
+   if (c_terminus) {
+      std::pair<bool, int> last = graphics_info_t::molecules[imol].last_protein_residue_in_chain(chain);
+      if (! last.first) { why_not = "no protein residues in chain " + chain; return false; }
+      resno = last.second;
+   }
+   if (! add_OXT_to_residue(imol, chain.c_str(), resno, "")) {
+      why_not = "could not add OXT to " + chain + " " + std::to_string(resno);
+      return false;
+   }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_ideal_nucleic_acid(bool dna, bool form_b, bool single_stranded, const std::string &sequence,
+                                       std::string &why_not) {
+   int imol = ideal_nucleic_acid(dna ? "DNA" : "RNA", form_b ? "B" : "A", single_stranded ? 1 : 0, sequence.c_str());
+   if (! is_valid_model_molecule(imol)) { why_not = "could not build a model of " + sequence; return false; }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_baton_start() {
+   // the core asks for a skeleton in a GTK window when it finds none
+   int skeleton = -1;
+   if (bandicoot_core_map_skeletonized(graphics_info_t::map_for_skeletonize))
+      skeleton = graphics_info_t::map_for_skeletonize;
+   for (int imol = 0; skeleton == -1 && imol < graphics_info_t::n_molecules(); imol++)
+      if (bandicoot_core_map_skeletonized(imol)) skeleton = imol;
+   if (skeleton == -1) return false;
+   graphics_info_t::map_for_skeletonize = skeleton;
+   return try_set_draw_baton(1) != 0;
+}
+
+void bandicoot_core_baton_op(const std::string &op) {
+   if      (op == "accept")      accept_baton_position();
+   else if (op == "try another") baton_tip_try_another();
+   else if (op == "previous")    baton_tip_previous();
+   else if (op == "undo")        baton_build_delete_last_residue();
+   else if (op == "lengthen")    lengthen_baton();
+   else if (op == "shorten")     shorten_baton();
+}
+
+void bandicoot_core_baton_stop() {
+   try_set_draw_baton(0);
+   set_baton_mode(0);
+}
+
+void bandicoot_core_baton_build_params(int start_resno, const std::string &chain, bool backwards) {
+   set_baton_build_params(start_resno, chain.c_str(), backwards ? "backwards" : "forwards");
+}
+
+bool bandicoot_core_ligand_from_smiles(const std::string &smiles, const std::string &code, std::string &message) {
+   int n_before = graphics_info_t::n_molecules();
+   // needs no PanDDA session; the module may not have been loaded yet
+   safe_python_command("import bandicoot_pandda");
+   message = bandicoot_core_pandda_call("ligand_from_smiles_standalone(" + python_literal(smiles) + ", " +
+                                        python_literal(code) + ")");
+   if (! message.empty()) add_status_bar_text(message.c_str());
+   return graphics_info_t::n_molecules() > n_before;
+}
+
+void bandicoot_core_glycan_opened() {
+   // sugars added or refined keep a proper chair
+   safe_python_command("add_synthetic_pyranose_planes()");
+   safe_python_command("use_unimodal_pyranose_ring_torsions()");
+}
+
+std::vector<bandicoot_glycan_link> bandicoot_core_glycan_links() {
+   // the labels are the keys of bandicoot_glyco_button_states() (gui_add_linked_cho.py)
+   return {
+      { "Add a NAG-ASN NAG",   "NAG", "NAG-ASN"  }, { "Add a BETA1-4 NAG",   "NAG", "BETA1-4"  },
+      { "Add a BETA1-4 BMA",   "BMA", "BETA1-4"  }, { "Add an ALPHA1-2 MAN", "MAN", "ALPHA1-2" },
+      { "Add an ALPHA1-3 MAN", "MAN", "ALPHA1-3" }, { "Add an ALPHA2-3 MAN", "MAN", "ALPHA2-3" },
+      { "Add an ALPHA2-3 GAL", "GAL", "ALPHA2-3" }, { "Add an ALPHA1-6 MAN", "MAN", "ALPHA1-6" },
+      { "Add a BETA1-2 NAG",   "NAG", "BETA1-2"  }, { "Add a BETA1-4 GAL",   "GAL", "BETA1-4"  },
+      { "Add an ALPHA1-2 FUC", "FUC", "ALPHA1-2" }, { "Add an ALPHA1-3 FUC", "FUC", "ALPHA1-3" },
+      { "Add an ALPHA1-6 FUC", "FUC", "ALPHA1-6" }, { "Add a BETA1-6 FUL",   "FUL", "BETA1-6"  },
+      { "Add an XYP-BMA XYP",  "XYP", "XYP-BMA"  }, { "Add an ALPHA2-3 SIA", "SIA", "ALPHA2-3" },
+      { "Add an ALPHA2-6 SIA", "SIA", "ALPHA2-6" }
+   };
+}
+
+std::map<std::string, bool> bandicoot_core_glycan_link_states(const std::string &tree_type) {
+   std::map<std::string, bool> states;
+   PyObject *r = safe_python_command_with_return("bandicoot_glyco_button_states(" + single_quote(tree_type) + ")");
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   if (r && PyDict_Check(r)) {
+      PyObject *key, *value;
+      Py_ssize_t pos = 0;
+      while (PyDict_Next(r, &pos, &key, &value))
+         if (PyUnicode_Check(key)) states[PyUnicode_AsUTF8(key)] = PyObject_IsTrue(value) == 1;
+   }
+   PyGILState_Release(gstate);
+   return states;
+}
+
+void bandicoot_core_add_glycan_link(const bandicoot_glycan_link &link) {
+   safe_python_command("add_linked_residue_with_extra_restraints_to_active_residue(" +
+                       single_quote(link.residue) + ", " + single_quote(link.link) + ")");
+}
+
+void bandicoot_core_refine_glycan_tree() {
+   safe_python_command("glyco_refine_tree()");
+}
+
+static std::function<void()> glycan_view;
+
+void bandicoot_core_set_glycan_view(std::function<void()> refresh) {
+   glycan_view = std::move(refresh);
+}
+
+bool bandicoot_wx_glycan_refresh() {
+   if (! glycan_view) return false;
+   glycan_view();
+   return true;
+}
+
 // ---- Calculate menu: PanDDA Inspect
 
 void set_refinement_lennard_jones_epsilon(float epsilon);  // c-interface-refine.cc
@@ -2301,6 +2786,65 @@ void bandicoot_core_clear_fixed_atoms() {
 
 void bandicoot_wx_release_sidebar_toggle(const std::string &widget) {
    if (ui_view.release_sidebar_toggle) ui_view.release_sidebar_toggle(widget);
+}
+
+void bandicoot_wx_release_tools_toggle(const std::string &widget) {
+   if (ui_view.release_tools_toggle) ui_view.release_tools_toggle(widget);
+}
+
+// ---- Multi-Residue Torsion
+
+// the bonds last offered, in the window's order
+static std::vector<std::pair<coot::atom_spec_t, coot::atom_spec_t>> torsion_bonds;
+
+bool bandicoot_wx_multi_torsion(const std::vector<std::pair<coot::atom_spec_t, coot::atom_spec_t>> &bonds) {
+   if (! ui_view.multi_torsion) return false;
+   torsion_bonds = bonds;
+   std::vector<std::string> labels;
+   auto atom = [](const coot::atom_spec_t &s) {
+      return coot::util::remove_whitespace(s.atom_name) + " " + std::to_string(s.res_no);
+   };
+   for (const auto &b : bonds) labels.push_back(atom(b.first) + "  ->  " + atom(b.second));
+   ui_view.multi_torsion(labels);
+   return true;
+}
+
+void bandicoot_core_multi_torsion_start() {
+   graphics_info_t g;
+   g.in_multi_residue_torsion_define = true;
+   g.multi_residue_torsion_picked_residue_specs.clear();
+   g.multi_residue_torsion_reverse_fragment_mode = false;
+   pick_cursor_maybe();
+   add_status_bar_text("Multi-Residue Torsion: click on atoms in the residues to twist");
+}
+
+void bandicoot_core_multi_torsion_picked() {
+   clear_pending_picks();
+   show_multi_residue_torsion_dialog();
+}
+
+void bandicoot_core_multi_torsion_select(int bond, bool reverse) {
+   graphics_info_t g;
+   g.multi_residue_torsion_reverse_fragment_mode = reverse;
+   if (bond < 0 || bond >= int(torsion_bonds.size())) return;
+   graphics_info_t::select_multi_residue_torsion_bond(torsion_bonds[bond].first, torsion_bonds[bond].second);
+}
+
+void bandicoot_core_multi_torsion_reverse(bool reverse) {
+   set_multi_residue_torsion_reverse_mode(reverse ? 1 : 0);
+}
+
+void bandicoot_core_multi_torsion_finish(bool accept) {
+   if (accept) {
+      accept_regularizement();
+   } else {
+      clear_up_moving_atoms();
+      clear_pending_picks();
+      normal_cursor();
+   }
+   clear_multi_residue_torsion_mode();
+   torsion_bonds.clear();
+   graphics_draw();
 }
 
 // ---- windows that edit the moving atoms

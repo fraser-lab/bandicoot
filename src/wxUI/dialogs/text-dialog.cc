@@ -12,7 +12,7 @@ namespace wxui {
 TextDialog::TextDialog(wxWindow *parent, const wxString &title, const wxString &text,
                        bool fixed_width)
    : wxFrame(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
-             wxDEFAULT_FRAME_STYLE | (parent ? wxFRAME_FLOAT_ON_PARENT : 0)) {
+             wxDEFAULT_FRAME_STYLE) {
 
    wxPanel *p = new wxPanel(this);
    wxTextCtrl *t = new wxTextCtrl(p, wxID_ANY, text, wxDefaultPosition, wxDefaultSize,

@@ -148,6 +148,8 @@ bool bandicoot_wx_display_manager_open();
 // A repeating timer on the wx event loop, which stops when the callback
 // returns false; 0 if there is no window to run it.
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+// A yes/no it waits on: 1 yes, 0 no, -1 if there is no window to ask in.
+int bandicoot_wx_question(const std::string &text);
 // A radio-button choice whose options and buttons run Python commands; false
 // if there is no window to show it in.
 bool bandicoot_wx_radio_choice(const std::string &title,
@@ -7431,6 +7433,18 @@ run_state_file_maybe() {
 	    graphics_info_t::state_file_was_run_flag = true;
 	 } else {
 	    if (graphics_info_t::use_graphics_interface_flag) { 
+#ifdef BANDICOOT_UI_WX
+	       // asked once the wx event loop runs, as the main window is then up
+	       std::string question = "There is a coot auto-save state file here.\n\n";
+	       for (const std::string &m : g.save_state_data_and_models(filename, 1))
+		  question += "    " + m + "\n";
+	       question += "\nDo you want to run it?";
+	       if (bandicoot_wx_timeout_add(1, [question]() {
+		      if (bandicoot_wx_question(question) == 1) run_state_file();
+		      return false;
+		   }))
+		  return;
+#endif
 	       GtkWidget *dialog = wrapped_create_run_state_file_dialog();
 	       gtk_widget_show(dialog);
 	    } 

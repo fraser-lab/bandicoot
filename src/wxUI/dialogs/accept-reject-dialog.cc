@@ -50,7 +50,7 @@ private:
 
 AcceptRejectDialog::AcceptRejectDialog(wxWindow *parent, const Hooks &h)
    : wxFrame(parent, wxID_ANY, "Accept Refinement?", wxDefaultPosition, wxDefaultSize,
-             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)) | wxFRAME_FLOAT_ON_PARENT),
+             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER))),
      hooks(h) {
 
    panel = new wxPanel(this);

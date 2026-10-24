@@ -105,6 +105,10 @@
 #ifdef BANDICOOT_UI_WX
 #include "wxUI/bridge/core-bridge.hh"  // the wx build's results list
 bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_result_row> &rows);
+// Its info message, and a yes/no the core waits on: 1 yes, 0 no, -1 if wx has
+// not taken it on.
+bool bandicoot_wx_info(const std::string &text, bool markup);
+int  bandicoot_wx_question(const std::string &text);
 #endif
 #include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
 
@@ -2212,6 +2216,9 @@ static void bandicoot_msg_dialog_response(GtkDialog *dialog, gint response,
 // Coot-style native info dialog (the Python info_dialog is the gtk stub).
 static void bandicoot_native_info_dialog(const char *msg) {
    if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_info(msg ? msg : "", false)) return;
+#endif
    GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
    GtkWidget *d = gtk_message_dialog_new(mw ? GTK_WINDOW(mw) : NULL,
                                          GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -2957,7 +2964,15 @@ static void bandicoot_glyco_dialog_refresh() {
 }
 
 // Public entry point for the recentre hook (run_post_set_rotation_centre_hook).
+#ifdef BANDICOOT_UI_WX
+// The wx build's glycan window (wxUI/bridge/core-bridge.cc); false if none.
+bool bandicoot_wx_glycan_refresh();
+#endif
+
 extern "C" void bandicoot_glyco_dialog_refresh_if_open() {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_glycan_refresh()) return;
+#endif
    bandicoot_glyco_dialog_refresh();
 }
 
@@ -4962,6 +4977,10 @@ void  do_edit_replace_fragment() {
 bool bandicoot_native_question_dialog(const char *msg) {
 
    if (! graphics_info_t::use_graphics_interface_flag) return false;
+#ifdef BANDICOOT_UI_WX
+   int answer = bandicoot_wx_question(msg ? msg : "");
+   if (answer != -1) return answer == 1;
+#endif
    GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
    // The OR of two GtkDialogFlags is an int, and C++ will not convert that back
    // to the enum on its own.

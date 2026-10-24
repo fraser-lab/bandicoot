@@ -12,6 +12,7 @@
 #define BANDICOOT_WX_CORE_BRIDGE_HH
 
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -685,6 +686,17 @@ struct bandicoot_ui_view {
    // the core let go of a sidebar toggle (by Coot's widget name), as it
    // un-presses the GTK one when its picks are done or cancelled
    std::function<void(const std::string &widget)> release_sidebar_toggle;
+   // and likewise for an Other Modelling Tools toggle
+   std::function<void(const std::string &widget)> release_tools_toggle;
+   // Multi-Residue Torsion's picked residues are ready to twist: the
+   // rotatable bonds to offer, by label (see bandicoot_core_multi_torsion_*)
+   std::function<void(const std::vector<std::string> &bonds)> multi_torsion;
+   // a yes/no the core waits on (true for yes)
+   std::function<bool(const std::string &question)> question;
+   // molecules to choose among (imol, label), all ticked at first, waiting
+   // for the answer: the ticked ones, or none if cancelled
+   std::function<std::vector<int>(const std::string &title, const std::string &header,
+                                  const std::vector<std::pair<int, std::string>> &molecules)> choose_molecules;
    // run callback every interval_ms until it returns false (scripts'
    // timeouts, which in the GTK build ran on GLib's main loop)
    std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
@@ -810,6 +822,129 @@ void bandicoot_core_run_script(const std::string &path);
 // The Python console: run code in the console's lasting namespace; output
 // holds what it printed (or the error), had_error says which.
 std::string bandicoot_core_console_run(const std::string &code, bool &had_error);
+
+// Modelling menu: the items that act at once on the active residue or
+// molecule, by their menu ids (e.g. "BMOD_INVERT_CHIRAL"). False if the id is
+// not one of them.
+bool bandicoot_core_is_modelling_direct(const std::string &id);
+bool bandicoot_core_modelling_direct(const std::string &id);
+
+// Monomer from Dictionary: a new molecule for a 3-letter code (from the
+// dictionary, or fetched). New Molecule by Sphere: the atoms within radius of
+// the screen centre. New Molecule from Symmetry Op: a copy moved by a symop
+// ("X,Y,Z" style). Residue Type Selection: the residues of one type. Fetch
+// PDBe Ligand Description: its name and SMILES (status bar and console),
+// placing the monomer. False, with the reason, if nothing was made.
+bool bandicoot_core_monomer_from_dictionary(const std::string &comp_id, std::string &why_not);
+// Rename Residue: the residue at the screen centre gets a new name.
+bool bandicoot_core_rename_active_residue(const std::string &name, std::string &why_not);
+bool bandicoot_core_new_molecule_by_sphere(int imol, float radius, std::string &why_not);
+bool bandicoot_core_new_molecule_by_symop(int imol, const std::string &symop, std::string &why_not);
+bool bandicoot_core_residue_type_selection(int imol, const std::string &residue_type, std::string &why_not);
+void bandicoot_core_fetch_pdbe_ligand(const std::string &comp_id);
+
+// Ligand Restraints: the components to offer (every ligand, or only those a
+// load left without restraints), each with its label and whether nothing
+// describes it yet; and generation for the ticked ones. progress gets each
+// step; report the failures and caveats (empty if none). False if no
+// generator could be found, with the reason in report.
+struct bandicoot_restraint_row { std::string comp_id, label; bool needed = false; };
+std::vector<bandicoot_restraint_row> bandicoot_core_restraint_rows(bool show_all);
+bool bandicoot_core_generate_restraints(bool show_all, const std::vector<std::string> &comp_ids,
+                                        std::function<void(const std::string &)> progress,
+                                        std::string &report);
+// The core asks for the window: from the menu (show_all, say so if nothing is
+// found) or after a load (only what is missing; fresh = what this load brought).
+void bandicoot_core_set_restraints_view(
+   std::function<void(bool show_all, const std::vector<std::string> &fresh, bool announce_empty)> open);
+// Modelling > Generate Ligand Restraints, as the menu opens it.
+void bandicoot_core_open_ligand_restraints();
+
+// The Modelling items that act on a whole model chosen first (e.g.
+// "BMOD_RENUMBER_WATERS"). False if the id is not one of them.
+bool bandicoot_core_modelling_on_model(const std::string &id, int imol);
+
+// Rigid Body Fit Residue Range, into the refinement map. Superpose Ligands:
+// the moving ligand's whole molecule is moved onto the reference ligand.
+// Associate Sequence: a FASTA or PIR file, to one chain or every protein
+// chain. Cootaneer: assigns side chains from the map, after the sequence in
+// file if one is given, then optionally fits the protein. False, with the
+// reason, if nothing was done.
+bool bandicoot_core_rigid_body_fit_range(int imol, const std::string &chain, int first, int last,
+                                         std::string &why_not);
+bool bandicoot_core_superpose_ligands(int imol_reference, const std::string &chain_reference, int resno_reference,
+                                      int imol_moving, const std::string &chain_moving, int resno_moving,
+                                      std::string &why_not);
+bool bandicoot_core_associate_sequence(int imol, const std::string &chain, const std::string &file, bool pir,
+                                       bool all_protein_chains, std::string &why_not);
+bool bandicoot_core_cootaneer(int imol, const std::string &file, bool fit_protein_after, std::string &why_not);
+
+// Add Other Solvent Molecules: the comp-ids offered, and adding one to a
+// model (jiggle-fitted at the screen centre when there is a refinement map).
+std::vector<std::string> bandicoot_core_solvent_comp_ids();
+void bandicoot_core_add_solvent(int imol, const std::string &comp_id);
+
+// Other Modelling Tools. The atom picks are named as Coot names their toggles
+// ("cis_trans_conversion_toggle_button", "model_refine_dialog_db_main_togglebutton",
+// "reverse_fragment_direction_togglebutton", "other_tools_base_pair_toggle_button");
+// on waits for the pick, off stops waiting. The core lets go of a toggle
+// through bandicoot_ui_view::release_tools_toggle once its pick is done.
+void bandicoot_core_tools_pick(const std::string &widget, bool on);
+void bandicoot_core_make_link_pick();
+// Place a helix or strand at the screen centre, into the refinement map.
+bool bandicoot_core_place_helix_here(std::string &why_not);
+bool bandicoot_core_place_strand_here(int n_residues, std::string &why_not);
+// Fill Partial Residues, Delete Hydrogen Atoms (in the molecule at the screen
+// centre) and Delete Side-chains for Active Chain, by those labels.
+bool bandicoot_core_active_molecule_tool(const std::string &tool, std::string &why_not);
+void bandicoot_core_set_undo_molecule(int imol);
+// A ligand built from SMILES, placed at the screen centre. message says how
+// it went (also on the status bar); false if no molecule was made.
+bool bandicoot_core_ligand_from_smiles(const std::string &smiles, const std::string &code, std::string &message);
+
+// Find Secondary Structure (templates and lengths as Coot numbers them;
+// radius 0 searches the whole map) and Build Nucleic Acid (within radius of
+// the screen centre), into the refinement map.
+bool bandicoot_core_find_secondary_structure(bool helices, int helix_template, int helix_length,
+                                             bool strands, int strand_template, int strand_length,
+                                             float radius, std::string &why_not);
+bool bandicoot_core_find_nucleic_acids(float radius, std::string &why_not);
+// Add OXT at the chain's C terminus, or after the given residue.
+bool bandicoot_core_add_oxt(int imol, const std::string &chain, bool c_terminus, int resno,
+                            std::string &why_not);
+// DNA & RNA Models: an ideal model of sequence at the screen centre.
+bool bandicoot_core_ideal_nucleic_acid(bool dna, bool form_b, bool single_stranded, const std::string &sequence,
+                                       std::string &why_not);
+
+// C-alpha Baton Mode. start is false, doing nothing, when no map has a
+// skeleton. The ops are the Baton window's buttons ("accept", "try another",
+// "previous", "undo", "lengthen", "shorten"); stop puts the baton away.
+bool bandicoot_core_baton_start();
+void bandicoot_core_baton_op(const std::string &op);
+void bandicoot_core_baton_stop();
+void bandicoot_core_baton_build_params(int start_resno, const std::string &chain, bool backwards);
+
+// Multi-Residue Torsion: start picking residues; picked (Apply) offers their
+// rotatable bonds through bandicoot_ui_view::multi_torsion; select makes one
+// the bond that dragging turns; finish keeps or drops the result, and also
+// ends a pick that never got that far.
+void bandicoot_core_multi_torsion_start();
+void bandicoot_core_multi_torsion_picked();
+void bandicoot_core_multi_torsion_select(int bond, bool reverse);
+void bandicoot_core_multi_torsion_reverse(bool reverse);
+void bandicoot_core_multi_torsion_finish(bool accept);
+
+// Add N-linked Glycan: opening installs the sugar ring restraints; the sugars
+// and links it offers (label, residue type, link), and which of them suit the
+// residue now centred for a glycan tree type (by label).
+void bandicoot_core_glycan_opened();
+struct bandicoot_glycan_link { std::string label, residue, link; };
+std::vector<bandicoot_glycan_link> bandicoot_core_glycan_links();
+std::map<std::string, bool> bandicoot_core_glycan_link_states(const std::string &tree_type);
+void bandicoot_core_add_glycan_link(const bandicoot_glycan_link &link);
+void bandicoot_core_refine_glycan_tree();
+// The core asks for the window to be brought up to date when the view is recentred.
+void bandicoot_core_set_glycan_view(std::function<void()> refresh);
 
 // PanDDA Inspect, driven by python/bandicoot_pandda.py. Opening readies the
 // driver and quiets the per-dataset ligand restraint questions, which a

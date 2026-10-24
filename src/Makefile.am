@@ -628,6 +628,10 @@ if UI_WX
 	wxUI/main/calculate-menu.cc \
 	wxUI/main/edit-menu.hh \
 	wxUI/main/edit-menu.cc \
+	wxUI/main/modelling-menu.hh \
+	wxUI/main/modelling-menu.cc \
+	wxUI/main/other-tools.hh \
+	wxUI/main/other-tools.cc \
 	wxUI/main/pandda-inspect.hh \
 	wxUI/main/pandda-inspect.cc \
 	wxUI/main/python-console.hh \
@@ -646,6 +650,8 @@ if UI_WX
 	wxUI/dialogs/file-panel-size.mm \
 	wxUI/dialogs/colour-panel.hh \
 	wxUI/dialogs/colour-panel.mm \
+	wxUI/dialogs/caution-icon.hh \
+	wxUI/dialogs/caution-icon.mm \
 	wxUI/assets/icons.hh         \
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \

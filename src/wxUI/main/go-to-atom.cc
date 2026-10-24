@@ -80,7 +80,7 @@ BevelButton *icon_button(wxWindow *parent, const wxString &label, const char *ic
 
 GoToAtomWindow::GoToAtomWindow(wxWindow *parent)
    : wxFrame(parent, wxID_ANY, "Go To Atom...", wxDefaultPosition, wxDefaultSize,
-             wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT) {
+             wxDEFAULT_FRAME_STYLE) {
 
    wxPanel *panel = new wxPanel(this);
    panel->SetBackgroundColour(palette::face());

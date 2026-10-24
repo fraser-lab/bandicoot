@@ -2405,6 +2405,12 @@ public:
 			  short int show_no_bonds_dialog_maybe_flag);
    void import_all_refmac_cifs();
    static std::vector<std::string> *cif_dictionary_filename_vec;
+   // BANDICOOT: for each of those, the comp ids it holds (sorted) and the
+   // imol_enc it was read with -- what decides that a later read replaces it
+   static std::vector<std::pair<std::vector<std::string>, int> > cif_dictionary_scope_vec;
+   // the dictionaries a saved session should read: each read not replaced by
+   // a later one
+   std::vector<std::string> cif_dictionaries_for_state() const;
 
    // make private?
    static short int python_history;
@@ -3927,6 +3933,11 @@ string   static std::string sessionid;
 
    void multi_torsion_residues(int imol, const std::vector<coot::residue_spec_t> &v);
    static void on_multi_residue_torsion_button_clicked(GtkButton *button, gpointer user_data);
+#ifdef BANDICOOT_UI_WX
+   // The wx window's bond button: the bond dragging turns, by its atoms.
+   static void select_multi_residue_torsion_bond(const coot::atom_spec_t &first,
+                                                 const coot::atom_spec_t &second);
+#endif
    void rotate_multi_residue_torsion(double x, double y);
 
    // bottom left ligand view

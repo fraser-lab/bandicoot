@@ -45,7 +45,7 @@ class Chooser : public wxFrame {
 public:
    Chooser(const wxString &title, wxPoint *where_in)
       : wxFrame(owner, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
-                (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)) | wxFRAME_FLOAT_ON_PARENT),
+                (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER))),
         where(where_in) {
       panel = new wxPanel(this);
       panel->SetBackgroundColour(palette::face());
@@ -397,6 +397,32 @@ void show_button_choice(wxWindow *parent, const bandicoot_button_choice &c) {
    d->Bind(wxEVT_CLOSE_WINDOW, [finish](wxCloseEvent &) { finish(); });
    d->CentreOnParent();
    d->Show();
+}
+
+// Waits for the answer: the core goes on with whichever are ticked.
+std::vector<int> choose_molecules(wxWindow *parent, const std::string &title, const std::string &header,
+                                  const std::vector<std::pair<int, std::string>> &molecules) {
+   wxDialog d(parent, wxID_ANY, wxString::FromUTF8(title));
+   d.SetBackgroundColour(palette::face());
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(&d, wxID_ANY, wxString::FromUTF8(header)), 0, wxBOTTOM, 8);
+   std::vector<wxCheckBox *> boxes;
+   for (const auto &m : molecules) {
+      wxCheckBox *b = new wxCheckBox(&d, wxID_ANY, wxString::FromUTF8(m.second));
+      b->SetValue(true);
+      col->Add(b, 0, wxBOTTOM, 4);
+      boxes.push_back(b);
+   }
+   col->Add(d.CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxTOP, 8);
+   wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+   outer->Add(col, 1, wxEXPAND | wxALL, 10);
+   d.SetSizerAndFit(outer);
+   d.CentreOnParent();
+   std::vector<int> chosen;
+   if (d.ShowModal() == wxID_OK)
+      for (size_t i = 0; i < boxes.size(); i++)
+         if (boxes[i]->IsChecked()) chosen.push_back(molecules[i].first);
+   return chosen;
 }
 
 } // namespace wxui

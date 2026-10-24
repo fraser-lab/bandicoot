@@ -36,6 +36,13 @@
 #ifdef __APPLE__
 #include "bandicoot_appkit.h" // bandicoot_status_bar_height()
 #endif
+
+#ifdef BANDICOOT_UI_WX
+// The wx build's Multi-Residue Torsion window (wxUI/bridge/core-bridge.cc),
+// listing the rotatable bonds. False if wx has not taken it on.
+bool bandicoot_wx_multi_torsion(const std::vector<std::pair<coot::atom_spec_t, coot::atom_spec_t> > &bonds);
+#endif
+
 void
 graphics_info_t::multi_torsion_residues(int imol, const std::vector<coot::residue_spec_t> &v) {
 
@@ -86,11 +93,21 @@ graphics_info_t::multi_torsion_residues(int imol, const std::vector<coot::residu
 	 moving_mol->GetSelIndex(selhnd, atom_selection, n_selected_atoms);
 
 	 try { 
-	    std::vector<std::pair<mmdb::Atom *, mmdb::Atom *> > pairs = 
+	    std::vector<std::pair<mmdb::Atom *, mmdb::Atom *> > pairs =
 	       coot::torsionable_bonds(imol, mol, atom_selection, n_selected_atoms, Geom_p());
-	    
+
+#ifdef BANDICOOT_UI_WX
+	    std::vector<std::pair<coot::atom_spec_t, coot::atom_spec_t> > specs;
+	    for (const auto &p : pairs)
+	       specs.push_back(std::make_pair(coot::atom_spec_t(p.first), coot::atom_spec_t(p.second)));
+	    if (! bandicoot_wx_multi_torsion(specs)) {
+	       GtkWidget *w = wrapped_create_multi_residue_torsion_dialog(pairs);
+	       gtk_widget_show(w);
+	    }
+#else
 	    GtkWidget *w = wrapped_create_multi_residue_torsion_dialog(pairs);
 	    gtk_widget_show(w);
+#endif
 
 	    moving_atoms_asc_type = coot::NEW_COORDS_REPLACE;
 	    make_moving_atoms_graphics_object(imol, make_asc(moving_mol));

@@ -79,6 +79,17 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 
 ## P3 — cosmetic / minor
 
+### Restoring an older session warns "No matching molecules found" for its dictionaries
+Session files saved by earlier builds read their restraint dictionaries before their
+molecules, so each dictionary is checked against an empty session and raises a "No
+matching molecules found for <file>" message, one per dictionary read. The dictionaries
+are still read, and apply once the molecules arrive. Sessions saved now read molecules
+first, and generated dictionaries are kept in `coot-restraints` rather than in a
+temporary folder the system may clear.
+
+- **Workaround:** dismiss the messages, then save the session again; the new session
+  file restores cleanly.
+
 ### Simple Mutate on a nucleotide does nothing for the molecule's first atom
 `do_base_mutation()` (`src/c-interface-build-side-chain.cc`) accepts the picked atom only
 if its index is `> 0`, so when the atom clicked is the first atom of the molecule the

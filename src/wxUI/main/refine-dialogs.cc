@@ -99,7 +99,7 @@ RefineParams *refine_params = nullptr;
 RefineParams::RefineParams(wxWindow *parent)
    : wxFrame(parent, wxID_ANY, "Refinement and Regularization Parameters",
              wxDefaultPosition, wxDefaultSize,
-             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)) | wxFRAME_FLOAT_ON_PARENT) {
+             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER))) {
 
    bandicoot_refine_params p = bandicoot_core_refine_params();
 
@@ -380,7 +380,7 @@ FixedAtoms *fixed_atoms = nullptr;
 
 FixedAtoms::FixedAtoms(wxWindow *parent)
    : wxFrame(parent, wxID_ANY, "Fixed Atoms for Refinement", wxDefaultPosition, wxDefaultSize,
-             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)) | wxFRAME_FLOAT_ON_PARENT) {
+             (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER))) {
 
    wxPanel *panel = new wxPanel(this);
    panel->SetBackgroundColour(palette::face());

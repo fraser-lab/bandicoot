@@ -5,6 +5,7 @@
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/palette.hh"
 #include "wxUI/dialogs/file-dialogs.hh"
+#include "wxUI/main/other-tools.hh"
 
 #include <wx/checkbox.h>
 #include <wx/choice.h>
@@ -223,29 +224,9 @@ private:
    }
 
    void ligand_from_smiles() {
-      wxDialog d(this, wxID_ANY, "Ligand from SMILES");
-      d.SetBackgroundColour(palette::face());
-      wxFlexGridSizer *grid = new wxFlexGridSizer(2, 6, 6);
-      grid->AddGrowableCol(1);
-      wxTextCtrl *code = new wxTextCtrl(&d, wxID_ANY, "LIG");
-      code->SetMaxLength(3);
-      wxTextCtrl *smiles = new wxTextCtrl(&d, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(320, -1),
-                                          wxTE_PROCESS_ENTER);
-      grid->Add(new wxStaticText(&d, wxID_ANY, "3-letter code:"), 0, wxALIGN_CENTER_VERTICAL);
-      grid->Add(code, 1, wxEXPAND);
-      grid->Add(new wxStaticText(&d, wxID_ANY, "SMILES:"), 0, wxALIGN_CENTER_VERTICAL);
-      grid->Add(smiles, 1, wxEXPAND);
-      smiles->Bind(wxEVT_TEXT_ENTER, [&d](wxCommandEvent &) { d.EndModal(wxID_OK); });
-      wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
-      col->Add(grid, 0, wxEXPAND | wxBOTTOM, 10);
-      col->Add(d.CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND);
-      wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
-      outer->Add(col, 1, wxEXPAND | wxALL, 10);
-      d.SetSizerAndFit(outer);
-      d.CentreOnParent();
-      smiles->SetFocus();
-      if (d.ShowModal() == wxID_OK)
-         run("ligand_from_smiles(" + quoted(smiles->GetValue()) + ", " + quoted(code->GetValue()) + ")");
+      std::string smiles, code;
+      if (ask_ligand_from_smiles(this, smiles, code))
+         run("ligand_from_smiles(" + quoted(wxString::FromUTF8(smiles)) + ", " + quoted(wxString::FromUTF8(code)) + ")");
    }
 
    // Summary opens the driver's HTML page in the browser.

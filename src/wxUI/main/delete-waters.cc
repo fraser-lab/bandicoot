@@ -38,8 +38,7 @@ BevelButton *icon_button(wxWindow *parent, const wxString &label, const char *ic
 
 wxFrame *grey_frame(const wxString &title, wxPanel *&panel) {
    wxFrame *f = new wxFrame(owner, wxID_ANY, title, wxDefaultPosition, wxDefaultSize,
-                            (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)) |
-                            wxFRAME_FLOAT_ON_PARENT);
+                            (wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX | wxRESIZE_BORDER)));
    panel = new wxPanel(f);
    panel->SetBackgroundColour(palette::face());
    return f;

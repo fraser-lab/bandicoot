@@ -186,6 +186,7 @@ def _acedrg_build(smiles, tlc):
             print("acedrg output (tail):\n" + tail)
         return (None, None, "acedrg could not build %s from that SMILES "
                 "(see terminal)" % tlc)
+    pdb, cif = bandicoot_restraints.keep_generated(pdb, cif)
     return (pdb, cif, None)
 
 
