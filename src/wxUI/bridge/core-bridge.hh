@@ -697,6 +697,8 @@ struct bandicoot_ui_view {
    // for the answer: the ticked ones, or none if cancelled
    std::function<std::vector<int>(const std::string &title, const std::string &header,
                                   const std::vector<std::pair<int, std::string>> &molecules)> choose_molecules;
+   // Quick Ligand Validate's report: each test 0 passed, 1 failed, 2 not done
+   std::function<void(const std::string &residue, int density, int geometry, int bumps)> ligand_check;
    // run callback every interval_ms until it returns false (scripts'
    // timeouts, which in the GTK build ran on GLib's main loop)
    std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
@@ -828,6 +830,43 @@ std::string bandicoot_core_console_run(const std::string &code, bool &had_error)
 // not one of them.
 bool bandicoot_core_is_modelling_direct(const std::string &id);
 bool bandicoot_core_modelling_direct(const std::string &id);
+
+// Ligand menu: the items that act at once, by their menu ids (e.g.
+// "BLIG_JIGGLE_FIT"). False if the id is not one of them.
+bool bandicoot_core_is_ligand_direct(const std::string &id);
+bool bandicoot_core_ligand_direct(const std::string &id);
+// Find Ligands: what the window offers, filled from Coot's current settings,
+// and the choices it hands back to search with.
+struct bandicoot_find_ligands {
+   struct molecule { int imol; std::string label; int n_atoms; bool difference_map; };
+   std::vector<molecule> maps, proteins, ligands;
+   int atom_limit = 0;           // ligands listed have fewer atoms than this
+   int many_atoms = 200;         // more than this asks before searching
+   // the choices
+   int map = -1, protein = -1;
+   std::vector<std::pair<int, bool>> chosen;   // ligand, flexible
+   bool mask_waters = true, here = false, multi = false, refine = true;
+   float sigma = 1.0f, frac_scoring = 0.9f, frac_correl = 0.9f;
+   int n_top_sites = 10, n_conformers = 50;
+};
+bandicoot_find_ligands bandicoot_core_find_ligands_setup();
+// Stores the choices as Coot's settings and searches; Coot reports the result.
+void bandicoot_core_find_ligands(const bandicoot_find_ligands &f);
+
+// The residue at the screen centre; false if there is none.
+bool bandicoot_core_active_residue(int &imol, std::string &chain_id, int &resno,
+                                   std::string &ins_code, std::string &res_name);
+// SMILES -> simple 3D: a new molecule of residue type comp_id, built by RDKit
+// at the screen centre.
+bool bandicoot_core_smiles_to_3d(const std::string &smiles, const std::string &comp_id,
+                                 std::string &why_not);
+// Rename Atom to Reference: writes a dictionary for the residue as type
+// new_comp_id, its atoms named as in reference_comp_id's.
+bool bandicoot_core_rename_to_reference(int imol, const std::string &chain_id, int resno,
+                                        const std::string &ins_code,
+                                        const std::string &reference_comp_id,
+                                        const std::string &new_comp_id,
+                                        const std::string &cif_file_name, std::string &why_not);
 
 // Monomer from Dictionary: a new molecule for a 3-letter code (from the
 // dictionary, or fetched). New Molecule by Sphere: the atoms within radius of

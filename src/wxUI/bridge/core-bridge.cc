@@ -18,8 +18,10 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <iostream>
 #include <string>
+#include <sys/stat.h>
 
 #include <gtk/gtk.h>
 #ifdef HAVE_GSL
@@ -2270,6 +2272,131 @@ bool bandicoot_core_modelling_direct(const std::string &id) {
       return true;
    }
    return false;
+}
+
+int import_rdkit_mol_from_smiles(const std::string &smiles, const std::string &comp_id); // sdf-interface.hh
+
+static const std::map<std::string, int> &ligand_direct_ops() {
+   static const std::map<std::string, int> ops = {
+      { "BLIG_MOLPROBITY_DOTS",      BLIG_MOLPROBITY_DOTS },
+      { "BLIG_COOT_LIGAND_DOTS",     BLIG_COOT_LIGAND_DOTS },
+      { "BLIG_ALL_ATOM_DOTS",        BLIG_ALL_ATOM_DOTS },
+      { "BLIG_JIGGLE_FIT",           BLIG_JIGGLE_FIT },
+      { "BLIG_HYDROGENATE",          BLIG_HYDROGENATE },
+      { "BLIG_CONTACT_DOTS_LIGAND",  BLIG_CONTACT_DOTS_LIGAND },
+      { "BLIG_TOGGLE_FLEV",          BLIG_TOGGLE_FLEV },
+      { "BLIG_SOLID_OBJECTS",        BLIG_SOLID_OBJECTS },
+      { "BLIG_UNSOLID_OBJECTS",      BLIG_UNSOLID_OBJECTS },
+      { "BLIG_CHEMICAL_FEATURES",    BLIG_CHEMICAL_FEATURES },
+      { "BLIG_TABULATE_DISTORTIONS", BLIG_TABULATE_DISTORTIONS },
+      { "BLIG_DISPLAY_DISTORTIONS",  BLIG_DISPLAY_DISTORTIONS },
+      { "BLIG_QUICK_VALIDATE",       BLIG_QUICK_VALIDATE },
+   };
+   return ops;
+}
+
+bool bandicoot_core_is_ligand_direct(const std::string &id) {
+   return ligand_direct_ops().count(id) > 0;
+}
+
+bool bandicoot_core_ligand_direct(const std::string &id) {
+   auto it = ligand_direct_ops().find(id);
+   if (it == ligand_direct_ops().end()) return false;
+   bandicoot_ligand_dispatch(it->second);
+   return true;
+}
+
+bandicoot_find_ligands bandicoot_core_find_ligands_setup() {
+   graphics_info_t g;
+   bandicoot_find_ligands f;
+   f.atom_limit = graphics_info_t::find_ligand_ligand_atom_limit;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      std::string label = std::to_string(imol) + " " + g.molecules[imol].name_;
+      if (g.molecules[imol].has_xmap())
+         f.maps.push_back({ imol, label, 0, map_is_difference_map(imol) == 1 });
+      int n = g.molecules[imol].atom_sel.n_selected_atoms;
+      if (n > 0)
+         f.proteins.push_back({ imol, label, n, false });
+      if (g.molecules[imol].has_model() && n < f.atom_limit)
+         f.ligands.push_back({ imol, label, n, false });
+   }
+   f.mask_waters  = graphics_info_t::find_ligand_mask_waters_flag;
+   f.here         = graphics_info_t::find_ligand_here_cluster_flag;
+   f.sigma        = graphics_info_t::ligand_cluster_sigma_level;
+   f.n_top_sites  = graphics_info_t::find_ligand_n_top_ligands;
+   f.n_conformers = graphics_info_t::ligand_wiggly_ligand_n_samples;
+   f.multi        = graphics_info_t::find_ligand_multiple_solutions_per_cluster_flag;
+   // as the GTK window: the stored fractions show only with multi-solutions on
+   if (f.multi) {
+      f.frac_scoring = graphics_info_t::find_ligand_score_by_correl_frac_limit;
+      f.frac_correl  = graphics_info_t::find_ligand_score_correl_frac_interesting_limit;
+   }
+   f.refine = g.find_ligand_do_real_space_refine_state();
+   return f;
+}
+
+void bandicoot_core_find_ligands(const bandicoot_find_ligands &f) {
+   graphics_info_t g;
+   graphics_info_t::find_ligand_mask_waters_flag = f.mask_waters;
+   graphics_info_t::find_ligand_here_cluster_flag = f.here;
+   graphics_info_t::ligand_cluster_sigma_level = f.sigma;
+   graphics_info_t::find_ligand_n_top_ligands = f.n_top_sites;
+   graphics_info_t::ligand_wiggly_ligand_n_samples = f.n_conformers;
+   graphics_info_t::find_ligand_multiple_solutions_per_cluster_flag = f.multi;
+   graphics_info_t::find_ligand_score_by_correl_frac_limit = f.frac_scoring;
+   graphics_info_t::find_ligand_score_correl_frac_interesting_limit = f.frac_correl;
+   g.set_find_ligand_do_real_space_refine_state(f.refine);
+   g.set_find_ligands_mols(f.map, f.protein, f.chosen);
+   execute_ligand_search();
+}
+
+bool bandicoot_wx_ligand_check(const std::string &residue, int density, int geometry, int bumps) {
+   if (! ui_view.ligand_check) return false;
+   ui_view.ligand_check(residue, density, geometry, bumps);
+   return true;
+}
+
+bool bandicoot_core_active_residue(int &imol, std::string &chain_id, int &resno,
+                                   std::string &ins_code, std::string &res_name) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t>> aa = active_atom_spec();
+   if (! aa.first) return false;
+   imol = aa.second.first;
+   const coot::atom_spec_t &spec = aa.second.second;
+   chain_id = spec.chain_id; resno = spec.res_no; ins_code = spec.ins_code;
+   res_name = residue_name(imol, chain_id.c_str(), resno, ins_code.c_str());
+   return true;
+}
+
+bool bandicoot_core_smiles_to_3d(const std::string &smiles, const std::string &comp_id,
+                                 std::string &why_not) {
+   if (! enhanced_ligand_coot_p()) { why_not = "this build has no RDKit"; return false; }
+   int imol = import_rdkit_mol_from_smiles(smiles, comp_id);
+   if (! is_valid_model_molecule(imol)) {
+      why_not = "RDKit could not build a molecule from " + smiles;
+      return false;
+   }
+   graphics_draw();
+   return true;
+}
+
+bool bandicoot_core_rename_to_reference(int imol, const std::string &chain_id, int resno,
+                                        const std::string &ins_code,
+                                        const std::string &reference_comp_id,
+                                        const std::string &new_comp_id,
+                                        const std::string &cif_file_name, std::string &why_not) {
+   // the core says nothing on failure except to the terminal, so success is
+   // the dictionary file being written
+   time_t start = time(nullptr);
+   match_this_residue_and_dictionary(imol, chain_id, resno, ins_code, cif_file_name,
+                                     reference_comp_id, new_comp_id);
+   struct stat after;
+   if (stat(cif_file_name.c_str(), &after) != 0 || after.st_mtime < start) {
+      why_not = "no dictionary was written (no restraints for this residue or for "
+                + reference_comp_id + ", or no atoms matched)";
+      return false;
+   }
+   std::cout << "INFO:: wrote " << cif_file_name << std::endl;
+   return true;
 }
 
 bool bandicoot_core_rename_active_residue(const std::string &name, std::string &why_not) {

@@ -174,7 +174,7 @@ void graphics_info_t::bandicoot_render_local_post_refine_dots(int imol) {
         mol_for_dots,
         g.Geom_p(),
         ignore_waters,
-        0.5f, 0.25f);
+        0.5f, 0.25f, imol);
     coot::atom_overlaps_dots_container_t c = overlaps.all_atom_contact_dots(0.5, true);
 
     // Colour lookup — small enough to inline here; matches the upstream

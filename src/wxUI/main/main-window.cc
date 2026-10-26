@@ -31,6 +31,7 @@
 #include "wxUI/main/top-toolbar.hh"
 #include "wxUI/main/calculate-menu.hh"
 #include "wxUI/main/modelling-menu.hh"
+#include "wxUI/main/ligand-menu.hh"
 #include "wxUI/main/other-tools.hh"
 #include "wxUI/main/pandda-inspect.hh"
 #include "wxUI/main/edit-menu.hh"
@@ -725,6 +726,14 @@ private:
          CallAfter([action]() { bandicoot_core_modelling_direct(action); });
          return true;
       }
+      if (wxui::is_ligand_action(action)) {
+         CallAfter([this, action]() { wxui::run_ligand_action(this, action); });
+         return true;
+      }
+      if (bandicoot_core_is_ligand_direct(action)) {
+         CallAfter([action]() { bandicoot_core_ligand_direct(action); });
+         return true;
+      }
       return false;
    }
 
@@ -1008,6 +1017,9 @@ private:
       v.choose_molecules = [this](const std::string &title, const std::string &header,
                                   const std::vector<std::pair<int, std::string>> &molecules) {
          return wxui::choose_molecules(this, title, header, molecules);
+      };
+      v.ligand_check = [this](const std::string &residue, int density, int geometry, int bumps) {
+         wxui::show_ligand_check(this, residue, density, geometry, bumps);
       };
       bandicoot_core_set_ui_view(v);
    }

@@ -2713,7 +2713,7 @@ int clashes_with_symmetry(int imol, const char *chain_id, int res_no, const char
       if (residue_p) {
 	 if (mol) {
 	    std::vector<mmdb::Residue *> dummy; // neighbours
-	    coot::atom_overlaps_container_t ao(residue_p, dummy, mol, g.Geom_p());
+	    coot::atom_overlaps_container_t ao(residue_p, dummy, mol, g.Geom_p(), imol);
 	    std::vector<coot::atom_overlap_t> v = ao.symmetry_contacts(clash_dist);
 	    if (v.empty())
 	       r = 0;
@@ -3069,7 +3069,7 @@ float atom_overlap_score(int imol) {
       mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
       graphics_info_t g;
       bool ignore_waters_flag = false;
-      coot::atom_overlaps_container_t ao(mol, g.Geom_p(), ignore_waters_flag);
+      coot::atom_overlaps_container_t ao(mol, g.Geom_p(), ignore_waters_flag, 0.5, 0.25, imol);
       ao.make_all_atom_overlaps();
       s = ao.score();
    }

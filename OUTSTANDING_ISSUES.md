@@ -13,6 +13,14 @@ worth fixing. Newest info at the top of each entry.
 
 ## P2 — visible bug, workaround exists
 
+### Ligand > Find Ligands crashes when it searches
+With a map, a protein model and some ligand molecules loaded, choosing a ligand to search
+for (one not already in the model) and starting the search crashes Bandicoot. Not yet
+investigated, including whether Coot 0.9 does the same.
+
+- **Workaround:** place the ligand by hand: open it, move it to the density, and fit it
+  with Jiggle-Fit Ligand or real-space refinement.
+
 ### GitHub #19 — User-defined key bindings never work
 `add_key_binding()` does `from types import IntType, StringType`
 (`python/coot_utils.py:1972`). Both names were removed in Python 3, so **any** user key
@@ -78,6 +86,13 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 ---
 
 ## P3 — cosmetic / minor
+
+### Ligand > Hydrogenate region crashes
+Choosing the item crashes Bandicoot. Not yet investigated, including whether Coot 0.9
+does the same.
+
+- **Workaround:** Modelling > Add Hydrogen Atoms adds hydrogens to the active residue's
+  molecule.
 
 ### Restoring an older session warns "No matching molecules found" for its dictionaries
 Session files saved by earlier builds read their restraint dictionaries before their

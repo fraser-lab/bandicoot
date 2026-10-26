@@ -1,6 +1,7 @@
 // src/wxUI/main/other-tools.cc
 
 #include "wxUI/main/other-tools.hh"
+#include "wxUI/main/ligand-menu.hh"
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
@@ -477,7 +478,7 @@ public:
       wxStaticBoxSizer *tools = new wxStaticBoxSizer(wxVERTICAL, p, wxEmptyString);
       wxWindow *tb = tools->GetStaticBox();
       add(tools, tb, "Find Waters...", "add-water.svg", [this]() { show_find_waters(GetParent()); });
-      add(tools, tb, "Find Ligands...", "go-to-ligand.svg", nullptr);
+      add(tools, tb, "Find Ligands...", "go-to-ligand.svg", [this]() { show_find_ligands(GetParent()); });
       add(tools, tb, "Find Secondary Structure...", "secondary-structure.svg", [this]() { show_find_secondary_structure(this); });
       add(tools, tb, "Build Nucleic Acid...", "dna.svg", [this]() { show_build_nucleic_acid(this); });
       add_pick(tools, tb, "Cis <-> Trans", cis_trans);

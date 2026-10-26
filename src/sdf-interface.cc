@@ -244,7 +244,10 @@ int import_rdkit_mol_from_smiles(const std::string &smiles_str, const std::strin
       } else {
 	 std::cout << "WARNING:: BAD SMILES " << smiles_str << std::endl;
 	 std::string s = "WARNING:: Bad SMILES: " + smiles_str;
+#ifndef BANDICOOT_UI_WX
+	 // the wx build's caller reports the failure itself
 	 info_dialog(s.c_str());
+#endif
       }
    }
    catch (const std::exception &e) {

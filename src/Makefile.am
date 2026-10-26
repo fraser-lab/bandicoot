@@ -629,6 +629,8 @@ if UI_WX
 	wxUI/main/edit-menu.hh \
 	wxUI/main/edit-menu.cc \
 	wxUI/main/modelling-menu.hh \
+	wxUI/main/ligand-menu.cc \
+	wxUI/main/ligand-menu.hh \
 	wxUI/main/modelling-menu.cc \
 	wxUI/main/other-tools.hh \
 	wxUI/main/other-tools.cc \
