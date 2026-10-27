@@ -4385,8 +4385,12 @@ molecule_class_info_t::make_symm_atom_label_string(mmdb::PAtom atom,
                                                    const std::pair <symm_trans_t, Cell_Translation> &symm_trans) const {
 
    std::string s = make_atom_label_string(atom, 0, 0);
-   s += ": ";
-   s += to_string(symm_trans);
+   // BANDICOOT: the operator is shown only for expanded labels, so the
+   // setting has an effect
+   if (graphics_info_t::symmetry_atom_labels_expanded_flag) {
+      s += ": ";
+      s += to_string(symm_trans);
+   }
    return s;
 }
 

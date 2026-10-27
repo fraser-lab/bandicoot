@@ -550,6 +550,10 @@ struct bandicoot_other_preferences {
    bool pandda_split = false, pandda_basic = false;
    bool auto_rename = false, ask_rename = false, auto_generate = false, ask_generate = false;
    bool apply_restraints_to_all = false;
+   // view settings Coot kept in Draw menu dialogs, saved here with the rest
+   float clipping = 0;                       // front and back together
+   bool crosshairs = false;
+   bool label_on_recentre = false;
 };
 bandicoot_other_preferences bandicoot_core_other_preferences();
 // What Reset Defaults returns these settings to; the PanDDA directory is kept.
@@ -571,6 +575,9 @@ void bandicoot_core_set_pandda_config(const std::string &cifs_dir, bool split);
 void bandicoot_core_set_pandda_basic(bool basic);
 void bandicoot_core_set_ligand_behaviour(bool auto_rename, bool ask_rename, bool auto_generate,
                                          bool ask_generate, bool apply_restraints_to_all);
+void bandicoot_core_set_clipping(float clipping);
+void bandicoot_core_set_crosshairs(bool on);
+void bandicoot_core_set_label_on_recentre(bool on);
 
 // Sequence View: a model's chains as one-letter sequences, residues
 // coloured by secondary structure, as Coot's view shows them.
@@ -613,6 +620,8 @@ struct bandicoot_dm_molecule {
    bool displayed;
    bool active;         // models
    int render_as;       // models: index in bandicoot_core_render_as_labels(), -1 if none fits
+   // models: their additional representations, by label and whether shown
+   std::vector<std::pair<std::string, bool>> add_reps;
 };
 std::vector<bandicoot_dm_molecule> bandicoot_core_dm_maps();
 std::vector<bandicoot_dm_molecule> bandicoot_core_dm_models();
@@ -699,6 +708,8 @@ struct bandicoot_ui_view {
                                   const std::vector<std::pair<int, std::string>> &molecules)> choose_molecules;
    // Quick Ligand Validate's report: each test 0 passed, 1 failed, 2 not done
    std::function<void(const std::string &residue, int density, int geometry, int bumps)> ligand_check;
+   // a window of read-only text
+   std::function<void(const std::string &title, const std::string &text)> text_window;
    // run callback every interval_ms until it returns false (scripts'
    // timeouts, which in the GTK build ran on GLib's main loop)
    std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
@@ -835,6 +846,144 @@ bool bandicoot_core_modelling_direct(const std::string &id);
 // "BLIG_JIGGLE_FIT"). False if the id is not one of them.
 bool bandicoot_core_is_ligand_direct(const std::string &id);
 bool bandicoot_core_ligand_direct(const std::string &id);
+
+// Draw menu: the items that act at once, by their menu ids. False if the id
+// is not one of them.
+bool bandicoot_core_is_draw_direct(const std::string &id);
+bool bandicoot_core_draw_direct(const std::string &id);
+// Draw > Anisotropic Atoms, for every molecule at once.
+struct bandicoot_aniso {
+   bool show = false, limit = false;
+   float radius = 0;                         // A, used when limit is on
+   float probability = 0;                    // %
+};
+bandicoot_aniso bandicoot_core_aniso();
+// Everything but the probability, which applies on its own as it moves.
+void bandicoot_core_set_aniso(const bandicoot_aniso &a);
+void bandicoot_core_set_aniso_probability(float percent);
+
+// Draw > Additional Representation: a further, fatter or ball-and-stick
+// drawing of part of a model, listed under it in the Display Manager.
+struct bandicoot_add_rep_request {
+   int imol = -1;                  // for by residues and by selection
+   int by = 0;                     // 0 the residue at the centre, 1 residues, 2 selection string,
+                                   // 3 the entire molecule
+   std::string chain_id, ins_code, selection;
+   int resno_start = 0, resno_end = 0;
+   bool ball_and_stick = false;
+   float bond_width = 8;           // fat bonds
+};
+// False, with the reason, if nothing was added.
+bool bandicoot_core_add_representation(const bandicoot_add_rep_request &r, std::string &why_not);
+// The molecule the window chose last.
+int bandicoot_core_add_rep_molecule();
+// The first and last residue numbers of a chain; false if it has none.
+bool bandicoot_core_chain_residue_range(int imol, const std::string &chain_id, int &first, int &last);
+void bandicoot_core_set_additional_representation_shown(int imol, int index, bool shown);
+void bandicoot_core_set_all_additional_representations_shown(int imol, bool shown);
+
+// Draw > Cell & Symmetry. The unit cell state is read from the first molecule.
+struct bandicoot_symmetry {
+   bool shown = false;
+   float radius = 0;               // A
+   bandicoot_rgb colour;
+   float colour_merge = 0;
+   bool expanded_labels = false;
+   bool unit_cells = false;
+};
+bandicoot_symmetry bandicoot_core_symmetry();
+void bandicoot_core_set_symmetry_shown(bool shown);
+// Turns symmetry on and saves that with the preferences.
+void bandicoot_core_set_symmetry_always_on();
+// False if the radius is out of range.
+bool bandicoot_core_set_symmetry_radius(float radius);
+void bandicoot_core_set_symmetry_colour(const bandicoot_rgb &colour);
+void bandicoot_core_set_symmetry_colour_merge(float merge);
+void bandicoot_core_set_symmetry_expanded_labels(bool expanded);
+void bandicoot_core_set_unit_cells_shown(bool shown);
+// Symmetry by Molecule, for each model.
+struct bandicoot_molecule_symmetry {
+   int imol;
+   std::string label;              // "Molecule 2 2abc.pdb"
+   bool shown;
+   int display;                    // 0 sphere, 1 near chains, 2 C-alphas
+   int colouring;                  // 0 standard, 1 by symop, 2 by molecule
+};
+std::vector<bandicoot_molecule_symmetry> bandicoot_core_molecule_symmetries();
+void bandicoot_core_set_molecule_symmetry_shown(int imol, bool shown);
+void bandicoot_core_set_molecule_symmetry_display(int imol, int display);
+void bandicoot_core_set_molecule_symmetry_colouring(int imol, int colouring);
+
+// Draw > Generic Display Objects: those not closed, by their object numbers.
+struct bandicoot_generic_object {
+   int index;
+   std::string name;
+   bool displayed;
+};
+std::vector<bandicoot_generic_object> bandicoot_core_generic_objects();
+void bandicoot_core_set_generic_object_displayed(int index, bool displayed);
+void bandicoot_core_set_all_generic_objects_displayed(bool displayed);
+void bandicoot_core_close_all_generic_objects();
+
+// Draw > NCS Ghost Control: the models that have NCS ghosts.
+struct bandicoot_ncs_molecule {
+   int imol;
+   std::string label;              // "Molecule 2 2abc.pdb"
+   bool ghosts_shown;
+   std::vector<std::string> chains;
+   std::vector<bool> chain_shown;  // as a ghost; never the master
+   int master = -1;                // index in chains
+};
+std::vector<bandicoot_ncs_molecule> bandicoot_core_ncs_molecules();
+void bandicoot_core_set_ncs_ghosts_shown(int imol, bool shown);
+void bandicoot_core_set_ncs_ghost_chain_shown(int imol, int ichain, bool shown);
+// The other chains are all shown as ghosts of the new master, as in Coot.
+void bandicoot_core_set_ncs_master(int imol, int ichain);
+
+// Draw > Screenshot. Simple is the graphics window as it is; Povray and
+// Raster3D write a scene file beside the image and render it with that
+// program. False if no image was written; renderer_found says whether the
+// program was there to run.
+bool bandicoot_core_screenshot(const std::string &path);
+bool bandicoot_core_povray_image(const std::string &path, std::string &image_path, bool &renderer_found);
+bool bandicoot_core_raster3d_image(const std::string &path, std::string &image_path, bool &renderer_found);
+// Coot's suggestion when a dark blue map would project badly; empty if none.
+std::string bandicoot_core_dark_density_warning();
+
+// Draw > Representation Tools. The items that act at once, by their menu ids
+// (e.g. "BREP_GREY_CARBONS"); false if the id is not one of them. why_not is
+// set when the item had nothing to act on.
+bool bandicoot_core_is_representation_direct(const std::string &id);
+bool bandicoot_core_representation_direct(const std::string &id, std::string &why_not);
+// The handle of the new object, -1 on failure.
+int  bandicoot_core_ball_and_stick(int imol, const std::string &selection);
+void bandicoot_core_clear_ball_and_stick(int imol);
+// -1 if the selection matches no atoms
+int  bandicoot_core_dotted_surface(int imol, const std::string &selection);
+void bandicoot_core_clear_dots(int imol, int handle);
+float bandicoot_core_map_radius();
+// 0 for no limit
+void bandicoot_core_limit_model_display_radius(float radius);
+void bandicoot_core_label_all_cas(int imol);
+// HOLE: a pore's radius along a path from start to end, drawn as dots and
+// written to dots_file.
+struct bandicoot_xyz { float x = 0, y = 0, z = 0; };
+bandicoot_xyz bandicoot_core_rotation_centre();
+void bandicoot_core_hole(int imol, const bandicoot_xyz &start, const bandicoot_xyz &end,
+                         const std::string &dots_file);
+// Views
+std::string bandicoot_core_next_view_name();
+void bandicoot_core_add_view(const std::string &name);
+void bandicoot_core_add_spin_view(int steps, float degrees);
+std::vector<std::string> bandicoot_core_views();
+void bandicoot_core_go_to_view(int index);
+float bandicoot_core_views_play_speed();
+void bandicoot_core_set_views_play_speed(float speed);
+void bandicoot_core_save_views(const std::string &path);
+// 3D annotations: text placed in the scene
+void bandicoot_core_add_annotation(const std::string &text);
+void bandicoot_core_save_annotations(const std::string &path);
+void bandicoot_core_load_annotations(const std::string &path);
 // Find Ligands: what the window offers, filled from Coot's current settings,
 // and the choices it hands back to search with.
 struct bandicoot_find_ligands {

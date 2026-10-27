@@ -31,6 +31,8 @@
 #include "wxUI/main/top-toolbar.hh"
 #include "wxUI/main/calculate-menu.hh"
 #include "wxUI/main/modelling-menu.hh"
+#include "wxUI/main/draw-menu.hh"
+#include "wxUI/dialogs/text-dialog.hh"
 #include "wxUI/main/ligand-menu.hh"
 #include "wxUI/main/other-tools.hh"
 #include "wxUI/main/pandda-inspect.hh"
@@ -734,6 +736,30 @@ private:
          CallAfter([action]() { bandicoot_core_ligand_direct(action); });
          return true;
       }
+      if (action == "on_map_and_mol_control1_activate") {
+         CallAfter([]() { wxui::show_display_manager(); });
+         return true;
+      }
+      if (action == "on_go_to_atom1_activate") {
+         CallAfter([]() { wxui::show_go_to_atom(); });
+         return true;
+      }
+      if (wxui::is_draw_action(action)) {
+         CallAfter([this, action]() { wxui::run_draw_action(this, action); });
+         return true;
+      }
+      if (bandicoot_core_is_draw_direct(action)) {
+         CallAfter([action]() { bandicoot_core_draw_direct(action); });
+         return true;
+      }
+      if (bandicoot_core_is_representation_direct(action)) {
+         CallAfter([this, action]() {
+            std::string why_not;
+            if (! bandicoot_core_representation_direct(action, why_not) && ! why_not.empty())
+               wxui::info(this, wxString::FromUTF8(why_not));
+         });
+         return true;
+      }
       return false;
    }
 
@@ -1021,6 +1047,9 @@ private:
       v.ligand_check = [this](const std::string &residue, int density, int geometry, int bumps) {
          wxui::show_ligand_check(this, residue, density, geometry, bumps);
       };
+      v.text_window = [this](const std::string &title, const std::string &text) {
+         wxui::show_text(this, wxString::FromUTF8(title), wxString::FromUTF8(text), true);
+      };
       bandicoot_core_set_ui_view(v);
    }
 
@@ -1227,9 +1256,25 @@ bool bandicoot_wx_surface_make_current() {
    return s ? s->make_current() : false;
 }
 
+// set while a frame is drawn to be read back rather than shown
+static bool hold_swap = false;
+
 void bandicoot_wx_surface_swap_buffers() {
    GLSurface *s = the_surface();
-   if (s) s->SwapBuffers();
+   if (s && ! hold_swap) s->SwapBuffers();
+}
+
+void bandicoot_wx_surface_read_back(std::function<void()> read) {
+   GLSurface *s = the_surface();
+   if (! s) return;
+   hold_swap = true;
+   s->redraw();
+   hold_swap = false;
+   if (s->make_current()) {
+      glReadBuffer(GL_BACK);
+      read();
+   }
+   s->redraw();
 }
 
 void bandicoot_wx_surface_redraw() {

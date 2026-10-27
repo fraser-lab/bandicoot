@@ -60,6 +60,10 @@
 #define PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME   45
 // BANDICOOT: "Scale Bond Width to Occupancy" (Preferences > Bond Parameters)
 #define PREFERENCES_SCALE_BOND_WIDTH_TO_OCCUPANCY 46
+// BANDICOOT: view settings Coot kept only for the session (Preferences > Others)
+#define PREFERENCES_CLIPPING                      47
+#define PREFERENCES_CROSSHAIRS                    48
+#define PREFERENCES_LABEL_ON_RECENTRE             49
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

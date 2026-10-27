@@ -22,6 +22,7 @@
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <gtk/gtk.h>
 #ifdef HAVE_GSL
@@ -45,6 +46,7 @@
 #include "save-coords-options.hh"
 #include "ligand/primitive-chi-angles.hh"
 #include "c-interface-ligands-swig.hh"
+#include "c-interface-generic-objects.h"
 #include "coot-utils/coot-package-paths.hh"
 #include "ligand/richardson-rotamer.hh"
 #include "coot-utils/coot-coord-utils.hh"
@@ -1491,6 +1493,9 @@ bandicoot_other_preferences bandicoot_core_other_preferences() {
    p.auto_generate = auto_generate;
    p.ask_generate = show_generate;
    p.apply_restraints_to_all = apply_all;
+   p.clipping = graphics_info_t::clipping_front;
+   p.crosshairs = graphics_info_t::draw_crosshairs_flag != 0;
+   p.label_on_recentre = graphics_info_t::label_atom_on_recentre_flag != 0;
    return p;
 }
 
@@ -1524,12 +1529,33 @@ bandicoot_other_preferences bandicoot_core_other_preference_defaults() {
    d.auto_generate = false;
    d.ask_generate = true;
    d.apply_restraints_to_all = false;
+   d.clipping = default_float(PREFERENCES_CLIPPING, 0.0f);
+   d.crosshairs = default_int(PREFERENCES_CROSSHAIRS, 0) != 0;
+   d.label_on_recentre = default_int(PREFERENCES_LABEL_ON_RECENTRE, 1) != 0;
    return d;
 }
 
 std::vector<std::string> bandicoot_core_other_font_labels() {
    // the names Coot gives sizes 4 to 7
    return { "Times Roman 10", "Times Roman 24", "Fixed 8/13", "Fixed 9/15" };
+}
+
+void bandicoot_core_set_clipping(float clipping) {
+   preferences_internal_change_value_float(PREFERENCES_CLIPPING, clipping);
+   set_clipping_front(clipping);
+   set_clipping_back(clipping);
+}
+
+void bandicoot_core_set_crosshairs(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_CROSSHAIRS, on ? 1 : 0);
+   set_draw_crosshairs(on ? 1 : 0);
+   // Coot redraws only when they come on
+   graphics_draw();
+}
+
+void bandicoot_core_set_label_on_recentre(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_LABEL_ON_RECENTRE, on ? 1 : 0);
+   set_label_on_recentre_flag(on ? 1 : 0);
 }
 
 void bandicoot_core_set_antialias(bool on) {
@@ -2306,6 +2332,568 @@ bool bandicoot_core_ligand_direct(const std::string &id) {
    return true;
 }
 
+static const std::map<std::string, std::function<void()>> &draw_direct_ops() {
+   static const std::map<std::string, std::function<void()>> ops = {
+      { "on_display_only_active1_activate", []() {
+           display_only_active();
+           bandicoot_wx_molecules_changed();
+        } },
+      { "on_label_atoms_in_residue1_activate", label_atoms_in_residue },
+      { "on_label_neighbours1_activate",       label_neighbours },
+      { "on_undo_last_navigation1_activate",   undo_last_move },
+      { "on_rock_view_on_off1_activate",       toggle_idle_rock_function },
+      { "on_spin_view_on_off1_activate",       toggle_idle_spin_function },
+   };
+   return ops;
+}
+
+bool bandicoot_core_is_draw_direct(const std::string &id) {
+   return draw_direct_ops().count(id) > 0;
+}
+
+bool bandicoot_core_draw_direct(const std::string &id) {
+   auto it = draw_direct_ops().find(id);
+   if (it == draw_direct_ops().end()) return false;
+   it->second();
+   return true;
+}
+
+bandicoot_aniso bandicoot_core_aniso() {
+   bandicoot_aniso a;
+   a.show = get_show_aniso() == 1;
+   a.limit = get_show_limit_aniso() == 1;
+   a.radius = graphics_info_t::show_aniso_atoms_radius;
+   a.probability = get_aniso_probability();
+   return a;
+}
+
+void bandicoot_core_set_aniso(const bandicoot_aniso &a) {
+   set_limit_aniso(a.limit ? 1 : 0);
+   // set_aniso_limit_size_from_widget's range, without its fallback to 10 A
+   if (a.radius >= 0.0f && a.radius < 99999.9f) graphics_info_t::show_aniso_atoms_radius = a.radius;
+   set_show_aniso(a.show ? 1 : 0);
+}
+
+void bandicoot_core_set_aniso_probability(float percent) {
+   set_aniso_probability(percent);
+}
+
+// ---- Draw > Additional Representation
+
+// every atom; the Display Manager names it rather than showing the string
+static const std::string entire_molecule_selection = "/*/*/*";
+
+bool bandicoot_core_add_representation(const bandicoot_add_rep_request &r, std::string &why_not) {
+   int imol = r.imol;
+   coot::atom_selection_info_t asi;
+   if (r.by == 0) {
+      std::pair<bool, std::pair<int, coot::atom_spec_t> > aa = active_atom_spec();
+      if (! aa.first) { why_not = "no residue at the centre"; return false; }
+      imol = aa.second.first;
+      const coot::atom_spec_t &spec = aa.second.second;
+      asi = coot::atom_selection_info_t(spec.chain_id, spec.res_no, spec.res_no, spec.ins_code);
+   } else if (r.by == 1) {
+      asi = coot::atom_selection_info_t(r.chain_id, r.resno_start, r.resno_end, r.ins_code);
+   } else if (r.by == 2) {
+      if (r.selection.empty()) { why_not = "no atom selection given"; return false; }
+      asi = coot::atom_selection_info_t(r.selection);
+   } else {
+      asi = coot::atom_selection_info_t(entire_molecule_selection);
+   }
+   if (! is_valid_model_molecule(imol)) { why_not = "no model chosen"; return false; }
+   if (r.by != 0) graphics_info_t::add_reps_molecule_combobox_molecule = imol;
+   graphics_info_t g;
+   // the representation types and widths Coot's window uses
+   int type = r.ball_and_stick ? coot::BALL_AND_STICK : coot::SIMPLE_LINES;
+   float width = r.ball_and_stick ? 0.15f : r.bond_width;
+   gl_context_info_t glci(graphics_info_t::glarea, graphics_info_t::glarea_2);
+   g.molecules[imol].add_additional_representation(type, coot::NORMAL_BONDS, width, true, asi,
+                                                   g.display_control_window(), glci, g.Geom_p());
+   graphics_draw();
+   bandicoot_wx_molecules_changed();
+   return true;
+}
+
+int bandicoot_core_add_rep_molecule() {
+   return graphics_info_t::add_reps_molecule_combobox_molecule;
+}
+
+bool bandicoot_core_chain_residue_range(int imol, const std::string &chain_id, int &first, int &last) {
+   if (! is_valid_model_molecule(imol)) return false;
+   mmdb::Model *model = graphics_info_t::molecules[imol].atom_sel.mol->GetModel(1);
+   if (! model) return false;
+   for (int ich=0; ich<model->GetNumberOfChains(); ich++) {
+      mmdb::Chain *chain = model->GetChain(ich);
+      if (chain && chain_id == chain->GetChainID() && chain->GetNumberOfResidues() > 0) {
+         std::pair<int, int> r = coot::util::min_and_max_residues(chain);
+         first = r.first;
+         last = r.second;
+         return true;
+      }
+   }
+   return false;
+}
+
+void bandicoot_core_set_additional_representation_shown(int imol, int index, bool shown) {
+   set_show_additional_representation(imol, index, shown ? 1 : 0);
+}
+
+void bandicoot_core_set_all_additional_representations_shown(int imol, bool shown) {
+   set_show_all_additional_representations(imol, shown ? 1 : 0);
+}
+
+// ---- Draw > Cell & Symmetry
+
+static int first_molecule() {
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol) || is_valid_map_molecule(imol)) return imol;
+   return -1;
+}
+
+bandicoot_symmetry bandicoot_core_symmetry() {
+   bandicoot_symmetry s;
+   s.shown = get_show_symmetry() == 1;
+   s.radius = graphics_info_t::symmetry_search_radius;
+   s.colour.r = graphics_info_t::symmetry_colour[0];
+   s.colour.g = graphics_info_t::symmetry_colour[1];
+   s.colour.b = graphics_info_t::symmetry_colour[2];
+   s.colour_merge = graphics_info_t::symmetry_colour_merge_weight;
+   s.expanded_labels = graphics_info_t::symmetry_atom_labels_expanded_flag;
+   int imol = first_molecule();
+   s.unit_cells = imol >= 0 && get_show_unit_cell(imol) == 1;
+   return s;
+}
+
+void bandicoot_core_set_symmetry_shown(bool shown) {
+   set_show_symmetry_master(shown ? 1 : 0);
+}
+
+void bandicoot_core_set_symmetry_always_on() {
+   add_symmetry_on_to_preferences_and_apply();
+}
+
+bool bandicoot_core_set_symmetry_radius(float radius) {
+   // set_symmetry_size_from_widget's range, without its fallback to 10 A
+   if (! (radius > 0.0f && radius < 9999.9f)) return false;
+   set_symmetry_size_from_widget(std::to_string(radius).c_str());
+   return true;
+}
+
+void bandicoot_core_set_symmetry_colour(const bandicoot_rgb &colour) {
+   graphics_info_t::symmetry_colour[0] = colour.r;
+   graphics_info_t::symmetry_colour[1] = colour.g;
+   graphics_info_t::symmetry_colour[2] = colour.b;
+   graphics_draw();
+}
+
+void bandicoot_core_set_symmetry_colour_merge(float merge) {
+   set_symmetry_colour_merge(merge);
+}
+
+void bandicoot_core_set_symmetry_expanded_labels(bool expanded) {
+   set_symmetry_atom_labels_expanded(expanded ? 1 : 0);
+}
+
+void bandicoot_core_set_unit_cells_shown(bool shown) {
+   set_show_unit_cells_all(shown ? 1 : 0);
+}
+
+std::vector<bandicoot_molecule_symmetry> bandicoot_core_molecule_symmetries() {
+   std::vector<bandicoot_molecule_symmetry> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      if (! is_valid_model_molecule(imol)) continue;
+      const molecule_class_info_t &m = graphics_info_t::molecules[imol];
+      bandicoot_molecule_symmetry s;
+      s.imol = imol;
+      s.label = "Molecule " + std::to_string(imol) + " " + m.name_for_display_manager();
+      s.shown = m.show_symmetry;
+      s.display = m.symmetry_as_calphas ? 2 : m.symmetry_whole_chain_flag ? 1 : 0;
+      s.colouring = m.symmetry_colour_by_symop_flag ? 1 : m.symmetry_rotate_colour_map_flag ? 2 : 0;
+      v.push_back(s);
+   }
+   return v;
+}
+
+void bandicoot_core_set_molecule_symmetry_shown(int imol, bool shown) {
+   set_show_symmetry_molecule(imol, shown ? 1 : 0);
+}
+
+// the pairs of calls Coot's window makes for each choice
+void bandicoot_core_set_molecule_symmetry_display(int imol, int display) {
+   if (display == 2) {
+      symmetry_as_calphas(imol, 1);
+   } else {
+      symmetry_as_calphas(imol, 0);
+      set_symmetry_whole_chain(imol, display == 1 ? 1 : 0);
+   }
+}
+
+void bandicoot_core_set_molecule_symmetry_colouring(int imol, int colouring) {
+   set_symmetry_colour_by_symop(imol, colouring == 1 ? 1 : 0);
+   set_symmetry_molecule_rotate_colour_map(imol, colouring == 0 ? 0 : 1);
+}
+
+// ---- Draw > Generic Display Objects
+
+std::vector<bandicoot_generic_object> bandicoot_core_generic_objects() {
+   std::vector<bandicoot_generic_object> v;
+   const std::vector<coot::generic_display_object_t> &objs = *graphics_info_t::generic_objects_p;
+   for (unsigned int i=0; i<objs.size(); i++)
+      if (! objs[i].is_closed_flag)
+         v.push_back({ int(i), objs[i].name, objs[i].is_displayed_flag != 0 });
+   return v;
+}
+
+void bandicoot_core_set_generic_object_displayed(int index, bool displayed) {
+   set_display_generic_object(index, displayed ? 1 : 0);
+}
+
+void bandicoot_core_set_all_generic_objects_displayed(bool displayed) {
+   set_display_all_generic_objects(displayed ? 1 : 0);
+}
+
+void bandicoot_core_close_all_generic_objects() {
+   close_all_generic_objects();
+}
+
+// ---- Draw > NCS Ghost Control
+
+std::vector<bandicoot_ncs_molecule> bandicoot_core_ncs_molecules() {
+   std::vector<bandicoot_ncs_molecule> v;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++) {
+      if (! is_valid_model_molecule(imol)) continue;
+      const molecule_class_info_t &m = graphics_info_t::molecules[imol];
+      std::vector<coot::ghost_molecule_display_t> ghosts = m.NCS_ghosts();
+      if (ghosts.empty()) continue;
+      bandicoot_ncs_molecule n;
+      n.imol = imol;
+      n.label = "Molecule " + std::to_string(imol) + " " + m.name_for_display_manager();
+      n.ghosts_shown = m.draw_ncs_ghosts_p();
+      n.chains = coot::util::chains_in_molecule(m.atom_sel.mol);
+      const std::string &master = ghosts[0].target_chain_id;
+      for (unsigned int ich=0; ich<n.chains.size(); ich++) {
+         if (n.chains[ich] == master) n.master = ich;
+         bool shown = false;
+         for (const coot::ghost_molecule_display_t &gh : ghosts)
+            if (gh.chain_id == n.chains[ich]) shown = gh.display_it_flag;
+         n.chain_shown.push_back(shown && n.chains[ich] != master);
+      }
+      v.push_back(n);
+   }
+   return v;
+}
+
+void bandicoot_core_set_ncs_ghosts_shown(int imol, bool shown) {
+   set_draw_ncs_ghosts(imol, shown ? 1 : 0);
+}
+
+void bandicoot_core_set_ncs_ghost_chain_shown(int imol, int ichain, bool shown) {
+   ncs_control_display_chain(imol, ichain, shown ? 1 : 0);
+}
+
+void bandicoot_core_set_ncs_master(int imol, int ichain) {
+   ncs_control_change_ncs_master_to_chain(imol, ichain);
+   if (! is_valid_model_molecule(imol)) return;
+   std::vector<std::string> chains =
+      coot::util::chains_in_molecule(graphics_info_t::molecules[imol].atom_sel.mol);
+   for (int ich=0; ich<int(chains.size()); ich++)
+      if (ich != ichain) ncs_control_display_chain(imol, ich, 1);
+}
+
+// ---- Draw > Screenshot
+
+bool bandicoot_core_screenshot(const std::string &path) {
+   bool ok = false;
+   bandicoot_wx_surface_read_back([&ok, path]() { ok = graphics_info_t::screendump_image(path) != 0; });
+   struct stat st;
+   return ok && stat(path.c_str(), &st) == 0;
+}
+
+static bool image_written(const std::string &image_path, time_t since) {
+   struct stat st;
+   return stat(image_path.c_str(), &st) == 0 && st.st_mtime >= since;
+}
+
+// Where raytrace looks for a renderer: the directory named by env_dir, if
+// given, then PATH.
+static bool program_found(const std::string &name, const char *env_dir) {
+   std::vector<std::string> dirs;
+   if (env_dir && getenv(env_dir)) dirs.push_back(getenv(env_dir));
+   if (const char *path = getenv("PATH")) {
+      std::string p(path);
+      size_t start = 0;
+      while (start <= p.size()) {
+         size_t end = p.find(':', start);
+         if (end == std::string::npos) end = p.size();
+         dirs.push_back(p.substr(start, end - start));
+         start = end + 1;
+      }
+   }
+   for (const std::string &d : dirs) {
+      if (d.empty()) continue;
+      std::string f = d + "/" + name;
+      if (access(f.c_str(), X_OK) == 0) return true;
+   }
+   std::cout << "INFO:: " << name << " not found" << (env_dir ? std::string(" in $") + env_dir + " or" : "")
+             << " on PATH " << (getenv("PATH") ? getenv("PATH") : "") << std::endl;
+   return false;
+}
+
+bool bandicoot_core_povray_image(const std::string &path, std::string &image_path, bool &renderer_found) {
+   renderer_found = program_found("povray", nullptr);
+   time_t start = time(nullptr);
+   make_image_povray(path.c_str());
+   image_path = path + ".png";   // the name raytrace gives it
+   return image_written(image_path, start);
+}
+
+bool bandicoot_core_raster3d_image(const std::string &path, std::string &image_path, bool &renderer_found) {
+   renderer_found = program_found("render", "CCP4_BIN");
+   time_t start = time(nullptr);
+   make_image_raster3d(path.c_str());
+   image_path = path;
+   return image_written(image_path, start);
+}
+
+// ---- Draw > Representation Tools
+
+// A Python string literal holding s.
+static std::string py_quote(const std::string &s) {
+   std::string q = "'";
+   for (char c : s) {
+      if (c == '\\' || c == '\'') q += '\\';
+      if (c == '\n') { q += "\\n"; continue; }
+      q += c;
+   }
+   return q + "'";
+}
+
+static void run_python(const std::string &code) {
+   bool had_error = false;
+   std::string out = bandicoot_core_console_run(code, had_error);
+   if (! out.empty()) std::cout << out << (out.back() == '\n' ? "" : "\n");
+}
+
+// Coot's Highlight Interesting Site: the residue in ball-and-stick in a
+// copy of its own colour, its neighbours in ball-and-stick, distances shown.
+static bool highlight_site(std::string &why_not) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t> > aa = active_atom_spec();
+   if (! aa.first) { why_not = "No residue at the centre"; return false; }
+   int imol = aa.second.first;
+   coot::residue_spec_t centre(aa.second.second);
+   std::vector<coot::residue_spec_t> others =
+      graphics_info_t::molecules[imol].residues_near_residue(centre, 4.0);
+   std::string sel = "//" + centre.chain_id + "/" + std::to_string(centre.res_no);
+   if (! centre.ins_code.empty()) sel += "." + centre.ins_code;
+   int imol_new = new_molecule_by_atom_selection(imol, sel.c_str());
+   int draw_h = draw_hydrogens_state(imol);
+   if (is_valid_model_molecule(imol_new)) {
+      set_mol_active(imol_new, 0);
+      set_show_environment_distances(1);
+      set_molecule_bonds_colour_map_rotation(imol_new, 230);
+      additional_representation_by_attributes(imol_new, centre.chain_id.c_str(), centre.res_no, centre.res_no,
+                                              centre.ins_code.c_str(), coot::BALL_AND_STICK, 1, 0.14, draw_h);
+   }
+   for (const coot::residue_spec_t &r : others)
+      additional_representation_by_attributes(imol, r.chain_id.c_str(), r.res_no, r.res_no,
+                                              r.ins_code.c_str(), coot::BALL_AND_STICK, 1, 0.14, draw_h);
+   bandicoot_wx_molecules_changed();
+   return true;
+}
+
+static bool grey_carbons(bool grey, std::string &why_not) {
+   std::pair<bool, std::pair<int, coot::atom_spec_t> > aa = active_atom_spec();
+   if (! aa.first) { why_not = "No molecule at the centre"; return false; }
+   set_use_grey_carbons_for_molecule(aa.second.first, grey ? 1 : 0);
+   return true;
+}
+
+static void stick_balls(bool on) {
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol)) set_draw_stick_mode_atoms(imol, on ? 1 : 0);
+}
+
+static bool ccp4mg(std::string &why_not) {
+   // Coot's picture description, beside the files it reads
+   std::string pd = coot::util::current_working_dir() + "/1.mgpic.py";
+   write_ccp4mg_picture_description(pd.c_str());
+   std::cout << "INFO:: wrote " << pd << std::endl;
+   if (! program_found("ccp4mg", nullptr)) { why_not = "CCP4MG was not found"; return false; }
+   std::string cmd = "ccp4mg -pict '" + pd + "' &";
+   if (system(cmd.c_str()) != 0) { why_not = "CCP4MG could not be started"; return false; }
+   return true;
+}
+
+static const std::map<std::string, std::function<bool(std::string &)>> &representation_ops() {
+   static const std::map<std::string, std::function<bool(std::string &)>> ops = {
+      { "BREP_UNDO_SYMMETRY_VIEW", [](std::string &why) {
+           if (undo_symmetry_view()) return true;
+           why = "No symmetry copy at the centre";
+           return false;
+        } },
+      { "BREP_BALLS_ON",  [](std::string &) { stick_balls(true);  return true; } },
+      { "BREP_BALLS_OFF", [](std::string &) { stick_balls(false); return true; } },
+      { "BREP_GREY_CARBONS",     [](std::string &why) { return grey_carbons(true, why); } },
+      { "BREP_COLOURED_CARBONS", [](std::string &why) { return grey_carbons(false, why); } },
+      { "BREP_HIGHLIGHT_SITE", highlight_site },
+      { "BREP_PLAY_VIEWS", [](std::string &why) {
+           if (n_views() == 0) { why = "No views have been added"; return false; }
+           go_to_first_view(1);
+           play_views();
+           return true;
+        } },
+      { "BREP_REMOVE_ANNOTATION_HERE",  [](std::string &) { run_python("remove_annotation_here()"); return true; } },
+      { "BREP_REMOVE_ANNOTATION_CLICK", [](std::string &) {
+           add_status_bar_text("Click near the annotation to remove");
+           run_python("remove_annotation_at_click()");
+           return true;
+        } },
+      { "BREP_CCP4MG", ccp4mg },
+   };
+   return ops;
+}
+
+bool bandicoot_core_is_representation_direct(const std::string &id) {
+   return representation_ops().count(id) > 0;
+}
+
+bool bandicoot_core_representation_direct(const std::string &id, std::string &why_not) {
+   auto it = representation_ops().find(id);
+   if (it == representation_ops().end()) return false;
+   return it->second(why_not);
+}
+
+int bandicoot_core_ball_and_stick(int imol, const std::string &selection) {
+   // the sizes Coot's menu item used
+   int handle = make_ball_and_stick(imol, selection.c_str(), 0.18, 0.3, 1);
+   std::cout << "INFO:: ball and stick handle " << handle << std::endl;
+   return handle;
+}
+
+void bandicoot_core_clear_ball_and_stick(int imol) {
+   clear_ball_and_stick(imol);
+}
+
+int bandicoot_core_dotted_surface(int imol, const std::string &selection) {
+   if (! is_valid_model_molecule(imol)) return -1;
+   // nothing matched would make an empty, invisible object
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+   int sel = mol->NewSelection();
+   mol->Select(sel, mmdb::STYPE_ATOM, selection.c_str(), mmdb::SKEY_NEW);
+   int n = mol->GetSelLength(sel);
+   mol->DeleteSelection(sel);
+   if (n == 0) return -1;
+   // one colour reads better than colour by atom
+   set_dots_colour(imol, 0.5, 0.5, 0.5);
+   int handle = dots(imol, selection.c_str(), selection.c_str(), 2, 1);
+   std::string s = "Dotted surface handle " + std::to_string(handle);
+   std::cout << "INFO:: " << s << std::endl;
+   add_status_bar_text(s.c_str());
+   return handle;
+}
+
+void bandicoot_core_clear_dots(int imol, int handle) {
+   clear_dots(imol, handle);
+}
+
+float bandicoot_core_map_radius() {
+   return get_map_radius();
+}
+
+void bandicoot_core_limit_model_display_radius(float radius) {
+   if (radius < 0.1f) set_model_display_radius(0, 10);
+   else set_model_display_radius(1, radius);
+}
+
+void bandicoot_core_label_all_cas(int imol) {
+   if (! is_valid_model_molecule(imol)) return;
+   mmdb::Model *model = graphics_info_t::molecules[imol].atom_sel.mol->GetModel(1);
+   if (! model) return;
+   for (int ich=0; ich<model->GetNumberOfChains(); ich++) {
+      mmdb::Chain *chain = model->GetChain(ich);
+      if (! chain || is_solvent_chain_p(imol, chain->GetChainID()) == 1) continue;
+      for (int ir=0; ir<chain->GetNumberOfResidues(); ir++) {
+         mmdb::Residue *r = chain->GetResidue(ir);
+         if (r) add_atom_label(imol, const_cast<char *>(chain->GetChainID()), r->GetSeqNum(), const_cast<char *>(" CA "));
+      }
+   }
+   graphics_draw();
+}
+
+bandicoot_xyz bandicoot_core_rotation_centre() {
+   bandicoot_xyz c;
+   c.x = graphics_info_t::RotationCentre_x();
+   c.y = graphics_info_t::RotationCentre_y();
+   c.z = graphics_info_t::RotationCentre_z();
+   return c;
+}
+
+void bandicoot_core_hole(int imol, const bandicoot_xyz &start, const bandicoot_xyz &end,
+                         const std::string &dots_file) {
+   // Coot's colouring; its probe-radius graph is a GTK window, so it is not drawn
+   hole(imol, start.x, start.y, start.z, end.x, end.y, end.z, 1, 0, 1, false, dots_file);
+}
+
+std::string bandicoot_core_next_view_name() {
+   // "View", then "View-1", "View-2" ... as Coot names them
+   std::vector<std::string> names = bandicoot_core_views();
+   for (int n=0; ; n++) {
+      std::string name = n == 0 ? "View" : "View-" + std::to_string(n);
+      if (std::find(names.begin(), names.end(), name) == names.end()) return name;
+   }
+}
+
+void bandicoot_core_add_view(const std::string &name) {
+   add_view_here(name.c_str());
+}
+
+void bandicoot_core_add_spin_view(int steps, float degrees) {
+   add_spin_view("Spin", steps, degrees);
+}
+
+std::vector<std::string> bandicoot_core_views() {
+   std::vector<std::string> v;
+   for (const coot::view_info_t &view : graphics_info_t::views) v.push_back(view.view_name);
+   return v;
+}
+
+void bandicoot_core_go_to_view(int index) {
+   go_to_view_number(index, 0);
+}
+
+float bandicoot_core_views_play_speed() {
+   return views_play_speed();
+}
+
+void bandicoot_core_set_views_play_speed(float speed) {
+   set_views_play_speed(speed);
+}
+
+void bandicoot_core_save_views(const std::string &path) {
+   save_views(path.c_str());
+}
+
+void bandicoot_core_add_annotation(const std::string &text) {
+   run_python("add_annotation_here(" + py_quote(text) + ")");
+}
+
+void bandicoot_core_save_annotations(const std::string &path) {
+   run_python("save_annotations(" + py_quote(path) + ")");
+}
+
+void bandicoot_core_load_annotations(const std::string &path) {
+   run_python("load_annotations(" + py_quote(path) + ")");
+}
+
+std::string bandicoot_core_dark_density_warning() {
+   for (int i=0; i<graphics_info_t::n_molecules(); i++) {
+      const molecule_class_info_t &m = graphics_info_t::molecules[i];
+      if (m.has_xmap() && m.is_displayed_p() && background_is_black_p() && m.map_is_too_blue_p())
+         return "Consider making the map brighter:\nblue projects badly.";
+   }
+   return std::string();
+}
+
 bandicoot_find_ligands bandicoot_core_find_ligands_setup() {
    graphics_info_t g;
    bandicoot_find_ligands f;
@@ -2348,6 +2936,12 @@ void bandicoot_core_find_ligands(const bandicoot_find_ligands &f) {
    g.set_find_ligand_do_real_space_refine_state(f.refine);
    g.set_find_ligands_mols(f.map, f.protein, f.chosen);
    execute_ligand_search();
+}
+
+bool bandicoot_wx_text_window(const std::string &title, const std::string &text) {
+   if (! ui_view.text_window) return false;
+   ui_view.text_window(title, text);
+   return true;
 }
 
 bool bandicoot_wx_ligand_check(const std::string &residue, int density, int geometry, int bumps) {
@@ -3583,8 +4177,16 @@ std::vector<bandicoot_dm_molecule> bandicoot_core_dm_models() {
       int render_as = -1;
       for (int i=0; i<n_render_as; i++)
          if (render_as_items[i].bonds_box_type == m.Bonds_box_type()) render_as = i;
-      v.push_back({ imol, m.name_for_display_manager(), mol_is_displayed(imol) != 0,
-                    mol_is_active(imol) != 0, render_as });
+      bandicoot_dm_molecule d { imol, m.name_for_display_manager(), mol_is_displayed(imol) != 0,
+                                mol_is_active(imol) != 0, render_as, {} };
+      for (const coot::additional_representations_t &r : m.add_reps) {
+         std::string label = r.info_string();
+         if (r.atom_sel_info.type == coot::atom_selection_info_t::BY_STRING &&
+             r.atom_sel_info.atom_selection_str == entire_molecule_selection)
+            label = label.substr(0, label.find(": ") + 2) + "Entire Molecule";
+         d.add_reps.push_back({ label, r.show_it });
+      }
+      v.push_back(d);
    }
    return v;
 }

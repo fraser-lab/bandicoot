@@ -109,6 +109,7 @@ bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_
 // not taken it on.
 bool bandicoot_wx_info(const std::string &text, bool markup);
 int  bandicoot_wx_question(const std::string &text);
+int  bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
 #endif
 #include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
 
@@ -1624,6 +1625,30 @@ my_delete_ramachandran_mol_option(GtkWidget *widget, void *data) {
 void
 show_fix_nomenclature_errors_gui(int imol,
 				 const std::vector<std::pair<std::string, coot::residue_spec_t> > &nomenclature_errors) {
+#ifdef BANDICOOT_UI_WX
+   // asked once the read has finished, so a session or several files are not held up
+   if (graphics_info_t::use_graphics_interface_flag && is_valid_model_molecule(imol)) {
+      for (unsigned int i=0; i<nomenclature_errors.size(); i++)
+         std::cout << "INFO:: nomenclature error in molecule " << imol << ": "
+                   << nomenclature_errors[i].first << " " << nomenclature_errors[i].second.format()
+                   << std::endl;
+      std::size_t n = nomenclature_errors.size();
+      std::string q = "Molecule " + coot::util::int_to_string(imol) + " has " +
+         coot::util::int_to_string(n) + " nomenclature error" + (n > 1 ? "s" : "") + ".\n\n";
+      const std::size_t shown = 10;
+      for (std::size_t i=0; i<n && i<shown; i++)
+         q += nomenclature_errors[i].first + " " + nomenclature_errors[i].second.format() + "\n";
+      if (n > shown)
+         q += "and " + coot::util::int_to_string(n - shown) + " more\n";
+      q += n > 1 ? "\nCorrect them?" : "\nCorrect it?";
+      bandicoot_wx_timeout_add(1, [imol, q]() {
+         if (is_valid_model_molecule(imol) && bandicoot_wx_question(q) == 1)
+            fix_nomenclature_errors(imol);
+         return false;
+      });
+   }
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       if (is_valid_model_molecule(imol)) {
 

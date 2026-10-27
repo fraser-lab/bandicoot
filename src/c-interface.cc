@@ -1777,16 +1777,40 @@ void set_auto_read_column_labels(const char *fwt, const char *phwt,
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// No GTK main loop runs under wx, so spin and rock are wx timers. Each start
+// takes a fresh token; a timer whose token is no longer current stops.
+static void bandicoot_wx_start_spin_rock(bool rock) {
+   static int last_token = 0;
+   int token = ++last_token;
+   graphics_info_t::idle_function_spin_rock_token = token;
+   int id = bandicoot_wx_timeout_add(rock ? 25 : 16, [token, rock]() {
+      if (graphics_info_t::idle_function_spin_rock_token != token) return false;
+      if (rock) animate_idle_rock(nullptr);
+      else animate_idle_spin(nullptr);
+      return true;
+   });
+   if (! id) graphics_info_t::idle_function_spin_rock_token = 0;
+}
+#endif
+
 void toggle_idle_spin_function() { 
 
    graphics_info_t g; 
 
+#ifdef BANDICOOT_UI_WX
+   if (g.idle_function_spin_rock_token == 0)
+      bandicoot_wx_start_spin_rock(false);
+   else
+      g.idle_function_spin_rock_token = 0;
+#else
    if (g.idle_function_spin_rock_token == 0) { 
       g.idle_function_spin_rock_token = gtk_idle_add((GtkFunction)animate_idle_spin, g.glarea);
    } else {
       gtk_idle_remove(g.idle_function_spin_rock_token);
       g.idle_function_spin_rock_token = 0; 
    }
+#endif
    add_to_history_simple("toggle-idle-function");
 }
 
@@ -1796,17 +1820,23 @@ void toggle_idle_rock_function() {
    graphics_info_t g; 
 
    if (g.idle_function_spin_rock_token == 0) { 
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_start_spin_rock(true);
+#else
       g.idle_function_spin_rock_token =
 	 // gtk_idle_add((GtkFunction)animate_idle_rock, g.glarea);
 	 gtk_timeout_add(25, // 40 fps
 			 (GtkFunction) animate_idle_rock,
 			 g.glarea);
+#endif
       g.time_holder_for_rocking = coot::elapsed_time_ms();
 
       g.idle_function_rock_angle_previous =
 	 get_idle_function_rock_target_angle();
    } else {
+#ifndef BANDICOOT_UI_WX
       gtk_idle_remove(g.idle_function_spin_rock_token);
+#endif
       g.idle_function_spin_rock_token = 0;
    }
    add_to_history_simple("toggle-idle-rock-function");

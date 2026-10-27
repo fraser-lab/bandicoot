@@ -555,7 +555,7 @@ void     *graphics_info_t::atom_label_font = 0;
 void     *graphics_info_t::atom_label_font = GLUT_BITMAP_HELVETICA_12;
 #endif
 int       graphics_info_t::label_atom_on_recentre_flag = 1;
-int       graphics_info_t::symmetry_atom_labels_expanded_flag = 0;
+int       graphics_info_t::symmetry_atom_labels_expanded_flag = 1; // BANDICOOT: on, as labels always showed the operator before the setting worked
 coot::colour_holder graphics_info_t::font_colour = coot::colour_holder(1.0, 0.8, 0.8);
 
 #ifdef __APPLE__

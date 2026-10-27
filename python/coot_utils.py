@@ -3164,13 +3164,12 @@ def save_annotations(file_name):
 
 def load_annotations(file_name):
     if (os.path.isfile(file_name)):
-        from types import ListType
         port = open(file_name, 'r')
         ls = port.readline()
         port.close()
         ls = ls.rstrip("\n")
         ls = eval(ls)
-        if (type(ls) is ListType):
+        if isinstance(ls, list):
             global annotations
             annotations = ls
             for ann in annotations:

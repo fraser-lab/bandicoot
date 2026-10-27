@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 23.52 21.94">
+  <defs>
+    <linearGradient id="linear-gradient" x1="5.9" y1="18.67" x2="4.95" y2="20.31" gradientTransform="translate(14.3 -3.53) rotate(144.45) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1=".33" y1="12.04" x2="2.23" y2="12.04" gradientTransform="translate(18.98 19.06) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <radialGradient id="radial-gradient" cx="9.04" cy="21.13" fx="9.04" fy="21.13" r="2.89" gradientTransform="translate(14.3 -3.53) rotate(144.45) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="1.28" cy="7.13" fx="1.28" fy="7.13" r="2.89" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-3" cx="1.78" cy="16.74" fx="1.78" fy="16.74" r="2.55" xlink:href="#radial-gradient"/>
+    <linearGradient id="linear-gradient-3" x1="29.18" y1="-22.31" x2="31.14" y2="-22.31" gradientTransform="translate(-28.2 -17.15) rotate(71.68)" xlink:href="#linear-gradient"/>
+    <radialGradient id="radial-gradient-4" cx="30.16" cy="-26.61" fx="30.16" fy="-26.61" r="2.98" gradientTransform="translate(-28.2 -17.15) rotate(71.68)" xlink:href="#radial-gradient"/>
+  </defs>
+  <path d="M22.9,12.46c-.38-.17-.75-.34-1.13-.51-.95,2.09-1.9,4.18-2.85,6.28l1.73.79c.82-1.8,1.64-3.6,2.46-5.41l-.2-1.14Z" fill="url(#linear-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M18.54,6.35c-.96.79-1.55,1.98-1.67,2.86" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <rect x="19.31" y="3.57" width="1.9" height="6.89" transform="translate(40.83 .94) rotate(144.45)" fill="url(#linear-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="19.24" cy="18.92" r="2.89" fill="url(#radial-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="17.4" cy="3.02" r="2.89" fill="url(#radial-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M23.38,8.12c-.2-.02-1.13-.07-1.96.53-1.3.93-1.6,2.73-.67,4.03.61.86,1.67,1.28,2.64,1.2v-5.75Z" fill="url(#radial-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <polygon points="19 12.16 19.47 9.22 16.95 6.43 13.98 6.59 5.54 14.2 10.56 19.77 19 12.16" fill="#f6c26b" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="17.17" cy="8.88" r=".72" fill="#fff" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <g>
+    <line x1="13.98" y1="14.46" x2="10.93" y2="11.08" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+    <line x1="12.75" y1="15.57" x2="9.7" y2="12.19" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+    <line x1="11.52" y1="16.68" x2="8.47" y2="13.3" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+  </g>
+  <path d="M16.94,8.57c.36.05,4.31.6,5.62-1.49.07-.11.74-1.22.27-1.92-.39-.59-1.49-.75-2.66-.25" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M.18,4.19c1.54-.51,3.08-1.02,4.62-1.53.21.62.41,1.24.62,1.86-1.76.58-3.53,1.17-5.29,1.75l.05-2.08Z" fill="url(#linear-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="6.55" cy="3.11" r="2.98" fill="url(#radial-gradient-4)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+</svg>

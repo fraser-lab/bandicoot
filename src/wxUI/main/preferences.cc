@@ -255,7 +255,8 @@ private:
       case 4:
          // Coot's Tips tab is left out: no tips window opens in Bandicoot
          pages = { antialias_page(), fonts_page(), console_page(), pointer_page(), speed_page(),
-                   pick_atom_page(), pandda_page(), ligands_page() };
+                   pick_atom_page(), pandda_page(), ligands_page(), clipping_page(),
+                   centre_label_page(), crosshairs_page() };
          break;
       default: break;
       }
@@ -1227,6 +1228,47 @@ private:
    }
 
    // Every setting this window shows, back to its default.
+   // ---- Others > Clipping
+
+   std::pair<wxPanel *, wxString> clipping_page() {
+      wxBoxSizer *col;
+      wxPanel *page = new_page(notebook, col);
+      heading(page, col, "Clipping Adjustment");
+      wxStaticBoxSizer *box = frame(page, wxEmptyString);
+      // the range the keyboard clipping keys move through
+      StepSlider *slider = new StepSlider(box->GetStaticBox(), -15.0, 15.0, 0.1, 0.0, 1);
+      slider->on_change = [](double v) { bandicoot_core_set_clipping(float(v)); };
+      box->Add(slider, 0, wxEXPAND | wxALL, 6);
+      col->Add(box, 0, wxEXPAND);
+      refreshers.push_back([slider]() { slider->set_value(bandicoot_core_other_preferences().clipping); });
+      return { page, "Clipping" };
+   }
+
+   // ---- Others > Centre Atom Label
+
+   std::pair<wxPanel *, wxString> centre_label_page() {
+      wxBoxSizer *col;
+      wxPanel *page = new_page(notebook, col);
+      YesNo label = yes_no(page, col, "Label Centre Atom on Recentre?",
+                           [](bool on) { bandicoot_core_set_label_on_recentre(on); }, "On", "Off");
+      col->Add(new wxStaticText(page, wxID_ANY,
+                                "While environment distances are shown, their own\n"
+                                "Label Atom setting is used instead."), 0, wxALIGN_CENTER);
+      refreshers.push_back([label]() mutable { label.set(bandicoot_core_other_preferences().label_on_recentre); });
+      return { page, "Centre Atom Label" };
+   }
+
+   // ---- Others > Crosshairs
+
+   std::pair<wxPanel *, wxString> crosshairs_page() {
+      wxBoxSizer *col;
+      wxPanel *page = new_page(notebook, col);
+      YesNo cross = yes_no(page, col, "Display Crosshairs",
+                           [](bool on) { bandicoot_core_set_crosshairs(on); }, "On", "Off");
+      refreshers.push_back([cross]() mutable { cross.set(bandicoot_core_other_preferences().crosshairs); });
+      return { page, "Crosshairs" };
+   }
+
    void reset_defaults() {
       bandicoot_general_preferences d = bandicoot_core_general_preference_defaults();
       bandicoot_core_set_ar_docked(d.ar_docked);
@@ -1283,6 +1325,9 @@ private:
       bandicoot_core_set_pandda_basic(o.pandda_basic);
       bandicoot_core_set_ligand_behaviour(o.auto_rename, o.ask_rename, o.auto_generate, o.ask_generate,
                                           o.apply_restraints_to_all);
+      bandicoot_core_set_clipping(o.clipping);
+      bandicoot_core_set_crosshairs(o.crosshairs);
+      bandicoot_core_set_label_on_recentre(o.label_on_recentre);
       refresh();
    }
 };

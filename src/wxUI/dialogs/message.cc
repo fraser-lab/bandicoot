@@ -7,7 +7,6 @@
 #include <wx/button.h>
 #include <wx/dialog.h>
 #include <wx/frame.h>
-#include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
@@ -15,6 +14,20 @@
 #include <iostream>
 
 namespace wxui {
+
+namespace {
+
+// Without one, a dialog is simply text and buttons.
+wxBitmapBundle warning_sign() {
+#ifdef __APPLE__
+   // wx's own warning art on macOS is the small monochrome symbol
+   return caution_icon(48);
+#else
+   return wxArtProvider::GetBitmapBundle(wxART_WARNING, wxART_MESSAGE_BOX, wxSize(48, 48));
+#endif
+}
+
+} // namespace
 
 void info(wxWindow *parent, const wxString &text) {
 
@@ -45,7 +58,31 @@ void error(wxWindow *parent, const wxString &what_failed, const wxString &subjec
    if (! detail.empty()) std::cout << " -- " << detail;
    std::cout << std::endl;
 
-   wxMessageDialog d(parent, subject, what_failed, wxOK | wxICON_ERROR);
+   // built by hand: the system alert on macOS shows the app icon and drops
+   // the title, which here is what failed
+   wxDialog d(parent, wxID_ANY, "Bandicoot");
+   wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
+   wxBitmapBundle sign = warning_sign();
+   if (sign.IsOk())
+      row->Add(new wxStaticBitmap(&d, wxID_ANY, sign), 0, wxALIGN_TOP | wxRIGHT, 14);
+   wxBoxSizer *text = new wxBoxSizer(wxVERTICAL);
+   wxStaticText *head = new wxStaticText(&d, wxID_ANY, what_failed);
+   head->SetFont(head->GetFont().Bold());
+   head->Wrap(d.FromDIP(420));
+   text->Add(head, 0, wxEXPAND);
+   if (! subject.empty()) {
+      wxStaticText *s = new wxStaticText(&d, wxID_ANY, subject);
+      s->Wrap(d.FromDIP(420));
+      text->Add(s, 0, wxEXPAND | wxTOP, 8);
+   }
+   row->Add(text, 1, wxEXPAND);
+   wxButton *ok = new wxButton(&d, wxID_OK, "OK");
+   ok->SetDefault();
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(row, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 16);
+   col->Add(ok, 0, wxALIGN_RIGHT | wxALL, 12);
+   d.SetSizerAndFit(col);
+   d.CentreOnParent();
    d.ShowModal();
 }
 
@@ -56,13 +93,7 @@ bool confirm(wxWindow *parent, const wxString &question,
    // built by hand so the warning sign sits beside the text
    wxDialog d(parent, wxID_ANY, "Bandicoot");
    wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
-#ifdef __APPLE__
-   // wx's own warning art on macOS is the small monochrome symbol
-   wxBitmapBundle sign = caution_icon(48);
-#else
-   wxBitmapBundle sign = wxArtProvider::GetBitmapBundle(wxART_WARNING, wxART_MESSAGE_BOX, wxSize(48, 48));
-#endif
-   // without one the dialog is simply text and buttons
+   wxBitmapBundle sign = warning_sign();
    if (sign.IsOk())
       row->Add(new wxStaticBitmap(&d, wxID_ANY, sign), 0, wxALIGN_TOP | wxRIGHT, 14);
    wxBoxSizer *text = new wxBoxSizer(wxVERTICAL);

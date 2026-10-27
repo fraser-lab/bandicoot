@@ -59,6 +59,9 @@ connect-to-world.svg  gtk-open.png		   side-chain-180.png             \
 	    kleywegt.svg		   smiles.svg                     \
 	    map.svg			   spin-view.png                  \
 coot-favicon.png      merge-molecules.svg	   spin-view.svg                  \
+rock-view.svg                                                            \
+additional-representation.svg display-active.svg label-atoms.svg          \
+label-neighbors.svg representation-tools.svg                             \
 coot-icon.png	      mutate-auto-fit.svg	   stereo-view.svg                \
 coot-save.png	      mutate.svg		   stop.svg                       \
 coot-save-symm.png    panel-screenshot.png	   temperature.png                \

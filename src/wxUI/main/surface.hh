@@ -10,6 +10,7 @@
 #ifndef BANDICOOT_WX_SURFACE_HH
 #define BANDICOOT_WX_SURFACE_HH
 
+#include <functional>
 #include <string>
 
 // Start wxWidgets. Must run before gtk_init(), so that the application object
@@ -28,6 +29,9 @@ bool   bandicoot_wx_surface_make_current();
 void   bandicoot_wx_surface_swap_buffers();
 void   bandicoot_wx_surface_redraw();       // synchronous, like gtk_widget_draw()
 double bandicoot_wx_surface_backing_scale();
+// Draws a frame without showing it and runs read while that frame is the GL
+// read buffer, for capturing the graphics as they are.
+void   bandicoot_wx_surface_read_back(std::function<void()> read);
 
 // Text for the status bar at the bottom of the main window.
 void bandicoot_wx_set_status_text(const std::string &text);

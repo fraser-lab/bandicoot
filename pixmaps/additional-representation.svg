@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 20.23 22.15">
+  <defs>
+    <linearGradient id="linear-gradient" x1="7.09" y1="7.31" x2="8.96" y2="7.31" gradientTransform="translate(-.58 .36)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="3.73" y1="13.86" x2="4.67" y2="15.49" gradientTransform="translate(20.53 19.49) rotate(120)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-3" x1="12.6" y1="13.87" x2="11.66" y2="15.5" gradientTransform="translate(6.73 31.52) rotate(-120)" xlink:href="#linear-gradient"/>
+    <radialGradient id="radial-gradient" cx="15.7" cy="16.31" fx="15.7" fy="16.31" r="2.86" gradientTransform="translate(-2.24 2.77) rotate(-15.48)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="8.03" cy="2.45" fx="8.03" fy="2.45" r="2.86" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-3" cx=".66" cy="17.19" fx=".66" fy="17.19" r="2.86" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-4" cx="8.03" cy="12.16" fx="8.03" fy="12.16" r="2.86" xlink:href="#radial-gradient"/>
+  </defs>
+  <rect x="6.5" y="4.26" width="1.88" height="6.82" transform="translate(-1.78 2.27) rotate(-15.48)" fill="url(#linear-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <rect x="4.78" y="12.38" width="1.88" height="6.82" transform="translate(-1.26 31.06) rotate(-135.48)" fill="url(#linear-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <rect x="12.43" y="10.26" width="1.88" height="6.82" transform="translate(29.95 4.15) rotate(104.52)" fill="url(#linear-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="17.24" cy="14.29" r="2.86" fill="url(#radial-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="6.14" cy="2.99" r="2.86" fill="url(#radial-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="2.99" cy="19.16" r="2.86" fill="url(#radial-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="8.74" cy="12.34" r="2.86" fill="url(#radial-gradient-4)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+</svg>

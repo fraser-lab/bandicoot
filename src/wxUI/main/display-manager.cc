@@ -15,6 +15,7 @@
 #include <wx/radiobut.h>
 #include <wx/sizer.h>
 #include <wx/splitter.h>
+#include <wx/statbox.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/tglbtn.h>
@@ -53,6 +54,7 @@ struct ModelRow {
    wxTextCtrl *name;
    wxCheckBox *display, *active;
    wxChoice *render_as;
+   std::vector<wxCheckBox *> add_reps;   // its additional representations
 };
 
 class DisplayManager : public wxFrame {
@@ -77,6 +79,7 @@ private:
    void refresh();
    void add_map_row(const bandicoot_dm_molecule &m, int scroll_map);
    void add_model_row(const bandicoot_dm_molecule &m, const std::vector<wxString> &render_as);
+   wxWindow *add_reps_row(const bandicoot_dm_molecule &m, ModelRow &r);
    void close();
 };
 
@@ -200,7 +203,10 @@ void DisplayManager::rebuild() {
 void DisplayManager::refresh() {
    std::vector<bandicoot_dm_molecule> maps = bandicoot_core_dm_maps();
    std::vector<bandicoot_dm_molecule> models = bandicoot_core_dm_models();
-   if (maps.size() != map_rows.size() || models.size() != model_rows.size()) {
+   bool same = maps.size() == map_rows.size() && models.size() == model_rows.size();
+   for (size_t i = 0; same && i < models.size(); i++)
+      same = models[i].add_reps.size() == model_rows[i].add_reps.size();
+   if (! same) {
       rebuild();
       return;
    }
@@ -220,6 +226,10 @@ void DisplayManager::refresh() {
       show_check_state(r.display);
       show_check_state(r.active);
       r.render_as->SetSelection(models[i].render_as >= 0 ? models[i].render_as : wxNOT_FOUND);
+      for (size_t j = 0; j < r.add_reps.size(); j++) {
+         r.add_reps[j]->SetValue(models[i].add_reps[j].second);
+         show_check_state(r.add_reps[j]);
+      }
    }
 }
 
@@ -291,7 +301,44 @@ void DisplayManager::add_model_row(const bandicoot_dm_molecule &m,
    remove->Bind(wxEVT_BUTTON, [imol](wxCommandEvent &) { bandicoot_core_close_molecule(imol); });
 
    model_list->add_row(row);
+   if (! m.add_reps.empty()) model_list->add_row(add_reps_row(m, r));
    model_rows.push_back(r);
+}
+
+// Under a model with additional representations: one switch for them all,
+// and one for each, as the GTK window has them.
+wxWindow *DisplayManager::add_reps_row(const bandicoot_dm_molecule &m, ModelRow &r) {
+   wxPanel *p = new wxPanel(model_list);
+   p->SetBackgroundColour(palette::face());
+   bool any_shown = false;
+   for (const auto &rep : m.add_reps) any_shown = any_shown || rep.second;
+   wxCheckBox *all = new wxCheckBox(p, wxID_ANY, "Show Additional Representations");
+   all->SetValue(any_shown);
+   show_check_state(all);
+   wxStaticBoxSizer *box = new wxStaticBoxSizer(wxVERTICAL, p, "Additional Representations");
+   int imol = m.imol;
+   for (size_t i = 0; i < m.add_reps.size(); i++) {
+      wxCheckBox *c = new wxCheckBox(box->GetStaticBox(), wxID_ANY, wxString::FromUTF8(m.add_reps[i].first));
+      c->SetValue(m.add_reps[i].second);
+      show_check_state(c);
+      int index = int(i);
+      c->Bind(wxEVT_CHECKBOX, [imol, index](wxCommandEvent &e) {
+         show_check_state(static_cast<wxCheckBox *>(e.GetEventObject()));
+         bandicoot_core_set_additional_representation_shown(imol, index, e.IsChecked());
+      });
+      box->Add(c, 0, wxALL, 2);
+      r.add_reps.push_back(c);
+   }
+   all->Bind(wxEVT_CHECKBOX, [this, imol](wxCommandEvent &e) {
+      show_check_state(static_cast<wxCheckBox *>(e.GetEventObject()));
+      bandicoot_core_set_all_additional_representations_shown(imol, e.IsChecked());
+      state_changed();
+   });
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(all, 0, wxLEFT | wxTOP, 8);
+   col->Add(box, 0, wxEXPAND | wxALL, 6);
+   p->SetSizer(col);
+   return p;
 }
 
 void DisplayManager::close() {

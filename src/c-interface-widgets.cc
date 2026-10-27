@@ -55,6 +55,8 @@ bool bandicoot_wx_delete_open();
 bool bandicoot_wx_delete_keep_active();
 void bandicoot_wx_delete_close();
 bool bandicoot_wx_delete_present();
+// And its text window; false if there is no window to show it in.
+bool bandicoot_wx_text_window(const std::string &title, const std::string &text);
 #endif
 
 short int delete_item_widget_is_being_shown() {
@@ -869,6 +871,10 @@ void on_simple_text_dialog_close_button_pressed( GtkWidget *button,
 void simple_text_dialog(const std::string &dialog_title, const std::string &text,
 			int geom_x, int geom_y) {
 
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag) bandicoot_wx_text_window(dialog_title, text);
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
 
       GtkWidget *d = gtk_dialog_new();
