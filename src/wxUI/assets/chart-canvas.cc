@@ -296,13 +296,23 @@ void ChartCanvas::on_paint(wxPaintEvent &) {
    wxPoint view = CalcUnscrolledPosition(wxPoint(0, 0));
    gc->Translate(offset.m_x - view.x, offset.m_y - view.y);
    gc->Scale(scale, scale);
+   draw_items(gc.get());
+}
+
+void ChartCanvas::render(wxGraphicsContext *gc, double points_per_unit) {
+   gc->Scale(points_per_unit, points_per_unit);
+   gc->Translate(-world_x0, -world_y0);
+   draw_items(gc);
+}
+
+void ChartCanvas::draw_items(wxGraphicsContext *gc) {
 
    for (Item &i : items) {
       switch (i.kind) {
       case Kind::Rect:
       case Kind::Ellipse: {
-         gc->SetPen(make_pen(gc.get(), i.style));
-         gc->SetBrush(make_brush(gc.get(), i.style));
+         gc->SetPen(make_pen(gc, i.style));
+         gc->SetBrush(make_brush(gc, i.style));
          if (i.kind == Kind::Rect)
             gc->DrawRectangle(i.points[0].m_x, i.points[0].m_y, i.points[1].m_x, i.points[1].m_y);
          else
@@ -317,11 +327,11 @@ void ChartCanvas::on_paint(wxPaintEvent &) {
             path.AddLineToPoint(i.points[k]);
          if (i.closed) path.CloseSubpath();
          if (i.closed && i.style.fill.IsOk()) {
-            gc->SetBrush(make_brush(gc.get(), i.style));
+            gc->SetBrush(make_brush(gc, i.style));
             gc->FillPath(path);
          }
          if (i.style.stroke.IsOk()) {
-            gc->SetPen(make_pen(gc.get(), i.style));
+            gc->SetPen(make_pen(gc, i.style));
             gc->StrokePath(path);
          }
          break;

@@ -101,6 +101,13 @@
 
 #include "geometry/dict-utils.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Ramachandran plot (wxUI/bridge/core-bridge.cc), told
+// wherever Coot's Dynarama was updated.
+void bandicoot_wx_rama_changed(int imol);
+void bandicoot_wx_rama_highlight(int imol, const coot::residue_spec_t &spec);
+#endif
+
 // (Bandicoot dot machinery is funnelled through
 // graphics_info_t::do_probe_dots_on_rotamers_and_chis() in
 // graphics-info-modelling.cc. The post-refine accept path here calls
@@ -868,6 +875,10 @@ graphics_info_t::update_ramachandran_plot_point_maybe(int imol, mmdb::Atom *atom
 
 void
 graphics_info_t::update_ramachandran_plot_point_maybe(int imol, const coot::residue_spec_t &res_spec) {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_rama_highlight(imol, res_spec);
+#endif
 
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
    GtkWidget *w = coot::get_validation_graph(imol, coot::RAMACHANDRAN_PLOT);
@@ -1710,6 +1721,10 @@ graphics_info_t::accept_moving_atoms() {
       setup_for_probe_dots_on_chis_molprobity(imol_moving_atoms);
    }
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_rama_changed(imol_moving_atoms);
+   update_ramachandran_plot_point_maybe(imol_moving_atoms, *moving_atoms_asc);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
    GtkWidget *w = coot::get_validation_graph(imol_moving_atoms, coot::RAMACHANDRAN_PLOT);
    if (w) {
@@ -4738,6 +4753,9 @@ graphics_info_t::apply_undo() {
 		  update_go_to_atom_window_on_changed_mol(umol);
 
 		  // update the ramachandran, if there was one
+#ifdef BANDICOOT_UI_WX
+		  bandicoot_wx_rama_changed(umol);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
 		  GtkWidget *w = coot::get_validation_graph(umol, coot::RAMACHANDRAN_PLOT);
 		  if (w) {
@@ -4806,6 +4824,9 @@ graphics_info_t::apply_redo() {
 	    // (maybe)
 	    update_go_to_atom_window_on_changed_mol(umol);
 
+#ifdef BANDICOOT_UI_WX
+            bandicoot_wx_rama_changed(umol);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
             GtkWidget *w = coot::get_validation_graph(umol, coot::RAMACHANDRAN_PLOT);
             if (w) {

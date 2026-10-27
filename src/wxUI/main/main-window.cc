@@ -32,6 +32,10 @@
 #include "wxUI/main/calculate-menu.hh"
 #include "wxUI/main/modelling-menu.hh"
 #include "wxUI/main/draw-menu.hh"
+#include "wxUI/main/measures-menu.hh"
+#include "wxUI/main/validate-menu.hh"
+#include "wxUI/main/validation-graphs.hh"
+#include "wxUI/main/rama-plot.hh"
 #include "wxUI/dialogs/text-dialog.hh"
 #include "wxUI/main/ligand-menu.hh"
 #include "wxUI/main/other-tools.hh"
@@ -461,7 +465,7 @@ public:
          report_unconnected(path, action);
       };
       hooks.has_molecule_list = [](const std::string &list) {
-         return list == "sequence_view1" || list == "map_colour1";
+         return list == "sequence_view1" || list == "map_colour1" || wxui::is_validate_molecule_list(list);
       };
       hooks.molecules = [](const std::string &list) {
          return list == "map_colour1" ? bandicoot_core_maps_for_fitting()
@@ -470,6 +474,8 @@ public:
       hooks.on_molecule = [this](const std::string &list, int imol) {
          if (list == "sequence_view1") CallAfter([this, imol]() { open_sequence_view(imol); });
          if (list == "map_colour1") CallAfter([this, imol]() { wxui::show_map_colour(this, imol); });
+         if (wxui::is_validate_molecule_list(list))
+            CallAfter([this, list, imol]() { wxui::run_validate_molecule(this, list, imol); });
       };
       hooks.is_checked = [](const std::string &action) {
          if (action == "on_background_black1_activate") return bandicoot_core_background_is_black() ? 1 : 0;
@@ -557,6 +563,8 @@ public:
       wxui::install_delete_waters(this);
       wxui::install_file_actions(this);
       wxui::install_edit_menu(this);
+      wxui::install_validation_graphs(this);
+      wxui::install_rama_plot(this);
       wxui::install_pandda_inspect(this);
       wxui::install_modelling_menu(this);
 
@@ -750,6 +758,14 @@ private:
       }
       if (bandicoot_core_is_draw_direct(action)) {
          CallAfter([action]() { bandicoot_core_draw_direct(action); });
+         return true;
+      }
+      if (wxui::is_validate_action(action)) {
+         CallAfter([this, action]() { wxui::run_validate_action(this, action); });
+         return true;
+      }
+      if (wxui::is_measures_action(action)) {
+         CallAfter([this, action]() { wxui::run_measures_action(this, action); });
          return true;
       }
       if (bandicoot_core_is_representation_direct(action)) {
@@ -1032,6 +1048,8 @@ private:
          if (sidebar) sidebar->release(widget);
       };
       v.release_tools_toggle = [](const std::string &widget) { wxui::release_tools_toggle(widget); };
+      v.release_geometry_toggle = [](const std::string &kind) { wxui::release_geometry_toggle(kind); };
+      v.step_list = [](int step) { return wxui::step_validate_list(step); };
       v.multi_torsion = [this](const std::vector<std::string> &bonds) { wxui::show_multi_torsion(this, bonds); };
       v.timeout_add = [](int interval_ms, std::function<bool()> callback) {
          CallbackTimer *t = new CallbackTimer(std::move(callback));
@@ -1039,6 +1057,7 @@ private:
       };
       v.radio_choice = [this](const bandicoot_radio_choice &c) { wxui::show_radio_choice(this, c); };
       v.button_choice = [this](const bandicoot_button_choice &c) { wxui::show_button_choice(this, c); };
+      v.generic_objects = [this]() { wxui::run_draw_action(this, "on_generic_display_objects1_activate"); };
       v.question = [this](const std::string &q) { return wxui::confirm(this, wxString::FromUTF8(q), "Yes", "No"); };
       v.choose_molecules = [this](const std::string &title, const std::string &header,
                                   const std::vector<std::pair<int, std::string>> &molecules) {

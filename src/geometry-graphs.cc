@@ -76,6 +76,20 @@
 #include "cc-interface.hh"
 #include "graphics-info.h"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build draws these graphs in a wx chart (wxUI/bridge/core-bridge.cc):
+// the graph object keeps its bookkeeping and hands each drawing step there.
+void bandicoot_wx_graph_open(const void *graph, int imol, int type, const std::string &title,
+                             const std::string &label, int n_chains, int max_chain_length);
+void bandicoot_wx_graph_axis(const void *graph, int chain, int nres);
+void bandicoot_wx_graph_ticks(const void *graph, int chain, int min_resno, int max_resno);
+void bandicoot_wx_graph_label(const void *graph, int chain, const std::string &text);
+void bandicoot_wx_graph_block(const void *graph, int chain, int slot, double distortion,
+                              const std::string &colour, int imol, const coot::atom_spec_t &spec,
+                              const std::string &info);
+void bandicoot_wx_graph_remove(const void *graph, int chain, int slot);
+#endif
+
 #ifdef HAVE_GSL
 #if defined(HAVE_GNOME_CANVAS) || defined(HAVE_GTK_CANVAS)
 
@@ -149,7 +163,11 @@ coot::geometry_graphs::geometry_graphs(coot::geometry_graph_type graph_type_in,
    n_chains = nchains_in;
    max_chain_length = max_chain_length_in;
    setup_internal();
+#ifdef BANDICOOT_UI_WX
+   canvas = NULL;
+#else
    setup_canvas(nchains_in, max_chain_length_in);
+#endif
    // std::cout << "DEBUG:: in geometry_graphs constuctor resizing geometry_graphs block to "
    // << nchains_in << std::endl;
    blocks.resize(nchains_in);
@@ -198,6 +216,10 @@ coot::geometry_graphs::geometry_graphs(coot::geometry_graph_type graph_type_in,
    if (graph_type == coot::GEOMETRY_GRAPH_OMEGA_DISTORTION)
       distortion_max = 90.0; // degrees
       
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_graph_open(this, imol, graph_type, title, graph_label, n_chains, max_chain_length);
+   return;
+#endif
    gtk_window_set_title(GTK_WINDOW(dialog()), title.c_str());
 
    // And now the graph label for EJD:
@@ -820,6 +842,9 @@ coot::geometry_graphs::update_omega_blocks(const coot::omega_distortion_info_con
 		  gtk_object_destroy(GTK_OBJECT(blocks[chain_index][offsetted_residue_number])); 
 		  blocks[chain_index][offsetted_residue_number] = NULL;
 	       }
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_wx_graph_remove(this, chain_index, offsetted_residue_number);
+#endif
 	    }
 	 }
       }
@@ -904,6 +929,9 @@ coot::geometry_graphs::delete_block(int chain_number, int raw_resno) {
 			 << offsetted_residue_number << std::endl;
 	    if (offsetted_residue_number >= 1) {
 	       if (offsetted_residue_number < int(blocks[chain_number].size())) { 
+#ifdef BANDICOOT_UI_WX
+		  bandicoot_wx_graph_remove(this, chain_number, offsetted_residue_number);
+#endif
 		  if (blocks[chain_number][offsetted_residue_number]) { 
 		     gtk_object_destroy(GTK_OBJECT(blocks[chain_number][offsetted_residue_number])); 
 		     blocks[chain_number][offsetted_residue_number] = NULL;
@@ -1076,6 +1104,12 @@ coot::geometry_graphs::plot_block(const coot::geometry_graph_block_info &block_i
        && graphics_info_t::mark_cis_peptides_as_bad_flag)
       colour = "slate blue";
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_graph_block(this, chain_number, resno - offset, distortion, colour, block_info.imol,
+                            block_info.atom_spec, block_info.distortion_info_string);
+   return;
+#endif
+
    // std::cout << " distortion: " << distortion << std::endl;
    // std::cout << " block: " << x1 << " " << x2 << " " << y1 << " " << y2 << std::endl;
 
@@ -1114,6 +1148,11 @@ coot::geometry_graphs::plot_block(const coot::geometry_graph_block_info &block_i
 
 void
 coot::geometry_graphs::draw_chain_axis(int nres, int ichain) const {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_graph_axis(this, ichain, nres);
+   return;
+#endif
 
    double chain_scale = 80.0;
    double scale = 10.0;
@@ -1164,6 +1203,11 @@ void
 coot::geometry_graphs::draw_chain_axis_tick_and_tick_labels(int min_resno,
 							    int max_resno,
 							    int chain_number) const {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_graph_ticks(this, chain_number, min_resno, max_resno);
+   return;
+#endif
 
    GtkCanvasItem *item;
    GtkCanvasPoints *points;
@@ -1220,6 +1264,10 @@ coot::geometry_graphs::label_chain(const std::string &label, int ichain) const {
    double y = 10 + ichain*chain_scale;
    std::string text = "Chain ";
    text += label;
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_graph_label(this, ichain, text);
+   return;
+#endif
    GtkCanvasItem *item;
 
    item = gtk_canvas_item_new(gtk_canvas_root(canvas),
@@ -1287,6 +1335,10 @@ coot::geometry_graphs::distortion_to_colour(const double &distortion) const {
 
 GtkWidget *
 coot::geometry_graphs::dialog() const {
+#ifdef BANDICOOT_UI_WX
+   // the handle the core stores for later updates: this object itself
+   return reinterpret_cast<GtkWidget *>(const_cast<coot::geometry_graphs *>(this));
+#endif
    return lookup_widget(GTK_WIDGET(canvas), "geometry_graphs_dialog");
 }
 

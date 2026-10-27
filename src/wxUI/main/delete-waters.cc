@@ -256,6 +256,76 @@ void show_blobs(const std::vector<std::vector<float>> &blobs) {
    d->Show();
 }
 
+// Validate > Unmodelled blobs: Find Waters' search without the waters, the
+// blobs too big to be waters listed as Find Waters lists them.
+wxFrame *unmodelled_blobs = nullptr;
+
+void open_unmodelled_blobs() {
+   if (unmodelled_blobs) {
+      unmodelled_blobs->Raise();
+      return;
+   }
+   wxPanel *p;
+   wxFrame *w = grey_frame("Find Unmodelled Blobs of density", p);
+   unmodelled_blobs = w;
+
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   TitledPanel *maps_frame = new TitledPanel(p);
+   auto maps = radio_list(maps_frame, "Select Map:", bandicoot_core_find_waters_maps());
+   col->Add(maps_frame, 0, wxEXPAND | wxALL, 6);
+   TitledPanel *models_frame = new TitledPanel(p);
+   auto models = radio_list(models_frame, "Select Protein Model:", bandicoot_core_find_waters_models());
+   col->Add(models_frame, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+
+   TitledPanel *level = new TitledPanel(p);
+   level->content_sizer()->Add(new wxStaticText(level->content(), wxID_ANY, "Find Blobs above:"), 0,
+                               wxALIGN_CENTER | wxBOTTOM, 4);
+   wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
+   wxTextCtrl *rmsd = new wxTextCtrl(level->content(), wxID_ANY,
+                                     wxString::Format("%.1f", bandicoot_core_find_waters_values().rmsd),
+                                     wxDefaultPosition, wxSize(140, -1));
+   row->Add(rmsd, 0, wxRIGHT, 8);
+   row->Add(new wxStaticText(level->content(), wxID_ANY, "r.m.s.d."), 0, wxALIGN_CENTER_VERTICAL);
+   level->content_sizer()->Add(row);
+   col->Add(level, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+
+   wxBoxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
+   BevelButton *go = icon_button(p, "Find Blobs", "stock-button-ok.png");
+   BevelButton *cancel = icon_button(p, "Cancel", "stock-button-cancel.png");
+   go->Bind(wxEVT_BUTTON, [w, maps, models, rmsd](wxCommandEvent &) {
+      int imol_map = chosen(maps), imol_model = chosen(models);
+      if (imol_map < 0 || imol_model < 0) {
+         error(w, "Cannot search for blobs", imol_map < 0 ? "No map is loaded." : "No model is loaded.");
+         return;
+      }
+      // the range Coot's dialog accepted
+      double r;
+      if (! rmsd->GetValue().ToCDouble(&r) || r <= 0.0 || r >= 1000.0) { wxBell(); rmsd->SetFocus(); return; }
+      w->Close();
+      std::vector<bandicoot_xyz> found = bandicoot_core_find_blobs(imol_model, imol_map, float(r));
+      if (found.empty()) {
+         info(owner, "Coot found no unexplained blobs");
+         return;
+      }
+      std::vector<std::vector<float>> blobs;
+      for (const bandicoot_xyz &b : found) blobs.push_back({ b.x, b.y, b.z });
+      show_blobs(blobs);
+   });
+   cancel->Bind(wxEVT_BUTTON, [w](wxCommandEvent &) { w->Close(); });
+   w->Bind(wxEVT_CLOSE_WINDOW, [w](wxCloseEvent &) {
+      unmodelled_blobs = nullptr;
+      w->Destroy();
+   });
+   buttons->Add(go, 0, wxRIGHT, 12);
+   buttons->Add(cancel);
+   col->Add(buttons, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+   p->SetSizer(col);
+   col->SetSizeHints(w);
+   w->CentreOnParent();
+   w->Show();
+}
+
 } // namespace
 
 void install_delete_waters(wxWindow *parent) {
@@ -272,6 +342,11 @@ void install_delete_waters(wxWindow *parent) {
 void show_find_waters(wxWindow *parent) {
    owner = parent;
    open_find_waters();
+}
+
+void show_unmodelled_blobs(wxWindow *parent) {
+   owner = parent;
+   open_unmodelled_blobs();
 }
 
 } // namespace wxui

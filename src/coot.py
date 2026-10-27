@@ -4323,6 +4323,12 @@ def bandicoot_radio_choice_py(title, choices, selected, accept_label, accept_com
 def bandicoot_button_choice_py(title, buttons, close_label, close_command):
     return _coot.bandicoot_button_choice_py(title, buttons, close_label, close_command)
 
+def bandicoot_button_choice_filtered_py(title, buttons, check_label, checked_buttons, close_label, close_command):
+    return _coot.bandicoot_button_choice_filtered_py(title, buttons, check_label, checked_buttons, close_label, close_command)
+
+def bandicoot_generic_objects_window_py():
+    return _coot.bandicoot_generic_objects_window_py()
+
 def bandicoot_rotation_centre_py():
     return _coot.bandicoot_rotation_centre_py()
 

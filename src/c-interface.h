@@ -6729,6 +6729,17 @@ int bandicoot_radio_choice_py(const char *title, PyObject *choices, int selected
     window to show it in. */
 int bandicoot_button_choice_py(const char *title, PyObject *buttons,
                                const char *close_label, const char *close_command);
+/*! \brief Bandicoot: as bandicoot_button_choice_py, with a check button
+    (check_label) above the list that, while ticked, shows checked_buttons in
+    its place. Returns 1 if the window was shown, 0 if there is no native
+    window to show it in. */
+int bandicoot_button_choice_filtered_py(const char *title, PyObject *buttons,
+                                        const char *check_label, PyObject *checked_buttons,
+                                        const char *close_label, const char *close_command);
+/*! \brief Bandicoot: the Generic Display Objects window, for the scripts
+    whose own (pygtk) one cannot appear. Returns 1 if it was shown, 0 if there
+    is no native window to show it in. */
+int bandicoot_generic_objects_window_py();
 /*! \brief Bandicoot v0.2.0.1: the rotation centre as [x, y, z], without
     adding the read to the command history or echoing it to the console.
     For callers that sample the view repeatedly. */

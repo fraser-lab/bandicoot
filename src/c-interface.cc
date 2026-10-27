@@ -161,6 +161,12 @@ bool bandicoot_wx_radio_choice(const std::string &title,
 bool bandicoot_wx_button_choice(const std::string &title,
                                 const std::vector<std::pair<std::string, std::string>> &buttons,
                                 const std::string &close_label, const std::string &close_command);
+bool bandicoot_wx_button_choice_filtered(const std::string &title,
+                                         const std::vector<std::pair<std::string, std::string>> &buttons,
+                                         const std::string &check_label,
+                                         const std::vector<std::pair<std::string, std::string>> &checked_buttons,
+                                         const std::string &close_label, const std::string &close_command);
+bool bandicoot_wx_generic_objects();
 #endif
 
 
@@ -8852,21 +8858,51 @@ int bandicoot_radio_choice_py(const char *title, PyObject *choices, int selected
 #endif
 }
 
+#ifdef BANDICOOT_UI_WX
+// A Python list of [label, command]; false if it is not one.
+static bool button_list_from_py(PyObject *buttons, std::vector<std::pair<std::string, std::string>> &v) {
+   if (! buttons || ! PyList_Check(buttons)) return false;
+   for (Py_ssize_t i=0; i<PyList_Size(buttons); i++) {
+      PyObject *item = PyList_GetItem(buttons, i);
+      if (! PyList_Check(item) || PyList_Size(item) < 2) return false;
+      PyObject *label = PyList_GetItem(item, 0);
+      PyObject *command = PyList_GetItem(item, 1);
+      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return false;
+      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
+   }
+   return true;
+}
+#endif
+
 int bandicoot_button_choice_py(const char *title, PyObject *buttons,
                                const char *close_label, const char *close_command) {
 #ifdef BANDICOOT_UI_WX
-   if (! buttons || ! PyList_Check(buttons)) return 0;
    std::vector<std::pair<std::string, std::string>> v;
-   for (Py_ssize_t i=0; i<PyList_Size(buttons); i++) {
-      PyObject *item = PyList_GetItem(buttons, i);
-      if (! PyList_Check(item) || PyList_Size(item) < 2) return 0;
-      PyObject *label = PyList_GetItem(item, 0);
-      PyObject *command = PyList_GetItem(item, 1);
-      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return 0;
-      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
-   }
+   if (! button_list_from_py(buttons, v)) return 0;
    return bandicoot_wx_button_choice(title ? title : "", v, close_label ? close_label : "",
                                      close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+int bandicoot_button_choice_filtered_py(const char *title, PyObject *buttons,
+                                        const char *check_label, PyObject *checked_buttons,
+                                        const char *close_label, const char *close_command) {
+#ifdef BANDICOOT_UI_WX
+   std::vector<std::pair<std::string, std::string>> all, checked;
+   if (! button_list_from_py(buttons, all) || ! button_list_from_py(checked_buttons, checked)) return 0;
+   return bandicoot_wx_button_choice_filtered(title ? title : "", all, check_label ? check_label : "", checked,
+                                              close_label ? close_label : "",
+                                              close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+int bandicoot_generic_objects_window_py() {
+#ifdef BANDICOOT_UI_WX
+   return bandicoot_wx_generic_objects() ? 1 : 0;
 #else
    return 0;
 #endif

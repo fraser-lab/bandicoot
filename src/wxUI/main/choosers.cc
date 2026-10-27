@@ -370,18 +370,34 @@ void show_button_choice(wxWindow *parent, const bandicoot_button_choice &c) {
    list->SetBackgroundColour(palette::face());
    list->SetScrollRate(0, 10);
    wxBoxSizer *rows = new wxBoxSizer(wxVERTICAL);
-   for (const auto &b : c.buttons) {
-      BevelButton *button = new BevelButton(list, wxID_ANY, wxString::FromUTF8(b.first));
-      std::string command = b.second;
-      button->Bind(wxEVT_BUTTON, [command](wxCommandEvent &) { bandicoot_core_run_python(command); });
-      rows->Add(button, 0, wxEXPAND | wxBOTTOM, 4);
-   }
    list->SetSizer(rows);
+   auto fill = [list, rows](const std::vector<std::pair<std::string, std::string>> &buttons) {
+      list->DestroyChildren();
+      rows->Clear();
+      for (const auto &b : buttons) {
+         BevelButton *button = new BevelButton(list, wxID_ANY, wxString::FromUTF8(b.first));
+         std::string command = b.second;
+         button->Bind(wxEVT_BUTTON, [command](wxCommandEvent &) { bandicoot_core_run_python(command); });
+         rows->Add(button, 0, wxEXPAND | wxBOTTOM, 4);
+      }
+      list->FitInside();
+      list->Layout();
+   };
+   fill(c.buttons);
    wxSize all = rows->CalcMin();
-   list->SetMinSize(wxSize(std::max(all.x + 20, 300), std::min(all.y + 4, 420)));
+   list->SetMinSize(wxSize(std::max(all.x + 20, 300), std::clamp(all.y + 4, 120, 420)));
 
-   wxButton *close = new wxButton(d, wxID_CANCEL, wxString::FromUTF8(c.close_label.empty() ? "Close" : c.close_label));
    wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   if (! c.check_label.empty()) {
+      // e.g. the Flips list's "Clashes, Problems and Flips only"
+      wxCheckBox *check = new wxCheckBox(d, wxID_ANY, wxString::FromUTF8(c.check_label));
+      auto all_buttons = c.buttons, checked_buttons = c.checked_buttons;
+      check->Bind(wxEVT_CHECKBOX, [fill, all_buttons, checked_buttons](wxCommandEvent &e) {
+         fill(e.IsChecked() ? checked_buttons : all_buttons);
+      });
+      col->Add(check, 0, wxBOTTOM, 8);
+   }
+   wxButton *close = new wxButton(d, wxID_CANCEL, wxString::FromUTF8(c.close_label.empty() ? "Close" : c.close_label));
    col->Add(list, 1, wxEXPAND | wxBOTTOM, 10);
    col->Add(close, 0, wxALIGN_RIGHT);
    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);

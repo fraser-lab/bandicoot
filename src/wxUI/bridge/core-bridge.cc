@@ -21,6 +21,7 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <tuple>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -49,6 +50,8 @@
 #include "c-interface-generic-objects.h"
 #include "coot-utils/coot-package-paths.hh"
 #include "ligand/richardson-rotamer.hh"
+#include "ligand/ligand.hh"
+#include "coot-utils/peak-search.hh"
 #include "coot-utils/coot-coord-utils.hh"
 #include "utils/coot-utils.hh"
 
@@ -1911,6 +1914,30 @@ bool bandicoot_wx_radio_choice(const std::string &title,
    return true;
 }
 
+bool bandicoot_wx_button_choice_filtered(const std::string &title,
+                                         const std::vector<std::pair<std::string, std::string>> &buttons,
+                                         const std::string &check_label,
+                                         const std::vector<std::pair<std::string, std::string>> &checked_buttons,
+                                         const std::string &close_label, const std::string &close_command) {
+   // an empty list is still shown, as Coot's window was
+   if (! ui_view.button_choice) return false;
+   bandicoot_button_choice c;
+   c.title = title;
+   c.buttons = buttons;
+   c.check_label = check_label;
+   c.checked_buttons = checked_buttons;
+   c.close_label = close_label;
+   c.close_command = close_command;
+   ui_view.button_choice(c);
+   return true;
+}
+
+bool bandicoot_wx_generic_objects() {
+   if (! ui_view.generic_objects) return false;
+   ui_view.generic_objects();
+   return true;
+}
+
 bool bandicoot_wx_button_choice(const std::string &title,
                                 const std::vector<std::pair<std::string, std::string>> &buttons,
                                 const std::string &close_label, const std::string &close_command) {
@@ -2637,6 +2664,19 @@ static bool program_found(const std::string &name, const char *env_dir) {
    std::cout << "INFO:: " << name << " not found" << (env_dir ? std::string(" in $") + env_dir + " or" : "")
              << " on PATH " << (getenv("PATH") ? getenv("PATH") : "") << std::endl;
    return false;
+}
+
+// find_exe's places, as Coot's probe script looks: PATH, $CBIN, $CCP4_BIN
+bool bandicoot_core_probe_clashes(int imol, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "no such model"; return false; }
+   for (const char *program : { "reduce", "probe" }) {
+      if (! program_found(program, "CBIN") && ! program_found(program, "CCP4_BIN")) {
+         why_not = std::string(program) + " was not found";
+         return false;
+      }
+   }
+   safe_python_command("probe(" + std::to_string(imol) + ")");
+   return true;
 }
 
 bool bandicoot_core_povray_image(const std::string &path, std::string &image_path, bool &renderer_found) {
@@ -3391,6 +3431,623 @@ bool bandicoot_wx_glycan_refresh() {
    return true;
 }
 
+// ---- Measures menu
+
+void bandicoot_core_geometry_pick(const std::string &kind, bool on) {
+   if (kind == "dynamic_distance") {
+      setup_dynamic_distances(on ? 1 : 0);
+      if (! on) normal_cursor();
+      return;
+   }
+   if (on) {
+      if (kind == "distance") do_distance_define();
+      else if (kind == "angle") do_angle_define();
+      else if (kind == "torsion") do_torsion_define();
+      return;
+   }
+   if (kind == "distance") graphics_info_t::in_distance_define = 0;
+   else if (kind == "angle") graphics_info_t::in_angle_define = 0;
+   else if (kind == "torsion") graphics_info_t::in_torsion_define = 0;
+   else return;
+   graphics_info_t::pick_pending_flag = 0;
+   normal_cursor();
+}
+
+void bandicoot_core_clear_last_distance() { clear_last_simple_distance(); }
+void bandicoot_core_clear_all_distances() { clear_simple_distances(); }
+void bandicoot_core_clear_atom_labels() { remove_all_atom_labels(); }
+
+void bandicoot_wx_release_geometry_toggle(const std::string &kind) {
+   if (ui_view.release_geometry_toggle) ui_view.release_geometry_toggle(kind);
+}
+
+bandicoot_environment bandicoot_core_environment() {
+   bandicoot_environment e;
+   e.shown = graphics_info_t::environment_show_distances;
+   e.h_bonds = graphics_info_t::environment_distances_show_h_bonds;
+   e.bumps = graphics_info_t::environment_distances_show_bumps;
+   e.label_atom = graphics_info_t::environment_distance_label_atom != 0;
+   e.min_distance = graphics_info_t::environment_min_distance;
+   e.max_distance = graphics_info_t::environment_max_distance;
+   return e;
+}
+
+void bandicoot_core_set_environment_shown(bool shown) { set_show_environment_distances(shown ? 1 : 0); }
+void bandicoot_core_set_environment_h_bonds(bool shown) { set_show_environment_distances_h_bonds(shown ? 1 : 0); }
+void bandicoot_core_set_environment_bumps(bool shown) { set_show_environment_distances_bumps(shown ? 1 : 0); }
+void bandicoot_core_set_environment_label_atom(bool label) { set_environment_distances_label_atom(label ? 1 : 0); }
+
+// execute_environment_settings' range, without its fallback values
+bool bandicoot_core_set_environment_limits(float min_distance, float max_distance) {
+   if (min_distance < 0 || min_distance > 1000 || max_distance < 0 || max_distance > 1000) return false;
+   if (max_distance < min_distance) std::swap(min_distance, max_distance);
+   graphics_info_t::environment_min_distance = min_distance;
+   graphics_info_t::environment_max_distance = max_distance;
+   if (graphics_info_t::environment_show_distances) set_show_environment_distances(1);
+   return true;
+}
+
+bandicoot_pointer_distances bandicoot_core_pointer_distances() {
+   bandicoot_pointer_distances p;
+   p.shown = graphics_info_t::show_pointer_distances_flag != 0;
+   p.min_distance = graphics_info_t::pointer_min_dist;
+   p.max_distance = graphics_info_t::pointer_max_dist;
+   return p;
+}
+
+void bandicoot_core_set_pointer_distances_shown(bool shown) { set_show_pointer_distances(shown ? 1 : 0); }
+
+// execute_pointer_distances_settings' range, without its fallback to 0
+bool bandicoot_core_set_pointer_distance_limits(float min_distance, float max_distance) {
+   if (min_distance < 0 || min_distance >= 999.9f || max_distance < 0 || max_distance >= 999.9f) return false;
+   graphics_info_t::pointer_min_dist = min_distance;
+   graphics_info_t::pointer_max_dist = max_distance;
+   if (graphics_info_t::show_pointer_distances_flag) {
+      graphics_info_t g;
+      g.make_pointer_distance_objects();
+      graphics_draw();
+   }
+   return true;
+}
+
+void bandicoot_core_plane_begin() {
+   pick_cursor_maybe();
+   bandicoot_core_plane_mode(false);
+}
+
+void bandicoot_core_plane_mode(bool deviation) {
+   setup_lsq_deviation(deviation ? 1 : 0);
+   setup_lsq_plane_define(deviation ? 0 : 1);
+}
+
+void bandicoot_core_plane_remove_last_atom() { remove_last_lsq_plane_atom(); }
+
+void bandicoot_core_plane_end() {
+   unset_lsq_plane_dialog();
+   normal_cursor();
+}
+
+// ---- Validate menu
+
+static std::vector<std::pair<int, std::string>> full_name_list(bool maps);
+
+// An atom row, labelled as Coot's lists label them: " A 38 CA " and so on.
+static bandicoot_result_row atom_row(int imol, const coot::atom_spec_t &spec, const std::string &extra = "") {
+   bandicoot_result_row r;
+   r.imol = imol;
+   r.chain = spec.chain_id;
+   r.resno = spec.res_no;
+   r.atom = spec.atom_name;
+   r.ins_code = spec.ins_code;
+   r.alt_conf = spec.alt_conf;
+   r.label = spec.chain_id + " " + std::to_string(spec.res_no) + " " + spec.atom_name;
+   if (! spec.alt_conf.empty()) r.label += " " + spec.alt_conf;
+   r.label += extra;
+   return r;
+}
+
+bandicoot_bad_chirals bandicoot_core_bad_chirals(int imol) {
+   bandicoot_bad_chirals b;
+   if (! is_valid_model_molecule(imol)) return b;
+   std::pair<std::vector<std::string>, std::vector<coot::atom_spec_t>> v =
+      graphics_info_t::molecules[imol].bad_chiral_volumes();
+   b.unknown_types = v.first;
+   std::cout << "There were " << v.second.size() << " bad chiral volumes" << std::endl;
+   for (const coot::atom_spec_t &spec : v.second) b.atoms.push_back(atom_row(imol, spec));
+   return b;
+}
+
+// execute_find_blobs, handing back the blobs instead of showing them
+std::vector<bandicoot_xyz> bandicoot_core_find_blobs(int imol_model, int imol_map, float rmsd) {
+   std::vector<bandicoot_xyz> blobs;
+   if (! is_valid_model_molecule(imol_model) || ! is_valid_map_molecule(imol_map)) return blobs;
+   graphics_info_t g;
+   coot::ligand lig;
+   lig.import_map_from(g.molecules[imol_map].xmap, g.molecules[imol_map].map_sigma());
+   lig.set_map_atom_mask_radius(1.9);
+   lig.mask_map(g.molecules[imol_model].atom_sel.mol, g.find_ligand_mask_waters_flag);
+   std::cout << "using sigma cut off " << rmsd << std::endl;
+   lig.water_fit(rmsd, 1);
+   for (const auto &blob : lig.big_blobs()) {
+      bandicoot_xyz p;
+      p.x = blob.first.x(); p.y = blob.first.y(); p.z = blob.first.z();
+      blobs.push_back(p);
+   }
+   if (blobs.empty()) std::cout << "Coot found no blobs" << std::endl;
+   return blobs;
+}
+
+std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps_full_names() {
+   std::vector<std::pair<int, std::string>> v;
+   for (const auto &m : full_name_list(true))
+      if (graphics_info_t::molecules[m.first].is_difference_map_p()) v.push_back(m);
+   return v;
+}
+
+float bandicoot_core_difference_map_peaks_level() {
+   return graphics_info_t::difference_map_peaks_sigma_level;
+}
+
+// difference_map_peaks, handing back the peaks instead of showing them
+std::vector<bandicoot_peak> bandicoot_core_difference_map_peaks(int imol_map, int imol_model, float rmsd,
+                                                                bool positive, bool negative,
+                                                                bool around_model_only) {
+   std::vector<bandicoot_peak> peaks;
+   if (! is_valid_map_molecule(imol_map)) return peaks;
+   molecule_class_info_t &m = graphics_info_t::molecules[imol_map];
+   if (! m.is_difference_map_p()) return peaks;
+   graphics_info_t::difference_map_peaks_sigma_level = rmsd;
+   coot::peak_search ps(m.xmap);
+   ps.set_max_closeness(graphics_info_t::difference_map_peaks_max_closeness);
+   std::vector<std::pair<clipper::Coord_orth, float>> centres;
+   if (is_valid_model_molecule(imol_model))
+      centres = ps.get_peaks(m.xmap, graphics_info_t::molecules[imol_model].atom_sel.mol,
+                             rmsd, positive, negative, around_model_only);
+   else
+      centres = ps.get_peaks(m.xmap, rmsd, positive, negative);
+   float map_sigma = m.map_sigma();
+   std::cout << "\n   Found these peak positions:\n";
+   for (unsigned int i = 0; i < centres.size(); i++) {
+      bandicoot_peak p;
+      p.at.x = centres[i].first.x(); p.at.y = centres[i].first.y(); p.at.z = centres[i].first.z();
+      p.value = centres[i].second;
+      p.rmsd = centres[i].second / map_sigma;
+      p.label = std::to_string(i + 1) + " " + graphics_info_t::float_to_string(p.value) + " (" +
+                graphics_info_t::float_to_string(p.rmsd) + " rmsd) at " + centres[i].first.format();
+      peaks.push_back(p);
+      std::cout << "   " << i << " dv: " << p.value << " n-rmsd: " << p.rmsd << " "
+                << centres[i].first.format() << std::endl;
+   }
+   std::cout << "\n   Found " << centres.size() << " peak positions:\n";
+   return peaks;
+}
+
+// as a click on a row of Coot's peak list
+void bandicoot_core_go_to_peak(const bandicoot_peak &peak, const std::string &label) {
+   bandicoot_record_navigation("diff-map-peaks", label.c_str());
+   graphics_info_t g;
+   g.setRotationCentre(coot::Cartesian(peak.at.x, peak.at.y, peak.at.z));
+   for (int i = 0; i < graphics_info_t::n_molecules(); i++) {
+      graphics_info_t::molecules[i].update_map(graphics_info_t::auto_recontour_map_flag);
+      graphics_info_t::molecules[i].update_symmetry();
+   }
+   g.make_pointer_distance_objects();
+   graphics_draw();
+}
+
+bandicoot_check_waters bandicoot_core_check_waters_values() {
+   bandicoot_check_waters c;
+   c.imol = graphics_info_t::check_waters_molecule;
+   c.b_factor = graphics_info_t::check_waters_b_factor_limit;
+   c.map_rmsd = graphics_info_t::check_waters_map_sigma_limit;
+   c.min_distance = graphics_info_t::check_waters_min_dist_limit;
+   c.max_distance = graphics_info_t::check_waters_max_dist_limit;
+   return c;
+}
+
+// do_check_waters_by_widget's reading of the criteria: kept for next time,
+// and an unused one passed as -100
+static std::vector<coot::atom_spec_t> water_baddies(const bandicoot_check_waters &c, bool &have_map) {
+   graphics_info_t::check_waters_molecule = c.imol;
+   graphics_info_t::check_waters_b_factor_limit = c.b_factor;
+   graphics_info_t::check_waters_map_sigma_limit = c.map_rmsd;
+   graphics_info_t::check_waters_min_dist_limit = c.min_distance;
+   graphics_info_t::check_waters_max_dist_limit = c.max_distance;
+   graphics_info_t g;
+   int imol_map = g.Imol_Refinement_Map();
+   have_map = is_valid_map_molecule(imol_map);
+   if (! have_map || ! is_valid_model_molecule(c.imol)) return {};
+   const molecule_class_info_t &map = graphics_info_t::molecules[imol_map];
+   return graphics_info_t::molecules[c.imol].find_water_baddies(
+      c.use_b_factor ? c.b_factor : -100.0f, map.xmap, map.map_sigma(),
+      c.use_map_rmsd ? c.map_rmsd : -100.0f,
+      c.use_min_distance ? c.min_distance : -100.0f,
+      c.use_max_distance ? c.max_distance : -100.0f,
+      c.ignore_partial_occupancy_contacts, c.ignore_zero_occupancy, c.any ? 1 : 0);
+}
+
+bool bandicoot_core_check_waters(const bandicoot_check_waters &c, std::vector<bandicoot_result_row> &rows) {
+   bool have_map;
+   std::vector<coot::atom_spec_t> baddies = water_baddies(c, have_map);
+   if (! have_map) return false;
+   for (const coot::atom_spec_t &b : baddies)
+      rows.push_back(atom_row(c.imol, b, " [Occ: " + graphics_info_t::float_to_string(b.float_user_data) +
+                                         "]   " + b.string_user_data));
+   return true;
+}
+
+bool bandicoot_core_delete_checked_waters(const bandicoot_check_waters &c, int &n_deleted) {
+   bool have_map;
+   std::vector<coot::atom_spec_t> baddies = water_baddies(c, have_map);
+   if (! have_map) return false;
+   n_deleted = baddies.empty() ? 0 : graphics_info_t::molecules[c.imol].delete_atoms(baddies);
+   graphics_draw();
+   return true;
+}
+
+std::vector<bandicoot_result_row> bandicoot_core_waters_by_difference_map(int imol, int imol_diff_map) {
+   std::vector<bandicoot_result_row> rows;
+   if (! is_valid_model_molecule(imol) || ! is_valid_map_molecule(imol_diff_map)) return rows;
+   const molecule_class_info_t &map = graphics_info_t::molecules[imol_diff_map];
+   if (! map.is_difference_map_p()) return rows;
+   std::vector<coot::atom_spec_t> v = graphics_info_t::molecules[imol].check_waters_by_difference_map(
+      map.xmap, graphics_info_t::check_waters_by_difference_map_sigma_level);
+   for (const coot::atom_spec_t &spec : v) rows.push_back(atom_row(imol, spec));
+   return rows;
+}
+
+std::vector<bandicoot_result_row> bandicoot_core_gln_asn_outliers(int imol) {
+   std::vector<bandicoot_result_row> rows;
+   if (! is_valid_model_molecule(imol)) return rows;
+   std::vector<std::pair<coot::atom_spec_t, std::string>> v =
+      coot::util::gln_asn_b_factor_outliers(graphics_info_t::molecules[imol].atom_sel.mol);
+   std::cout << "Found " << v.size() << " GLN/ASN B-factor outliers" << std::endl;
+   for (const auto &o : v) {
+      std::cout << o.second << std::endl;
+      bandicoot_result_row r = atom_row(imol, o.first);
+      r.label = o.second;
+      rows.push_back(r);
+   }
+   return rows;
+}
+
+void bandicoot_core_flip_side_chain(const bandicoot_result_row &row) {
+   do_180_degree_side_chain_flip(row.imol, row.chain.c_str(), row.resno, row.ins_code.c_str(),
+                                 row.alt_conf.c_str());
+}
+
+std::string bandicoot_core_short_name(int imol) {
+   if (imol < 0 || imol >= graphics_info_t::n_molecules()) return "";
+   return graphics_info_t::molecules[imol].dotted_chopped_name();
+}
+
+// ---- Validate menu: the residue graphs
+
+static bandicoot_graph_view graph_view;
+
+void bandicoot_core_set_graph_view(const bandicoot_graph_view &view) {
+   graph_view = view;
+}
+
+void bandicoot_wx_graph_open(const void *graph, int imol, int type, const std::string &title,
+                             const std::string &label, int n_chains, int max_chain_length) {
+   if (graph_view.open)
+      graph_view.open(graph, imol, type, title, label, n_chains, max_chain_length,
+                      type == coot::GEOMETRY_GRAPH_DENSITY_FIT);
+}
+
+void bandicoot_wx_graph_axis(const void *graph, int chain, int nres) {
+   if (graph_view.axis) graph_view.axis(graph, chain, nres);
+}
+
+void bandicoot_wx_graph_ticks(const void *graph, int chain, int min_resno, int max_resno) {
+   if (graph_view.ticks) graph_view.ticks(graph, chain, min_resno, max_resno);
+}
+
+void bandicoot_wx_graph_label(const void *graph, int chain, const std::string &text) {
+   if (graph_view.label) graph_view.label(graph, chain, text);
+}
+
+void bandicoot_wx_graph_block(const void *graph, int chain, int slot, double distortion,
+                              const std::string &colour, int imol, const coot::atom_spec_t &spec,
+                              const std::string &info) {
+   if (! graph_view.block) return;
+   bandicoot_graph_block b;
+   b.slot = slot;
+   b.distortion = distortion;
+   b.colour = colour;
+   b.info = info;
+   b.target = atom_row(imol, spec);
+   b.target.label = info;
+   graph_view.block(graph, chain, b);
+}
+
+void bandicoot_wx_graph_remove(const void *graph, int chain, int slot) {
+   if (graph_view.remove) graph_view.remove(graph, chain, slot);
+}
+
+bool bandicoot_core_validation_graph(const std::string &list, int imol, std::string &why_not) {
+   if (! is_valid_model_molecule(imol)) { why_not = "no such model"; return false; }
+   graphics_info_t g;
+   if (list == "geometry_analysis1") g.geometric_distortion(imol);
+   else if (list == "peptide_omega_analysis1") g.omega_graphs(imol);
+   else if (list == "temp_fact_variance_analysis1") g.b_factor_graphs(imol);
+   else if (list == "temp_fact_analysis1") g.calc_b_factor_graphs(imol);
+   else if (list == "rotamer_analysis1") g.rotamer_graphs(imol);
+   else if (list == "density_fit_analysis1") {
+      // asks for the refinement map itself when none is set
+      g.density_fit_graphs(imol);
+      if (! is_valid_map_molecule(g.Imol_Refinement_Map())) { why_not = "no refinement map is set"; return false; }
+   } else if (list == "ncs_differences1") {
+      if (! g.molecules[imol].first_ncs_master_chain_id().first) { why_not = "the model has no NCS"; return false; }
+      g.ncs_diffs_from_mol(imol);
+   } else {
+      return false;
+   }
+   return true;
+}
+
+float bandicoot_core_density_fit_scale() {
+   return graphics_info_t::residue_density_fit_scale_factor;
+}
+
+// Coot's Rescale button
+void bandicoot_core_graph_rescale(const void *graph, float scale) {
+   coot::geometry_graphs *gr = static_cast<coot::geometry_graphs *>(const_cast<void *>(graph));
+   graphics_info_t::residue_density_fit_scale_factor = scale;
+   graphics_info_t g;
+   int imol = gr->get_imol();
+   if (! is_valid_model_molecule(imol)) return;
+   gr->update_residue_blocks(g.density_fit_from_mol(g.molecules[imol].atom_sel, imol, g.Imol_Refinement_Map()));
+}
+
+// as the GTK window's destroy did; the object itself is left alone, as
+// there, since an update in progress may still hold it
+void bandicoot_core_graph_closed(const void *graph) {
+   const coot::geometry_graphs *gr = static_cast<const coot::geometry_graphs *>(graph);
+   int imol = gr->Imol();
+   if (is_valid_model_molecule(imol) &&
+       coot::get_validation_graph(imol, gr->Graph_Type()) == gr->dialog())
+      coot::set_validation_graph(imol, gr->Graph_Type(), NULL);
+}
+
+// ---- Validate menu: the Ramachandran plot
+
+static bandicoot_rama_view rama_view;
+
+void bandicoot_core_set_rama_view(const bandicoot_rama_view &view) {
+   rama_view = view;
+}
+
+// called where Coot updated its Dynarama
+void bandicoot_wx_rama_changed(int imol) {
+   if (rama_view.changed) rama_view.changed(imol);
+}
+
+void bandicoot_wx_rama_highlight(int imol, const coot::residue_spec_t &spec) {
+   if (rama_view.highlight) rama_view.highlight(imol, spec.chain_id, spec.res_no, spec.ins_code);
+}
+
+// Coot's tables and contour levels (rama_plot::setup_internal), made again
+// when the levels change.
+struct rama_tables_t {
+   float preferred = -1, allowed = -1;
+   clipper::Ramachandran all, gly, pro, general, pre_pro, ile_val;
+};
+
+static const rama_tables_t &rama_tables() {
+   static rama_tables_t t;
+   float preferred = graphics_info_t::rama_level_prefered;
+   float allowed = graphics_info_t::rama_level_allowed;
+   if (t.preferred != preferred || t.allowed != allowed) {
+#ifdef CLIPPER_HAS_TOP8000
+      t.all.init(clipper::Ramachandran::All2);
+      t.gly.init(clipper::Ramachandran::Gly2);
+      t.pro.init(clipper::Ramachandran::Pro2);
+      t.general.init(clipper::Ramachandran::NoGPIVpreP2);
+      t.pre_pro.init(clipper::Ramachandran::PrePro2);
+      t.ile_val.init(clipper::Ramachandran::IleVal2);
+#else
+      t.all.init(clipper::Ramachandran::All5);
+      t.gly.init(clipper::Ramachandran::Gly5);
+      t.pro.init(clipper::Ramachandran::Pro5);
+      t.general.init(clipper::Ramachandran::NonGlyPro5);
+      t.pre_pro.init(clipper::Ramachandran::NonGlyPro5);
+      t.ile_val.init(clipper::Ramachandran::NonGlyPro5);
+#endif
+      for (clipper::Ramachandran *r : { &t.all, &t.gly, &t.pro, &t.general, &t.pre_pro, &t.ile_val })
+         r->set_thresholds(preferred, allowed);
+      t.preferred = preferred;
+      t.allowed = allowed;
+   }
+   return t;
+}
+
+static const clipper::Ramachandran &rama_table(int table) {
+   const rama_tables_t &t = rama_tables();
+   switch (table) {
+   case BRAMA_GLY: return t.gly;
+   case BRAMA_PRO: return t.pro;
+   case BRAMA_PRE_PRO: return t.pre_pro;
+   case BRAMA_ILE_VAL: return t.ile_val;
+   case BRAMA_ALL: return t.all;
+   default: return t.general;
+   }
+}
+
+static int rama_table_for(const std::string &res_name, bool is_pre_pro) {
+   if (res_name == "GLY") return BRAMA_GLY;
+   if (res_name == "PRO") return BRAMA_PRO;
+   if (is_pre_pro) return BRAMA_PRE_PRO;
+   if (res_name == "ILE" || res_name == "VAL") return BRAMA_ILE_VAL;
+   return BRAMA_GENERAL;
+}
+
+// as rama_plot::draw_phi_psi_point_internal judges it
+static void add_rama_point(const coot::util::phi_psi_t &pp, mmdb::Residue *residue, bandicoot_rama_set &set) {
+   bandicoot_rama_point p;
+   p.phi = pp.phi();
+   p.psi = pp.psi();
+   std::string name = pp.residue_name();
+   p.kind = name == "GLY" ? 1 : (name == "PRO" ? 2 : 0);
+   p.table = rama_table_for(name, pp.is_pre_pro());
+   const clipper::Ramachandran &r = rama_table(p.table);
+   double phi = clipper::Util::d2rad(p.phi), psi = clipper::Util::d2rad(p.psi);
+   p.region = r.allowed(phi, psi) ? (r.favored(phi, psi) ? 2 : 1) : 0;
+   p.label = pp.label();
+   p.chain = pp.chain_id;
+   p.resno = pp.residue_number;
+   p.ins_code = residue ? residue->GetInsCode() : "";
+   if (p.region == 2) set.n_favoured++;
+   if (p.region == 1) set.n_allowed++;
+   set.points.push_back(p);
+}
+
+// rama_plot::generate_phi_psis and generate_phi_psis_by_selection
+bool bandicoot_core_rama_points(int imol, const std::string &selection, bandicoot_rama_set &set) {
+   set = bandicoot_rama_set();
+   if (! is_valid_model_molecule(imol)) return false;
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+   if (selection.empty()) {
+      for (int imod = 1; imod <= mol->GetNumberOfModels(); imod++) {
+         mmdb::Model *model_p = mol->GetModel(imod);
+         if (! model_p) continue;
+         for (int ichain = 0; ichain < model_p->GetNumberOfChains(); ichain++) {
+            mmdb::Chain *chain_p = model_p->GetChain(ichain);
+            int nres = chain_p->GetNumberOfResidues();
+            for (int ires = 1; ires < nres - 1; ires++) {
+               mmdb::Residue *prev = chain_p->GetResidue(ires - 1);
+               mmdb::Residue *here = chain_p->GetResidue(ires);
+               mmdb::Residue *next = chain_p->GetResidue(ires + 1);
+               if (! prev || ! here || ! next) continue;
+               try {
+                  add_rama_point(coot::util::phi_psi_with_residues_t(prev, here, next), here, set);
+               }
+               catch (const std::runtime_error &) {
+                  // no phi/psi for this one (e.g. a chain break)
+               }
+            }
+         }
+      }
+   } else {
+      int handle = mol->NewSelection();
+      mol->Select(handle, mmdb::STYPE_RESIDUE, selection.c_str(), mmdb::SKEY_NEW);
+      mmdb::PResidue *residues = nullptr;
+      int n_residues = 0;
+      mol->GetSelIndex(handle, residues, n_residues);
+      for (int ires = 1; ires < n_residues - 1; ires++) {
+         mmdb::Residue *prev = residues[ires - 1], *here = residues[ires], *next = residues[ires + 1];
+         if (std::string(prev->GetChainID()) != here->GetChainID() ||
+             std::string(here->GetChainID()) != next->GetChainID())
+            continue;
+         try {
+            add_rama_point(coot::util::phi_psi_t(prev, here, next), here, set);
+         }
+         catch (const std::runtime_error &) {
+         }
+      }
+      mol->DeleteSelection(handle);
+   }
+   return true;
+}
+
+// rama_plot::draw_2_phi_psi_sets_on_canvas and find_phi_psi_differences
+bool bandicoot_core_kleywegt(int imol1, int imol2, bool by_chain, const std::string &chain1,
+                             const std::string &chain2, std::vector<bandicoot_kleywegt_pair> &pairs) {
+   pairs.clear();
+   if (! is_valid_model_molecule(imol1) || ! is_valid_model_molecule(imol2)) return false;
+   bandicoot_rama_set set1, set2;
+   bandicoot_core_rama_points(imol1, by_chain ? "//" + chain1 : std::string(), set1);
+   bandicoot_core_rama_points(imol2, by_chain ? "//" + chain2 : std::string(), set2);
+   std::map<std::tuple<std::string, int, std::string>, const bandicoot_rama_point *> second;
+   for (const bandicoot_rama_point &p : set2.points) second[{ p.chain, p.resno, p.ins_code }] = &p;
+   std::vector<std::pair<double, bandicoot_kleywegt_pair>> v;
+   for (const bandicoot_rama_point &p : set1.points) {
+      auto it = second.find({ by_chain ? chain2 : p.chain, p.resno, p.ins_code });
+      if (it == second.end()) continue;
+      double d1 = std::fabs(p.phi - it->second->phi), d2 = std::fabs(p.psi - it->second->psi);
+      if (d1 > 180) d1 -= 360;
+      if (d2 > 180) d2 -= 360;
+      v.push_back({ std::sqrt(d1 * d1 + d2 * d2), { p, *it->second } });
+   }
+   std::stable_sort(v.begin(), v.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+   for (size_t i = 0; i < v.size() && int(i) < graphics_info_t::rama_n_diffs; i++) pairs.push_back(v[i].second);
+   return true;
+}
+
+// rama_plot::get_intermediate_bg_colour
+static void rama_blend(const int start[3], const int end[3], float p_min, float p_max, float p,
+                       int quad_channel, unsigned char *out) {
+   float x = (p - p_min) / (p_max - p_min);
+   for (int i = 0; i < 3; i++) {
+      float f = (i == quad_channel) ? std::sqrt(std::max(x, 0.0f)) : x;
+      out[i] = (unsigned char) std::clamp(int((1.0f - f) * start[i] + f * end[i]), 0, 255);
+   }
+}
+
+std::string bandicoot_core_rama_background(int table, std::vector<unsigned char> &rgb) {
+   rgb.clear();
+   float preferred = graphics_info_t::rama_level_prefered;
+   float allowed = graphics_info_t::rama_level_allowed;
+   if (std::fabs(preferred - 0.02f) < 0.000001f && std::fabs(allowed - 0.002f) < 0.000001f) {
+#ifdef CLIPPER_HAS_TOP8000
+      static const char *files[] = { "rama2_all.png", "rama2_non_gly_pro_pre_pro_ileval.png", "rama2_gly.png",
+                                     "rama2_pro.png", "rama2_pre_pro.png", "rama2_ileval.png" };
+#else
+      static const char *files[] = { "rama_all.png", "rama_non_gly_pro.png", "rama_gly.png",
+                                     "rama_pro.png", "rama_non_gly_pro.png", "rama_non_gly_pro.png" };
+#endif
+      if (table >= 0 && table < BRAMA_N_TABLES) {
+         std::string path = coot::package_data_dir() + "/pixmaps/" + files[table];
+         if (coot::file_exists(path)) return path;
+      }
+   }
+   // rama_plot::make_background: shaded blocks, favoured pink, allowed cream
+   const clipper::Ramachandran &r = rama_table(table);
+   int step = std::max(1, int(graphics_info_t::rama_plot_background_block_size));
+   float max_prob = 0;
+   for (int i = -180; i < 180; i += step)
+      for (int j = -180; j < 180; j += step)
+         max_prob = std::max(max_prob, float(r.probability(clipper::Util::d2rad(i + step / 2.0),
+                                                           clipper::Util::d2rad(-(j + step / 2.0)))));
+   const int cream[3] = { 255, 240, 220 }, pink[3] = { 210, 150, 190 }, white[3] = { 255, 255, 255 };
+   rgb.assign(360 * 360 * 3, 255);
+   for (int i = -180; i < 180; i += step) {
+      for (int j = -180; j < 180; j += step) {
+         double x = clipper::Util::d2rad(i + step / 2.0), y = clipper::Util::d2rad(-(j + step / 2.0));
+         unsigned char c[3] = { 255, 255, 255 };
+         float p = r.probability(x, y);
+         if (r.favored(x, y))
+            rama_blend(cream, pink, preferred, max_prob, p, 1, c);
+         else if (r.allowed(x, y))
+            rama_blend(white, cream, allowed, preferred, p, 2, c);
+         else
+            continue;
+         for (int row = j + 180; row < std::min(j + 180 + step, 360); row++)
+            for (int col = i + 180; col < std::min(i + 180 + step, 360); col++)
+               std::copy(c, c + 3, &rgb[(row * 360 + col) * 3]);
+      }
+   }
+   return "";
+}
+
+// as update_ramachandran_plot_background_from_res_spec chooses
+int bandicoot_core_rama_table(int imol, const std::string &chain, int resno, const std::string &ins_code) {
+   if (! is_valid_model_molecule(imol)) return BRAMA_GENERAL;
+   std::string name = residue_name(imol, chain.c_str(), resno, ins_code.c_str());
+   std::string next = residue_name(imol, chain.c_str(), resno + 1, ins_code.c_str());
+   return rama_table_for(name, next == "PRO");
+}
+
+std::string bandicoot_core_rama_heading(int imol) {
+   if (! is_valid_model_molecule(imol)) return "";
+   return graphics_info_t::molecules[imol].dotted_chopped_name();   // starts with imol
+}
+
+bool bandicoot_wx_step_list(int step) {
+   return ui_view.step_list && ui_view.step_list(step);
+}
+
 // ---- Calculate menu: PanDDA Inspect
 
 void set_refinement_lennard_jones_epsilon(float epsilon);  // c-interface-refine.cc
@@ -3759,6 +4416,27 @@ bool bandicoot_wx_edit_backbone_present() {
    return true;
 }
 
+// judged against the general table, as Coot's backbone-edit plot did (its
+// points carry no residue type)
+void bandicoot_wx_backbone_rama(bool has_1, double phi_1, double psi_1, const std::string &label_1,
+                                bool has_2, double phi_2, double psi_2, const std::string &label_2) {
+   if (! ma_view.backbone_rama) return;
+   std::vector<bandicoot_rama_point> points;
+   auto add = [&points](double phi, double psi, const std::string &label) {
+      bandicoot_rama_point p;
+      p.phi = phi;
+      p.psi = psi;
+      p.label = label;
+      const clipper::Ramachandran &r = rama_table(BRAMA_GENERAL);
+      double x = clipper::Util::d2rad(phi), y = clipper::Util::d2rad(psi);
+      p.region = r.allowed(x, y) ? (r.favored(x, y) ? 2 : 1) : 0;
+      points.push_back(p);
+   };
+   if (has_1) add(phi_1, psi_1, label_1);
+   if (has_2) add(phi_2, psi_2, label_2);
+   ma_view.backbone_rama(points);
+}
+
 void bandicoot_core_backbone_peptide(double degrees) {
    with_adjustment(degrees, [](GtkAdjustment *a) {
       graphics_info_t::edit_backbone_peptide_changed_func(a, nullptr);
@@ -4114,6 +4792,7 @@ void bandicoot_wx_molecules_changed() {
    bandicoot_wx_goto_molecules_changed(-1);
    if (dm_view.molecules_changed) dm_view.molecules_changed();
    if (seq_hooks.molecules_changed) seq_hooks.molecules_changed();
+   if (rama_view.molecules_changed) rama_view.molecules_changed();
 }
 
 void bandicoot_wx_display_changed() {

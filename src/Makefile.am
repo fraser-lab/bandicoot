@@ -633,6 +633,14 @@ if UI_WX
 	wxUI/main/ligand-menu.hh \
 	wxUI/main/draw-menu.cc \
 	wxUI/main/draw-menu.hh \
+	wxUI/main/measures-menu.cc \
+	wxUI/main/measures-menu.hh \
+	wxUI/main/validate-menu.cc \
+	wxUI/main/validate-menu.hh \
+	wxUI/main/validation-graphs.cc \
+	wxUI/main/validation-graphs.hh \
+	wxUI/main/rama-plot.cc \
+	wxUI/main/rama-plot.hh \
 	wxUI/main/modelling-menu.cc \
 	wxUI/main/other-tools.hh \
 	wxUI/main/other-tools.cc \

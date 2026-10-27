@@ -1,7 +1,8 @@
 // src/wxUI/main/delete-waters.hh
 //
-// Delete item (the sidebar's Delete...), Find Waters, and the list of
-// unmodelled blobs of density Find Waters can leave.
+// Delete item (the sidebar's Delete...), Find Waters, and the unmodelled
+// blobs of density: Validate's search for them, and the list it and Find
+// Waters can leave.
 
 #ifndef BANDICOOT_WXUI_DELETE_WATERS_HH
 #define BANDICOOT_WXUI_DELETE_WATERS_HH
@@ -15,6 +16,9 @@ void install_delete_waters(wxWindow *parent);
 
 // Shows Find Waters (the sidebar's Find Waters...).
 void show_find_waters(wxWindow *parent);
+
+// Shows Validate > Unmodelled blobs.
+void show_unmodelled_blobs(wxWindow *parent);
 
 } // namespace wxui
 

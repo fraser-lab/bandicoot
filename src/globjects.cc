@@ -120,6 +120,8 @@
 bool bandicoot_wx_moving_atoms_window_open();
 // The wx build's sequence views.
 void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
+// The wx build's peak and water lists, stepped by the . and , keys.
+bool bandicoot_wx_step_list(int step);
 #endif
 
 std::vector<molecule_class_info_t> graphics_info_t::molecules;
@@ -3205,6 +3207,12 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
 	 // So, what is the next rotamer (bear in mind wrapping).
 	 graphics_info_t::rotamer_dialog_next_rotamer();
       } else {
+#ifdef BANDICOOT_UI_WX
+	 if (bandicoot_wx_step_list(+1)) {
+	    handled = TRUE;
+	    break;
+	 }
+#endif
 	 if (graphics_info_t::difference_map_peaks_dialog) {
 	    graphics_info_t::difference_map_peaks_next_peak();
 	 } else {
@@ -3230,6 +3238,12 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
       if (graphics_info_t::rotamer_dialog) {
 	 graphics_info_t::rotamer_dialog_previous_rotamer();
       } else {
+#ifdef BANDICOOT_UI_WX
+	 if (bandicoot_wx_step_list(-1)) {
+	    handled = TRUE;
+	    break;
+	 }
+#endif
 	 if (graphics_info_t::difference_map_peaks_dialog) {
 	    graphics_info_t::difference_map_peaks_previous_peak();
 	 } else {

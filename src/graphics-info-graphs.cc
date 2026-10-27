@@ -227,8 +227,9 @@ graphics_info_t::update_geometry_graphs(mmdb::PResidue *SelResidues, int nSelRes
 #include "nsv.hh"
 
 #ifdef BANDICOOT_UI_WX
-// The wx build's sequence views (wxUI/bridge/core-bridge.cc).
+// The wx build's sequence views and Ramachandran plot (wxUI/bridge/core-bridge.cc).
 void bandicoot_wx_sequence_view_changed(int imol);
+void bandicoot_wx_rama_changed(int imol);
 #endif
 
 // The molecule-based version of the above.
@@ -369,6 +370,7 @@ graphics_info_t::update_validation_graphs(int imol) {
 
 #ifdef BANDICOOT_UI_WX
    bandicoot_wx_sequence_view_changed(imol);
+   bandicoot_wx_rama_changed(imol);
 #endif
 
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)

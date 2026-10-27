@@ -22,6 +22,8 @@
 #include <functional>
 #include <vector>
 
+class wxGraphicsContext;
+
 namespace wxui {
 
 struct ChartStyle {
@@ -71,6 +73,12 @@ public:
    void clear_group(int group);
    void clear();
 
+   // Draws every item into gc, the top-left of the world bounds at its
+   // origin, at points_per_unit (to save the chart as an image, say).
+   void render(wxGraphicsContext *gc, double points_per_unit);
+   double world_width() const { return world_x1 - world_x0; }
+   double world_height() const { return world_y1 - world_y0; }
+
    wxPoint2DDouble to_world(const wxPoint &window_point) const;
    // topmost clickable item at a world position
    item_id hit_test(const wxPoint2DDouble &world_point) const;
@@ -114,6 +122,7 @@ private:
    void layout();
    bool hits(const Item &item, const wxPoint2DDouble &p, double tolerance) const;
 
+   void draw_items(wxGraphicsContext *gc);
    void on_paint(wxPaintEvent &e);
    void on_size(wxSizeEvent &e);
    void on_mouse(wxMouseEvent &e);

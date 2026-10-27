@@ -765,6 +765,10 @@ private:
    // Geometry Graphs:
    coot::geometry_graphs * geometry_graph_dialog_to_object(GtkWidget *w) const {
       coot::geometry_graphs *gr = NULL;
+#ifdef BANDICOOT_UI_WX
+      // the wx build stores the graph object itself (geometry_graphs::dialog())
+      return reinterpret_cast<coot::geometry_graphs *>(w);
+#endif
       if (!w) {
 	 std::cout << "ERROR:: null w in geometry_graph_dialog_to_object" << std::endl;
       } else {

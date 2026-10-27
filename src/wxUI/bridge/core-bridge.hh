@@ -661,6 +661,7 @@ struct bandicoot_result_row {
    int imol = -1;
    std::string chain, atom;
    int resno = 0;
+   std::string ins_code, alt_conf;   // for a row's action (e.g. a flip)
 };
 // Go where a row points.
 void bandicoot_core_go_to_result(const bandicoot_result_row &row);
@@ -679,6 +680,10 @@ struct bandicoot_button_choice {
    std::string title;
    std::vector<std::pair<std::string, std::string>> buttons;  // label, command
    std::string close_label, close_command;
+   // optional: a check button above the list that, while ticked, shows
+   // checked_buttons in its place
+   std::string check_label;
+   std::vector<std::pair<std::string, std::string>> checked_buttons;
 };
 // Run a script's Python command.
 void bandicoot_core_run_python(const std::string &command);
@@ -697,6 +702,11 @@ struct bandicoot_ui_view {
    std::function<void(const std::string &widget)> release_sidebar_toggle;
    // and likewise for an Other Modelling Tools toggle
    std::function<void(const std::string &widget)> release_tools_toggle;
+   // and for a Distances & Angles pick (see bandicoot_core_geometry_pick)
+   std::function<void(const std::string &kind)> release_geometry_toggle;
+   // the . and , keys: step the open peak or water list by one row, as
+   // Coot's keys did; false if no such list is open
+   std::function<bool(int step)> step_list;
    // Multi-Residue Torsion's picked residues are ready to twist: the
    // rotatable bonds to offer, by label (see bandicoot_core_multi_torsion_*)
    std::function<void(const std::vector<std::string> &bonds)> multi_torsion;
@@ -717,6 +727,8 @@ struct bandicoot_ui_view {
    std::function<void(const bandicoot_radio_choice &choice)> radio_choice;
    // a script's column of buttons (its own pygtk one cannot appear)
    std::function<void(const bandicoot_button_choice &choice)> button_choice;
+   // Draw > Generic Display Objects (scripts open it after drawing objects)
+   std::function<void()> generic_objects;
 };
 void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
 
@@ -984,6 +996,172 @@ void bandicoot_core_save_views(const std::string &path);
 void bandicoot_core_add_annotation(const std::string &text);
 void bandicoot_core_save_annotations(const std::string &path);
 void bandicoot_core_load_annotations(const std::string &path);
+
+// Measures > Distances & Angles: the atom picks, "distance", "angle",
+// "torsion" and "dynamic_distance"; on waits for the pick, off stops waiting.
+// The core lets go of a pick through bandicoot_ui_view::release_geometry_toggle
+// once it is done.
+void bandicoot_core_geometry_pick(const std::string &kind, bool on);
+void bandicoot_core_clear_last_distance();
+void bandicoot_core_clear_all_distances();
+void bandicoot_core_clear_atom_labels();
+// Measures > Environment Distances: the distances shown around the residue at
+// the screen centre. Each part applies on its own; the limits together.
+struct bandicoot_environment {
+   bool shown = false, h_bonds = false, bumps = false, label_atom = false;
+   float min_distance = 0, max_distance = 0;   // A
+};
+bandicoot_environment bandicoot_core_environment();
+void bandicoot_core_set_environment_shown(bool shown);
+void bandicoot_core_set_environment_h_bonds(bool shown);
+void bandicoot_core_set_environment_bumps(bool shown);
+void bandicoot_core_set_environment_label_atom(bool label);
+// False, changing nothing, if either is out of range; swapped if reversed.
+bool bandicoot_core_set_environment_limits(float min_distance, float max_distance);
+// Measures > Pointer Distances: distances from the pointer to nearby atoms.
+struct bandicoot_pointer_distances {
+   bool shown = false;
+   float min_distance = 0, max_distance = 0;   // A
+};
+bandicoot_pointer_distances bandicoot_core_pointer_distances();
+void bandicoot_core_set_pointer_distances_shown(bool shown);
+// False, changing nothing, if either is out of range.
+bool bandicoot_core_set_pointer_distance_limits(float min_distance, float max_distance);
+// Measures > Plane Distances: picks either add an atom to the plane or
+// measure an atom's deviation from it. Ending clears the plane.
+void bandicoot_core_plane_begin();
+void bandicoot_core_plane_mode(bool deviation);
+void bandicoot_core_plane_remove_last_atom();
+void bandicoot_core_plane_end();
+
+// Validate > Incorrect Chiral Volumes: the inverted chiral centres of a model,
+// and the residue types it had no restraints for.
+struct bandicoot_bad_chirals {
+   std::vector<bandicoot_result_row> atoms;
+   std::vector<std::string> unknown_types;
+};
+bandicoot_bad_chirals bandicoot_core_bad_chirals(int imol);
+// Validate > Unmodelled blobs: density above rmsd in the map once the model
+// is masked out, too big to be waters.
+std::vector<bandicoot_xyz> bandicoot_core_find_blobs(int imol_model, int imol_map, float rmsd);
+// Validate > Difference Map Peaks. The models are optional (-1 for none).
+// The difference maps by number and full name, as Find Waters lists maps.
+std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps_full_names();
+float bandicoot_core_difference_map_peaks_level();
+struct bandicoot_peak {
+   bandicoot_xyz at;
+   float value = 0, rmsd = 0;
+   std::string label;              // as Coot's list shows it
+};
+// Remembers rmsd for next time.
+std::vector<bandicoot_peak> bandicoot_core_difference_map_peaks(int imol_map, int imol_model, float rmsd,
+                                                                bool positive, bool negative,
+                                                                bool around_model_only);
+// Centre on a peak, label being its row in the list.
+void bandicoot_core_go_to_peak(const bandicoot_peak &peak, const std::string &label);
+// Validate > Check/Delete Waters. A criterion that is off takes no part.
+struct bandicoot_check_waters {
+   int imol = -1;
+   float b_factor = 0, map_rmsd = 0, min_distance = 0, max_distance = 0;
+   bool use_b_factor = true, use_map_rmsd = true, use_min_distance = true, use_max_distance = true;
+   bool ignore_partial_occupancy_contacts = false, ignore_zero_occupancy = false;
+   bool any = true;                     // match any criterion (false: all)
+};
+// The limits last used.
+bandicoot_check_waters bandicoot_core_check_waters_values();
+// Both need a refinement map; false (doing nothing) without one.
+bool bandicoot_core_check_waters(const bandicoot_check_waters &c, std::vector<bandicoot_result_row> &rows);
+bool bandicoot_core_delete_checked_waters(const bandicoot_check_waters &c, int &n_deleted);
+// Waters whose difference-map density looks odd.
+std::vector<bandicoot_result_row> bandicoot_core_waters_by_difference_map(int imol, int imol_diff_map);
+// Validate > GLN and ASN B-factor Outliers: amides whose O and N B-factors
+// suggest they are flipped; the flip turns the side chain 180 degrees.
+std::vector<bandicoot_result_row> bandicoot_core_gln_asn_outliers(int imol);
+void bandicoot_core_flip_side_chain(const bandicoot_result_row &row);
+// The model name as Coot shortens it in messages.
+std::string bandicoot_core_short_name(int imol);
+
+// Validate > the residue graphs (Geometry, Peptide omega, Temp. fact.
+// variance, Average Temp. fact., Rotamer, Density fit, NCS Differences).
+// Coot's graph objects draw through this view, one window per graph: a
+// residue's block sits in a slot along its chain's axis and is replaced or
+// removed as the model changes. graph is the core's handle for a window.
+struct bandicoot_graph_block {
+   int slot = 0;                   // place along the axis, in residues
+   double distortion = 0;          // its height, in Coot's units
+   std::string colour;             // as Coot names it ("gold1", ...)
+   std::string info;               // shown when the pointer is over it
+   bandicoot_result_row target;    // where a click goes
+};
+struct bandicoot_graph_view {
+   std::function<void(const void *graph, int imol, int type, const std::string &title,
+                      const std::string &label, int n_chains, int max_chain_length,
+                      bool rescale)> open;
+   std::function<void(const void *graph, int chain, int nres)> axis;
+   std::function<void(const void *graph, int chain, int min_resno, int max_resno)> ticks;
+   std::function<void(const void *graph, int chain, const std::string &text)> label;
+   std::function<void(const void *graph, int chain, const bandicoot_graph_block &block)> block;
+   std::function<void(const void *graph, int chain, int slot)> remove;
+};
+void bandicoot_core_set_graph_view(const bandicoot_graph_view &view);
+// Open a graph by its menu list name ("geometry_analysis1", ...) for a
+// model. False, with the reason, if there was nothing to show.
+bool bandicoot_core_validation_graph(const std::string &list, int imol, std::string &why_not);
+// Density fit: redraw at a new scale (kept for later graphs, as in Coot).
+float bandicoot_core_density_fit_scale();
+void bandicoot_core_graph_rescale(const void *graph, float scale);
+// The window is gone: the core stops updating that graph.
+void bandicoot_core_graph_closed(const void *graph);
+
+// Validate > Ramachandran Plot. Each residue with a phi and psi, judged
+// against the table for its type, as Coot's Dynarama does.
+enum bandicoot_rama_table { BRAMA_ALL, BRAMA_GENERAL, BRAMA_GLY, BRAMA_PRO, BRAMA_PRE_PRO, BRAMA_ILE_VAL,
+                            BRAMA_N_TABLES };
+struct bandicoot_rama_point {
+   double phi = 0, psi = 0;
+   int kind = 0;                    // 0 general, 1 GLY, 2 PRO (its symbol)
+   int region = 0;                  // 0 outlier, 1 allowed, 2 favoured
+   int table = BRAMA_GENERAL;       // the background to show for it
+   std::string label;               // "1665 A MET", as Coot labels it
+   std::string chain, ins_code;
+   int resno = 0;
+};
+struct bandicoot_rama_set {
+   std::vector<bandicoot_rama_point> points;
+   int n_favoured = 0, n_allowed = 0;    // of points.size()
+};
+// selection empty: the whole model; otherwise an mmdb residue selection
+// ("//A/1620-1660"). False if the model is gone.
+bool bandicoot_core_rama_points(int imol, const std::string &selection, bandicoot_rama_set &set);
+// A background picture for a table (an image file Coot ships, 360 x 360
+// degrees), or empty when the contour levels are not the standard ones; then
+// rgb is filled with Coot's shaded blocks instead, 360 x 360 pixels.
+std::string bandicoot_core_rama_background(int table, std::vector<unsigned char> &rgb);
+// The table for a residue of the model (as it is now).
+int bandicoot_core_rama_table(int imol, const std::string &chain, int resno, const std::string &ins_code);
+// The window's heading, as Coot's: "28 ...ed_datasets/x0191/x0191-pandda-input.pdb".
+std::string bandicoot_core_rama_heading(int imol);
+// Validate > Probe clashes: reduce and probe run on the model by Coot's
+// script, which then lists reduce's flips and shows the dots. False, with the
+// reason, if either program cannot be found.
+bool bandicoot_core_probe_clashes(int imol, std::string &why_not);
+
+// Validate > Kleywegt Plot: residue by residue, how a model's phi and psi
+// differ from another's (or one chain's from another's), the biggest
+// differences first and no more than Coot shows. Without chains every chain
+// of imol1 is compared with the same chain of imol2. False if a model is gone.
+struct bandicoot_kleywegt_pair { bandicoot_rama_point first, second; };
+bool bandicoot_core_kleywegt(int imol1, int imol2, bool by_chain, const std::string &chain1,
+                             const std::string &chain2, std::vector<bandicoot_kleywegt_pair> &pairs);
+// What the core tells an open plot.
+struct bandicoot_rama_view {
+   std::function<void(int imol)> changed;                    // redraw from the model
+   // the current residue is now this one (Coot's green square)
+   std::function<void(int imol, const std::string &chain, int resno, const std::string &ins_code)> highlight;
+   std::function<void()> molecules_changed;                  // one may have closed
+};
+void bandicoot_core_set_rama_view(const bandicoot_rama_view &view);
+
 // Find Ligands: what the window offers, filled from Coot's current settings,
 // and the choices it hands back to search with.
 struct bandicoot_find_ligands {
@@ -1162,6 +1340,9 @@ struct bandicoot_moving_atoms_view {
    std::function<void(const std::vector<std::string> &labels, int mode,
                       bool hydrogens)> edit_chi;
    std::function<void()> edit_backbone;
+   // Edit Backbone Torsions' Ramachandran plot: the residue edited and the
+   // next one, as they now are (either may be missing)
+   std::function<void(const std::vector<bandicoot_rama_point> &points)> backbone_rama;
    std::function<bool()> open_windows;
 };
 void bandicoot_core_set_moving_atoms_view(const bandicoot_moving_atoms_view &view);

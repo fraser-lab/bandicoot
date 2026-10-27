@@ -1,6 +1,7 @@
 // src/wxUI/main/model-dialogs.cc
 
 #include "wxUI/main/model-dialogs.hh"
+#include "wxUI/main/rama-plot.hh"
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
@@ -310,6 +311,12 @@ void open_edit_backbone() {
                                                 bandicoot_core_backbone_finish, &edit_backbone_at);
    edit_backbone = w;
    w->on_end = []() { edit_backbone = nullptr; };
+   // the Ramachandran plot of the two residues the edit moves, with the
+   // sliders under it (Coot had them in two windows)
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(w->panel, wxID_ANY, "Ramachandran Plot (Backbone Edit Mode)"), 0,
+            wxALIGN_CENTER | wxTOP, 6);
+   col->Add(make_backbone_plot(w->panel), 1, wxEXPAND | wxALL, 6);
    TitledPanel *body = new TitledPanel(w->panel);
    // degrees either way, as Coot's sliders give them
    TitledSlider *peptide  = new TitledSlider(body->content(), "Rotate Peptide",  -180.0, 180.0, 0.1, 0.0, 1);
@@ -318,8 +325,7 @@ void open_edit_backbone() {
    carbonyl->on_change = [](double v) { bandicoot_core_backbone_carbonyl(v); };
    body->content_sizer()->Add(peptide,  0, wxEXPAND | wxBOTTOM, 6);
    body->content_sizer()->Add(carbonyl, 0, wxEXPAND);
-   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
-   col->Add(body, 1, wxEXPAND | wxALL, 6);
+   col->Add(body, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
    col->Add(w->buttons("OK", "stock-button-ok.png"), 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, 8);
    lay_out(w, col);
    w->SetSize(wxSize(std::max(w->GetSize().x, 380), w->GetSize().y));
@@ -338,6 +344,7 @@ void install_model_dialogs(wxWindow *parent) {
       open_edit_chi(labels, mode, hydrogens);
    };
    v.edit_backbone = []() { open_edit_backbone(); };
+   v.backbone_rama = [](const std::vector<bandicoot_rama_point> &points) { show_backbone_points(points); };
    // the windows during which a drag must not move the atoms bodily, as
    // Coot's rotamer and backbone dialogs
    v.open_windows = []() { return rotamers != nullptr || edit_backbone != nullptr; };
