@@ -87,6 +87,31 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 
 ## P3 — cosmetic / minor
 
+### Labels in the graphics window stretch and shrink as the model rotates
+Atom labels and distance labels get wider or narrower as the view turns. In
+`graphics_info_t::printString_internal()` (`src/graphics-info.cc`) the label is scaled by
+`sf/aspect` along X before the rotation that turns it to face the camera, so the aspect
+correction acts along the model's X axis instead of the screen's. Inherited from Coot 0.9,
+whose stroke-font labels use the same transforms. The effect grows with the window's aspect
+ratio and vanishes in a square window.
+
+- **Workaround:** none needed for reading the labels; a squarer window reduces the effect.
+
+### Labels are hard to read on a light background
+Atom labels use one fixed label colour, pale pink by default, whatever the background
+colour, so on a white background they have almost no contrast. Inherited from Coot 0.9.
+
+- **Workaround:** set a darker label colour in Preferences, or with
+  `set_font_colour(r, g, b)`.
+
+### Symmetry-atom labels are drawn in the ordinary label colour
+Labels on symmetry atoms are meant to be bluish so they stand apart from the model's own
+labels. On macOS, labels are drawn as a texture tinted with the label colour inside
+`graphics_info_t::printString_internal()` (`src/graphics-info.cc`), which overrides the
+colour its caller set, so symmetry labels look like any other.
+
+- **Workaround:** none; the label text itself identifies the symmetry operator.
+
 ### Ligand > Hydrogenate region crashes
 Choosing the item crashes Bandicoot. Not yet investigated, including whether Coot 0.9
 does the same.

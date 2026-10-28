@@ -35,7 +35,8 @@ holding a modifier while clicking or dragging.
 | Click / drag | Button 1 | Pick, or rotate the view |
 | `Option`+click | Button 2 (middle) | Centre on the atom under the pointer |
 | `Option`+drag | Button 2 (middle) | Pan the view |
-| `Control`+drag | Button 3 (right) | Zoom |
+| `Control`+drag | Button 1 + `Ctrl` | Pan the view |
+| Right-drag | Button 3 (right) | Zoom |
 
 ## Refinement & fitting
 

@@ -1435,6 +1435,31 @@ void bandicoot_core_centre_on(float x, float y, float z);
 void bandicoot_core_fixed_atom_pick(int mode);
 void bandicoot_core_clear_fixed_atoms();
 
+// About > Header/Remarks Browser. An mmCIF model shows its categories, which
+// a filter narrows; a PDB model shows its Compound, Author, Journal and Links
+// panels and one panel per REMARK number, unfiltered.
+struct bandicoot_header_panel {
+   std::string title;
+   std::string text;
+   unsigned char red, green, blue;  // background
+   bool fixed_width;
+   bool shown;                      // mmCIF: has something matching the filter
+};
+struct bandicoot_header_view {
+   std::string title;  // the structure's title
+   bool mmcif = false;
+   std::vector<bandicoot_header_panel> panels;
+};
+// The panels for this filter (any case; empty for all) and, for mmCIF, with
+// or without the per-atom and per-residue tables. The panels come in the same
+// order, and as many, whatever the filter. False if the model has no header
+// information.
+bool bandicoot_core_header_view(int imol, const std::string &filter, bool show_all,
+                                bandicoot_header_view *view);
+
+// The directory holding Bandicoot's data files (the licence among them).
+std::string bandicoot_core_package_data_dir();
+
 // Runs a toolbar, menu or sidebar action by its action name; state is a
 // toggle's new state (true for a push button). False if the wx build does not
 // run that action yet.

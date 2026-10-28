@@ -33,6 +33,7 @@
 #include "wxUI/main/modelling-menu.hh"
 #include "wxUI/main/draw-menu.hh"
 #include "wxUI/main/measures-menu.hh"
+#include "wxUI/main/about-menu.hh"
 #include "wxUI/main/validate-menu.hh"
 #include "wxUI/main/validation-graphs.hh"
 #include "wxUI/main/rama-plot.hh"
@@ -766,6 +767,10 @@ private:
       }
       if (wxui::is_measures_action(action)) {
          CallAfter([this, action]() { wxui::run_measures_action(this, action); });
+         return true;
+      }
+      if (wxui::is_about_action(action)) {
+         CallAfter([this, action]() { wxui::run_about_action(this, action); });
          return true;
       }
       if (bandicoot_core_is_representation_direct(action)) {

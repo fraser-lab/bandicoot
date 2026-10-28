@@ -635,6 +635,8 @@ if UI_WX
 	wxUI/main/draw-menu.hh \
 	wxUI/main/measures-menu.cc \
 	wxUI/main/measures-menu.hh \
+	wxUI/main/about-menu.cc \
+	wxUI/main/about-menu.hh \
 	wxUI/main/validate-menu.cc \
 	wxUI/main/validate-menu.hh \
 	wxUI/main/validation-graphs.cc \

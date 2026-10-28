@@ -53,6 +53,8 @@
 #include "ligand/ligand.hh"
 #include "coot-utils/peak-search.hh"
 #include "coot-utils/coot-coord-utils.hh"
+#include "coot-utils/mmcif-header-view.hh"
+#include "coords/mmdb.h"
 #include "utils/coot-utils.hh"
 
 #include "wxUI/bridge/core-bridge.hh"
@@ -5052,6 +5054,178 @@ bool bandicoot_core_goto_position(int &x, int &y) {
 void bandicoot_core_save_goto_position(int x, int y) {
    graphics_info_t::go_to_atom_window_x_position = x;
    graphics_info_t::go_to_atom_window_y_position = y;
+}
+
+// ---- About menu: Header/Remarks Browser
+
+namespace {
+
+bandicoot_header_panel header_panel(const std::string &title, const std::string &text,
+                                    unsigned char r, unsigned char g, unsigned char b,
+                                    bool fixed_width = false) {
+   bandicoot_header_panel p;
+   p.title = title;
+   p.text = text;
+   p.red = r; p.green = g; p.blue = b;
+   p.fixed_width = fixed_width;
+   p.shown = true;
+   return p;
+}
+
+// Pale washes by family, as the GTK browser has them, so the eye groups the
+// window at a glance.
+void header_family_rgb(coot::header_family_t f, unsigned char *rgb) {
+   switch (f) {
+   case coot::header_family_t::bibliography:  rgb[0] = 255; rgb[1] = 247; rgb[2] = 226; break;
+   case coot::header_family_t::entity:        rgb[0] = 255; rgb[1] = 237; rgb[2] = 243; break;
+   case coot::header_family_t::experiment:    rgb[0] = 228; rgb[1] = 253; rgb[2] = 228; break;
+   case coot::header_family_t::refinement:    rgb[0] = 222; rgb[1] = 251; rgb[2] = 255; break;
+   case coot::header_family_t::symmetry:      rgb[0] = 239; rgb[1] = 233; rgb[2] = 255; break;
+   case coot::header_family_t::annotation:    rgb[0] = 233; rgb[1] = 245; rgb[2] = 251; break;
+   case coot::header_family_t::heterogeneity: rgb[0] = 255; rgb[1] = 233; rgb[2] = 198; break;
+   default:                                   rgb[0] = 251; rgb[1] = 251; rgb[2] = 251; break;
+   }
+}
+
+void remark_rgb(int remark_number, unsigned char *rgb) {
+   rgb[0] = rgb[1] = rgb[2] = 255;
+   switch (remark_number) {
+   case 2:   rgb[2] = 233; break;
+   case 3:   rgb[0] = 233; break;
+   case 4:   rgb[1] = 233; break;
+   case 5:   rgb[1] = 241; rgb[2] = 241; break;
+   case 280: rgb[0] = 243; rgb[1] = 237; break;
+   case 350: rgb[1] = 237; rgb[2] = 239; break;
+   case 465: rgb[1] = 233; rgb[2] = 233; break;
+   default: break;
+   }
+}
+
+std::string joined_lines(mmdb::TitleContainer *c, bool journal) {
+   std::string s;
+   if (! c) return s;
+   for (int i = 0; i < c->Length(); i++) {
+      const char *line = nullptr;
+      if (journal) {
+         mmdb::Journal *j = mmdb::PJournal(c->GetContainerClass(i));
+         if (j) line = j->Line;
+      } else {
+         mmdb::Author *a = mmdb::PAuthor(c->GetContainerClass(i));
+         if (a) line = a->Line;
+      }
+      if (line) s += std::string(line) + "\n";
+   }
+   return s;
+}
+
+std::string link_lines(mmdb::Manager *mol) {
+   std::string s;
+   mmdb::Model *model_p = mol->GetModel(1);
+   if (! model_p) return s;
+   int n_links = model_p->GetNumberOfLinks();
+   for (int i = 0; i < n_links; i++) {
+      mmdb::Link *l = model_p->GetLink(i);
+      if (! l) continue;
+      float dist = -1;
+#ifdef MMDB_HAS_LINK_DISTANCE
+      dist = l->dist;
+#endif
+      // residue names padded to three, for alignment
+      std::string rn1 = l->resName1, rn2 = l->resName2;
+      while (rn1.length() < 3) rn1 += " ";
+      while (rn2.length() < 3) rn2 += " ";
+      s += std::string("LINK ") + l->atName1 + " " + l->aloc1 + " " + rn1 + " " +
+           coot::util::int_to_string(l->seqNum1) + " " + l->insCode1 + " " +
+           l->atName2 + " " + l->aloc2 + " " + rn2 + " " +
+           coot::util::int_to_string(l->seqNum2) + " " + l->insCode2 + " " +
+           coot::util::float_to_string_using_dec_pl(dist, 3) + "\n";
+   }
+   return s;
+}
+
+void pdb_header_view(mmdb::Manager *mol, bandicoot_header_view *view) {
+
+   view->title = coot::get_title(mol);
+
+   std::string compound;
+   for (const std::string &line : coot::get_compound_lines(mol)) compound += line + "\n";
+   if (! compound.empty())
+      view->panels.push_back(header_panel("Compound", compound, 255, 247, 247));
+
+   access_title *at = static_cast<access_title *>(
+      const_cast<mmdb::Title *>(static_cast<access_mol *>(mol)->GetTitle()));
+   std::string authors = joined_lines(at->GetAuthor(), false);
+   if (! authors.empty())
+      view->panels.push_back(header_panel("Author", authors, 247, 232, 208));
+   std::string journal = joined_lines(at->GetJournal(), true);
+   if (! journal.empty())
+      view->panels.push_back(header_panel("Journal", journal, 177, 193, 208));
+   std::string links = link_lines(mol);
+   if (! links.empty())
+      view->panels.push_back(header_panel("Links", links, 177, 208, 247, true));
+
+   std::map<int, std::string> remarks;
+   mmdb::TitleContainer *tc = mol->GetRemarks();
+   for (int i = 0; i < tc->Length(); i++) {
+      mmdb::Remark *r = static_cast<mmdb::Remark *>(tc->GetContainerClass(i));
+      if (r) remarks[r->remarkNum] += std::string(r->remark ? r->remark : "") + "\n";
+   }
+   for (const auto &r : remarks) {
+      unsigned char rgb[3];
+      remark_rgb(r.first, rgb);
+      view->panels.push_back(header_panel("REMARK " + coot::util::int_to_string(r.first),
+                                          r.second, rgb[0], rgb[1], rgb[2]));
+   }
+}
+
+// The categories of the document last shown, so typing in the filter does
+// not rebuild them on each key.
+const coot::mmcif_document_t *header_doc = nullptr;
+std::vector<coot::header_category_t> header_categories;
+
+} // namespace
+
+bool bandicoot_core_header_view(int imol, const std::string &filter, bool show_all,
+                                bandicoot_header_view *view) {
+
+   *view = bandicoot_header_view();
+   if (! is_valid_model_molecule(imol)) return false;
+   mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
+   if (! mol) return false;
+
+   const coot::mmcif_document_t *doc = graphics_info_t::molecules[imol].get_mmcif_document();
+   if (! doc) {
+      pdb_header_view(mol, view);
+      return ! view->panels.empty();
+   }
+
+   if (doc != header_doc || filter.empty()) {
+      header_categories = coot::mmcif_header_view(doc);
+      header_doc = doc;
+   }
+   if (header_categories.empty()) return false;
+
+   view->mmcif = true;
+   std::string title = coot::get_title(mol);
+   if (title != "Not available") {
+      for (char &c : title) c = std::toupper(static_cast<unsigned char>(c));
+      view->title = title;
+   }
+   for (const coot::header_category_t &c : header_categories) {
+      unsigned char rgb[3];
+      header_family_rgb(c.family, rgb);
+      std::string text;
+      bool any = coot::mmcif_header_category_text(c, filter, &text);
+      bandicoot_header_panel p = header_panel(c.label.empty() ? c.name : c.label, text,
+                                              rgb[0], rgb[1], rgb[2], true);
+      p.shown = any && (show_all || ! c.body);
+      view->panels.push_back(p);
+   }
+   return true;
+}
+
+std::string bandicoot_core_package_data_dir() {
+   return coot::package_data_dir();
 }
 
 // ---- actions

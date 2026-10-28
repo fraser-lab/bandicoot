@@ -167,12 +167,6 @@ namespace {
       GtkWidget *show_all_button;
    };
 
-   std::string pad_to(const std::string &s, size_t w) {
-      std::string t = s;
-      while (t.size() < w) t += " ";
-      return t;
-   }
-
    // Panel colours, per FAMILY rather than per category, so an unfamiliar
    // category still lands in a sensible group. Kept in the same register as the
    // PDB browser's REMARK panels -- pale washes, dark text -- because the point
@@ -205,130 +199,16 @@ namespace {
       return c;
    }
 
-   std::string lowered(const std::string &s) {
-      std::string t = s;
-      for (char &c : t) c = std::tolower(static_cast<unsigned char>(c));
-      return t;
-   }
-
-   bool contains(const std::string &hay_lower, const std::string &needle_lower) {
-      return needle_lower.empty() ||
-             hay_lower.find(needle_lower) != std::string::npos;
-   }
-
-   // A field with no value carries no information -- only the fact that the tag
-   // was declared -- and a wwPDB entry declares a great many it does not fill
-   // (_refine alone has 66 tags and fills about half). Showing them puts a
-   // column of blanks in the way of the numbers someone opened the window for.
-   bool has_value(const std::string &v) {
-      if (v.empty()) return false;
-      for (char c : v)
-         if (! std::isspace(static_cast<unsigned char>(c))) return true;
-      return false;
-   }
-
-   // Build the text for one category, keeping only what matches the filter.
-   // Returns false when nothing matches, so the caller can hide the frame.
-   //
-   // The filter deliberately works AT FIELD LEVEL. Matching whole categories
-   // was the first cut and it read as broken: typing "resolution" matched
-   // _refine, which contains resolution items, and then showed all 66 of its
-   // fields -- most of them about something else entirely.
-   bool category_content(const coot::header_category_t &c,
-                         const std::string &needle, std::string *out) {
-
-      out->clear();
-      const std::string cat_hay = lowered(c.name + " " + c.label);
-      const bool whole_category_matches = ! needle.empty() && contains(cat_hay, needle);
-
-      if (! c.is_loop) {
-
-         // Which fields to show, and how wide the label column has to be. Two
-         // passes so the alignment is computed from what is actually displayed
-         // rather than from the whole category.
-         std::vector<size_t> keep;
-         for (size_t i = 0; i < c.column_tags.size(); i++) {
-            const std::string &v = c.rows.empty() ? std::string() : c.rows[0][i];
-            if (! has_value(v)) continue;
-            if (! needle.empty() && ! whole_category_matches) {
-               std::string hay = lowered(c.column_labels[i] + " " + c.column_tags[i] +
-                                         " " + v);
-               if (! contains(hay, needle)) continue;
-            }
-            keep.push_back(i);
-         }
-         if (keep.empty()) return false;
-
-         size_t wl = 0;
-         for (size_t i : keep) wl = std::max(wl, c.column_labels[i].size());
-         for (size_t i : keep) {
-            const std::string &v = c.rows[0][i];
-            *out += " " + pad_to(c.column_labels[i], wl) + "   " + v + "\n";
-         }
-         return true;
-      }
-
-      // A loop is a table, and a table's unit is the row. If the category or a
-      // column heading matches, the whole table is what was asked for;
-      // otherwise keep the rows that match and drop the rest.
-      bool column_matches = false;
-      if (! needle.empty())
-         for (size_t i = 0; i < c.column_labels.size() && ! column_matches; i++)
-            column_matches = contains(lowered(c.column_labels[i] + " " +
-                                              c.column_tags[i]), needle);
-
-      std::vector<size_t> keep_rows;
-      for (size_t r = 0; r < c.rows.size(); r++) {
-         if (needle.empty() || whole_category_matches || column_matches) {
-            keep_rows.push_back(r);
-            continue;
-         }
-         bool row_matches = false;
-         for (const std::string &cell : c.rows[r])
-            if (contains(lowered(cell), needle)) { row_matches = true; break; }
-         if (row_matches) keep_rows.push_back(r);
-      }
-      if (keep_rows.empty()) return false;
-
-      // Drop columns that are empty in every row being shown: a wwPDB loop
-      // routinely declares columns it never fills, and an empty column is a
-      // stretch of whitespace between two things the reader wants to compare.
-      size_t ncol = c.column_tags.size();
-      std::vector<size_t> cols;
-      for (size_t i = 0; i < ncol; i++)
-         for (size_t r : keep_rows)
-            if (i < c.rows[r].size() && has_value(c.rows[r][i])) { cols.push_back(i); break; }
-      if (cols.empty()) return false;
-
-      std::vector<size_t> w(ncol, 0);
-      for (size_t i : cols) {
-         w[i] = c.column_labels[i].size();
-         for (size_t r : keep_rows)
-            if (i < c.rows[r].size()) w[i] = std::max(w[i], c.rows[r][i].size());
-         if (w[i] > 44) w[i] = 44;
-      }
-      for (size_t i : cols) *out += " " + pad_to(c.column_labels[i], w[i]);
-      *out += "\n";
-      for (size_t i : cols) *out += " " + std::string(w[i], '-');
-      *out += "\n";
-      for (size_t r : keep_rows) {
-         for (size_t i : cols)
-            *out += " " + pad_to(i < c.rows[r].size() ? c.rows[r][i] : std::string(), w[i]);
-         *out += "\n";
-      }
-      return true;
-   }
-
    void header_dialog_refresh(header_dialog_state *st) {
 
       const char *txt = gtk_entry_get_text(GTK_ENTRY(st->filter_entry));
-      std::string needle = lowered(txt ? txt : "");
+      std::string needle = txt ? txt : "";
       bool show_all =
          gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(st->show_all_button));
 
       for (header_panel &p : st->panels) {
          std::string body;
-         bool any = category_content(*p.cat, needle, &body);
+         bool any = coot::mmcif_header_category_text(*p.cat, needle, &body);
          bool wanted = any && (show_all || ! p.cat->body);
          if (! wanted) {
             gtk_widget_hide(p.frame);

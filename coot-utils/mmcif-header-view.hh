@@ -142,6 +142,13 @@ namespace coot {
    //! Which family does this category belong to? Prefix-matched, longest wins.
    header_family_t mmcif_category_family(const std::string &category);
 
+   //! The text a browser panel shows for a category: aligned label/value
+   //! pairs, or a table with a heading row. Only fields (or rows) matching
+   //! filter (any case; empty matches all) are kept, and empty fields and
+   //! columns are dropped. False when nothing is left to show.
+   bool mmcif_header_category_text(const header_category_t &c,
+                                   const std::string &filter, std::string *out);
+
 }
 
 #endif // MMCIF_HEADER_VIEW_HH
