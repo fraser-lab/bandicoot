@@ -1,6 +1,7 @@
 // src/wxUI/main/display-manager.cc
 
 #include "wxUI/main/display-manager.hh"
+#include "wxUI/main/map-properties.hh"
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
@@ -20,7 +21,6 @@
 #include <wx/textctrl.h>
 #include <wx/tglbtn.h>
 
-#include <iostream>
 #include <vector>
 
 namespace wxui {
@@ -257,11 +257,7 @@ void DisplayManager::add_map_row(const bandicoot_dm_molecule &m, int scroll_map)
       for (MapRow &other : map_rows) other.scroll->SetValue(other.imol == imol);
       bandicoot_core_set_scroll_map(imol);
    });
-   properties->Bind(wxEVT_BUTTON, [](wxCommandEvent &) {
-      // the single-map properties dialog comes with the complex dialogs
-      std::cout << "INFO:: not yet connected in the wx build: Display Manager > Properties"
-                << " (on_display_control_map_properties_button_clicked)" << std::endl;
-   });
+   properties->Bind(wxEVT_BUTTON, [this, imol](wxCommandEvent &) { show_map_properties(this, imol); });
    remove->Bind(wxEVT_BUTTON, [imol](wxCommandEvent &) { bandicoot_core_close_molecule(imol); });
 
    map_list->add_row(row);

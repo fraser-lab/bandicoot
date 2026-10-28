@@ -54,6 +54,7 @@
 #include "coot-utils/peak-search.hh"
 #include "coot-utils/coot-coord-utils.hh"
 #include "coot-utils/mmcif-header-view.hh"
+#include "coot-utils/xmap-stats.hh"
 #include "coords/mmdb.h"
 #include "utils/coot-utils.hh"
 
@@ -5054,6 +5055,86 @@ bool bandicoot_core_goto_position(int &x, int &y) {
 void bandicoot_core_save_goto_position(int x, int y) {
    graphics_info_t::go_to_atom_window_x_position = x;
    graphics_info_t::go_to_atom_window_y_position = y;
+}
+
+// ---- Display Manager: map properties
+
+bool bandicoot_core_map_properties(int imol, bandicoot_map_properties *p) {
+
+   *p = bandicoot_map_properties();
+   if (! is_valid_map_molecule(imol)) return false;
+   molecule_class_info_t &m = graphics_info_t::molecules[imol];
+   const clipper::Xmap<float> &xmap = m.xmap;
+
+   p->cell = m.cell_text_with_embeded_newline();
+   p->spacegroup = "   " + xmap.spacegroup().descr().symbol_hm() +
+                   "  [" + xmap.spacegroup().descr().symbol_hall() + "]";
+   // no data resolution: estimate it from the grid, as Coot does
+   float r = m.data_resolution();
+   if (r < 0) {
+      r = 2.0 * xmap.cell().descr().a() / static_cast<float>(xmap.grid_sampling().nu());
+      p->resolution = " " + coot::util::float_to_string(r);
+   } else {
+      p->resolution = coot::util::float_to_string(r);
+   }
+   clipper::Grid_sampling gs = xmap.grid_sampling();
+   p->resolution += " \xc3\x85 (by grid) " + coot::util::int_to_string(gs.nu()) + " " +
+                    coot::util::int_to_string(gs.nv()) + " " + coot::util::int_to_string(gs.nw());
+
+   p->solid_surface = m.draw_it_for_solid_density_surface;
+   p->opacity = m.density_surface_opacity;
+   p->contour_level = m.contour_level;
+   p->step_by_rmsd = m.contour_by_sigma_flag;
+   p->rmsd_step = m.contour_sigma_step;
+   p->skeleton = m.xskel_is_filled;
+   p->colour = bandicoot_core_map_colour(imol);
+
+   mean_and_variance<float> mv =
+      m.set_and_get_histogram_values(1000, graphics_info_t::ignore_pseudo_zeros_for_map_stats);
+   if (mv.size() > 1) {
+      p->bins = mv.bins;
+      p->min_density = mv.min_density;
+      p->bin_width = mv.bin_width;
+      p->mean = mv.mean;
+      p->rmsd = std::sqrt(mv.variance);
+   }
+   return true;
+}
+
+void bandicoot_core_set_map_surface(int imol, bool solid) {
+   if (! is_valid_map_molecule(imol)) return;
+   set_draw_map_standard_lines(imol, solid ? 0 : 1);
+   set_draw_solid_density_surface(imol, solid ? 1 : 0);
+   if (solid) set_flat_shading_for_solid_density_surface(0);
+}
+
+void bandicoot_core_set_map_opacity(int imol, float opacity) {
+   if (is_valid_map_molecule(imol)) set_solid_density_surface_opacity(imol, opacity);
+}
+
+void bandicoot_core_set_map_contour_level(int imol, float level, bool in_rmsd) {
+   if (! is_valid_map_molecule(imol)) return;
+   if (in_rmsd)
+      set_contour_level_in_sigma(imol, level);
+   else
+      set_contour_level_absolute(imol, level);
+}
+
+void bandicoot_core_set_map_rmsd_step(int imol, bool on, float step) {
+   // a step of 0 is ignored when off
+   if (is_valid_map_molecule(imol))
+      graphics_info_t::molecules[imol].set_contour_by_sigma_step(on ? step : 0.0, on ? 1 : 0);
+}
+
+void bandicoot_core_set_map_skeleton(int imol, bool on) {
+   if (! is_valid_map_molecule(imol)) return;
+   if (on) {
+      graphics_info_t::skeletonize_map(imol, 0);
+      if (graphics_info_t::map_for_skeletonize < 0)
+         graphics_info_t::map_for_skeletonize = imol;
+   } else {
+      graphics_info_t::unskeletonize_map(imol);
+   }
 }
 
 // ---- About menu: Header/Remarks Browser

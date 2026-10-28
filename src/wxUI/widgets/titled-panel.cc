@@ -24,12 +24,15 @@ const int title_inset = 8;  // points from the frame's left end to the title
 
 // ---------------------------------------------------------------- TitledPanel
 
-TitledPanel::TitledPanel(wxWindow *parent, const wxString &title)
+TitledPanel::TitledPanel(wxWindow *parent, const wxString &title, bool bold)
    : wxPanel(parent) {
 
    SetLabel(title);
    SetBackgroundColour(palette::face());
+   wxFont normal = GetFont();
+   if (bold) SetFont(normal.Bold());
    inner = new wxPanel(this);
+   if (bold) inner->SetFont(normal);
    inner_sizer = new wxBoxSizer(wxVERTICAL);
    inner->SetSizer(inner_sizer);
 

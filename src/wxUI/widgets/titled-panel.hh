@@ -22,7 +22,9 @@ namespace wxui {
 
 class TitledPanel : public wxPanel {
 public:
-   TitledPanel(wxWindow *parent, const wxString &title = wxEmptyString);
+   // bold: the title in bold, as GTK frames titled with <b> markup; the
+   // content keeps the ordinary font
+   TitledPanel(wxWindow *parent, const wxString &title = wxEmptyString, bool bold = false);
 
    // Put children here, created with content() as their parent.
    wxPanel *content() const { return inner; }

@@ -1457,6 +1457,31 @@ struct bandicoot_header_view {
 bool bandicoot_core_header_view(int imol, const std::string &filter, bool show_all,
                                 bandicoot_header_view *view);
 
+// Display Manager > Properties: a map's settings, and its density histogram
+// with the contour level marked.
+struct bandicoot_map_properties {
+   std::string cell, spacegroup, resolution;
+   bool solid_surface = false;     // drawn as a surface rather than lines
+   float opacity = 1;              // of the surface, 0 to 1
+   float contour_level = 0;        // absolute
+   bool step_by_rmsd = false;      // contour level steps in r.m.s.d.
+   float rmsd_step = 0;
+   bool skeleton = false;
+   bandicoot_rgb colour;
+   // the histogram: counts in bins of equal width from min_density; empty if
+   // the map has none
+   std::vector<int> bins;
+   float min_density = 0, bin_width = 0, mean = 0, rmsd = 0;
+};
+bool bandicoot_core_map_properties(int imol, bandicoot_map_properties *p);
+void bandicoot_core_set_map_surface(int imol, bool solid);
+void bandicoot_core_set_map_opacity(int imol, float opacity);
+// level in r.m.s.d. if in_rmsd, otherwise absolute
+void bandicoot_core_set_map_contour_level(int imol, float level, bool in_rmsd);
+// on: the scroll wheel and +/- step the contour level by step r.m.s.d.
+void bandicoot_core_set_map_rmsd_step(int imol, bool on, float step);
+void bandicoot_core_set_map_skeleton(int imol, bool on);
+
 // The directory holding Bandicoot's data files (the licence among them).
 std::string bandicoot_core_package_data_dir();
 
