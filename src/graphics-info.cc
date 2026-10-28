@@ -2970,6 +2970,17 @@ graphics_info_t::printString_internal(const std::string &s,
 				      const double &x, const double &y, const double &z,
 				      bool do_unproject, bool mono_font, double sf) {
 
+   // Labels take the colour their caller set. Those colours are chosen for
+   // a black background, so on a light one a darker shade of the same colour
+   // is used instead, to keep the label readable.
+   GLfloat label_colour[4];
+   glGetFloatv(GL_CURRENT_COLOR, label_colour);
+   if (! background_is_black_p())
+      for (int i=0; i<3; i++)
+	 label_colour[i] *= 0.4f;
+   glPushAttrib(GL_CURRENT_BIT);
+   glColor4f(label_colour[0], label_colour[1], label_colour[2], 1.0f);
+
    if (graphics_info_t::stroke_characters) {
 
       // better text with these 3 lines?
@@ -3000,8 +3011,17 @@ graphics_info_t::printString_internal(const std::string &s,
       glPushMatrix();
       glTranslated(x,y,z);
 
-      float aspect = static_cast<float>(graphics_x_size)/static_cast<float>(graphics_y_size);
-      glScaled(sf/aspect, sf, sf);
+      // A camera-facing label lives in a space whose projection already
+      // corrects for the window's shape, so it is scaled evenly; scaling one
+      // axis here would act along a model axis and stretch the label as the
+      // view turns. Text drawn straight in screen coordinates (no unproject)
+      // still needs the correction.
+      if (do_unproject) {
+	 glScaled(sf, sf, sf);
+      } else {
+	 float aspect = static_cast<float>(graphics_x_size)/static_cast<float>(graphics_y_size);
+	 glScaled(sf/aspect, sf, sf);
+      }
 
       if (do_unproject) {
 	 coot::Cartesian b = unproject(1);
@@ -3067,11 +3087,8 @@ graphics_info_t::printString_internal(const std::string &s,
 	    glEnable(GL_BLEND);
 	    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	    glBindTexture(GL_TEXTURE_2D, tex);
-	    // Tint the white-on-transparent texture with the configured
-	    // label colour.
-	    glColor4f(graphics_info_t::font_colour.red,
-		      graphics_info_t::font_colour.green,
-		      graphics_info_t::font_colour.blue, 1.0f);
+	    // Tint the white-on-transparent texture with the label colour.
+	    glColor4f(label_colour[0], label_colour[1], label_colour[2], 1.0f);
 	    // NSBitmapImageRep rows are top-down; flip V so the texture
 	    // isn't upside down in the quad.
 	    glBegin(GL_QUADS);
@@ -3113,6 +3130,8 @@ graphics_info_t::printString_internal(const std::string &s,
       glPopAttrib();
 #endif
    }
+
+   glPopAttrib();
 }
 
 
