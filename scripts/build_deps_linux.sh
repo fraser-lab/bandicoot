@@ -14,6 +14,9 @@
 #                   and GTK 3 cannot be loaded into one process, so the
 #                   distribution's wxGTK (GTK 3) cannot be used
 #   gemmi           mmCIF I/O; needs libgemmi_cpp
+#   GSL             refinement's minimiser; built here because a distribution's
+#                   libgsl-dev can be unusable when other GSL runtime versions
+#                   are already installed
 #
 # Tarballs are downloaded from upstream and verified against the checksums
 # pinned below, then cached in <prefix>/src so re-runs need no network.
@@ -75,6 +78,7 @@ FFTW_OUT="${DEPS_PREFIX}/fftw2"
 CANVAS_OUT="${DEPS_PREFIX}/canvas"
 WX_OUT="${DEPS_PREFIX}/wx"
 GEMMI_OUT="${DEPS_PREFIX}/gemmi"
+GSL_OUT="${DEPS_PREFIX}/gsl"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -87,6 +91,7 @@ libgnomecanvas|2.30.3|https://download.gnome.org/sources/libgnomecanvas/2.30/lib
 goocanvas|1.0.0|https://download.gnome.org/sources/goocanvas/1.0/goocanvas-1.0.0.tar.bz2|1c072ef88567cad241fb4addee26e9bd96741b1503ff736d1c152fa6d865711e
 wxWidgets|3.3.3|https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.3/wxWidgets-3.3.3.tar.bz2|81b09d6dd9f1ed9301f8c55a968a488d0491f264dc2bab19a7e407ac67009482
 gemmi|0.7.5|https://github.com/project-gemmi/gemmi/archive/refs/tags/v0.7.5.tar.gz|9e2a8a51e62c69bf43f62aadf527ca4312860de8a36c12a8747d3e8ae556f0b3
+gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
 "
 
 echo "==> deps prefix: ${DEPS_PREFIX}"
@@ -195,6 +200,8 @@ build_autotools libgnomecanvas "${PCDIR}/libgnomecanvas-2.0.pc" "${CANVAS_OUT}" 
     --disable-static --disable-gtk-doc --disable-glibtest
 build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
     --disable-static --disable-gtk-doc --disable-python
+build_autotools gsl "${GSL_OUT}/bin/gsl-config" "${GSL_OUT}" \
+    --disable-static
 
 # wxWidgets on GTK 2, with the parts Bandicoot uses (OpenGL canvas, AUI, SVG
 # icons). The C++ flags must not carry the old-C warning downgrades above.
@@ -240,6 +247,11 @@ if [ -f "${FFTW_OUT}/include/fftw.h" ]; then
     printf '    %-22s %s\n' "fftw2 (single-prec)" "$(dep_field fftw 2)"
 else
     echo "    fftw2: NOT FOUND" >&2; _fail=1
+fi
+if [ -x "${GSL_OUT}/bin/gsl-config" ]; then
+    printf '    %-22s %s\n' "GSL" "$("${GSL_OUT}/bin/gsl-config" --version)"
+else
+    echo "    GSL: NOT FOUND" >&2; _fail=1
 fi
 if [ -x "${WX_OUT}/bin/wx-config" ]; then
     printf '    %-22s %s (%s)\n' "wxWidgets" "$("${WX_OUT}/bin/wx-config" --version)" \

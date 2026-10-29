@@ -42,6 +42,7 @@ FFTW_PREFIX="${DEPS_PREFIX}/fftw2"
 CANVAS_PREFIX="${DEPS_PREFIX}/canvas"
 WX_PREFIX="${DEPS_PREFIX}/wx"
 GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
+GSL_PREFIX="${DEPS_PREFIX}/gsl"
 
 # --- system packages (Debian / Ubuntu) ---------------------------------------
 # Crystallographic libraries come from the distribution (Debian Science);
@@ -51,7 +52,7 @@ APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig gobjc++ cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
-libgsl-dev libboost-dev
+libboost-dev
 libclipper-dev libccp4-dev libmmdb2-dev libssm-dev
 python3-dev python3-numpy python3-matplotlib
 "
@@ -98,6 +99,7 @@ _need "${CANVAS_PREFIX}/lib/pkgconfig/goocanvas.pc" "goocanvas 1.x"
 _need "${CANVAS_PREFIX}/lib/pkgconfig/libgnomecanvas-2.0.pc" "libgnomecanvas"
 _need "${WX_PREFIX}/bin/wx-config"                 "wxWidgets (GTK 2)"
 _need "${GEMMI_PREFIX}/include/gemmi/model.hpp"    "gemmi"
+_need "${GSL_PREFIX}/bin/gsl-config"               "GSL"
 _need "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" "monomer dictionary (checked in)"
 _need "${PYTHON}"                                  "Python"
 if [ "${_preflight_fail}" != "0" ]; then
@@ -109,7 +111,8 @@ PYTHON_CONFIG="${PYTHON}-config"
 [ -x "${PYTHON_CONFIG}" ] || PYTHON_CONFIG="$(command -v python3-config || true)"
 [ -n "${PYTHON_CONFIG}" ] || { echo "!! python3-config not found (python3-dev)" >&2; exit 1; }
 
-for mod in gtk+-2.0 clipper mmdb2 ssm gsl; do
+export PKG_CONFIG_PATH="${CANVAS_PREFIX}/lib/pkgconfig:${GSL_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+for mod in gtk+-2.0 clipper mmdb2 ssm; do
     if ! pkg-config --exists "${mod}"; then
         echo "!! build-linux.sh: pkg-config cannot find ${mod}" >&2
         _preflight_fail=1
@@ -160,10 +163,9 @@ touch src/main.cc
 # --- configure -----------------------------------------------------------------
 # rpaths into the dependency tree so the installed program finds the
 # source-built libraries without LD_LIBRARY_PATH
-DEP_RPATHS="-Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib"
+DEP_RPATHS="-Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib"
 PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
 
-export PKG_CONFIG_PATH="${CANVAS_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 export CPPFLAGS="-I${PREFIX}/include"
 export LDFLAGS="-L${PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
@@ -178,9 +180,17 @@ echo "==> ./configure --prefix=${PREFIX} --with-ui=wx"
     --with-fftw-prefix="${FFTW_PREFIX}" \
     --with-goocanvas-prefix="${CANVAS_PREFIX}" \
     --with-gemmi="${GEMMI_PREFIX}" \
+    --with-gsl-prefix="${GSL_PREFIX}" \
     --with-python=/usr \
     PYTHON="${PYTHON}" \
     PYTHON_CONFIG="${PYTHON_CONFIG}"
+
+# configure builds without refinement, quietly, when its GSL test fails
+if ! grep -q "^COOT_GSL_FLAGS = -DHAVE_GSL" src/Makefile; then
+    echo "!! build-linux.sh: configure did not enable GSL, so refinement would be missing" >&2
+    echo "   see the GSL section of config.log" >&2
+    exit 1
+fi
 
 # --- make + install -------------------------------------------------------------
 if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
