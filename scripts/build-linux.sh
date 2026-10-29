@@ -48,7 +48,7 @@ GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
 # gobjc++ is needed only because configure probes for an Objective-C++
 # compiler (no Objective-C++ is compiled on Linux).
 APT_PACKAGES="
-build-essential autoconf automake libtool pkg-config intltool swig gobjc++ cmake curl
+build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig gobjc++ cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
 libgsl-dev libboost-dev

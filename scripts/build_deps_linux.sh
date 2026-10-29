@@ -34,6 +34,28 @@ fi
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
+# --- system packages these builds need (Debian / Ubuntu) ---------------------
+APT_PACKAGES="
+build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl cmake curl
+libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev
+libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev
+"
+if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ] && command -v dpkg-query >/dev/null 2>&1; then
+    _missing=""
+    for p in ${APT_PACKAGES}; do
+        if ! dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "install ok installed"; then
+            _missing="${_missing} $p"
+        fi
+    done
+    if [ -n "${_missing}" ]; then
+        echo "!! build_deps_linux.sh: missing system packages:${_missing}" >&2
+        echo "   install them with:" >&2
+        echo "     sudo apt-get install${_missing}" >&2
+        echo "   (BANDICOOT_SKIP_PACKAGE_CHECK=1 skips this check)" >&2
+        exit 1
+    fi
+fi
+
 DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
