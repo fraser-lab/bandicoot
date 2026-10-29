@@ -37,8 +37,10 @@
 coot::atom_overlaps_container_t::atom_overlaps_container_t(mmdb::Residue *res_central_in,
                                                            const std::vector<mmdb::Residue *> &neighbours_in,
                                                            mmdb::Manager *mol_in,
-                                                           const protein_geometry *geom_p_in) {
+                                                           const protein_geometry *geom_p_in,
+                                                           int imol_enc_in) {
    geom_p = geom_p_in;
+   imol_enc = imol_enc_in;
    res_central = res_central_in;
    neighbours = neighbours_in;
    mol = mol_in;
@@ -51,8 +53,10 @@ coot::atom_overlaps_container_t::atom_overlaps_container_t(mmdb::Residue *res_ce
 coot::atom_overlaps_container_t::atom_overlaps_container_t(mmdb::Residue *res_central_in,
                                                            mmdb::Residue *neighbour,
                                                            mmdb::Manager *mol_in,
-                                                           const protein_geometry *geom_p_in) {
+                                                           const protein_geometry *geom_p_in,
+                                                           int imol_enc_in) {
    geom_p = geom_p_in;
+   imol_enc = imol_enc_in;
    res_central = res_central_in;
    neighbours.push_back(neighbour);
    mol = mol_in;
@@ -69,9 +73,11 @@ coot::atom_overlaps_container_t::atom_overlaps_container_t(mmdb::Residue *res_ce
                                                            mmdb::Manager *mol_in,
                                                            const protein_geometry *geom_p_in,
                                                            double clash_spike_length_in,
-                                                           double probe_radius_in) {
+                                                           double probe_radius_in,
+                                                           int imol_enc_in) {
    probe_radius = probe_radius_in;
    geom_p = geom_p_in;
+   imol_enc = imol_enc_in;
    res_central = res_central_in;
    neighbours = neighbours_in;
    mol = mol_in;
@@ -86,8 +92,10 @@ coot::atom_overlaps_container_t::atom_overlaps_container_t(mmdb::Manager *mol_in
                                                            const protein_geometry *geom_p_in,
                                                            bool ignore_water_contacts_flag_in,
                                                            double clash_spike_length_in,
-                                                           double probe_radius_in) {
+                                                           double probe_radius_in,
+                                                           int imol_enc_in) {
    geom_p = geom_p_in;
+   imol_enc = imol_enc_in;
    res_central = 0;
    mol = mol_in;
    clash_spike_length = 0.5;
@@ -112,7 +120,7 @@ coot::atom_overlaps_container_t::init() {
 
       std::string cres_name = res_central->GetResName();
       std::pair<bool, dictionary_residue_restraints_t> d =
-         geom_p->get_monomer_restraints(cres_name, protein_geometry::IMOL_ENC_ANY);
+         geom_p->get_monomer_restraints(cres_name, imol_enc);
       if (! d.first) {
          std::cout << "Failed to get dictionary for " << cres_name << std::endl;
       } else {
@@ -128,7 +136,7 @@ coot::atom_overlaps_container_t::init() {
          have_dictionary = true;
          for (unsigned int i=0; i<neighbours.size(); i++) {
             std::string residue_name = neighbours[i]->GetResName();
-            d = geom_p->get_monomer_restraints(residue_name, protein_geometry::IMOL_ENC_ANY);
+            d = geom_p->get_monomer_restraints(residue_name, imol_enc);
             if (! d.first) {
                std::cout << "WARNING:: Overlap fail. Failed to get dictionary for name "
                          << residue_name << std::endl;
@@ -177,7 +185,7 @@ coot::atom_overlaps_container_t::init_for_all_atom() {
                it = dictionary_map.find(residue_name);
                if (it == dictionary_map.end()) {
                   std::pair<bool, dictionary_residue_restraints_t> d =
-                     geom_p->get_monomer_restraints(residue_name, protein_geometry::IMOL_ENC_ANY);
+                     geom_p->get_monomer_restraints(residue_name, imol_enc);
                   if (! d.first) {
                      std::cout << "WARNING::Failed to get dictionary for " << residue_name << std::endl;
                      std::cout << "WARNING:: turning off have_dictionary" << std::endl;
@@ -432,7 +440,7 @@ coot::atom_overlaps_container_t::make_overlaps() {
    res_central->GetAtomTable(central_residue_atoms, n_central_residue_atoms);
    std::string res_central_name(res_central->GetResName());
    std::vector<std::pair<std::string, std::string> > bonds_for_cr_at =
-      geom_p->get_bonded_and_1_3_angles(res_central_name, protein_geometry::IMOL_ENC_ANY);
+      geom_p->get_bonded_and_1_3_angles(res_central_name, imol_enc);
 
    std::vector<baddie_attribs_t> baddies; // and not so baddies
 
@@ -447,7 +455,7 @@ coot::atom_overlaps_container_t::make_overlaps() {
 
          std::string res_name_nat(neighbours[i]->GetResName());
          std::vector<std::pair<std::string, std::string> > bonds_for_n_at =
-            geom_p->get_bonded_and_1_3_angles(res_name_nat, protein_geometry::IMOL_ENC_ANY);
+            geom_p->get_bonded_and_1_3_angles(res_name_nat, imol_enc);
 
          mmdb::PAtom *residue_atoms = 0;
          int n_residue_atoms = 0;
@@ -958,7 +966,7 @@ coot::atom_overlaps_container_t::get_h_bond_type(mmdb::Atom *at) {
    hb_t type = HB_UNASSIGNED;
    std::string atom_name = at->name;
    std::string res_name = at->GetResName();
-   type = geom_p->get_h_bond_type(atom_name, res_name, protein_geometry::IMOL_ENC_ANY); // heavyweight
+   type = geom_p->get_h_bond_type(atom_name, res_name, imol_enc); // heavyweight
 
    return type;
 }
@@ -1132,6 +1140,14 @@ coot::atom_overlaps_container_t::contact_dots_for_ligand(double dot_density_in) 
 
    atom_overlaps_dots_container_t ao;
    mmdb::realtype max_dist = 4.0; // max distance for an interaction
+
+   // BANDICOOT: the per-residue dictionaries below are only filled when every
+   // residue has one; without them the radius lookup reads past the end
+   if (! have_dictionary) {
+      std::cout << "WARNING:: contact_dots_for_ligand(): no dictionary for the "
+                << "residue or a neighbour" << std::endl;
+      return ao;
+   }
 
    bool excl_mc_flag = true; // exclude main-chain to main-chain interactions also
 
@@ -2471,7 +2487,7 @@ coot::atom_overlaps_container_t::bonded_angle_or_ring_related(mmdb::Manager *mol
       std::map<std::string, std::vector<std::pair<std::string, std::string> > >::const_iterator it;
       it = bonded_neighbours->find(res_name);
       if (it == bonded_neighbours->end()) {
-         bps = geom_p->get_bonded_and_1_3_angles(res_name, protein_geometry::IMOL_ENC_ANY);
+         bps = geom_p->get_bonded_and_1_3_angles(res_name, imol_enc);
          // bonded_neighbours[res_name] = bps; // when arg is reference
          // bonded_neighbours->insert(res_name, bps);
          (*bonded_neighbours)[res_name] = bps;

@@ -29,15 +29,15 @@ Coot 0.9, whose Python layer is Python-2 flavoured throughout; the same pattern 
 - **Workaround:** none for the bindings themselves. Coot's built-in C++ navigation keys
   are unaffected.
 
-### Python-driven dialogs open nothing
-`import gtk` resolves to a stub (`python/coot_load_modules.py.in:163`) because PyGTK was
-never ported to Python 3. Widget code runs, creates no window and raises nothing, so the
-affected menu items appear to do nothing at all. Around 700 call sites across 8 Python
-files are in this state; the wwPDB validation chart is a measured example — it downloads
-and parses correctly and then has nowhere to draw.
+### Python-driven dialogs open nothing (GTK build)
+`import gtk` resolves to a stub because PyGTK was never ported to Python 3. Widget code
+runs, creates no window and raises nothing, so the affected menu items appear to do
+nothing at all. In the GTK build this covers several hundred call sites across the Python
+modules. The wx build replaces the windows its menus and tools reach with native ones
+(including the wwPDB validation report after a PDB fetch, and the Probe flips list).
 
-- **Workaround:** none. Dialogs ported to C++ (the Modelling menu, glyco, the scripting
-  console, PanDDA Inspect, restraints) are unaffected.
+- **Workaround:** none in the GTK build. Dialogs ported to C++ (the Modelling menu, glyco,
+  the scripting console, PanDDA Inspect, restraints) are unaffected.
 
 ### mmCIF export ignores the no-hydrogens and anisotropic options
 `write_cif_file()` (`src/molecule-class-info.cc:7953`) writes hydrogens and ANISOU
@@ -52,8 +52,8 @@ show only the first three characters (`coot-utils/gemmi-header.cc:926, :934,
 only the header display is wrong. Saving such a model as PDB is a separate matter and is
 already guarded — the save warns and offers a rename rather than truncating silently.
 
-### GitHub #28 — Side toolbar style is not preserved between sessions
-Reported by alyubimov, 2026-08-28. Every other preference persists in
+### GitHub #28 — Side toolbar style is not preserved between sessions (GTK build)
+Every other preference persists in
 `~/.coot-preferences/coot_preferences.py`, but the model ("side") toolbar always comes back
 as **Icons and Text**, whatever was last chosen from the sidebar's settings popup.
 
@@ -74,10 +74,63 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
   (`src/callbacks.c:7872/7885/7898`), so it updates the state and does persist.
 - Inherited from Coot 0.9 rather than introduced here, but more visible in Bandicoot because
   the sidebar's own settings popup is the natural place to change the style.
+- The wx build saves the style whichever way it is chosen.
 
 ---
 
 ## P3 — cosmetic / minor
+
+### Stereo display modes do not work
+Stereo display is not functional; session files that ask for a stereo mode open in mono.
+
+### Ligand > Hydrogenate region crashes
+Choosing the item crashes Bandicoot. Not yet investigated, including whether Coot 0.9
+does the same.
+
+- **Workaround:** Modelling > Add Hydrogen Atoms adds hydrogens to the active residue's
+  molecule.
+
+### Restoring an older session warns "No matching molecules found" for its dictionaries
+Session files saved by earlier builds read their restraint dictionaries before their
+molecules, so each dictionary is checked against an empty session and raises a "No
+matching molecules found for <file>" message, one per dictionary read. The dictionaries
+are still read, and apply once the molecules arrive. Sessions saved now read molecules
+first, and generated dictionaries are kept in `coot-restraints` rather than in a
+temporary folder the system may clear.
+
+- **Workaround:** dismiss the messages, then save the session again; the new session
+  file restores cleanly.
+
+### Simple Mutate on a nucleotide does nothing for the molecule's first atom
+`do_base_mutation()` (`src/c-interface-build-side-chain.cc`) accepts the picked atom only
+if its index is `> 0`, so when the atom clicked is the first atom of the molecule the
+base chooser opens but choosing a base changes nothing, silently. Inherited from Coot 0.9.
+
+- **Workaround:** click any other atom of the nucleotide.
+
+### Opening data without map coefficients makes no map
+An MTZ file without phases, opened with File > Open MTZ, mmCIF, fcf or phs... or with
+Auto Open MTZ, goes to Coot's calculate-phases route, which asks for a model through a
+Python dialog that was never ported, so nothing happens. An mmCIF file holding observed
+structure factors only is read, found to have no calculated amplitudes, and left with a
+warning on the terminal. Both inherited from Coot 0.9.
+
+- **Workaround:** open the MTZ file written by refinement (it carries map coefficients),
+  or refine first with Run Refmac.
+
+### Some data files do nothing when opened as a dataset
+File > Open MTZ, mmCIF, fcf or phs... offers `.mmcif`, `.cif.gz` and CNS files, but only
+`.mtz`, `.cif`, `.fcf`, `.phs` and `.pha` are read; the others are passed over silently.
+Coot 0.9's CNS route here is disabled. Inherited from Coot 0.9.
+
+- **Workaround:** rename `.mmcif` to `.cif`, uncompress `.cif.gz`, and open CNS map
+  coefficients with Auto Open MTZ.
+
+### Search Monomer Library ignores "Include Monomers with Minimal Descriptions"
+The check box has no effect: the search treats every monomer the same either way.
+Inherited from Coot 0.9.
+
+- **Workaround:** none needed; the results are the same.
 
 ### Generated restraints depend on the quality of the input geometry
 elbow's target distances partly track the input coordinates, so restraints derived from
@@ -108,10 +161,9 @@ application otherwise launches normally, so this does not present as an install 
 
 - **Fix:** run `./setup.sh` from the unpacked tarball.
 
-### GitHub #15 — Model toolbar cannot be repositioned (partially addressed)
-Reported by alyubimov, 2026-08-06. Coot 0.9 lets the docked model toolbar sit on any
-edge of the rendering window; in Bandicoot it is fixed in place (on the **right**, not
-the left as the issue text says — `bandicoot_reposition_sidebar()` pins it to
+### GitHub #15 — Model toolbar cannot be repositioned (GTK build)
+Coot 0.9 lets the docked model toolbar sit on any edge of the rendering window; in the GTK
+build it is fixed in place on the **right** (`bandicoot_reposition_sidebar()` pins it to
 `NSMaxX(usable) - width`).
 
 - **Root cause:** repositioning works by reparenting the legacy
@@ -119,23 +171,10 @@ the left as the issue text says — `bandicoot_reposition_sidebar()` pins it to
   the `GtkToolbar` OUT of that handlebox into the native pinned sidebar
   (`gtk_widget_reparent` in `bandicoot_sidebar_install`, `src/bandicoot_appkit.mm`), so
   every position control moves an empty container between hidden frames.
-- **DONE 2026-08-06:** the inert right-click popup is removed — right-click on the
-  toolbar now does nothing (`on_model_toolbar_button_press_event`). `toolbar_popup_menu()`
-  and `set_model_toolbar_docked_position_callback()` were deleted; the popup also cast the
-  toolbar's parent to `GtkHandleBox` when it is a `GtkVBox`. Dock/undock and toolbar style
-  remain on the sidebar's own settings popup.
-- **STILL OPEN — the same dead UI in Preferences.** `Preferences > Refinement Toolbar`
-  still offers a Model Toolbar Position radio group (`src/callbacks.c:7765-7800`) calling
-  the same `set_model_toolbar_docked_position()`, and it is equally inert. **Decision
-  (2026-08-06): leave it.** If a user reports it we explain or remove it then; the wx
-  interface rework may land first, and it is unclear how many users move the toolbar at
-  all.
-- **Actual repositioning is deferred to the wx interface work.** Supporting left/right on
-  the native sidebar is feasible (a persisted side + x computed in
-  `bandicoot_reposition_sidebar()`), but the A/R bar and docked sequence view both inset
-  themselves from the sidebar's edge, so it is three pinned windows moving together.
-  Top/bottom would additionally need the toolbar re-oriented and would compete with the
-  sequence view for the top edge.
+- **The same dead UI in Preferences.** `Preferences > Refinement Toolbar` still offers a
+  Model Toolbar Position radio group calling the same
+  `set_model_toolbar_docked_position()`, and it is equally inert.
+- The wx build's sidebar docks on the left, right or bottom, or floats.
 
 ### Ball & Stick aromatic-ring toruses not drawing
 _(pre-existing, from the v0.1.4.11 bookmark — needs re-confirmation/detail)_

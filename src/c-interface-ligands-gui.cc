@@ -72,6 +72,12 @@
 
 #include "guile-fixups.h"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Ligand Check (wxUI/bridge/core-bridge.cc): each test 0
+// passed, 1 failed, 2 not done. False if wx has not taken it on.
+bool bandicoot_wx_ligand_check(const std::string &residue, int density, int geometry, int bumps);
+#endif
+
 /* in here we check if libcheck is available (if scripting is available) */
 GtkWidget *wrapped_create_libcheck_monomer_dialog() {
 
@@ -104,7 +110,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
 		<< std::endl;
       std::string s("WARNING:: you must have a map to\n search for ligands!");
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } 
    ifound_coords = fill_ligands_dialog_protein_bits(find_ligand_dialog);
    if (ifound_coords == 0) {
@@ -112,7 +118,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
 		<< std::endl;
       std::string s("WARNING:: you must have a protein\n to mask the map");
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } 
    ifound_ligand = fill_ligands_dialog_ligands_bits(find_ligand_dialog);
    if (ifound_ligand == 0) {
@@ -123,7 +129,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
       s += coot::util::int_to_string(graphics_info_t::find_ligand_ligand_atom_limit);
       s += " atoms\n";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    }
 
    // The mask waters toggle buttons:
@@ -1079,6 +1085,20 @@ coot::ligand_check_percentiles_dialog(coot::residue_spec_t spec,
 				      double percentile_limit) {
 
    if (graphics_info_t::use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      {
+         // 0 passed, 1 failed, 2 the test could not be done -- as the GTK
+         // images below are chosen
+         auto state = [percentile_limit](double p, double incomplete_below) {
+            return p >= percentile_limit ? 0 : (p < incomplete_below ? 2 : 1);
+         };
+         std::string l = "Residue: " + spec.chain_id + " " + util::int_to_string(spec.res_no);
+         if (bandicoot_wx_ligand_check(l, state(lr.density_correlation_percentile, -1),
+                                       state(lr.dictionary_geometry_percentile, 0),
+                                       state(lr.probe_clash_percentile, 0)))
+            return;
+      }
+#endif
       GtkWidget *w = create_ligand_check_dialog();
 
       GtkWidget *mogul_tick_w  = lookup_widget(w, "image_tick_mogul");

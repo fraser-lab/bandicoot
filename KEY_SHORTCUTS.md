@@ -5,9 +5,8 @@ window. `Ctrl` combinations are held together. Shifted letters (e.g. `Shift+R`)
 are shown as the capital letter.
 
 The model-building shortcuts are installed automatically on startup. To
-customise them, edit your personal copy at `~/.coot-preferences/template_key_bindings.py`
-(created via **Settings → Python: Install Template Keybindings**); your edits
-override the built-in defaults.
+customise them, put your own copy at `~/.coot-preferences/template_key_bindings.py`;
+your edits override the built-in defaults.
 
 ## Navigation & view
 
@@ -35,7 +34,8 @@ holding a modifier while clicking or dragging.
 | Click / drag | Button 1 | Pick, or rotate the view |
 | `Option`+click | Button 2 (middle) | Centre on the atom under the pointer |
 | `Option`+drag | Button 2 (middle) | Pan the view |
-| `Control`+drag | Button 3 (right) | Zoom |
+| `Control`+drag | Button 1 + `Ctrl` | Pan the view |
+| Right-drag | Button 3 (right) | Zoom |
 
 ## Refinement & fitting
 
@@ -87,8 +87,8 @@ holding a modifier while clicking or dragging.
 
 | Key | Function |
 |-----|----------|
-| `Ctrl+G` | Go To Residue (keyboard entry) |
-| `F5` | Model / Fit / Refine dialog |
+| `Ctrl+G` | Go To Residue (keyboard entry; GTK build only) |
+| `F5` | Model / Fit / Refine dialog (GTK build only) |
 | `F6` | Go To Atom window |
 | `F7` | Display Manager |
 | `F8` | Save screenshot |

@@ -340,10 +340,14 @@ get_drug_via_wikipedia_and_drugbank_py(const std::string &drugname) {
    std::string command = "get_drug_via_wikipedia(";
    command += single_quote(drugname);
    command += ")";
+   // the result is a Python object: hold the GIL while it is used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *r = safe_python_command_with_return(command);
    if (PyString_Check(r))
       s = PyString_AsString(r);
    Py_XDECREF(r);
+   PyGILState_Release(gstate);
    return s;
 }
 #endif

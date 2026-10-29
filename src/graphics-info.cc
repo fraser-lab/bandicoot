@@ -101,6 +101,17 @@
 
 #include "geometry/dict-utils.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Ramachandran plot (wxUI/bridge/core-bridge.cc), told
+// wherever Coot's Dynarama was updated.
+void bandicoot_wx_rama_changed(int imol);
+void bandicoot_wx_rama_highlight(int imol, const coot::residue_spec_t &spec);
+bool bandicoot_wx_info(const std::string &text, bool markup);
+bool bandicoot_wx_choose_undo_molecule();
+// Redo acts on the molecule Undo last acted on.
+static int bandicoot_last_undone_molecule = -1;
+#endif
+
 // (Bandicoot dot machinery is funnelled through
 // graphics_info_t::do_probe_dots_on_rotamers_and_chis() in
 // graphics-info-modelling.cc. The post-refine accept path here calls
@@ -311,6 +322,11 @@ void graphics_info_t::SetMouseClicked(double x, double y) {
 GtkWidget *graphics_info_t::wrapped_nothing_bad_dialog(const std::string &label) {
 
    GtkWidget *w = NULL;
+#ifdef BANDICOOT_UI_WX
+   // a GTK window cannot take input under wx's event loop; callers null-check
+   if (use_graphics_interface_flag && bandicoot_wx_info(label, true))
+      return w;
+#endif
    if (use_graphics_interface_flag) {
       w = create_nothing_bad_dialog();
       GtkWidget *label_widget = lookup_widget(w, "nothing_bad_label");
@@ -515,6 +531,9 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
    cif_dictionary_read_number++;
    if (rmit.success > 0) {
       cif_dictionary_filename_vec->push_back(cif_dictionary_filename);
+      std::vector<std::string> held = coot::comp_ids_in_dictionary_cif(cif_dictionary_filename);
+      std::sort(held.begin(), held.end());
+      cif_dictionary_scope_vec.push_back(std::make_pair(held, imol_enc));
       if (show_no_bonds_dialog_maybe_flag) {
 	 display_density_level_this_image = 1;
 	 std::string s;
@@ -530,14 +549,19 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
    } else {
       std::cout << "init_refmac_mon_lib "  << cif_dictionary_filename
 		<< " had no bond restraints\n";
+      std::string s;
+#ifdef BANDICOOT_UI_WX
+      // one message under wx: the headline leads the reader's errors below
+      if (use_graphics_interface_flag && show_no_bonds_dialog_maybe_flag)
+	 s = "CIF dictionary contains no restraints: " + cif_dictionary_filename + "\n\n";
+#else
       if (use_graphics_interface_flag) {
 	 if (show_no_bonds_dialog_maybe_flag) {
 	    GtkWidget *widget = create_no_cif_dictionary_bonds_dialog();
 	    gtk_widget_show(widget);
 	 }
       }
-
-      std::string s;
+#endif
       for (unsigned int i=0; i<rmit.error_messages.size(); i++) {
 	 s += rmit.error_messages[i];
 	 s += "\n";
@@ -865,6 +889,10 @@ graphics_info_t::update_ramachandran_plot_point_maybe(int imol, mmdb::Atom *atom
 
 void
 graphics_info_t::update_ramachandran_plot_point_maybe(int imol, const coot::residue_spec_t &res_spec) {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_rama_highlight(imol, res_spec);
+#endif
 
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
    GtkWidget *w = coot::get_validation_graph(imol, coot::RAMACHANDRAN_PLOT);
@@ -1707,6 +1735,10 @@ graphics_info_t::accept_moving_atoms() {
       setup_for_probe_dots_on_chis_molprobity(imol_moving_atoms);
    }
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_rama_changed(imol_moving_atoms);
+   update_ramachandran_plot_point_maybe(imol_moving_atoms, *moving_atoms_asc);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
    GtkWidget *w = coot::get_validation_graph(imol_moving_atoms, coot::RAMACHANDRAN_PLOT);
    if (w) {
@@ -1859,6 +1891,9 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
    std::string check_pms = "callable(globals().get('";
    check_pms += pms;
    check_pms += "'))";
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    v = safe_python_command_with_return(check_pms);
    if (v)
       ret = PyInt_AsLong(v);
@@ -1877,6 +1912,7 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
      Py_XDECREF(res);
    }
    Py_XDECREF(v);
+   PyGILState_Release(gstate);
 }
 #endif
 
@@ -1943,6 +1979,8 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
       std::string check_ps = "callable(globals().get('";
       check_ps += ps;
       check_ps += "'))";
+      // results are Python objects: hold the GIL while they are used
+      PyGILState_STATE gstate = PyGILState_Ensure();
       v = safe_python_command_with_return(check_ps);
       if (v)
          ret = PyInt_AsLong(v);
@@ -1956,6 +1994,7 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
         Py_XDECREF(res);
       }
       Py_XDECREF(v);
+      PyGILState_Release(gstate);
 }
 #endif
 
@@ -2952,6 +2991,17 @@ graphics_info_t::printString_internal(const std::string &s,
 				      const double &x, const double &y, const double &z,
 				      bool do_unproject, bool mono_font, double sf) {
 
+   // Labels take the colour their caller set. Those colours are chosen for
+   // a black background, so on a light one a darker shade of the same colour
+   // is used instead, to keep the label readable.
+   GLfloat label_colour[4];
+   glGetFloatv(GL_CURRENT_COLOR, label_colour);
+   if (! background_is_black_p())
+      for (int i=0; i<3; i++)
+	 label_colour[i] *= 0.4f;
+   glPushAttrib(GL_CURRENT_BIT);
+   glColor4f(label_colour[0], label_colour[1], label_colour[2], 1.0f);
+
    if (graphics_info_t::stroke_characters) {
 
       // better text with these 3 lines?
@@ -2982,8 +3032,17 @@ graphics_info_t::printString_internal(const std::string &s,
       glPushMatrix();
       glTranslated(x,y,z);
 
-      float aspect = static_cast<float>(graphics_x_size)/static_cast<float>(graphics_y_size);
-      glScaled(sf/aspect, sf, sf);
+      // A camera-facing label lives in a space whose projection already
+      // corrects for the window's shape, so it is scaled evenly; scaling one
+      // axis here would act along a model axis and stretch the label as the
+      // view turns. Text drawn straight in screen coordinates (no unproject)
+      // still needs the correction.
+      if (do_unproject) {
+	 glScaled(sf, sf, sf);
+      } else {
+	 float aspect = static_cast<float>(graphics_x_size)/static_cast<float>(graphics_y_size);
+	 glScaled(sf/aspect, sf, sf);
+      }
 
       if (do_unproject) {
 	 coot::Cartesian b = unproject(1);
@@ -3049,11 +3108,8 @@ graphics_info_t::printString_internal(const std::string &s,
 	    glEnable(GL_BLEND);
 	    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	    glBindTexture(GL_TEXTURE_2D, tex);
-	    // Tint the white-on-transparent texture with the configured
-	    // label colour.
-	    glColor4f(graphics_info_t::font_colour.red,
-		      graphics_info_t::font_colour.green,
-		      graphics_info_t::font_colour.blue, 1.0f);
+	    // Tint the white-on-transparent texture with the label colour.
+	    glColor4f(label_colour[0], label_colour[1], label_colour[2], 1.0f);
 	    // NSBitmapImageRep rows are top-down; flip V so the texture
 	    // isn't upside down in the quad.
 	    glBegin(GL_QUADS);
@@ -3095,6 +3151,8 @@ graphics_info_t::printString_internal(const std::string &s,
       glPopAttrib();
 #endif
    }
+
+   glPopAttrib();
 }
 
 
@@ -4709,6 +4767,9 @@ graphics_info_t::apply_undo() {
    int umol = Undo_molecule(coot::UNDO);
    // std::cout << "DEBUG:: undo molecule : " << umol << std::endl;
    if (umol == -2) {
+#ifdef BANDICOOT_UI_WX
+      if (use_graphics_interface_flag && bandicoot_wx_choose_undo_molecule()) return state;
+#endif
       if (use_graphics_interface_flag) {
 	 GtkWidget *dialog = create_undo_molecule_chooser_dialog();
 	 // GtkWidget *option_menu = lookup_widget(dialog, "undo_molecule_chooser_option_menu");
@@ -4727,6 +4788,9 @@ graphics_info_t::apply_undo() {
 	 if (molecules[umol].Have_modifications_p()) {
 	    if (molecules[umol].is_displayed_p()) {
 	       state = molecules[umol].apply_undo(cwd);
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_last_undone_molecule = umol;
+#endif
 	       if (use_graphics_interface_flag) {
 		  graphics_draw();
 
@@ -4735,6 +4799,9 @@ graphics_info_t::apply_undo() {
 		  update_go_to_atom_window_on_changed_mol(umol);
 
 		  // update the ramachandran, if there was one
+#ifdef BANDICOOT_UI_WX
+		  bandicoot_wx_rama_changed(umol);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
 		  GtkWidget *w = coot::get_validation_graph(umol, coot::RAMACHANDRAN_PLOT);
 		  if (w) {
@@ -4754,7 +4821,7 @@ graphics_info_t::apply_undo() {
 		  std::string s = "WARNING:: Coot will not undo modifications on a \n";
 		  s += "molecule that is not displayed";
 		  GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		  gtk_widget_show(w);
+		  if (w) gtk_widget_show(w);
 	       }
 	    }
 	 } else {
@@ -4782,6 +4849,13 @@ graphics_info_t::apply_redo() {
    int state = 0;
 
    int umol = Undo_molecule(coot::REDO);
+#ifdef BANDICOOT_UI_WX
+   // no chooser for Redo: it follows Undo
+   if (umol == -2) {
+      int last = bandicoot_last_undone_molecule;
+      umol = (is_valid_model_molecule(last) && molecules[last].Have_redoable_modifications_p()) ? last : -1;
+   }
+#endif
    if (umol == -2) { // ambiguity
       GtkWidget *dialog = create_undo_molecule_chooser_dialog();
       GtkWidget *combobox = lookup_widget(dialog, "undo_molecule_chooser_combobox");
@@ -4803,6 +4877,9 @@ graphics_info_t::apply_redo() {
 	    // (maybe)
 	    update_go_to_atom_window_on_changed_mol(umol);
 
+#ifdef BANDICOOT_UI_WX
+            bandicoot_wx_rama_changed(umol);
+#endif
 #if defined(HAVE_GTK_CANVAS) || defined(HAVE_GNOME_CANVAS)
             GtkWidget *w = coot::get_validation_graph(umol, coot::RAMACHANDRAN_PLOT);
             if (w) {
@@ -4926,12 +5003,16 @@ void
 graphics_info_t::pick_cursor_real() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_PICK);
+#else
       //    GdkCursorType c = GDK_CROSSHAIR;
       GdkCursorType c = pick_cursor_index;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
+#endif
    }
 }
 
@@ -4941,11 +5022,15 @@ graphics_info_t::normal_cursor() {
 
    if (use_graphics_interface_flag) {
       if (control_key_for_rotate_flag) {
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_NORMAL);
+#else
 	 GdkCursorType c = GDK_LEFT_PTR;
 	 GdkCursor *cursor;
 	 cursor = gdk_cursor_new (c);
 	 gdk_window_set_cursor (glarea->window, cursor);
 	 gdk_cursor_destroy (cursor);
+#endif
       }
    }
 }
@@ -4955,6 +5040,12 @@ void
 graphics_info_t::watch_cursor() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      // No GTK event pumping here: under wx's event loop it runs AppKit
+      // event handling (and its autorelease pools) inside wx's own, which
+      // corrupts them.
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_WATCH);
+#else
       GdkCursorType c = GDK_WATCH;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
@@ -4963,6 +5054,7 @@ graphics_info_t::watch_cursor() {
       while (gtk_events_pending()) {
 	 gtk_main_iteration();
       }
+#endif
    }
 }
 
@@ -4971,11 +5063,15 @@ void
 graphics_info_t::fleur_cursor() {
 
    if (use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_set_cursor(BANDICOOT_WX_CURSOR_FLEUR);
+#else
       GdkCursorType c = GDK_FLEUR;
       GdkCursor *cursor;
       cursor = gdk_cursor_new (c);
       gdk_window_set_cursor (glarea->window, cursor);
       gdk_cursor_destroy (cursor);
+#endif
    }
 }
 

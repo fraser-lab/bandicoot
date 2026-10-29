@@ -228,8 +228,10 @@ def run_refmac_by_filename_inner(pdb_in_filename, pdb_out_filename,
     # first check if refmac exists?
     refmac_execfile = find_exe("refmac5", "CBIN", "CCP4_BIN", "PATH")
     if not refmac_execfile:
-        print("BL WARNING:: no refmac found")
+        print("WARNING:: refmac5 not found in $CBIN, $CCP4_BIN or $PATH")
         print("  - no new map and molecule available")
+        if make_molecules_flag:
+            info_dialog("Refmac5 not found.")
         return
     else:
         # we have refmac
@@ -291,7 +293,7 @@ def run_refmac_by_filename_inner(pdb_in_filename, pdb_out_filename,
         std_lines.append("REFInement TYPE RIGID")
 
     imol_coords = refmac_imol_coords()
-    if operator.isNumberType(force_n_cycles):
+    if isinstance(force_n_cycles, (int, float)):
        if force_n_cycles >=0:
            if (refinement_type == 1):
                std_lines.append("RIGIDbody NCYCle " + str(force_n_cycles))
@@ -432,7 +434,10 @@ def post_run_refmac(imol_refmac_count,
 
     if (refmac_status) : # refmac ran fail...
         print("Refmac Failed with status:", refmac_status)
+        print("  log:", refmac_log_file_name)
         add_status_bar_text("Refmac failed")
+        if make_molecules_flag:
+            info_dialog("Refmac failed.")
 
         if (button):
             button[0].destroy()
@@ -522,6 +527,9 @@ def post_run_refmac(imol_refmac_count,
                 args = [mtz_out_filename, "DELFWT", "PHDELWT", "", 0, 1, 1, f_col, sig_f_col] + r_free_bit
                 make_and_draw_map_with_refmac_params(*args)
 
+        if make_molecules_flag:
+            info_dialog(refmac_r_factors_summary(refmac_log_file_name))
+
         # finally run the refmac_log_reader to get interesting things,
         # if real refinement
         if make_molecules_flag:
@@ -532,12 +540,40 @@ def post_run_refmac(imol_refmac_count,
             return False
 
 
+# The starting and final R and R-free from the results table at the end
+# of a refmac log, as a short message.
+#
+def refmac_r_factors_summary(refmac_log_file_name):
+
+    rows = {}
+    try:
+        with open(refmac_log_file_name) as log:
+            in_results = False
+            for line in log:
+                if "Final results" in line:
+                    in_results = True
+                elif in_results:
+                    for key in ("R factor", "R free"):
+                        if line.strip().startswith(key):
+                            values = line.split()[len(key.split()):]
+                            if len(values) >= 2:
+                                rows[key] = values[0:2]
+    except IOError:
+        pass
+
+    message = "Refmac finished."
+    for key, name in (("R factor", "R"), ("R free", "R-free")):
+        if key in rows:
+            message += "\n" + name + ":  " + rows[key][0] + " -> " + rows[key][1]
+    return message
+
+
 # Return True if the list of strings @var{params_list} contains a
 # string beginning with "WEIGHT".  If not return False
 #
 def extra_params_include_weight_p(params_list):
 
-   have_weight = map(lambda x: 'WEI' in x.upper(), params_list)
+   have_weight = list(map(lambda x: 'WEI' in x.upper(), params_list))
    if (sum(have_weight) == 1):
        return True
    elif (sum(have_weight) == 0):
@@ -1554,7 +1590,7 @@ def get_refmac_version():
                 for line in lines:
                     if ("Program" in line):
                         version = line.split()[-1]
-                        ret = map(int, version.split("."))
+                        ret = list(map(int, version.split(".")))
                         refmac_version_cached = ret
                         return ret
             else:

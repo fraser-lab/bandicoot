@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23.48 22.37">
+  <g>
+    <rect x="14.37" y="13.68" width=".76" height="6.14" transform="translate(-6.47 23.68) rotate(-66.75)" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <rect x="6.49" y="5.7" width=".76" height="6.14" transform="translate(16.5 14.38) rotate(158.25)" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="20.32" cy="19.22" r="3.03" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="9.11" cy="14.4" r="3.03" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+    <circle cx="4.63" cy="3.15" r="3.03" fill="#3f68b1" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  </g>
+  <line x1=".94" y1="5.28" x2="6.08" y2="17.47" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <line x1=".05" y1="5.66" x2="1.82" y2="4.9" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <line x1="5.28" y1="17.85" x2="7.05" y2="17.09" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <path d="M7.67,7.37c2.66-.31,5.24.4,7.12,2.2,1.88,1.8,2.69,4.35,2.49,7.02" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+</svg>

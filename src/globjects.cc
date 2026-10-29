@@ -113,6 +113,17 @@
 
 #include "draw.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's windows that edit moving atoms by sliders or choices
+// (wxUI/bridge/core-bridge.cc): while one is up, a drag must not translate
+// the moving atoms, as with the GTK dialogs below.
+bool bandicoot_wx_moving_atoms_window_open();
+// The wx build's sequence views.
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
+// The wx build's peak and water lists, stepped by the . and , keys.
+bool bandicoot_wx_step_list(int step);
+#endif
+
 std::vector<molecule_class_info_t> graphics_info_t::molecules;
 std::atomic<bool> molecule_class_info_t::draw_vector_sets_lock(false);
 
@@ -546,7 +557,7 @@ void     *graphics_info_t::atom_label_font = 0;
 void     *graphics_info_t::atom_label_font = GLUT_BITMAP_HELVETICA_12;
 #endif
 int       graphics_info_t::label_atom_on_recentre_flag = 1;
-int       graphics_info_t::symmetry_atom_labels_expanded_flag = 0;
+int       graphics_info_t::symmetry_atom_labels_expanded_flag = 1; // BANDICOOT: on, as labels always showed the operator before the setting worked
 coot::colour_holder graphics_info_t::font_colour = coot::colour_holder(1.0, 0.8, 0.8);
 
 #ifdef __APPLE__
@@ -956,6 +967,7 @@ float       graphics_info_t::residue_density_fit_scale_factor = 1.0;
 
 // cif dictionary
 std::vector<std::string> *graphics_info_t::cif_dictionary_filename_vec = NULL;
+std::vector<std::pair<std::vector<std::string>, int> > graphics_info_t::cif_dictionary_scope_vec;
 int  graphics_info_t::cif_dictionary_read_number = 1;
 // bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = true; // Too annoying
 bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = false;
@@ -2399,7 +2411,12 @@ gint glarea_motion_notify (GtkWidget *widget, GdkEventMotion *event) {
 		     // otherwise translate the whole fragment uniformly, and the
 		     // sliders only ever rebuild C/O/N -- leaving the two CA atoms
 		     // permanently displaced and corrupting the model on accept.
-		     if (! info.rotamer_dialog && ! info.edit_backbone_torsions_dialog) {
+#ifdef BANDICOOT_UI_WX
+		     bool wx_window_up = bandicoot_wx_moving_atoms_window_open();
+#else
+		     bool wx_window_up = false;
+#endif
+		     if (! info.rotamer_dialog && ! info.edit_backbone_torsions_dialog && ! wx_window_up) {
 			// e.g. translate an added peptide fragment.
 			info.move_moving_atoms_by_simple_translation(x_as_int,
 								     y_as_int);
@@ -2882,10 +2899,13 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
    case GDK_g:
       // say I want to go to residue 1G: first time Ctrl-G (second if)
       // and then the first if.
+#ifndef BANDICOOT_UI_WX
+      // the wx build has no keyboard go-to-residue window
       if (graphics_info_t::control_is_pressed) {
 	 show_go_to_residue_keyboarding_mode_window();
 	 handled = TRUE;
       }
+#endif
       break;
 
    case GDK_i:
@@ -3151,8 +3171,11 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
       break;
 
    case GDK_F5:
+#ifndef BANDICOOT_UI_WX
+      // the wx build has no Model/Fit/Refine window
       post_model_fit_refine_dialog();
       handled = TRUE;
+#endif
       break;
    case GDK_F6:
       post_go_to_atom_window();
@@ -3190,6 +3213,12 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
 	 // So, what is the next rotamer (bear in mind wrapping).
 	 graphics_info_t::rotamer_dialog_next_rotamer();
       } else {
+#ifdef BANDICOOT_UI_WX
+	 if (bandicoot_wx_step_list(+1)) {
+	    handled = TRUE;
+	    break;
+	 }
+#endif
 	 if (graphics_info_t::difference_map_peaks_dialog) {
 	    graphics_info_t::difference_map_peaks_next_peak();
 	 } else {
@@ -3215,6 +3244,12 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
       if (graphics_info_t::rotamer_dialog) {
 	 graphics_info_t::rotamer_dialog_previous_rotamer();
       } else {
+#ifdef BANDICOOT_UI_WX
+	 if (bandicoot_wx_step_list(-1)) {
+	    handled = TRUE;
+	    break;
+	 }
+#endif
 	 if (graphics_info_t::difference_map_peaks_dialog) {
 	    graphics_info_t::difference_map_peaks_previous_peak();
 	 } else {
@@ -3652,7 +3687,9 @@ gint key_release_event(GtkWidget *widget, GdkEventKey *event)
    }
 
    /* prevent the default handler from being run */
+#ifndef BANDICOOT_UI_WX
    gtk_signal_emit_stop_by_name(GTK_OBJECT(widget),"key_release_event");
+#endif
    return TRUE;
 
   return TRUE;
@@ -3969,7 +4006,13 @@ gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
 
    int x_as_int, y_as_int;
    GdkModifierType state;
+#ifdef BANDICOOT_UI_WX
+   // GDK does not see wx's events, so its pointer state would be stale; the
+   // wx surface supplies the pointer state in the event instead.
+   state = (GdkModifierType) event->state;
+#else
    gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+#endif
 
    // GTK-Quartz on Tahoe doesn't populate event->state with modifier bits
    // (shift/control); only the button mask makes it through. Query AppKit
@@ -4199,6 +4242,9 @@ gint glarea_button_release(GtkWidget *widget, GdkEventButton *event) {
                      mmdb::Atom *at = g.molecules[im].get_atom(nearest_atom_index_info);
                      g.setRotationCentre(nearest_atom_index_info.atom_index, nearest_atom_index_info.imol);
                      g.sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(im));
+#ifdef BANDICOOT_UI_WX
+                     bandicoot_wx_sequence_view_highlight(im, at);
+#endif
                   } else {
                      mmdb::Atom *at = g.get_moving_atom(nearest_atom_index_info);
                      if (at) {

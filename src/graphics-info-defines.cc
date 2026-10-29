@@ -48,6 +48,25 @@
 #include "bandicoot_appkit.h"
 #endif
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Fixed Atoms window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_release_fixed_atom_toggles();
+// And its residue-type and base choosers (false if wx has not taken them
+// on), and the end of an Add Alt Conf pick.
+bool bandicoot_wx_residue_chooser(bool show_stub);
+bool bandicoot_wx_base_chooser();
+void bandicoot_wx_add_alt_conf_done();
+bool bandicoot_wx_delete_open();
+// And its save panel for a picked symmetry mate (false if wx has not taken
+// it on).
+bool bandicoot_wx_save_symmetry_coords(const coot::save_coords_options_t &opts,
+                                       const std::string &file_name);
+// And its Residue Info window for a picked atom.
+bool bandicoot_wx_residue_info(int imol, int atom_index);
+// And its Other Modelling Tools toggles (by Coot's widget name).
+void bandicoot_wx_release_tools_toggle(const std::string &widget);
+#endif
+
 void
 graphics_info_t::clear_pending_picks() {
    a_is_pressed = 0;
@@ -368,6 +387,9 @@ graphics_info_t::check_if_in_residue_info_define(GdkEventButton *event) {
 	 int im = nearest_atom_index_info.imol; 
 	 // std::cout << "info: clicked on imol: " << im << std::endl;
 	 // a c-interface-info function...
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_residue_info(im, nearest_atom_index_info.atom_index))
+#endif
 	 output_residue_info_dialog(im, nearest_atom_index_info.atom_index); 
 	 info.in_residue_info_define = 0;
 	 normal_cursor();
@@ -831,7 +853,12 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
    if (state & GDK_CONTROL_MASK)
       destroy_delete_dialog_flag_by_ctrl_press = 0;
    
-   if (g.delete_item_widget) { 
+#ifdef BANDICOOT_UI_WX
+   bool delete_window_up = g.delete_item_widget || bandicoot_wx_delete_open();
+#else
+   bool delete_window_up = g.delete_item_widget;
+#endif
+   if (delete_window_up) { 
       // atom
       if (g.delete_item_atom) {
 	 pick_info naii = atom_pick(event);
@@ -882,7 +909,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry atoms";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       }
 	    }
@@ -1102,7 +1129,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry items";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       } 
 	    }
@@ -1148,7 +1175,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry atoms";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       }
 	    }
@@ -1463,17 +1490,29 @@ graphics_info_t::check_if_in_mutate_define(GdkEventButton *event) {
                         is_nuc = coot::util::is_nucleotide(r);
 	 
                      if (is_nuc) {
+#ifdef BANDICOOT_UI_WX
+                        if (! bandicoot_wx_base_chooser()) {
+#else
+                        {
+#endif
                         GtkWidget *w = create_nucleic_acid_base_chooser_dialog();
 #ifdef __APPLE__
                         bandicoot_register_persistent_dialog(w, "nucleic-acid-base-chooser");
 #endif
                         gtk_widget_show(w);
+                        }
                      } else {
+#ifdef BANDICOOT_UI_WX
+                        if (! bandicoot_wx_residue_chooser(true)) {
+#else
+                        {
+#endif
                         GtkWidget *widget = wrapped_create_residue_type_chooser_window(1);
 #ifdef __APPLE__
                         bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
 #endif
                         gtk_widget_show(widget);
+                        }
                      }
                      g.in_mutate_define = 0;
                      g.residue_type_chooser_auto_fit_flag = 0;
@@ -1505,11 +1544,17 @@ graphics_info_t::check_if_in_mutate_auto_fit_define(GdkEventButton *event) {
       if (naii.success == GL_TRUE) {
          g.mutate_auto_fit_residue_imol = naii.imol;
          g.mutate_auto_fit_residue_atom_index = naii.atom_index;
+#ifdef BANDICOOT_UI_WX
+         if (! bandicoot_wx_residue_chooser(false)) {
+#else
+         {
+#endif
          GtkWidget *widget = wrapped_create_residue_type_chooser_window(0);
 #ifdef __APPLE__
          bandicoot_register_persistent_dialog(widget, "residue-type-chooser");
 #endif
          gtk_widget_show(widget);
+         }
          g.in_mutate_auto_fit_define = 0;
          g.residue_type_chooser_auto_fit_flag = 1;
          pick_pending_flag = 0;
@@ -1597,6 +1642,9 @@ graphics_info_t::check_if_in_add_alt_conf_define(GdkEventButton *event) {
 
 	    split_residue(imol, naii.atom_index);
 	    in_add_alt_conf_define = 0;
+#ifdef BANDICOOT_UI_WX
+	    bandicoot_wx_add_alt_conf_done();
+#endif
 	    if (add_alt_conf_dialog)
 	       gtk_widget_destroy(add_alt_conf_dialog);
 	    pick_pending_flag = 0;
@@ -1623,6 +1671,9 @@ graphics_info_t::check_if_in_add_alt_conf_define(GdkEventButton *event) {
 	       in_add_alt_conf_define = 0;
 	       pick_pending_flag = 0;
 	       normal_cursor();
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_wx_add_alt_conf_done();
+#endif
 	       if (add_alt_conf_dialog)
 		  gtk_widget_destroy(add_alt_conf_dialog);
 	    }
@@ -1873,8 +1924,6 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	                       ? coot::coord_file_format_t::MMCIF
 	                       : coot::coord_file_format_t::PDB;
 
-	 GtkWidget *w = coot_save_coords_chooser_new(opts);
-
 // 	 std::string filename = "molecule-";
 // 	 filename += int_to_string(naii.imol);
 	 int imol = naii.imol;
@@ -1913,6 +1962,13 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
 	 // save time either way; this just stops the two disagreeing on sight.
 	 filename += coot::save_coords_options_t::extension_for(opts.format);
 
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_save_symmetry_coords(opts, filename)) {
+#else
+	 {
+#endif
+	 GtkWidget *w = coot_save_coords_chooser_new(opts);
+
 	 // Open in the directory the user last saved into, the same one Save
 	 // Coordinates uses. Without this the symmetry save starts wherever the
 	 // process happens to be, because it never went through
@@ -1934,8 +1990,9 @@ graphics_info_t::check_if_in_save_symmetry_define(GdkEventButton *event) {
          
          add_filename_filter_button(w, COOT_COORDS_FILE_SELECTION);
 
-	 normal_cursor();
 	 gtk_widget_show(w);
+	 }
+	 normal_cursor();
 	 pick_pending_flag = 0;
       }
    } 
@@ -2038,7 +2095,15 @@ graphics_info_t::check_if_in_fixed_atom_define(GdkEventButton *event,
 	 
 	 if (! (state & GDK_CONTROL_MASK)) { 
 	    // Ctrl key is not pressed.
+#ifdef BANDICOOT_UI_WX
+	    // the dialog is wx's: let go of its Fix / Unfix buttons
+	    bandicoot_wx_release_fixed_atom_toggles();
+	    in_fixed_atom_define = coot::FIXED_ATOM_NO_PICK;
+	    normal_cursor();
+	    if (false) {
+#else
 	    if (!fixed_atom_dialog) {
+#endif
 	       std::cout << "Ooops fixed atom dialog has gone!" << std::endl;
 	    } else { 
 	       GtkWidget *button1 = lookup_widget(fixed_atom_dialog,   "fix_atom_togglebutton");
@@ -2067,6 +2132,9 @@ graphics_info_t::check_if_in_base_pairing_define(GdkEventButton *event) {
 	 int res_no = at->GetSeqNum();
 	 std::string chain_id = at->GetChainID();
 	 watson_crick_pair(naii.imol, chain_id.c_str(), res_no);
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_wx_release_tools_toggle("other_tools_base_pair_toggle_button");
+#endif
 	 if (other_modelling_tools_dialog) {
 	    GtkWidget *w = lookup_widget(other_modelling_tools_dialog,
 					 "other_tools_base_pair_toggle_button");

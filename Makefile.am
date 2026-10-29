@@ -101,7 +101,7 @@ EXTRA_DIST = 		\
 
 subpkgdatadir = $(pkgdatadir)
 subpkgdata_DATA = cootrc standard-residues.pdb colours.def \
-	mtrix-to-ncs-matrix.awk syminfo.lib
+	mtrix-to-ncs-matrix.awk syminfo.lib COPYING
 
 
 appdatadir = ${datarootdir}/appdata

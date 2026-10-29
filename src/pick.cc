@@ -273,7 +273,7 @@ atom_pick(GdkEventButton *event) {
             if (n_pickable == 0) {
                std::string s = "There were no pickable (\"Active\") molecules!";
                GtkWidget *w = graphics_info_t::wrapped_nothing_bad_dialog(s);
-               gtk_widget_show(w);
+               if (w) gtk_widget_show(w);
             }
          }
 

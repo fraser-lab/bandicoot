@@ -500,8 +500,16 @@ void close_all_generic_objects() {
    graphics_draw();
 }
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Generic Display Objects window (wxUI/bridge/core-bridge.cc).
+bool bandicoot_wx_generic_objects();
+#endif
+
 void generic_objects_gui_wrapper() {
 
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_generic_objects()) return;
+#endif
    graphics_info_t g;
    g.generic_objects_dialog = wrapped_create_generic_objects_dialog();
    gtk_widget_show(g.generic_objects_dialog);

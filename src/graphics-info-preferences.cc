@@ -309,6 +309,24 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
        commands.push_back(state_command("set-rotation-centre-size",
 					g.preferences_internal[i].fvalue1, il));
        break;
+
+     // BANDICOOT: front and back clipping move together, as the Clipping tab sets them
+     case PREFERENCES_CLIPPING:
+       commands.push_back(state_command("set-clipping-front",
+					g.preferences_internal[i].fvalue1, il));
+       commands.push_back(state_command("set-clipping-back",
+					g.preferences_internal[i].fvalue1, il));
+       break;
+
+     case PREFERENCES_CROSSHAIRS:
+       commands.push_back(state_command("set-draw-crosshairs",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
+     case PREFERENCES_LABEL_ON_RECENTRE:
+       commands.push_back(state_command("set-label-on-recentre-flag",
+					g.preferences_internal[i].ivalue1, il));
+       break;
       
      case PREFERENCES_MODEL_TOOLBAR_SHOW:
        if (g.preferences_internal[i].ivalue1 == 0) {
@@ -675,6 +693,19 @@ graphics_info_t::make_preferences_internal() {
   p.fvalue1 = fvalue;
   ret.push_back(p);
 
+  // BANDICOOT: clipping, crosshairs, label on recentre
+  p.preference_type = PREFERENCES_CLIPPING;
+  p.fvalue1 = graphics_info_t::clipping_front;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_CROSSHAIRS;
+  p.ivalue1 = graphics_info_t::draw_crosshairs_flag;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_LABEL_ON_RECENTRE;
+  p.ivalue1 = graphics_info_t::label_atom_on_recentre_flag;
+  ret.push_back(p);
+
 
   graphics_info_t::preferences_internal = ret;
 
@@ -962,6 +993,10 @@ graphics_info_t::show_hide_toolbar_icon_pos(int pos, int show_hide_flag, int too
          coot::preferences_icon_info_t item = (*pall_items)[pos];
          
       }
+#ifdef BANDICOOT_UI_WX
+      if (toolbar_index == MODEL_TOOLBAR)
+         bandicoot_wx_sidebar_refresh();
+#endif
    }
 }
 

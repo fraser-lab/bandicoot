@@ -28,7 +28,6 @@ cootpixmapdir = $(pkgdatadir)/pixmaps
 # no longer use xpms.
 
 dist_cootpixmap_DATA = \
-coot-0.9.8.95.png     \
 add-alt-conf.png      dna.svg			   probe-clash.svg                \
 add-alt-conf.svg      edit-backbone.svg		   radacina_handcuffs-small.svg   \
 add-peptide-1.png     edit-chi.png		   ramachandran.png               \
@@ -59,6 +58,9 @@ connect-to-world.svg  gtk-open.png		   side-chain-180.png             \
 	    kleywegt.svg		   smiles.svg                     \
 	    map.svg			   spin-view.png                  \
 coot-favicon.png      merge-molecules.svg	   spin-view.svg                  \
+rock-view.svg                                                            \
+additional-representation.svg display-active.svg label-atoms.svg          \
+label-neighbors.svg representation-tools.svg                             \
 coot-icon.png	      mutate-auto-fit.svg	   stereo-view.svg                \
 coot-save.png	      mutate.svg		   stop.svg                       \
 coot-save-symm.png    panel-screenshot.png	   temperature.png                \
@@ -78,7 +80,20 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   rama_all.png rama_gly.png rama_pro.png rama_non_gly_pro.png \
   curlew-long.png curlew-128-filled.svg \
   refine-sphere-1.png regularize-sphere-1.png refine-tandem-1.png \
-  bandicoot-splash.png
+  bandicoot-splash.png \
+  bandicoot.svg bandicoot.png stock-cut.svg \
+  stock-open.png stock-clear.png stock-delete.png stock-undo.png stock-redo.png stock-zoom-fit.png \
+  stock-menu-about.png stock-menu-add.png stock-menu-clear.png stock-menu-close.png stock-menu-copy.png \
+  stock-menu-dialog-info.png stock-menu-execute.png stock-menu-find-and-replace.png stock-menu-index.png stock-menu-justify-center.png \
+  stock-menu-justify-left.png stock-menu-open.png stock-menu-preferences.png stock-menu-quit.png stock-menu-refresh.png \
+  stock-menu-save.png stock-menu-select-color.png stock-menu-undo.png stock-menu-unindent.png \
+  stock-button-ok.png stock-button-cancel.png stock-button-previous.png stock-button-next.png stock-button-apply.png stock-button-jump-to.png \
+  coords-open.svg mtz-open.svg map-open.svg \
+  refine-sphere-1.svg refine-sphere-plus-1.svg regularize-sphere-1.svg regularize-sphere-plus-1.svg \
+  refine-tandem-1.svg probe-clash-local.svg auto-fit-rotamer-backrub.svg hydrogen-toggle.svg \
+  hydrogen-toggle-on.svg probe-clash-on.svg auto-fit-rotamer-backrub-on.svg \
+  preferences-general.svg preferences-bonds.svg preferences-maps.svg preferences-colours.svg \
+  preferences-others.svg
 
 if CLIPPER_TOP8000
 dist_cootpixmap_DATA += \

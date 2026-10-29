@@ -4799,11 +4799,20 @@ def user_mods_gui(imol, pdb_file_name):
    # main line
    #
    # user mods will return a pair of lists.
-   if using_gui():
+   if use_graphics_interface_state():
       flips = user_mods(pdb_file_name)
       flip_buttons = make_flip_buttons(flips[0])
       no_adj_buttons = make_no_adj_buttons(flips[1])
       all_buttons = no_adj_buttons + flip_buttons
+      # Bandicoot's own window where pygtk's cannot appear; each button's
+      # commands are run together, as one expression
+      def as_command(buttons):
+         return [[label, "(" + ", ".join(func) + ")"] for label, func in buttons]
+      if bandicoot_button_choice_filtered_py(" Flips ", as_command(all_buttons),
+                                             "Clashes, Problems and Flips only",
+                                             as_command(make_flip_buttons(filter_buttons(flips[0]))),
+                                             "  Close  ", ""):
+         return
       dialog_box_of_buttons_with_check_button(
          " Flips ", [300, 300], all_buttons, "  Close  ",
          "Clashes, Problems and Flips only",

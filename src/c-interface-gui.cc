@@ -134,6 +134,14 @@ void open_coords_dialog() {
 
 #include "c-interface-widgets.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's windows that list molecules (wxUI/bridge/core-bridge.cc):
+// a molecule was added or closed.
+void bandicoot_wx_molecules_changed();
+// a dataset named on the command line (see manage_column_selector)
+bool bandicoot_wx_open_dataset(const std::string &file);
+#endif
+
 void
 open_cif_dictionary_file_selector_dialog() {
 
@@ -412,11 +420,16 @@ manage_column_selector(const char *filename) {
       // try to read as phs, cif etc, if not, return a selection
       // widget
 
-      GtkWidget *w = coot::column_selector_using_cmtz(filename);
+#ifdef BANDICOOT_UI_WX
+      if (! bandicoot_wx_open_dataset(filename))
+#endif
+      {
+         GtkWidget *w = coot::column_selector_using_cmtz(filename);
 
-      if (w) {
-         gtk_widget_show(w);
-         gtk_window_present(GTK_WINDOW(w));
+         if (w) {
+            gtk_widget_show(w);
+            gtk_window_present(GTK_WINDOW(w));
+         }
       }
    }
 
@@ -1496,25 +1509,25 @@ void run_clear_backups(int retval) {
 #ifdef USE_PYTHON
 void run_clear_backups_py(int retval) {
 
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *r = safe_python_command_with_return("clear_backups_maybe()");
+   bool did_not_run = (r == NULL || r == Py_None);
+   bool not_needed  = (r == Py_False); // backup gui was not needed/shown
+   Py_XDECREF(r);
+   PyGILState_Release(gstate);
 
-   if (r == NULL || r == Py_None) {
+   if (did_not_run) {
       // not false and not not false, function didn't run then...
-      std::cout << "WARNING:: clear_backups_maybe() returns "
-		<< PyString_AsString(PyObject_Str(r))
-		<< std::endl;
+      std::cout << "WARNING:: clear_backups_maybe() did not run" << std::endl;
       coot_real_exit(retval);
-   } else {
-//       std::cout << "DEBUG:: (clear-babckups-maybe) returned: "
-// 		<< scm_to_locale_string(display_scm(r))
-// 		<< std::endl;
    }
 
    // if r was #f then exit.
    //
-   if (r == Py_False) { // backup gui was not needed/shown
+   if (not_needed)
       coot_real_exit(retval);
-   }
 }
 #endif // PYTHON
 
@@ -1575,6 +1588,8 @@ coot_save_state_and_exit(int retval, int save_state_flag) {
    // atexit handlers never run and the recorder would lose its closing diff.
    // Before close_yourself() below, while the models can still be read.
    {
+      // results are Python objects: hold the GIL while they are used
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyObject *v = safe_python_command_with_return
          ("callable(globals().get('stop_session_recording'))");
       int ret = 0;
@@ -1584,6 +1599,7 @@ coot_save_state_and_exit(int retval, int save_state_flag) {
          PyObject *res = safe_python_command_with_return("stop_session_recording()");
          Py_XDECREF(res);
       }
+      PyGILState_Release(gstate);
    }
 #endif // USE_PYTHON
 
@@ -3179,6 +3195,10 @@ update_toolbar_icons_menu(int toolbar_index) {
 // functions for the modelling toolbar style
 void set_model_toolbar_style(int istate) {
    graphics_info_t::model_toolbar_style_state = istate;
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag)
+      bandicoot_wx_set_sidebar_style(istate);
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       GtkWidget *menuitem;
       if (istate <= 1) {
@@ -4124,6 +4144,9 @@ void close_molecule(int imol) {
 
    g.clear_up_moving_atoms_maybe(imol);
    g.update_scroll_wheel_map_on_molecule_close();
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_molecules_changed();
+#endif
 
    graphics_draw();
    std::string cmd = "close-molecule";
@@ -5004,8 +5027,20 @@ GtkWidget *wrapped_create_goto_atom_window() {
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Go To Atom window (wxUI/bridge/core-bridge.cc). False if it
+// is not in place.
+bool bandicoot_wx_goto_open();
+#endif
+
 void post_go_to_atom_window() {
 
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_goto_open()) {
+      add_to_history(std::vector<std::string>(1, "post-go-to-atom-window"));
+      return;
+   }
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       GtkWidget *widget = wrapped_create_goto_atom_window();
       gtk_widget_show(widget);
@@ -5541,6 +5576,10 @@ void set_filename_for_filechooserselection(GtkWidget *fileselection,
 }
 
 // functions to dock the accept/reject dialog
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject bar and window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_ar_settings_changed();
+#endif
 #ifdef __APPLE__
 // Defined in graphics-info-gui.cc: re-applies the docked-A/R preference to
 // Bandicoot's native bar (shows/hides it, sets active state).
@@ -5548,6 +5587,12 @@ void bandicoot_ar_sync_prefs(void);
 #endif
 
 void set_accept_reject_dialog_docked(int istate){
+#ifdef BANDICOOT_UI_WX
+   // there is no GTK dialog or bar to change
+   graphics_info_t::accept_reject_dialog_docked_flag = istate;
+   bandicoot_wx_ar_settings_changed();
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
      // we should destroy/hide the dialog if existing
      if (graphics_info_t::accept_reject_dialog) {
@@ -5576,6 +5621,11 @@ int accept_reject_dialog_docked_state(){
 
 // functions to show/hide/sensitise docked accept/reject dialog
 void set_accept_reject_dialog_docked_show(int state){
+#ifdef BANDICOOT_UI_WX
+   graphics_info_t::accept_reject_dialog_docked_show_flag = state;
+   bandicoot_wx_ar_settings_changed();
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
 	  graphics_info_t::accept_reject_dialog_docked_show_flag = state;
 	  if (state == 0) {

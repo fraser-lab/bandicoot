@@ -25,6 +25,9 @@ coot::scripting_function(const std::string &function_name,
 	 command_strings.push_back(args[i].as_string());
       }
       std::string s = graphics_info_t::pythonize_command_strings(command_strings);
+      // the result is a Python object: hold the GIL while it is used
+      // (safe_python_command_with_return() releases it on return)
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyObject *o = safe_python_command_with_return(s);
       if (o) {
 	 if (PyBool_Check(o)) {
@@ -44,6 +47,8 @@ coot::scripting_function(const std::string &function_name,
 	    r.s = PyString_AsString(o);
 	 } 
       } 
+      Py_XDECREF(o);
+      PyGILState_Release(gstate);
 #endif      
       
    } else {

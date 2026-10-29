@@ -53,6 +53,10 @@
 #include <gdk/gdkgldrawable.h>
 #include <gtk/gtkgl.h>
 
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/main/surface.hh"
+#endif
+
 #include <utils/ctpl.h>
 
 #ifdef USE_MOLECULES_TO_TRIANGLES
@@ -744,8 +748,11 @@ class graphics_info_t {
    clipper::Coord_orth moving_atoms_centre() const;
 
    void set_edit_backbone_adjustments(GtkWidget *widget);
+public:
+   // public for the wx build's Edit Backbone Torsions sliders
    static void edit_backbone_peptide_changed_func (GtkAdjustment *adj, GtkWidget *window); // callback
    static void edit_backbone_carbonyl_changed_func(GtkAdjustment *adj, GtkWidget *window); // callback
+private:
 
    void check_and_warn_inverted_chirals_and_cis_peptides() const;
 
@@ -758,6 +765,10 @@ class graphics_info_t {
    // Geometry Graphs:
    coot::geometry_graphs * geometry_graph_dialog_to_object(GtkWidget *w) const {
       coot::geometry_graphs *gr = NULL;
+#ifdef BANDICOOT_UI_WX
+      // the wx build stores the graph object itself (geometry_graphs::dialog())
+      return reinterpret_cast<coot::geometry_graphs *>(w);
+#endif
       if (!w) {
 	 std::cout << "ERROR:: null w in geometry_graph_dialog_to_object" << std::endl;
       } else {
@@ -903,7 +914,12 @@ public:
 
    static void graphics_draw() {
      if (glarea) {
+#ifdef BANDICOOT_UI_WX
+       // glarea is a hidden stand-in; the surface on screen is wx's
+       bandicoot_wx_surface_redraw();
+#else
        gtk_widget_draw(glarea, NULL);
+#endif
        if (make_movie_flag)
 	 dump_a_movie_image();
      }
@@ -957,9 +973,13 @@ public:
    /* OpenGL functions can be called only if make_current returns true */
    static int make_current_gl_context(GtkWidget *widget) {
 
+#ifdef BANDICOOT_UI_WX
+     return bandicoot_wx_surface_make_current();
+#else
      GdkGLContext *glcontext = gtk_widget_get_gl_context (widget);
      GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable (widget);
      return gdk_gl_drawable_gl_begin (gldrawable, glcontext);
+#endif
    }
 
 
@@ -2389,6 +2409,12 @@ public:
 			  short int show_no_bonds_dialog_maybe_flag);
    void import_all_refmac_cifs();
    static std::vector<std::string> *cif_dictionary_filename_vec;
+   // BANDICOOT: for each of those, the comp ids it holds (sorted) and the
+   // imol_enc it was read with -- what decides that a later read replaces it
+   static std::vector<std::pair<std::vector<std::string>, int> > cif_dictionary_scope_vec;
+   // the dictionaries a saved session should read: each read not replaced by
+   // a later one
+   std::vector<std::string> cif_dictionaries_for_state() const;
 
    // make private?
    static short int python_history;
@@ -3911,6 +3937,11 @@ string   static std::string sessionid;
 
    void multi_torsion_residues(int imol, const std::vector<coot::residue_spec_t> &v);
    static void on_multi_residue_torsion_button_clicked(GtkButton *button, gpointer user_data);
+#ifdef BANDICOOT_UI_WX
+   // The wx window's bond button: the bond dragging turns, by its atoms.
+   static void select_multi_residue_torsion_bond(const coot::atom_spec_t &first,
+                                                 const coot::atom_spec_t &second);
+#endif
    void rotate_multi_residue_torsion(double x, double y);
 
    // bottom left ligand view

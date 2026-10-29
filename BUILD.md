@@ -37,7 +37,12 @@ Install Conda-based dependencies:
 conda install -c bioconda clipper libccp4 mmdb2 ssm
 ```
 
-**NOTE**: `gtk+` is GTK **2** (Quartz backend). The conda channel these packages come from is **bioconda** (hence `-c bioconda`) and the Clipper library package is `clipper` — not the `clipper-*` set some older instructions listed.
+For the wx interface (`BANDICOOT_UI=wx`, below), also:
+```sh
+brew install wxwidgets rdkit boost-python3
+```
+
+**NOTE**: `gtk+` is GTK **2** (Quartz backend); the wx build still links it. The conda channel these packages come from is **bioconda** (hence `-c bioconda`) and the Clipper library package is `clipper` — not the `clipper-*` set some older instructions listed.
 
 
 ## 3. Clone the Bandicoot repository
@@ -79,7 +84,7 @@ codesign-install.sh
 check_install.sh
 ```
 
-At the end of `./scripts/build.sh`, Bandicoot should be installed to ~/sw/bandicoot-install`. Launch:
+At the end of `./scripts/build.sh`, Bandicoot should be installed to `~/sw/bandicoot-install`. Launch:
 
 ```sh
 ~/sw/bandicoot-install/bin/bcoot
@@ -97,6 +102,8 @@ Set as environment variables on `./scripts/build.sh`:
 | `BREW_PREFIX` | `brew --prefix` | Homebrew root |
 | `CONDA_PREFIX` | `/opt/miniconda3` | conda root; also supplies the embedded Python |
 | `JOBS` | CPU count | parallel make jobs |
+| `BANDICOOT_UI` | `gtk` | user interface toolkit: `gtk` or `wx`; give a wx build its own `PREFIX` |
+| `BANDICOOT_RDKIT` | unset | `1` enables RDKit (the 2D ligand view and FLEV) from Homebrew; any other value is used as its prefix |
 | `BANDICOOT_CLEAN=1` | — | force a full recompile |
 
 `build.sh` checks every dependency before compiling anything. If one is missing
@@ -105,7 +112,7 @@ fixes it.
 
 ## Verifying it works
 
-1. Splash, then the main window; title bar reads `BANDICOOT <version> (Coot 0.9.8.95)`.
+1. Splash, then the main window; title bar reads `BANDICOOT <version>`.
 2. `File > Open Coordinates…` — a PDB displays in the GL view.
 3. `Draw > Sequence View` opens. If this does nothing, the canvas libraries from
    step 4 weren't found at configure time.

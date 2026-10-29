@@ -297,6 +297,7 @@ pre_list = [
     "generic_objects.py",
     "pdbe_validation_data.py",  # defines pdb_validate (called by get_ebi.py after PDB fetch)
     "coot_gui.py",              # defines interesting_things_gui etc. (called by PDB-REDO + many others)
+    "bandicoot_db_loop.py",     # Fit Loop by Database Search without pygtk (uses coot_gui helpers)
     "ncs.py",
     "parse_pisa_xml.py",
     "cns2coot.py",

@@ -102,6 +102,16 @@
 #include "lbg-interface.hh"          // Ligand menu: SMILES/Residue -> 2D
 #include "sdf-interface.hh"          // Ligand menu: SMILES -> 3D, chemical features
 #include "c-interface-ligands.hh"    // Ligand menu: contact dots for ligand
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/bridge/core-bridge.hh"  // the wx build's results list
+bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_result_row> &rows);
+// Its info message, and a yes/no the core waits on: 1 yes, 0 no, -1 if wx has
+// not taken it on.
+bool bandicoot_wx_info(const std::string &text, bool markup);
+int  bandicoot_wx_question(const std::string &text);
+bool bandicoot_wx_ask(const std::string &text, std::function<void(bool yes)> on_answer);
+int  bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+#endif
 #include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
 
 #include "ligand/ligand.hh" // for rigid body fit by atom selection.
@@ -117,8 +127,28 @@
 #include "ligand/richardson-rotamer.hh"
 #endif 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Delete item window (wxUI/bridge/core-bridge.cc): whether it
+// is up, whether Keep Delete Active is on, closing it, opening it.
+bool bandicoot_wx_delete_open();
+bool bandicoot_wx_delete_keep_active();
+void bandicoot_wx_delete_close();
+bool bandicoot_wx_delete_present();
+void bandicoot_wx_delete_close_quietly();
+#endif
+
 void do_regularize_kill_delete_dialog() {
    graphics_info_t g;
+#ifdef BANDICOOT_UI_WX
+   // closed without clearing the picks: the refine or regularize pick that
+   // asked for this is already armed
+   if (bandicoot_wx_delete_open()) {
+      bandicoot_wx_delete_close_quietly();
+      g.delete_item_atom = 0;
+      g.delete_item_residue = 0;
+      g.delete_item_residue_hydrogens = 0;
+   }
+#endif
    if (g.delete_item_widget) { 
       gtk_widget_destroy(g.delete_item_widget);
       g.delete_item_widget = NULL;
@@ -152,6 +182,19 @@ void update_go_to_atom_residue_list(int imol) {
 
 /* utility function, moving widget work out of c-interface-build.cc */
 void delete_object_handle_delete_dialog(short int do_delete_dialog) {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_open()) {
+      if (do_delete_dialog) {  // not held open by Ctrl
+         if (bandicoot_wx_delete_keep_active()) {
+            pick_cursor_maybe();
+         } else {
+            bandicoot_wx_delete_close();
+            graphics_draw();
+         }
+      }
+      return;
+   }
+#endif
    if (graphics_info_t::delete_item_widget != NULL) {
       if (do_delete_dialog) { // via ctrl
 
@@ -182,6 +225,10 @@ void delete_object_handle_delete_dialog(short int do_delete_dialog) {
 
 void
 post_delete_item_dialog() {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_delete_present())
+      return;
+#endif
 
    GtkWidget *w = wrapped_create_delete_item_dialog();
    gtk_widget_show(w);
@@ -347,7 +394,19 @@ float estimate_map_weight(int imol_map) {
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Pointer atom type and Add Alternate Conformation windows
+// (wxUI/bridge/core-bridge.cc). False if wx has not taken them on.
+bool bandicoot_wx_pointer_atom_type();
+bool bandicoot_wx_add_alt_conf(int split_type);
+#endif
+
 void place_atom_at_pointer_by_window() { 
+
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_pointer_atom_type())
+      return;
+#endif
 
    // put up a widget which has a OK callback button which does a 
    // g.place_typed_atom_at_pointer();
@@ -595,6 +654,15 @@ void setup_alt_conf_with_dialog(GtkWidget *dialog) {
 
 void altconf() { 
 
+#ifdef BANDICOOT_UI_WX
+   // the window is wx's; the pick is armed as setup_alt_conf_with_dialog() does
+   if (bandicoot_wx_add_alt_conf(graphics_info_t::alt_conf_split_type_number())) {
+      graphics_info_t::in_add_alt_conf_define = 1;
+      graphics_info_t::pick_cursor_maybe();
+      graphics_info_t::pick_pending_flag = 1;
+      return;
+   }
+#endif
    GtkWidget *widget = create_add_alt_conf_dialog();
    setup_alt_conf_with_dialog(widget);
    gtk_widget_show(widget);
@@ -1203,7 +1271,7 @@ void fit_loop_from_widget(GtkWidget *dialog) {
 			 << res2 - res1 + 1 << ".  Using Poly-Ala\n";
 	       std::string s("WARNING:: Mis-matched sequence length\nUsing Poly Ala");
 	       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
             if (swap_flag == 1) {
                t = res1;
@@ -1327,7 +1395,7 @@ int do_align_mutate_sequence(GtkWidget *w) {
       std::string s = "WARNING:: autofit requested, but \n   refinement map not set!";
       std::cout << s << "\n";
       GtkWidget *warn = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(warn);
+      if (warn) gtk_widget_show(warn);
 
    } else {
 
@@ -1519,7 +1587,7 @@ change_chain_id_by_widget(GtkWidget *w) {
 	    graphics_draw();
 	 } else {
 	    GtkWidget *ws = wrapped_nothing_bad_dialog(r.second);
-	    gtk_widget_show(ws);
+	    if (ws) gtk_widget_show(ws);
 	 }
 	 graphics_info_t g;
 	 g.update_geometry_graphs(g.molecules[imol].atom_sel, imol);
@@ -1558,6 +1626,33 @@ my_delete_ramachandran_mol_option(GtkWidget *widget, void *data) {
 void
 show_fix_nomenclature_errors_gui(int imol,
 				 const std::vector<std::pair<std::string, coot::residue_spec_t> > &nomenclature_errors) {
+#ifdef BANDICOOT_UI_WX
+   // asked once the read has finished, so a session or several files are not held up
+   if (graphics_info_t::use_graphics_interface_flag && is_valid_model_molecule(imol)) {
+      for (unsigned int i=0; i<nomenclature_errors.size(); i++)
+         std::cout << "INFO:: nomenclature error in molecule " << imol << ": "
+                   << nomenclature_errors[i].first << " " << nomenclature_errors[i].second.format()
+                   << std::endl;
+      std::size_t n = nomenclature_errors.size();
+      std::string q = "Molecule " + coot::util::int_to_string(imol) + " has " +
+         coot::util::int_to_string(n) + " nomenclature error" + (n > 1 ? "s" : "") + ".\n\n";
+      const std::size_t shown = 10;
+      for (std::size_t i=0; i<n && i<shown; i++)
+         q += nomenclature_errors[i].first + " " + nomenclature_errors[i].second.format() + "\n";
+      if (n > shown)
+         q += "and " + coot::util::int_to_string(n - shown) + " more\n";
+      q += n > 1 ? "\nCorrect them?" : "\nCorrect it?";
+      // not modal: with several models read at once, each asks on its own
+      bandicoot_wx_timeout_add(1, [imol, q]() {
+         if (is_valid_model_molecule(imol))
+            bandicoot_wx_ask(q, [imol](bool yes) {
+               if (yes && is_valid_model_molecule(imol)) fix_nomenclature_errors(imol);
+            });
+         return false;
+      });
+   }
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       if (is_valid_model_molecule(imol)) {
 
@@ -2150,6 +2245,9 @@ static void bandicoot_msg_dialog_response(GtkDialog *dialog, gint response,
 // Coot-style native info dialog (the Python info_dialog is the gtk stub).
 static void bandicoot_native_info_dialog(const char *msg) {
    if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_info(msg ? msg : "", false)) return;
+#endif
    GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
    GtkWidget *d = gtk_message_dialog_new(mw ? GTK_WINDOW(mw) : NULL,
                                          GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -2172,6 +2270,39 @@ void bandicoot_interesting_things_py(const char *title, PyObject *baddie_list) {
    PyObject *blist = PySequence_List(baddie_list);
    if (! blist) { PyErr_Clear(); return; }
    Py_ssize_t n = PyList_Size(blist);
+
+#ifdef BANDICOOT_UI_WX
+   {
+      // the same rows, for the wx build's list
+      std::vector<bandicoot_result_row> rows;
+      for (Py_ssize_t i = 0; i < n; i++) {
+         PyObject *item = PyList_GetItem(blist, i);   // borrowed
+         if (! item || ! PyList_Check(item)) continue;
+         Py_ssize_t li = PyList_Size(item);
+         bandicoot_result_row row;
+         row.label = bandicoot_py_str(PyList_GetItem(item, 0));
+         if (li == 4) {
+            row.at_point = true;
+            row.x = PyFloat_AsDouble(PyList_GetItem(item, 1));
+            row.y = PyFloat_AsDouble(PyList_GetItem(item, 2));
+            row.z = PyFloat_AsDouble(PyList_GetItem(item, 3));
+         } else if (li >= 6) {
+            row.imol  = (int) PyInt_AsLong(PyList_GetItem(item, 1));
+            row.chain = bandicoot_py_str(PyList_GetItem(item, 2));
+            row.resno = (int) PyInt_AsLong(PyList_GetItem(item, 3));
+            row.atom  = bandicoot_py_str(PyList_GetItem(item, 5));
+         } else {
+            continue;
+         }
+         rows.push_back(row);
+      }
+      PyErr_Clear();
+      if (bandicoot_wx_results(title ? title : "Results", rows)) {
+         Py_DECREF(blist);
+         return;
+      }
+   }
+#endif
 
    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
    gtk_window_set_title(GTK_WINDOW(window), title ? title : "Results");
@@ -2862,7 +2993,15 @@ static void bandicoot_glyco_dialog_refresh() {
 }
 
 // Public entry point for the recentre hook (run_post_set_rotation_centre_hook).
+#ifdef BANDICOOT_UI_WX
+// The wx build's glycan window (wxUI/bridge/core-bridge.cc); false if none.
+bool bandicoot_wx_glycan_refresh();
+#endif
+
 extern "C" void bandicoot_glyco_dialog_refresh_if_open() {
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_glycan_refresh()) return;
+#endif
    bandicoot_glyco_dialog_refresh();
 }
 
@@ -4620,8 +4759,17 @@ static void bandicoot_pandda_rebuild_body() {
    }
 }
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's PanDDA Inspect window (wxUI/bridge/core-bridge.cc); false if
+// there is none to open.
+bool bandicoot_wx_pandda(const std::string &folder);
+#endif
+
 extern "C" void bandicoot_pandda_dialog() {
    if (! graphics_info_t::use_graphics_interface_flag) return;
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_pandda(std::string())) return;
+#endif
 #ifdef USE_PYTHON
    // import once so the button commands are single expressions (their return
    // value reaches the status label, and they aren't double-executed).
@@ -4676,6 +4824,9 @@ extern "C" void bandicoot_pandda_dialog() {
 
 // Entry point for the --pandda launcher: open the dialog and load `dir`.
 extern "C" void bandicoot_pandda_dialog_with_folder(const char *dir) {
+#ifdef BANDICOOT_UI_WX
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_pandda(dir ? dir : "")) return;
+#endif
    bandicoot_pandda_dialog();
    if (dir && *dir)
       bandicoot_pandda_load_folder(dir);
@@ -4855,6 +5006,10 @@ void  do_edit_replace_fragment() {
 bool bandicoot_native_question_dialog(const char *msg) {
 
    if (! graphics_info_t::use_graphics_interface_flag) return false;
+#ifdef BANDICOOT_UI_WX
+   int answer = bandicoot_wx_question(msg ? msg : "");
+   if (answer != -1) return answer == 1;
+#endif
    GtkWidget *mw = lookup_widget(GTK_WIDGET(graphics_info_t::glarea), "window1");
    // The OR of two GtkDialogFlags is an int, and C++ will not convert that back
    // to the enum on its own.

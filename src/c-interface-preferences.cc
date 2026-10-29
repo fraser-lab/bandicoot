@@ -131,7 +131,7 @@ void bandicoot_load_pick_atom_radius() {
 // "Dock Toolbar?" preference and the sidebar's Dock/Undock menu write it; startup
 // (bandicoot_sidebar_dock_default) reads it. Default = docked when the file is
 // absent. (The native sidebar's dock state is NOT part of Coot's own preferences
-// machinery — model_toolbar_position_state is the legacy handlebox position — so
+// machinery -- model_toolbar_position_state is the legacy handlebox position -- so
 // it needs its own tiny store, like the pick-radius settings above.)
 extern "C" void bandicoot_save_sidebar_docked(int docked) {
    std::string dir = bandicoot_pick_radius_dir();
@@ -151,6 +151,69 @@ extern "C" int bandicoot_load_sidebar_docked(void) {
    return 1;   // default: docked
 }
 
+// Persisted side the docked sidebar sits on, in
+// ~/.coot-preferences/bandicoot-sidebar-position, in Coot's numbering (0 right,
+// 1 left, 3 bottom). Written when the user picks a side; default = right. Coot's
+// own set_model_toolbar_docked_position() is not used for this: in Bandicoot it
+// is inert, yet the preferences file calls it at every start.
+extern "C" void bandicoot_save_sidebar_position(int position) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sidebar-position").c_str());
+   if (f) f << position << std::endl;
+}
+extern "C" int bandicoot_load_sidebar_position(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sidebar-position").c_str());
+      int v = 0;
+      if (f && (f >> v) && (v == 0 || v == 1 || v == 3)) return v;
+   }
+   return 0;   // default: right
+}
+// Persisted sidebar icon size in points, in
+// ~/.coot-preferences/bandicoot-sidebar-icon-size: one of 24, 20, 16, 12;
+// default 12.
+extern "C" void bandicoot_save_sidebar_icon_size(int points) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-sidebar-icon-size").c_str());
+   if (f) f << points << std::endl;
+}
+extern "C" int bandicoot_load_sidebar_icon_size(void) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (!dir.empty()) {
+      std::ifstream f((dir + "/bandicoot-sidebar-icon-size").c_str());
+      int v = 0;
+      if (f && (f >> v) && (v == 24 || v == 20 || v == 16 || v == 12)) return v;
+   }
+   return 12;   // default
+}
+// Persisted wx top toolbar, in ~/.coot-preferences/bandicoot-top-toolbar: the
+// display style (1 icons, 2 icons and text, 3 text) on the first line, then one
+// item id per line, in order, for the part of the toolbar the user arranges.
+// False when there is no saved toolbar, so the caller uses its defaults.
+bool bandicoot_load_top_toolbar(int &style, std::vector<std::string> &ids) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return false;
+   std::ifstream f((dir + "/bandicoot-top-toolbar").c_str());
+   if (! f || ! (f >> style) || style < 1 || style > 3) return false;
+   ids.clear();
+   std::string id;
+   while (f >> id) ids.push_back(id);
+   return true;
+}
+void bandicoot_save_top_toolbar(int style, const std::vector<std::string> &ids) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f((dir + "/bandicoot-top-toolbar").c_str());
+   if (! f) return;
+   f << style << std::endl;
+   for (const std::string &id : ids) f << id << std::endl;
+}
 // Persisted "Dock Sequence View Dialog?" preference, in
 // ~/.coot-preferences/bandicoot-sequence-view-docked ("1" docked / "0" floating).
 // Same self-contained store as the sidebar dock above; read by nsv() when the
@@ -499,7 +562,7 @@ static void bandicoot_add_pick_atom_tab(GtkWidget *prefs) {
 //   * a root directory of per-ligand .pdb/.cif subdirectories
 // They are stored as two lines (index path, cifs dir) in
 // ~/.coot-preferences/bandicoot-pandda and read DIRECTLY by the Python driver
-// (python/bandicoot_pandda.py) — no SWIG / C<->Python plumbing. This tab is the
+// (python/bandicoot_pandda.py) -- no SWIG / C<->Python plumbing. This tab is the
 // editor. Designed to grow (more ligand settings later, e.g. a "starting state").
 static GtkWidget *bcoot_ligands_index_entry = NULL;
 static GtkWidget *bcoot_ligands_cifs_entry  = NULL;
@@ -537,6 +600,22 @@ static void bandicoot_load_ligands_config(std::string &index_out, std::string &c
    std::getline(f, cifs_out);
    std::string s;
    if (std::getline(f, s)) split_out = (s == "1" || s == "Yes" || s == "true");
+}
+// The same settings for the wx Preferences window, which holds no GTK
+// widgets. The unused index line is kept as it is.
+void bandicoot_read_pandda_config(std::string &cifs_dir, bool &split) {
+   std::string index;
+   bandicoot_load_ligands_config(index, cifs_dir, split);
+}
+void bandicoot_write_pandda_config(const std::string &cifs_dir, bool split) {
+   std::string index, old_cifs;
+   bool old_split = false;
+   bandicoot_load_ligands_config(index, old_cifs, old_split);
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f(bandicoot_ligands_config_path().c_str());
+   if (f) f << index << "\n" << cifs_dir << "\n" << (split ? "1" : "0") << "\n";
 }
 static void bcoot_ligands_entry_activate(GtkEntry *e, gpointer u) {
    bandicoot_save_ligands_config();
@@ -600,7 +679,7 @@ static void bcoot_ligands_browse_dir(GtkButton *b, gpointer entry) {
    gtk_widget_destroy(fc);
 }
 
-// One "label | entry | Browse…" row in the ligand-sources table.
+// One "label | entry | Browse..." row in the ligand-sources table.
 static void bcoot_ligands_add_row(GtkWidget *tbl, int row, const char *label_text,
                                   GtkWidget **entry_out, const char *cur,
                                   void (*browse)(GtkButton *, gpointer)) {
@@ -693,6 +772,18 @@ static void bandicoot_save_ligand_behaviour() {
      << bcoot_yes(bcoot_lig_auto_generate_yes) << "\n"
      << bcoot_yes(bcoot_lig_show_generate_yes) << "\n"
      << bcoot_yes(bcoot_lig_apply_all_yes)     << "\n";
+}
+
+// The same file, written from values, for the wx Preferences window.
+void bandicoot_write_ligand_behaviour(int auto_rename, int show_rename,
+                                      int auto_generate, int show_generate, int apply_all) {
+   std::string dir = bandicoot_pick_radius_dir();
+   if (dir.empty()) return;
+   make_directory_maybe(dir.c_str());
+   std::ofstream f(bandicoot_ligand_behaviour_path().c_str());
+   if (!f) return;
+   f << auto_rename << "\n" << show_rename << "\n" << auto_generate << "\n"
+     << show_generate << "\n" << apply_all << "\n";
 }
 
 // GREY OUT rather than hide the dependent setting when it cannot apply.
@@ -920,7 +1011,7 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
       gtk_box_pack_start(GTK_BOX(box), no,  FALSE, FALSE, 0);
       gtk_box_reorder_child(GTK_BOX(box), yes, 0);
       gtk_box_reorder_child(GTK_BOX(box), no,  1);
-      // Initial state from the sidebar — set BEFORE connecting so it doesn't dock.
+      // Initial state from the sidebar -- set BEFORE connecting so it doesn't dock.
       if (bandicoot_sidebar_is_docked())
          gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(yes), TRUE);
       else
@@ -972,7 +1063,7 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
          gtk_container_set_border_width(GTK_CONTAINER(no),  5);
          gtk_box_pack_start(GTK_BOX(sv_box), yes, FALSE, FALSE, 0);
          gtk_box_pack_start(GTK_BOX(sv_box), no,  FALSE, FALSE, 0);
-         // Initial state from the saved pref — set BEFORE connecting the signals.
+         // Initial state from the saved pref -- set BEFORE connecting the signals.
          if (bandicoot_load_sequence_view_docked())
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(yes), TRUE);
          else
@@ -987,7 +1078,7 @@ static void bandicoot_fixup_preferences(GtkWidget *prefs) {
          if (idx >= 0) gtk_box_reorder_child(GTK_BOX(ar_parent), sv_frame, idx + 1);
          gtk_widget_show_all(sv_frame);
 
-         // 6. "Max. sequences shown" — how tall the DOCKED strip may grow before the
+         // 6. "Max. sequences shown" -- how tall the DOCKED strip may grow before the
          //    sequence scrolls inside it, in sequences (chains) because that is the
          //    unit the view is built from. Sits directly beneath the dock Yes/No frame
          //    it belongs with. Applies live to an open docked strip.
@@ -1066,6 +1157,18 @@ void bandicoot_set_default_bond_scheme_from_combo_index(int index) {
    preferences_internal_change_value_int(PREFERENCES_DEFAULT_BOND_DISPLAY_SCHEME,
                                          bonds_box_type);
    set_default_representation_type(bonds_box_type);
+}
+
+// The wx Preferences window lists the same schemes, from this table.
+std::vector<std::string> bandicoot_bond_scheme_labels() {
+   std::vector<std::string> v;
+   for (int i=0; i<bandicoot_n_bond_schemes; i++)
+      v.push_back(bandicoot_bond_schemes[i].label);
+   return v;
+}
+
+int bandicoot_bond_scheme_row(int bonds_box_type) {
+   return bandicoot_bond_scheme_index(bonds_box_type);
 }
 
 void show_preferences(){

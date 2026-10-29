@@ -56,6 +56,10 @@ def generic_object_with_name(obj_name):
 #
 def generic_objects_gui():
 
+    # Bandicoot's own window where pygtk's cannot appear
+    if bandicoot_generic_objects_window_py():
+        return
+
     pygtk_flag = False
     try:
       import pygtk
@@ -293,7 +297,7 @@ def probe(imol):
             set_recentre_on_read_pdb(1)
 
           # show the GUI for USER MODS
-          if using_gui():
+          if use_graphics_interface_state():
             user_mods_gui(imol_probe, reduce_out_pdb_file)
 
           # toggle_active_mol(imol_probe) let's not do

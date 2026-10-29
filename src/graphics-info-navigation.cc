@@ -61,6 +61,15 @@
 
 #include "cc-interface.hh"  // for statusbar_text
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Go To Atom window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_goto_target_changed();
+void bandicoot_wx_goto_model_changed(int imol);
+void bandicoot_wx_goto_molecules_changed(int imol);
+// And its sequence views.
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
+#endif
+
 // After this function, we call try_centre_from_new_go_to_atom(); 
 void graphics_info_t::set_go_to_atom_chain_residue_atom_name(const gchar *t1, 
 							     int it2, 
@@ -350,6 +359,9 @@ graphics_info_t::intelligent_near_atom_centring(GtkWidget *go_to_atom_window,
 	 // now update the widget with the new values of the above (like
 	 // c-interface:goto_near_atom_maybe())
 
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_wx_goto_target_changed();
+#endif
 	 if (go_to_atom_window) {
 	    update_widget_go_to_atom_values(go_to_atom_window, next_atom);
 	    // 	 GtkWidget *residue_tree = lookup_widget(go_to_atom_window,
@@ -381,6 +393,9 @@ graphics_info_t::intelligent_near_atom_centring(GtkWidget *go_to_atom_window,
                                                       };
 
          sequence_view_highlight_residue_maybe(next_atom, get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+         bandicoot_wx_sequence_view_highlight(imol, next_atom);
+#endif
       }
    }
    return 1;
@@ -669,6 +684,10 @@ graphics_info_t::find_atom_index_from_goto_info(int imol) {
 void
 graphics_info_t::update_go_to_atom_window_on_changed_mol(int imol) {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_model_changed(imol);
+#endif
+
    // now if the go to atom widget was being displayed, we need to
    // redraw the residue list and atom list (if the molecule of the
    // residue and atom list is the molecule that has just been
@@ -751,6 +770,10 @@ graphics_info_t::apply_go_to_atom_from_widget(GtkWidget *widget) {
 void
 graphics_info_t::update_go_to_atom_window_on_new_mol() {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_molecules_changed(-1);
+#endif
+
    if (go_to_atom_window) {
 
       // GtkWidget *option_menu = lookup_widget(GTK_WIDGET(go_to_atom_window), 
@@ -812,6 +835,10 @@ graphics_info_t::update_go_to_atom_window_on_new_mol() {
 // because we are passed it.
 void
 graphics_info_t::update_go_to_atom_window_on_other_molecule_chosen(int imol) {
+
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_molecules_changed(imol);
+#endif
 
    if (go_to_atom_window) {
       GtkWidget *combobox = lookup_widget(GTK_WIDGET(go_to_atom_window), "go_to_atom_molecule_combobox");

@@ -639,3 +639,121 @@ coot::mmcif_header_view(const coot::mmcif_document_t *doc) {
 
    return out;
 }
+
+namespace {
+
+   std::string pad_to(const std::string &s, size_t w) {
+      std::string t = s;
+      while (t.size() < w) t += " ";
+      return t;
+   }
+
+   std::string lowered(const std::string &s) {
+      std::string t = s;
+      for (char &c : t) c = std::tolower(static_cast<unsigned char>(c));
+      return t;
+   }
+
+   bool contains(const std::string &hay_lower, const std::string &needle_lower) {
+      return needle_lower.empty() ||
+             hay_lower.find(needle_lower) != std::string::npos;
+   }
+
+   // A field with no value carries no information -- only the fact that the tag
+   // was declared -- and a wwPDB entry declares a great many it does not fill.
+   // Showing them puts a column of blanks in the way of the numbers someone
+   // opened the window for.
+   bool has_value(const std::string &v) {
+      if (v.empty()) return false;
+      for (char c : v)
+         if (! std::isspace(static_cast<unsigned char>(c))) return true;
+      return false;
+   }
+}
+
+// The filter works at field level: matching whole categories reads as broken,
+// because a category matched for one field would then show all of its fields,
+// most of them about something else.
+bool
+coot::mmcif_header_category_text(const coot::header_category_t &c,
+                                 const std::string &filter, std::string *out) {
+
+   out->clear();
+   const std::string needle = lowered(filter);
+   const std::string cat_hay = lowered(c.name + " " + c.label);
+   const bool whole_category_matches = ! needle.empty() && contains(cat_hay, needle);
+
+   if (! c.is_loop) {
+
+      // Two passes, so the label column is as wide as what is shown.
+      std::vector<size_t> keep;
+      for (size_t i = 0; i < c.column_tags.size(); i++) {
+         const std::string &v = c.rows.empty() ? std::string() : c.rows[0][i];
+         if (! has_value(v)) continue;
+         if (! needle.empty() && ! whole_category_matches) {
+            std::string hay = lowered(c.column_labels[i] + " " + c.column_tags[i] +
+                                      " " + v);
+            if (! contains(hay, needle)) continue;
+         }
+         keep.push_back(i);
+      }
+      if (keep.empty()) return false;
+
+      size_t wl = 0;
+      for (size_t i : keep) wl = std::max(wl, c.column_labels[i].size());
+      for (size_t i : keep) {
+         const std::string &v = c.rows[0][i];
+         *out += " " + pad_to(c.column_labels[i], wl) + "   " + v + "\n";
+      }
+      return true;
+   }
+
+   // A loop is a table, and a table's unit is the row. If the category or a
+   // column heading matches, the whole table is what was asked for;
+   // otherwise keep the rows that match and drop the rest.
+   bool column_matches = false;
+   if (! needle.empty())
+      for (size_t i = 0; i < c.column_labels.size() && ! column_matches; i++)
+         column_matches = contains(lowered(c.column_labels[i] + " " +
+                                           c.column_tags[i]), needle);
+
+   std::vector<size_t> keep_rows;
+   for (size_t r = 0; r < c.rows.size(); r++) {
+      if (needle.empty() || whole_category_matches || column_matches) {
+         keep_rows.push_back(r);
+         continue;
+      }
+      bool row_matches = false;
+      for (const std::string &cell : c.rows[r])
+         if (contains(lowered(cell), needle)) { row_matches = true; break; }
+      if (row_matches) keep_rows.push_back(r);
+   }
+   if (keep_rows.empty()) return false;
+
+   // Drop columns that are empty in every row shown: a wwPDB loop routinely
+   // declares columns it never fills.
+   size_t ncol = c.column_tags.size();
+   std::vector<size_t> cols;
+   for (size_t i = 0; i < ncol; i++)
+      for (size_t r : keep_rows)
+         if (i < c.rows[r].size() && has_value(c.rows[r][i])) { cols.push_back(i); break; }
+   if (cols.empty()) return false;
+
+   std::vector<size_t> w(ncol, 0);
+   for (size_t i : cols) {
+      w[i] = c.column_labels[i].size();
+      for (size_t r : keep_rows)
+         if (i < c.rows[r].size()) w[i] = std::max(w[i], c.rows[r][i].size());
+      if (w[i] > 44) w[i] = 44;
+   }
+   for (size_t i : cols) *out += " " + pad_to(c.column_labels[i], w[i]);
+   *out += "\n";
+   for (size_t i : cols) *out += " " + std::string(w[i], '-');
+   *out += "\n";
+   for (size_t r : keep_rows) {
+      for (size_t i : cols)
+         *out += " " + pad_to(i < c.rows[r].size() ? c.rows[r][i] : std::string(), w[i]);
+      *out += "\n";
+   }
+   return true;
+}

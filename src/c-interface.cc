@@ -39,6 +39,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <functional>
 
 #if !defined(_MSC_VER)
 #include <glob.h> // for globbing.  Needed here?
@@ -138,6 +139,38 @@
 // moving column_label selection to c-interface from mtz bits.
 #include "cmtz-interface.hh"
 // #include "mtz-bits.h" stuff from here moved to cmtz-interface
+
+#ifdef BANDICOOT_UI_WX
+// The wx build's Go To Atom window (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_goto_target_changed();
+// And its Display Manager: false if it is not in place.
+bool bandicoot_wx_display_manager_open();
+// A repeating timer on the wx event loop, which stops when the callback
+// returns false; 0 if there is no window to run it.
+int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+// A yes/no it waits on: 1 yes, 0 no, -1 if there is no window to ask in.
+int bandicoot_wx_question(const std::string &text);
+// A radio-button choice whose options and buttons run Python commands; false
+// if there is no window to show it in.
+bool bandicoot_wx_radio_choice(const std::string &title,
+                               const std::vector<std::pair<std::string, std::string>> &choices,
+                               int selected,
+                               const std::string &accept_label, const std::string &accept_command,
+                               const std::string &reject_label, const std::string &reject_command);
+// A column of buttons that run Python commands; false if there is no window to show it in.
+bool bandicoot_wx_button_choice(const std::string &title,
+                                const std::vector<std::pair<std::string, std::string>> &buttons,
+                                const std::string &close_label, const std::string &close_command);
+bool bandicoot_wx_button_choice_filtered(const std::string &title,
+                                         const std::vector<std::pair<std::string, std::string>> &buttons,
+                                         const std::string &check_label,
+                                         const std::vector<std::pair<std::string, std::string>> &checked_buttons,
+                                         const std::string &close_label, const std::string &close_command);
+bool bandicoot_wx_generic_objects();
+bool bandicoot_wx_validation_report(const std::string &title, const std::string &footnote, int imol,
+                                    const std::vector<std::vector<std::string>> &metrics,
+                                    const std::vector<std::vector<std::string>> &residues);
+#endif
 
 
 // This is (already) in git-revision-count.cc
@@ -1233,6 +1266,11 @@ int first_unsaved_coords_imol() {
 
 void hardware_stereo_mode() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) { 
       if (graphics_info_t::display_mode != coot::HARDWARE_STEREO_MODE) {
 	 int previous_mode = graphics_info_t::display_mode;
@@ -1286,6 +1324,11 @@ void hardware_stereo_mode() {
 
 void zalman_stereo_mode() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
   // FIXME this is not really zalman!!!!!
    if (graphics_info_t::use_graphics_interface_flag) { 
       if (graphics_info_t::display_mode != coot::HARDWARE_STEREO_MODE) {
@@ -1395,6 +1438,11 @@ void mono_mode() {
 /*! \brief turn on side bye side stereo mode */
 void side_by_side_stereo_mode(short int use_wall_eye_flag) {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
 
       // If it wasn't in side by side stereo mode, then we need to
@@ -1459,6 +1507,11 @@ void side_by_side_stereo_mode(short int use_wall_eye_flag) {
 // when it works, call it dti_side_by_side_stereo_mode()
 void set_dti_stereo_mode(short int state) {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       if (state) { 
 	 short int stereo_mode;
@@ -1715,6 +1768,10 @@ int control_key_for_rotate_state() {
 /*  ------------------------------------------------------------------------ */
 void post_model_fit_refine_dialog() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no Model/Fit/Refine window (old session files still ask for it)
+   return;
+#endif
    GtkWidget *widget = wrapped_create_model_fit_refine_dialog();
    if (graphics_info_t::use_graphics_interface_flag) { 
       gtk_widget_show(widget);
@@ -1753,16 +1810,40 @@ void set_auto_read_column_labels(const char *fwt, const char *phwt,
 }
 
 
+#ifdef BANDICOOT_UI_WX
+// No GTK main loop runs under wx, so spin and rock are wx timers. Each start
+// takes a fresh token; a timer whose token is no longer current stops.
+static void bandicoot_wx_start_spin_rock(bool rock) {
+   static int last_token = 0;
+   int token = ++last_token;
+   graphics_info_t::idle_function_spin_rock_token = token;
+   int id = bandicoot_wx_timeout_add(rock ? 25 : 16, [token, rock]() {
+      if (graphics_info_t::idle_function_spin_rock_token != token) return false;
+      if (rock) animate_idle_rock(nullptr);
+      else animate_idle_spin(nullptr);
+      return true;
+   });
+   if (! id) graphics_info_t::idle_function_spin_rock_token = 0;
+}
+#endif
+
 void toggle_idle_spin_function() { 
 
    graphics_info_t g; 
 
+#ifdef BANDICOOT_UI_WX
+   if (g.idle_function_spin_rock_token == 0)
+      bandicoot_wx_start_spin_rock(false);
+   else
+      g.idle_function_spin_rock_token = 0;
+#else
    if (g.idle_function_spin_rock_token == 0) { 
       g.idle_function_spin_rock_token = gtk_idle_add((GtkFunction)animate_idle_spin, g.glarea);
    } else {
       gtk_idle_remove(g.idle_function_spin_rock_token);
       g.idle_function_spin_rock_token = 0; 
    }
+#endif
    add_to_history_simple("toggle-idle-function");
 }
 
@@ -1772,17 +1853,23 @@ void toggle_idle_rock_function() {
    graphics_info_t g; 
 
    if (g.idle_function_spin_rock_token == 0) { 
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_start_spin_rock(true);
+#else
       g.idle_function_spin_rock_token =
 	 // gtk_idle_add((GtkFunction)animate_idle_rock, g.glarea);
 	 gtk_timeout_add(25, // 40 fps
 			 (GtkFunction) animate_idle_rock,
 			 g.glarea);
+#endif
       g.time_holder_for_rocking = coot::elapsed_time_ms();
 
       g.idle_function_rock_angle_previous =
 	 get_idle_function_rock_target_angle();
    } else {
+#ifndef BANDICOOT_UI_WX
       gtk_idle_remove(g.idle_function_spin_rock_token);
+#endif
       g.idle_function_spin_rock_token = 0;
    }
    add_to_history_simple("toggle-idle-rock-function");
@@ -1816,7 +1903,9 @@ void set_flev_idle_ligand_interactions(int state) {
    if (state == 0) {
       // turn them off if they were on
       if (g.idle_function_ligand_interactions_token) { 
+#ifndef BANDICOOT_UI_WX
 	 gtk_idle_remove(g.idle_function_ligand_interactions_token);
+#endif
 	 g.idle_function_ligand_interactions_token = 0;
 	 for (unsigned int imol=0; imol<g.molecules.size(); imol++) { 
 	    if (is_valid_model_molecule(imol)) {
@@ -1827,10 +1916,23 @@ void set_flev_idle_ligand_interactions(int state) {
    } else {
       // turn them on if they were off.
       if (g.idle_function_ligand_interactions_token == 0) {
+#ifdef BANDICOOT_UI_WX
+	 // No GTK main loop under wx; a timer whose token is no longer current stops.
+	 static int last_token = 0;
+	 int token = ++last_token;
+	 g.idle_function_ligand_interactions_token = token;
+	 if (! bandicoot_wx_timeout_add(100, [token]() {
+	       if (graphics_info_t::idle_function_ligand_interactions_token != token) return false;
+	       animate_idle_ligand_interactions(nullptr);
+	       return true;
+	    }))
+	    g.idle_function_ligand_interactions_token = 0;
+#else
 	 g.idle_function_ligand_interactions_token =
 	    gtk_timeout_add(100,
 			    (GtkFunction) animate_idle_ligand_interactions,
 			    NULL);
+#endif
 	 g.time_holder_for_ligand_interactions = coot::elapsed_time_ms();
       }
    }
@@ -1871,10 +1973,7 @@ void do_tw() {
 void info_dialog(const char *txt) {
 
    graphics_info_t::info_dialog(txt);
-   std::string cmd = "info-dialog";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 // As info_dialog, but print to console too. Usefull for error and 
@@ -1884,20 +1983,14 @@ void info_dialog_and_text(const char *txt) {
 
    graphics_info_t g;
    g.info_dialog_and_text(txt);
-   std::string cmd = "info-dialog-and-text";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 void info_dialog_with_markup(const char *txt) {
 
    graphics_info_t g;
    g.info_dialog_and_text(txt, true);
-   std::string cmd = "info-dialog-and-text";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 
@@ -2813,7 +2906,7 @@ void set_show_symmetry_master(short int state) {
          if (false) { // I don't like this noise in the days of molecular symmetry for EM models
             if (graphics_info_t::use_graphics_interface_flag) {
                GtkWidget *w = g.wrapped_nothing_bad_dialog(s);
-               gtk_widget_show(w);
+               if (w) gtk_widget_show(w);
             }
 	 }
       }
@@ -4612,7 +4705,7 @@ read_phs_and_coords_and_make_map(const gchar *pdb_filename){
       w += "\n";
       w += "Can't make map from phs file.";
       GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-      gtk_widget_show(widget);
+      if (widget) gtk_widget_show(widget);
    } 
 }
 
@@ -4704,7 +4797,7 @@ read_phs_and_make_map_with_reso_limits(int imol_ref, const char* phs_filename,
 	 w += "\n";
 	 w += "Can't make map from phs file.";
 	 GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-	 gtk_widget_show(widget);
+	 if (widget) gtk_widget_show(widget);
       }
    } else {
       g.erase_last_molecule();
@@ -4715,7 +4808,7 @@ read_phs_and_make_map_with_reso_limits(int imol_ref, const char* phs_filename,
       w += "\n";
       w += "Can't make map from phs file.";
       GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-      gtk_widget_show(widget);
+      if (widget) gtk_widget_show(widget);
    }
 
    return istat;
@@ -5005,6 +5098,9 @@ int set_go_to_atom_chain_residue_atom_name(const char *t1, int iresno, const cha
       GtkWidget *window = graphics_info_t::go_to_atom_window;
       if (window)
 	 g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    }
    graphics_draw();
    return success;
@@ -5024,6 +5120,9 @@ int set_go_to_atom_chain_residue_atom_name_full(const char *chain_id,
       GtkWidget *window = graphics_info_t::go_to_atom_window;
       if (window)
 	 g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    }
    graphics_draw();
    return success;
@@ -5061,6 +5160,9 @@ int set_go_to_atom_chain_residue_atom_name_no_redraw(const char *t1, int iresno,
    GtkWidget *window = graphics_info_t::go_to_atom_window;
    if (window)
       g.update_widget_go_to_atom_values(window, at);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_goto_target_changed();
+#endif
    
    int success = 0;
    if (make_the_move_flag) { 
@@ -5760,8 +5862,14 @@ void save_display_control_widget_in_graphics(GtkWidget *widget) {
 }
 
 void 
-post_display_control_window() { 
+post_display_control_window() {
 
+#ifdef BANDICOOT_UI_WX
+   if (bandicoot_wx_display_manager_open()) {
+      add_to_history(std::vector<std::string>(1, "post-display-control-window"));
+      return;
+   }
+#endif
    GtkWidget *widget = wrapped_create_display_control_window();
    gtk_widget_show(widget);
    std::vector<std::string> command_strings;
@@ -7394,6 +7502,18 @@ run_state_file_maybe() {
 	    graphics_info_t::state_file_was_run_flag = true;
 	 } else {
 	    if (graphics_info_t::use_graphics_interface_flag) { 
+#ifdef BANDICOOT_UI_WX
+	       // asked once the wx event loop runs, as the main window is then up
+	       std::string question = "There is a coot auto-save state file here.\n\n";
+	       for (const std::string &m : g.save_state_data_and_models(filename, 1))
+		  question += "    " + m + "\n";
+	       question += "\nDo you want to run it?";
+	       if (bandicoot_wx_timeout_add(1, [question]() {
+		      if (bandicoot_wx_question(question) == 1) run_state_file();
+		      return false;
+		   }))
+		  return;
+#endif
 	       GtkWidget *dialog = wrapped_create_run_state_file_dialog();
 	       gtk_widget_show(dialog);
 	    } 
@@ -8736,9 +8856,121 @@ static gboolean bandicoot_python_timeout_thunk(gpointer data) {
 int bandicoot_python_timeout_add(int interval_ms, PyObject *callable) {
    if (!callable || !PyCallable_Check(callable)) return 0;
    Py_INCREF(callable);  // released by the thunk when it returns FALSE
+#ifdef BANDICOOT_UI_WX
+   // the wx build runs no GLib main loop, so GLib timeouts would never fire
+   int id = bandicoot_wx_timeout_add(interval_ms, [callable]() {
+      return bandicoot_python_timeout_thunk(callable) != FALSE;
+   });
+   if (id) return id;
+#endif
    return (int) g_timeout_add(interval_ms,
                               bandicoot_python_timeout_thunk,
                               callable);
+}
+
+int bandicoot_radio_choice_py(const char *title, PyObject *choices, int selected,
+                              const char *accept_label, const char *accept_command,
+                              const char *reject_label, const char *reject_command) {
+#ifdef BANDICOOT_UI_WX
+   if (! choices || ! PyList_Check(choices)) return 0;
+   std::vector<std::pair<std::string, std::string>> v;
+   for (Py_ssize_t i=0; i<PyList_Size(choices); i++) {
+      PyObject *item = PyList_GetItem(choices, i);
+      if (! PyList_Check(item) || PyList_Size(item) < 2) return 0;
+      PyObject *label = PyList_GetItem(item, 0);
+      PyObject *command = PyList_GetItem(item, 1);
+      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return 0;
+      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
+   }
+   return bandicoot_wx_radio_choice(title ? title : "", v, selected,
+                                    accept_label ? accept_label : "", accept_command ? accept_command : "",
+                                    reject_label ? reject_label : "", reject_command ? reject_command : "")
+      ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+#ifdef BANDICOOT_UI_WX
+// A Python list of [label, command]; false if it is not one.
+static bool button_list_from_py(PyObject *buttons, std::vector<std::pair<std::string, std::string>> &v) {
+   if (! buttons || ! PyList_Check(buttons)) return false;
+   for (Py_ssize_t i=0; i<PyList_Size(buttons); i++) {
+      PyObject *item = PyList_GetItem(buttons, i);
+      if (! PyList_Check(item) || PyList_Size(item) < 2) return false;
+      PyObject *label = PyList_GetItem(item, 0);
+      PyObject *command = PyList_GetItem(item, 1);
+      if (! PyUnicode_Check(label) || ! PyUnicode_Check(command)) return false;
+      v.push_back({ PyUnicode_AsUTF8(label), PyUnicode_AsUTF8(command) });
+   }
+   return true;
+}
+#endif
+
+int bandicoot_button_choice_py(const char *title, PyObject *buttons,
+                               const char *close_label, const char *close_command) {
+#ifdef BANDICOOT_UI_WX
+   std::vector<std::pair<std::string, std::string>> v;
+   if (! button_list_from_py(buttons, v)) return 0;
+   return bandicoot_wx_button_choice(title ? title : "", v, close_label ? close_label : "",
+                                     close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+int bandicoot_button_choice_filtered_py(const char *title, PyObject *buttons,
+                                        const char *check_label, PyObject *checked_buttons,
+                                        const char *close_label, const char *close_command) {
+#ifdef BANDICOOT_UI_WX
+   std::vector<std::pair<std::string, std::string>> all, checked;
+   if (! button_list_from_py(buttons, all) || ! button_list_from_py(checked_buttons, checked)) return 0;
+   return bandicoot_wx_button_choice_filtered(title ? title : "", all, check_label ? check_label : "", checked,
+                                              close_label ? close_label : "",
+                                              close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+#ifdef BANDICOOT_UI_WX
+// A list of lists, each item converted with str().
+static bool string_rows_from_py(PyObject *list, std::vector<std::vector<std::string>> &rows) {
+   if (! PyList_Check(list)) return false;
+   for (Py_ssize_t i = 0; i < PyList_Size(list); i++) {
+      PyObject *row = PyList_GetItem(list, i);
+      if (! PyList_Check(row)) return false;
+      std::vector<std::string> v;
+      for (Py_ssize_t j = 0; j < PyList_Size(row); j++) {
+         PyObject *s = PyObject_Str(PyList_GetItem(row, j));
+         if (! s) { PyErr_Clear(); return false; }
+         const char *c = PyUnicode_AsUTF8(s);
+         v.push_back(c ? c : "");
+         Py_DECREF(s);
+      }
+      rows.push_back(v);
+   }
+   return true;
+}
+#endif
+
+int bandicoot_validation_report_py(const char *title, const char *footnote, int imol,
+                                   PyObject *metrics, PyObject *residues) {
+#ifdef BANDICOOT_UI_WX
+   std::vector<std::vector<std::string>> m, r;
+   if (! string_rows_from_py(metrics, m) || ! string_rows_from_py(residues, r)) return 0;
+   return bandicoot_wx_validation_report(title ? title : "", footnote ? footnote : "", imol, m, r) ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+int bandicoot_generic_objects_window_py() {
+#ifdef BANDICOOT_UI_WX
+   return bandicoot_wx_generic_objects() ? 1 : 0;
+#else
+   return 0;
+#endif
 }
 
 // The scripting-API reader, rotation_centre_position(), is added to the command
@@ -8767,12 +8999,18 @@ void bandicoot_record_navigation(const char *source, const char *label) {
 #ifdef USE_PYTHON
    // The recorder is optional, so ask whether the entry point exists rather
    // than assuming it; an undefined name would raise into the click handler.
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *v = safe_python_command_with_return
       ("callable(globals().get('bandicoot_session_record_navigation'))");
    int ret = 0;
    if (v) ret = PyInt_AsLong(v);
    Py_XDECREF(v);
-   if (ret != 1) return;
+   if (ret != 1) {
+      PyGILState_Release(gstate);
+      return;
+   }
    // The command is evaluated as Python source, so the arguments are escaped
    // rather than merely quoted: labels are built from molecule and file names
    // and are not guaranteed to be free of quotes, backslashes or control
@@ -8791,6 +9029,7 @@ void bandicoot_record_navigation(const char *source, const char *label) {
    }
    PyObject *res = safe_python_command_with_return(cmd);
    Py_XDECREF(res);
+   PyGILState_Release(gstate);
 #endif // USE_PYTHON
 }
 

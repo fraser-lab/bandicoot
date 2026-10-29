@@ -18,6 +18,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA
 
+# objects for sources in subdirectories (wxUI/) are built beside them
+AUTOMAKE_OPTIONS = subdir-objects
+
 if COOT_USE_PYTHON
 
 # if coot.py is called __init.py and goes in site-packages/coot/
@@ -590,6 +593,133 @@ coot_bin_SOURCES = \
 if COOT_USE_PYTHON
    coot_bin_SOURCES += coot_wrap_python.cc
    EXTRA_DIST += coot_wrap_python_pre.cc
+endif
+
+# wx main window (--with-ui=wx)
+if UI_WX
+   coot_bin_SOURCES += \
+	wxUI/main/surface.hh         \
+	wxUI/main/main-window.cc     \
+	wxUI/main/splash.cc          \
+	wxUI/main/main-menu.hh       \
+	wxUI/main/main-menu.cc       \
+	wxUI/main/top-toolbar.hh     \
+	wxUI/main/top-toolbar.cc     \
+	wxUI/main/file-actions.hh    \
+	wxUI/main/file-actions.cc    \
+	wxUI/main/go-to-atom.hh      \
+	wxUI/main/go-to-atom.cc      \
+	wxUI/main/display-manager.hh \
+	wxUI/main/display-manager.cc \
+	wxUI/main/refine-dialogs.hh  \
+	wxUI/main/refine-dialogs.cc  \
+	wxUI/main/model-dialogs.hh   \
+	wxUI/main/model-dialogs.cc   \
+	wxUI/main/choosers.hh        \
+	wxUI/main/choosers.cc        \
+	wxUI/main/delete-waters.hh   \
+	wxUI/main/delete-waters.cc   \
+	wxUI/main/accept-reject-bar.hh \
+	wxUI/main/accept-reject-bar.cc \
+	wxUI/main/sequence-view.hh \
+	wxUI/main/sequence-view.cc \
+	wxUI/main/file-menu.hh \
+	wxUI/main/file-menu.cc \
+	wxUI/main/calculate-menu.hh \
+	wxUI/main/calculate-menu.cc \
+	wxUI/main/edit-menu.hh \
+	wxUI/main/edit-menu.cc \
+	wxUI/main/modelling-menu.hh \
+	wxUI/main/ligand-menu.cc \
+	wxUI/main/ligand-menu.hh \
+	wxUI/main/draw-menu.cc \
+	wxUI/main/draw-menu.hh \
+	wxUI/main/measures-menu.cc \
+	wxUI/main/measures-menu.hh \
+	wxUI/main/about-menu.cc \
+	wxUI/main/about-menu.hh \
+	wxUI/main/map-properties.cc \
+	wxUI/main/map-properties.hh \
+	wxUI/main/lidia-window.cc \
+	wxUI/main/lidia-window.hh \
+	wxUI/main/validate-menu.cc \
+	wxUI/main/validate-menu.hh \
+	wxUI/main/validation-graphs.cc \
+	wxUI/main/validation-graphs.hh \
+	wxUI/main/validation-report.cc \
+	wxUI/main/validation-report.hh \
+	wxUI/main/rama-plot.cc \
+	wxUI/main/rama-plot.hh \
+	wxUI/main/modelling-menu.cc \
+	wxUI/main/other-tools.hh \
+	wxUI/main/other-tools.cc \
+	wxUI/main/pandda-inspect.hh \
+	wxUI/main/pandda-inspect.cc \
+	wxUI/main/python-console.hh \
+	wxUI/main/python-console.cc \
+	wxUI/main/preferences.hh \
+	wxUI/main/preferences.cc \
+	wxUI/dialogs/accept-reject-dialog.hh \
+	wxUI/dialogs/accept-reject-dialog.cc \
+	wxUI/dialogs/toolbar-customizer.hh \
+	wxUI/dialogs/toolbar-customizer.cc \
+	wxUI/main/sidebar.hh         \
+	wxUI/main/sidebar.cc         \
+	wxUI/main/mac-menu.hh        \
+	wxUI/main/mac-menu.mm        \
+	wxUI/dialogs/file-panel-size.hh \
+	wxUI/dialogs/file-panel-size.mm \
+	wxUI/dialogs/colour-panel.hh \
+	wxUI/dialogs/colour-panel.mm \
+	wxUI/dialogs/caution-icon.hh \
+	wxUI/dialogs/caution-icon.mm \
+	wxUI/assets/icons.hh         \
+	wxUI/assets/icons.cc         \
+	wxUI/bridge/core-bridge.hh   \
+	wxUI/bridge/core-bridge.cc   \
+	wxUI/bridge/lidia-bridge.hh  \
+	wxUI/bridge/lidia-bridge.cc  \
+	wxUI/assets/chart-canvas.hh  \
+	wxUI/assets/chart-canvas.cc  \
+	wxUI/assets/palette.hh       \
+	wxUI/assets/bevel.hh         \
+	wxUI/assets/bevel.cc         \
+	wxUI/assets/button-base.hh   \
+	wxUI/assets/button-base.cc   \
+	wxUI/assets/arrow-button.hh  \
+	wxUI/assets/arrow-button.cc  \
+	wxUI/assets/bevel-button.hh  \
+	wxUI/assets/bevel-button.cc  \
+	wxUI/assets/toolbar-button.hh \
+	wxUI/assets/toolbar-button.cc \
+	wxUI/assets/flat-button.hh   \
+	wxUI/assets/flat-button.cc   \
+	wxUI/widgets/row-list.hh     \
+	wxUI/widgets/row-list.cc     \
+	wxUI/widgets/click-through-list.hh \
+	wxUI/widgets/click-through-list.cc \
+	wxUI/widgets/molecule-chooser.hh \
+	wxUI/widgets/molecule-chooser.cc \
+	wxUI/widgets/entry-row.hh    \
+	wxUI/widgets/entry-row.cc    \
+	wxUI/widgets/path-box.hh     \
+	wxUI/widgets/path-box.cc     \
+	wxUI/widgets/titled-panel.hh \
+	wxUI/widgets/menu-strip.hh \
+	wxUI/widgets/menu-strip.cc \
+	wxUI/widgets/titled-panel.cc \
+	wxUI/widgets/mixed-row.hh    \
+	wxUI/widgets/mixed-row.cc    \
+	wxUI/dialogs/message.hh      \
+	wxUI/dialogs/message.cc      \
+	wxUI/dialogs/text-dialog.hh  \
+	wxUI/dialogs/text-dialog.cc  \
+	wxUI/dialogs/form-dialogs.hh \
+	wxUI/dialogs/form-dialogs.cc \
+	wxUI/dialogs/click-through-dialog.hh \
+	wxUI/dialogs/click-through-dialog.cc \
+	wxUI/dialogs/file-dialogs.hh \
+	wxUI/dialogs/file-dialogs.cc
 endif
 if COOT_USE_PYTHON
    dist_python_PYTHON = coot.py coot.pth

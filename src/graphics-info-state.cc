@@ -199,14 +199,6 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
    commands.push_back(state_command("set-do-anti-aliasing", do_anti_aliasing_flag, il));
    commands.push_back(state_command("set-default-bond-thickness", default_bond_width, il));
 
-   // cif dictionary
-   if (cif_dictionary_filename_vec->size() > 0) { 
-      for (unsigned int i=0; i<cif_dictionary_filename_vec->size(); i++) {
-	 commands.push_back(state_command("read-cif-dictionary", 
-					  single_quote((*cif_dictionary_filename_vec)[i]), il));
-      }
-   }
-
    // Torsion restraints were set?
    if (do_torsion_restraints)
       commands.push_back(state_command("set-refine-with-torsion-restraints", do_torsion_restraints, il));
@@ -566,6 +558,16 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
       }
    }
 
+   // cif dictionary
+   //
+   // BANDICOOT: after the molecules, so that each dictionary is matched to
+   // (and scoped by) the components it describes rather than to nothing.
+   {
+      std::vector<std::string> dictionaries = cif_dictionaries_for_state();
+      for (unsigned int i=0; i<dictionaries.size(); i++)
+	 commands.push_back(state_command("read-cif-dictionary", single_quote(dictionaries[i]), il));
+   }
+
    // rama restraints on?
    if (do_rama_restraints) {
       commands.push_back(state_command("set-refine-ramachandran-torsion-angles", 1, il));
@@ -700,6 +702,33 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 }
 
 
+// BANDICOOT: a read is dropped when a later one has the same file, or holds
+// the same components at the same scope -- the later one superseded it in the
+// session, so replaying both only repeats work. Reads that never got a scope
+// record (there should be none) are kept.
+std::vector<std::string>
+graphics_info_t::cif_dictionaries_for_state() const {
+
+   std::vector<std::string> v;
+   const std::vector<std::string> &files = *cif_dictionary_filename_vec;
+   for (unsigned int i=0; i<files.size(); i++) {
+      bool replaced = false;
+      if (i < cif_dictionary_scope_vec.size()) {
+	 for (unsigned int j=i+1; j<files.size() && j<cif_dictionary_scope_vec.size(); j++) {
+	    if (cif_dictionary_scope_vec[j].second != cif_dictionary_scope_vec[i].second) continue;
+	    if (files[j] == files[i] ||
+		(! cif_dictionary_scope_vec[i].first.empty() &&
+		 cif_dictionary_scope_vec[j].first == cif_dictionary_scope_vec[i].first)) {
+	       replaced = true;
+	       break;
+	    }
+	 }
+      }
+      if (! replaced) v.push_back(files[i]);
+   }
+   return v;
+}
+
 std::vector<std::string>
 graphics_info_t::save_state_data_and_models(short int lang_flag) const {
 
@@ -720,11 +749,11 @@ graphics_info_t::save_state_data_and_models(short int lang_flag) const {
    }
 
    // add the cif dictionaries:
-   if (cif_dictionary_filename_vec->size() > 0) { 
-      for (unsigned int i=0; i<cif_dictionary_filename_vec->size(); i++) {
+   {
+      std::vector<std::string> dictionaries = cif_dictionaries_for_state();
+      for (unsigned int i=0; i<dictionaries.size(); i++) {
 	 std::string sd = ";;molecule-info: Dictionary: ";
-	 // sd += (*cif_dictionary_filename_vec)[i];
-	 std::string s = (*cif_dictionary_filename_vec)[i];
+	 std::string s = dictionaries[i];
 	 std::string::size_type islash = s.find_last_of("/");
 	 if (islash != std::string::npos) { 
 	    s = s.substr(islash+1, s.length());

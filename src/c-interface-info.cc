@@ -195,7 +195,7 @@ void do_residue_info_dialog() {
       std::string s =  "You have pending (un-Applied) residue edits\n";
       s += "Deal with them first.";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } else {
       std::cout << "Click on an atom..." << std::endl;
       graphics_info_t g;
@@ -286,7 +286,7 @@ void output_residue_info_dialog(int imol, int atom_index) {
       std::string s =  "You have pending (un-Applied) residue edits.\n";
       s += "Deal with them first.";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
 
    } else {
 
@@ -1248,16 +1248,19 @@ void hydrogenate_region(float radius) {
             python_command += single_quote(pdb_out);
             python_command += ")";
 
+            // the result is a Python object: hold the GIL while it is used
+            // (safe_python_command_with_return() releases it on return)
+            PyGILState_STATE gstate = PyGILState_Ensure();
             PyObject *r = safe_python_command_with_return(python_command);
-            std::cout << "::: safe_python_command_with_return() returned " << r << std::endl;
-            std::cout << "::: safe_python_command_with_return() returned "
-                      << PyString_AsString(display_python(r)) << std::endl;
-            if (r == Py_True) {
-               std::cout << "........ calling add_hydrogens_from_file() with pdb_out "
-                         << pdb_out << std::endl;
-               graphics_info_t::molecules[imol].add_hydrogens_from_file(pdb_out);
-            }
+            bool reduced = (r == Py_True);
             Py_XDECREF(r);
+            PyGILState_Release(gstate);
+            if (reduced) {
+               std::cout << "INFO:: adding hydrogens from " << pdb_out << std::endl;
+               graphics_info_t::molecules[imol].add_hydrogens_from_file(pdb_out);
+            } else {
+               std::cout << "WARNING:: hydrogenate region: reduce did not run" << std::endl;
+            }
 
 #endif // PYTHON
          } else {
@@ -2135,6 +2138,11 @@ PyObject *closest_atom_raw_py() {
 
 #include "nsv.hh"
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's sequence views (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_sequence_view_highlight(int imol, mmdb::Atom *at);
+#endif
+
 /*! \brief update the Go To Atom widget entries to atom closest to
   screen centre. */
 void update_go_to_atom_from_current_position() {
@@ -2171,6 +2179,9 @@ void update_go_to_atom_from_current_position() {
 
       mmdb::Atom *at = g.molecules[imol].get_atom(atom_spec);
       sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_sequence_view_highlight(imol, at);
+#endif
    }
 }
 
@@ -2202,6 +2213,9 @@ update_sequence_view_current_position_highlight_from_active_atom() {
       graphics_info_t g;
       mmdb::Atom *at = g.molecules[imol].get_atom(atom_spec);
       sequence_view_highlight_residue_maybe(at, g.get_sequence_view_is_displayed(imol));
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_sequence_view_highlight(imol, at);
+#endif
    }
 
 }
@@ -5321,6 +5335,9 @@ int refmac_runs_with_nolabels() {
 
 #else
 #ifdef USE_PYTHON
+  // the result is a Python object: hold the GIL while it is used
+  // (safe_python_command_with_return() releases it on return)
+  PyGILState_STATE gstate = PyGILState_Ensure();
   PyObject *refmac_version;
   refmac_version = safe_python_command_with_return("get_refmac_version()");
   if (refmac_version) {
@@ -5335,6 +5352,7 @@ int refmac_runs_with_nolabels() {
      }
   }
   Py_XDECREF(refmac_version);
+  PyGILState_Release(gstate);
 #endif
 #endif
 

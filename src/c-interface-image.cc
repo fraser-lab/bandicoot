@@ -54,10 +54,11 @@ GtkWidget *test_get_image_widget_for_comp_id(const std::string &comp_id) {
 }
 
 
-GtkWidget *get_image_widget_for_comp_id(const std::string &comp_id, int imol) {
+// The 2D depiction of a dictionary's monomer, as PNG data; empty if there is
+// no dictionary or it cannot be drawn.
+std::string comp_id_depiction_png(const std::string &comp_id, int imol, unsigned int image_size) {
 
-   GtkWidget *r = 0;
-   unsigned int image_size = 150; // pixels
+   std::string png;
 
 #ifdef MAKE_ENHANCED_LIGAND_TOOLS
 #ifdef RDKIT_HAS_CAIRO_SUPPORT
@@ -66,7 +67,7 @@ GtkWidget *get_image_widget_for_comp_id(const std::string &comp_id, int imol) {
    g.Geom_p()->try_dynamic_add(comp_id, g.cif_dictionary_read_number++);
    std::pair<bool, coot::dictionary_residue_restraints_t> dict =
       g.Geom_p()->get_monomer_restraints(comp_id, imol);
-   
+
    if (dict.first) {
 
       try {
@@ -78,46 +79,44 @@ GtkWidget *get_image_widget_for_comp_id(const std::string &comp_id, int imol) {
 	 int iconf_2d = RDDepict::compute2DCoords(rdk_mol_with_no_Hs);
 	 WedgeMolBonds(rdk_mol_with_no_Hs, &(rdk_mol_with_no_Hs.getConformer(iconf_2d)));
 
-         bool debug_make_mol_file = false;
-         if (debug_make_mol_file) {
-            std::string smb = RDKit::MolToMolBlock(rdk_mol_with_no_Hs, true, iconf_2d);
-            std::string fn = "test-" + comp_id + ".mol";
-            std::ofstream f(fn.c_str());
-            if (f)
-               f << smb << std::endl;
-            f.close();
-         }
-
 	 int n_conf = rdk_mol_with_no_Hs.getNumConformers();
-	 // std::cout << "debug:: n_conf for " << comp_id << " is " << n_conf << std::endl;
 	 if (n_conf > 0) {
-
             RDKit::MolDraw2DCairo drawer(image_size, image_size);
             drawer.drawMolecule(rdk_mol_with_no_Hs);
             drawer.finishDrawing();
-            std::string dt = drawer.getDrawingText();
-            GError *error = NULL;
-            GdkPixbufLoader *loader = gdk_pixbuf_loader_new_with_type("png", &error);
-            const guchar *image_data = reinterpret_cast<const guchar *>(dt.c_str());
-            gboolean load_success = gdk_pixbuf_loader_write(loader, image_data, dt.length(), &error);
-            if (load_success) {
-               GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-               r = gtk_image_new_from_pixbuf(pixbuf);
-            } else {
-               std::cout << "ERROR:: no load success" << comp_id << std::endl;
-            }
+            png = drawer.getDrawingText();
 	 }
       }
       catch (...) {
 	 std::cout << "WARNING:: hack caught a ... exception " << std::endl;
       }
-	 
+
    } else {
       std::cout << "No dictionary for rdkit_mol from " << comp_id << std::endl;
    }
-   
+
 #endif   // RDKIT_HAS_CAIRO_SUPPORT
 #endif   // MAKE_ENHANCED_LIGAND_TOOLS
-   return r;
+   return png;
 }
 
+GtkWidget *get_image_widget_for_comp_id(const std::string &comp_id, int imol) {
+
+   GtkWidget *r = 0;
+   unsigned int image_size = 150; // pixels
+
+   std::string dt = comp_id_depiction_png(comp_id, imol, image_size);
+   if (! dt.empty()) {
+      GError *error = NULL;
+      GdkPixbufLoader *loader = gdk_pixbuf_loader_new_with_type("png", &error);
+      const guchar *image_data = reinterpret_cast<const guchar *>(dt.c_str());
+      gboolean load_success = gdk_pixbuf_loader_write(loader, image_data, dt.length(), &error);
+      if (load_success) {
+         GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+         r = gtk_image_new_from_pixbuf(pixbuf);
+      } else {
+         std::cout << "ERROR:: no load success" << comp_id << std::endl;
+      }
+   }
+   return r;
+}

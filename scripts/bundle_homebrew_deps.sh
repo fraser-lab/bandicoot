@@ -153,18 +153,59 @@ while queue:
                 queue.append(cand)
                 break
 
-emitted = set()
-for lib in sorted(seen):
-    base = os.path.basename(lib)
-    if base in emitted:
+# One library file can be reached under several names: the Homebrew version
+# symlinks. Usually only one name is ever recorded, but some formulae (wx) give
+# a library an install name that is a symlink while their sibling libraries
+# reference the real file. Bundled as-is, that ships the same library twice with
+# two install names, and the process loads both. Group every name by the file it
+# resolves to -- including copies an earlier build already placed in lib/ -- and
+# where a file has more than one name, bundle it once under its real name.
+names_of = {}
+for lib in seen:
+    names_of.setdefault(os.path.realpath(lib), set()).add(os.path.basename(lib))
+libdir = os.path.join(prefix, 'lib')
+for base in os.listdir(libdir):
+    if os.path.islink(os.path.join(libdir, base)):
         continue
-    emitted.add(base)
-    print(base + '\t' + os.path.realpath(lib))
+    cand = os.path.join(brew, 'lib', base)
+    if os.path.exists(cand):
+        names_of.setdefault(os.path.realpath(cand), set()).add(base)
+
+emitted = set()
+for real in sorted(names_of):
+    names = names_of[real]
+    if len(names) > 1:
+        canonical = os.path.basename(real)
+        for alias in sorted(names - {canonical}):
+            print('A\t' + alias + '\t' + canonical)
+    elif real in [os.path.realpath(l) for l in seen]:
+        canonical = next(iter(names))
+    else:
+        continue # bundled earlier under its only name; nothing to do
+    if canonical in emitted:
+        continue
+    emitted.add(canonical)
+    print('L\t' + canonical + '\t' + real)
 PY
 )"
 
+# "alias<TAB>canonical" for libraries reached under more than one name
+ALIASES="$(printf '%s\n' "$CLOSURE" | awk -F'\t' '$1 == "A" {print $2 "\t" $3}')"
+CLOSURE="$(printf '%s\n' "$CLOSURE" | awk -F'\t' '$1 == "L" {print $2 "\t" $3}')"
+
+# The bundled name for a library basename: its canonical name if it is an alias.
+canonical_name() {
+    local c
+    c="$(printf '%s\n' "$ALIASES" | awk -F'\t' -v a="$1" '$1 == a {print $2; exit}')"
+    printf '%s\n' "${c:-$1}"
+}
+
 n_closure="$(printf '%s\n' "$CLOSURE" | grep -c . || true)"
 echo "    $n_closure Homebrew libraries in closure"
+if [ -n "$ALIASES" ]; then
+    echo "    libraries reached under more than one name (bundled once, as the second):"
+    printf '%s\n' "$ALIASES" | sed 's/^/      /'
+fi
 
 # --- 2. Copy each closure member into lib/ (flattened basename) ---
 copied=0; kept=0
@@ -195,13 +236,39 @@ rewrite_file() {
     local f="$1" dep base
     while IFS= read -r dep; do
         [ -n "$dep" ] || continue
-        base="$(basename "$dep")"
+        base="$(canonical_name "$(basename "$dep")")"
         install_name_tool -change "$dep" "@rpath/$base" "$f" 2>/dev/null || true
     done < <(brew_deps "$f")
+    # references an earlier build recorded against a now-retired alias name
+    [ -n "$ALIASES" ] || return 0
+    while IFS="$(printf '\t')" read -r alias canonical; do
+        [ -n "$alias" ] || continue
+        if otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}' | \
+             grep -qxF "@rpath/$alias"; then
+            install_name_tool -change "@rpath/$alias" "@rpath/$canonical" "$f" \
+                2>/dev/null || true
+        fi
+    done <<EOF
+$ALIASES
+EOF
 }
 # mach_o_files is re-evaluated here, so it now also enumerates the libs copied
 # in step 2 (their sibling refs still point at /opt/homebrew).
 while IFS= read -r f; do rewrite_file "$f"; done < <(mach_o_files)
+
+# Retire the alias copies: nothing references them any more, and leaving them in
+# lib/ would let the next build link against them again.
+if [ -n "$ALIASES" ]; then
+    while IFS="$(printf '\t')" read -r alias canonical; do
+        [ -n "$alias" ] || continue
+        if [ -f "$LIBDIR/$alias" ] && [ ! -L "$LIBDIR/$alias" ]; then
+            rm -f "$LIBDIR/$alias"
+            echo "    removed duplicate $alias (bundled as $canonical)"
+        fi
+    done <<EOF
+$ALIASES
+EOF
+fi
 
 # --- 4. Verify: nothing should reference Homebrew any more ---
 echo "==> verifying no Homebrew references remain"
@@ -218,6 +285,33 @@ done < <(mach_o_files)
 
 if [ "$leaks" -gt 0 ]; then
     echo "error: $leaks Mach-O file(s) still reference Homebrew after bundling" >&2
+    exit 1
+fi
+
+# A library under two names loads twice; for wx that means two runtimes, and a
+# window from one never receives events meant for the other.
+dups=0
+if [ -n "$ALIASES" ]; then
+    echo "==> verifying each library is bundled under one name"
+    while IFS="$(printf '\t')" read -r alias canonical; do
+        [ -n "$alias" ] || continue
+        if [ -e "$LIBDIR/$alias" ] && [ ! -L "$LIBDIR/$alias" ]; then
+            echo "    DUPLICATE: lib/$alias is a second copy of $canonical" >&2
+            dups=$((dups + 1))
+        fi
+        while IFS= read -r f; do
+            if otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}' | \
+                 grep -qxF "@rpath/$alias"; then
+                echo "    DUPLICATE: $f references $alias, not $canonical" >&2
+                dups=$((dups + 1))
+            fi
+        done < <(mach_o_files)
+    done <<EOF
+$ALIASES
+EOF
+fi
+if [ "$dups" -gt 0 ]; then
+    echo "error: $dups library name duplicate(s) remain after bundling" >&2
     exit 1
 fi
 

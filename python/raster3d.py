@@ -139,7 +139,7 @@ def raytrace(image_type, source_file_name, image_file_name, x_size, y_size):
       if (os.name == 'nt'):
                 args = ["/EXIT", "/RENDER"]
       else:
-                args = " "
+                args = []
       args += [source_file_name_mod] + povray_args() + ["-UV" , "+W" + str(x_size) , "+H" + str(y_size)]
       print("BL INFO:: run povray with args: ", args)
       povray_call = [povray_exe] +  args + ["+o" + image_file_name_mod]

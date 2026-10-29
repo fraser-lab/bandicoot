@@ -114,6 +114,22 @@ extern "C" int bandicoot_ar_bar_is_active(void);
 void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
 #endif
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc).
+bool bandicoot_wx_ar_update(const coot::refinement_results_t &rr);
+bool bandicoot_wx_ar_warnings(const std::string &text);
+void bandicoot_wx_ar_dismiss();
+bool bandicoot_wx_info(const std::string &text, bool markup);
+// And its Rotation & Translation and Select Rotamer windows. False if wx has
+// not taken them on.
+bool bandicoot_wx_rot_trans_present();
+bool bandicoot_wx_rotamers_present(int imol, int atom_index, bool alt_conf);
+// And its Delete item window.
+bool bandicoot_wx_delete_open();
+bool bandicoot_wx_delete_keep_active();
+void bandicoot_wx_delete_close();
+#endif
+
 
 void
 graphics_info_t::get_restraints_lock(const std::string &calling_function_name) {
@@ -737,6 +753,9 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function_and_draw()
                       << std::endl;
          g.clear_up_moving_atoms(); // get the restraints lock, deletes last_restraints
          g.clear_moving_atoms_object();
+#ifdef BANDICOOT_UI_WX
+         bandicoot_wx_ar_dismiss();
+#endif
          if (accept_reject_dialog_docked_flag == coot::DIALOG) {
 	       // this calls clear_up_moving_atoms() and clears atom pull restraint.
 	       // Null guard + immediate-null: accept_reject_dialog becomes a
@@ -875,6 +894,9 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function() {
       moving_atoms_bonds_lock = 0;
       moving_atoms_lock = false;
 
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_ar_update(saved_dragged_refinement_results);
+#endif
 #ifdef __APPLE__
       // Bandicoot's native A/R bar gets the live geometry updates (the stock
       // dialog is suppressed, so accept_reject_dialog is NULL).
@@ -1263,8 +1285,13 @@ graphics_info_t::make_last_restraints(const std::vector<std::pair<bool,mmdb::Res
    } else {
       continue_threaded_refinement_loop = false;
       if (use_graphics_interface_flag) {
-         GtkWidget *widget = create_no_restraints_info_dialog();
-         gtk_widget_show(widget);
+#ifdef BANDICOOT_UI_WX
+         if (! bandicoot_wx_info("No restraints found.\n\nThe residues have no dictionary, or a minimal one.\nCheck that the residue name and atom names match the\ndictionary, or use File > Import CIF Dictionary.", false))
+#endif
+         {
+            GtkWidget *widget = create_no_restraints_info_dialog();
+            gtk_widget_show(widget);
+         }
       }
    }
 
@@ -2964,8 +2991,13 @@ graphics_info_t::rigid_body_fit(const coot::minimol::molecule &mol_without_movin
       // 
    } else {
       if (use_graphics_interface_flag) { 
-	 GtkWidget *w = create_rigid_body_refinement_failed_dialog();
-	 gtk_widget_show(w);
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_info("Rigid body refinement failed: no sensible place to put the atoms.", false))
+#endif
+	 {
+	    GtkWidget *w = create_rigid_body_refinement_failed_dialog();
+	    gtk_widget_show(w);
+	 }
       }
    }
    return success;
@@ -3244,8 +3276,13 @@ graphics_info_t::execute_add_terminal_residue(int imol,
 	       std::cout << "WARNING: failed to find a fit for terminal residue"
 			 << std::endl;
 	       if (use_graphics_interface_flag) { 
-		  GtkWidget *w = create_add_terminal_residue_finds_none_dialog();
-		  gtk_widget_show(w);
+#ifdef BANDICOOT_UI_WX
+		  if (! bandicoot_wx_info("Add Terminal Residue found no acceptable configuration here.", false))
+#endif
+		  {
+		     GtkWidget *w = create_add_terminal_residue_finds_none_dialog();
+		     gtk_widget_show(w);
+		  }
 	       }
 
 	    } else {
@@ -3642,6 +3679,12 @@ graphics_info_t::execute_rotate_translate_ready() { // manual movement
       
    if (good_settings) {
 
+#ifdef BANDICOOT_UI_WX
+      // the sliders are wx's; the moving atoms below are made as for GTK
+      if (! bandicoot_wx_rot_trans_present()) {
+#else
+      {
+#endif
       GtkWidget *widget = create_rotate_translate_obj_dialog();
       GtkWindow *main_window = GTK_WINDOW(lookup_widget(graphics_info_t::glarea,
 							"window1"));
@@ -3656,6 +3699,7 @@ graphics_info_t::execute_rotate_translate_ready() { // manual movement
 				  rotate_translate_y_position);
       }
       gtk_widget_show(widget);
+      }
 
       atom_selection_container_t rt_asc;
       // No! It cannot point to the same mmdb::Atoms.
@@ -4293,7 +4337,7 @@ graphics_info_t::execute_db_main(int imol,
          if (use_graphics_interface_flag) {
             std::string s("Sorry, failed to convert that residue range.\nToo short, perhaps?");
             GtkWidget *w = wrapped_nothing_bad_dialog(s);
-            gtk_widget_show(w);
+            if (w) gtk_widget_show(w);
          }
       }
       main_chain.clear_results();
@@ -4360,6 +4404,12 @@ graphics_info_t::do_rotamers(int atom_index, int imol) {
       bool is_alt_conf_dialog = false;
       if (altconf.length())
 	 is_alt_conf_dialog = true;
+
+#ifdef BANDICOOT_UI_WX
+      // the window is wx's: it lists the rotamers and shows the first
+      if (bandicoot_wx_rotamers_present(imol, atom_index, is_alt_conf_dialog))
+	 return;
+#endif
 
 //       std::cout << "DEBUG:: in do_rotamers() atom_index is " << atom_index
 // 		<< " and alconf is :" <<  altconf << ":" << std::endl;
@@ -5188,6 +5238,12 @@ graphics_info_t::delete_residue_range(int imol,
       if (! is_valid_model_molecule(imol))
 	 delete_molecule_from_from_display_manager(imol, false);
 
+#ifdef BANDICOOT_UI_WX
+      if (bandicoot_wx_delete_open() && ! bandicoot_wx_delete_keep_active()) {
+	 bandicoot_wx_delete_close();
+	 normal_cursor();
+      }
+#endif
       if (delete_item_widget) {
 	 GtkWidget *checkbutton = lookup_widget(graphics_info_t::delete_item_widget,
 						"delete_item_keep_active_checkbutton");
@@ -5225,6 +5281,12 @@ graphics_info_t::delete_sidechain_range(int imol,
 
    if (is_valid_model_molecule(imol)) {
       molecules[imol].delete_sidechain_range(res_1, res_2);
+#ifdef BANDICOOT_UI_WX
+      if (bandicoot_wx_delete_open() && ! bandicoot_wx_delete_keep_active()) {
+	 bandicoot_wx_delete_close();
+	 normal_cursor();
+      }
+#endif
       if (delete_item_widget) {
 	 GtkWidget *checkbutton = lookup_widget(graphics_info_t::delete_item_widget,
 						"delete_item_keep_active_checkbutton");
@@ -5476,6 +5538,9 @@ graphics_info_t::check_and_warn_inverted_chirals_and_cis_peptides() const {
 	    // ===================== show it? ==============================
 
 	    if (show_chiral_volume_errors_dialog_flag) {
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_wx_ar_warnings(message_string != "Unset" ? message_string : std::string());
+#endif
 	       if (accept_reject_dialog) {
 		  if (message_string != "Unset") {
 

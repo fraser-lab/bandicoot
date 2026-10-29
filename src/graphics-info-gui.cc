@@ -89,6 +89,39 @@
 #include "guile-fixups.h"
 
 
+#ifdef BANDICOOT_UI_WX
+// The wx build's Accept/Reject window (wxUI/bridge/core-bridge.cc). False
+// until the window is in place.
+bool bandicoot_wx_ar_present(const std::string &fit_type, const coot::refinement_results_t &rr);
+// Coot's info dialogs, the refinement-map chooser and the model toolbar's
+// toggles, which in the wx build are wx's. False if wx has not taken them on.
+bool bandicoot_wx_info(const std::string &text, bool markup);
+bool bandicoot_wx_select_map();
+void bandicoot_wx_release_sidebar_toggle(const std::string &widget);
+void bandicoot_wx_release_tools_toggle(const std::string &widget);
+void bandicoot_wx_release_geometry_toggle(const std::string &kind);
+// The Edit Chi Angles and Edit Backbone Torsions windows. Edit Chi returns
+// the number of torsions it lists, or -2 if wx has not taken it on.
+int  bandicoot_wx_edit_chi_present(const std::string &res_type, int mode);
+bool bandicoot_wx_edit_backbone_present();
+// And its plot of the two residues an Edit Backbone Torsions changes:
+// angles in degrees, labelled as Coot labels them ("1665A"); a residue
+// without both angles is left out.
+void bandicoot_wx_backbone_rama(bool has_1, double phi_1, double psi_1, const std::string &label_1,
+                                bool has_2, double phi_2, double psi_2, const std::string &label_2);
+
+// pp as phi_psi_pairs_from_moving_atoms() gives it; c in this residue, n in the next
+static void wx_backbone_rama(const std::pair<std::pair<double, double>, std::pair<double, double> > &pp,
+                             mmdb::Atom *c, mmdb::Atom *n) {
+   if (! c || ! n) return;
+   bandicoot_wx_backbone_rama(pp.first.first > -200, clipper::Util::rad2d(pp.first.first),
+                              clipper::Util::rad2d(pp.first.second),
+                              coot::util::int_to_string(c->GetSeqNum()) + c->GetChainID(),
+                              pp.second.first > -200, clipper::Util::rad2d(pp.second.first),
+                              clipper::Util::rad2d(pp.second.second),
+                              coot::util::int_to_string(n->GetSeqNum()) + n->GetChainID());
+}
+#endif
 
 #ifdef __APPLE__
 // Bandicoot native Accept/Reject bar bridges. Declared at namespace scope to
@@ -167,6 +200,12 @@ void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr) 
 // if fit_type is "Torsion General" show the Reverse button.
 //
 void do_accept_reject_dialog(std::string fit_type, const coot::refinement_results_t &rr) {
+
+#ifdef BANDICOOT_UI_WX
+   // the stock dialog cannot take input under wx's event loop
+   if (bandicoot_wx_ar_present(fit_type, rr))
+      return;
+#endif
 
 #ifdef __APPLE__
    // While the native A/R bar is active it replaces Coot's stock dialog: refresh
@@ -539,6 +578,11 @@ GtkWidget *
 graphics_info_t::info_dialog(const std::string &s, bool use_markup) {
 
    GtkWidget *w = NULL;
+#ifdef BANDICOOT_UI_WX
+   // a GTK window cannot take input under wx's event loop
+   if (graphics_info_t::use_graphics_interface_flag && bandicoot_wx_info(s, use_markup))
+      return w;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       w = wrapped_nothing_bad_dialog(s);
 
@@ -946,6 +990,10 @@ graphics_info_t::set_file_for_save_filechooser(GtkWidget *fileselection) const {
 void
 graphics_info_t::activate_scroll_radio_button_in_display_manager(int imol) {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_display_changed();
+#endif
+
 //    graphics_info_t g;
 //    if (g.display_control_window()) {
 //       std::string wname = "map_scroll_button_";
@@ -1020,6 +1068,11 @@ graphics_info_t::select_refinement_map_combobox_changed(GtkWidget *combobox, gpo
 void
 graphics_info_t::show_select_map_dialog() {
 
+#ifdef BANDICOOT_UI_WX
+   // the GTK chooser runs modally, which would stop the wx window for good
+   if (use_graphics_interface_flag && bandicoot_wx_select_map())
+      return;
+#endif
    if (use_graphics_interface_flag) {
 
       GtkWidget *widget = create_select_fitting_map_dialog();
@@ -2415,6 +2468,11 @@ graphics_info_t::model_fit_refine_unactive_togglebutton(const std::string &butto
    if (button_name == "model_refine_dialog_fit_terminal_residue_togglebutton")
       toolbar_button_name = "model_toolbar_add_terminal_residue_togglebutton";
 
+#ifdef BANDICOOT_UI_WX
+   if (toolbar_button_name != "not-found")
+      bandicoot_wx_release_sidebar_toggle(toolbar_button_name);
+#endif
+
    // now, button_name may have been
    // model_refine_dialog_edit_phi_psi_togglebutton or
    // model_refine_dialog_edit_backbone_torsions_togglebutton, we
@@ -2440,6 +2498,9 @@ graphics_info_t::model_fit_refine_unactive_togglebutton(const std::string &butto
 void
 graphics_info_t::other_modelling_tools_unactive_togglebutton(const std::string &button_name) const {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_tools_toggle(button_name);
+#endif
    if (other_modelling_tools_dialog) {
       GtkWidget *toggle_button = lookup_widget(other_modelling_tools_dialog,
                                                button_name.c_str());
@@ -2456,6 +2517,16 @@ graphics_info_t::wrapped_create_edit_chi_angles_dialog(const std::string &res_ty
                                                        edit_chi_edit_type mode) {
 
    // mode is either EDIT_CHI or RESIDUE_PARTIAL_ALT_LOCS.
+
+#ifdef BANDICOOT_UI_WX
+   {
+      int n = bandicoot_wx_edit_chi_present(res_type, static_cast<int>(mode));
+      if (n != -2) {
+         edit_chi_angles_reverse_fragment = 0; // reset the static, as below
+         return n;
+      }
+   }
+#endif
 
 
    GtkWidget *dialog = create_edit_chi_angles_dialog();
@@ -2892,7 +2963,10 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
                if (next_ca && next_n && this_ca && this_o && this_c) {
 
                   // new addition 25Feb2004
+#ifndef BANDICOOT_UI_WX
+                  // the plot is a GNOME canvas window: none in the wx build yet
                   rama_plot_for_2_phi_psis(imol, atom_index);
+#endif
 
                   mmdb::Manager *mol = new mmdb::Manager;
                   mmdb::Model *model = new mmdb::Model;
@@ -2985,6 +3059,16 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
 //                             << backbone_torsion_end_ca_2.format() << std::endl;
 
                   graphics_draw();
+#ifdef BANDICOOT_UI_WX
+                  if (bandicoot_wx_edit_backbone_present()) {
+                     // the window's plot starts where the residues are
+                     wx_backbone_rama(phi_psi_pairs_from_moving_atoms(),
+                                      coot::get_first_atom_with_atom_name(" C  ", *moving_atoms_asc),
+                                      coot::get_first_atom_with_atom_name(" N  ", *moving_atoms_asc));
+                  } else {
+#else
+                  {
+#endif
                   GtkWidget *widget = create_edit_backbone_torsions_dialog();
                   // BANDICOOT (GitHub #12): record the handle so
                   // glarea_motion_notify() can suppress the intermediate-atom
@@ -2996,6 +3080,7 @@ graphics_info_t::execute_setup_backbone_torsion_edit(int imol, int atom_index) {
         GtkWidget *adj;
         adj = lookup_widget(widget, "edit_backbone_torsions_rotate_carbonyl_adjustment");
         g_signal_emit_by_name(G_OBJECT(adj), "value_changed");
+                  }
 
                } else {
                   std::cout << "WARNING:: not all atoms found in "
@@ -3119,6 +3204,9 @@ graphics_info_t::edit_backbone_peptide_changed_func(GtkAdjustment *adj, GtkWidge
             edit_phi_psi_plot->draw_it(vp);
       }
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+      wx_backbone_rama(pp, c_atom_p, n_atom_p);
+#endif
       regularize_object_bonds_box.clear_up();
       int imol = 0; // should be fine for backbone edits
       g.make_moving_atoms_graphics_object(imol, *moving_atoms_asc);
@@ -3206,6 +3294,9 @@ graphics_info_t::edit_backbone_carbonyl_changed_func(GtkAdjustment *adj, GtkWidg
       }
 
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+      wx_backbone_rama(pp, c_atom_p, n_atom_p);
+#endif
       regularize_object_bonds_box.clear_up();
       int imol = 0; // should be fine for backbone edits
       g.make_moving_atoms_graphics_object(imol, *moving_atoms_asc);
@@ -3280,6 +3371,9 @@ graphics_info_t::change_peptide_carbonyl_by(double angle) {
    }
 
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+   wx_backbone_rama(pp, c_atom_p, n_atom_p);
+#endif
 
    regularize_object_bonds_box.clear_up();
    int imol = 0; // should be fine for backbone edits
@@ -3419,6 +3513,9 @@ graphics_info_t::change_peptide_peptide_by(double angle) {
    }
 
 #endif // HAVE_GTK_CANVAS
+#ifdef BANDICOOT_UI_WX
+   wx_backbone_rama(pp, c_atom_p, n_atom_p);
+#endif
 
    regularize_object_bonds_box.clear_up();
    int imol = 0; // should be fine for backbone edits
@@ -3526,6 +3623,9 @@ graphics_info_t::get_sequence_view_is_displayed(int imol) const {
 void
 graphics_info_t::unset_geometry_dialog_distance_togglebutton() {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_geometry_toggle("distance");
+#endif
    if (geometry_dialog) {
       GtkWidget *toggle_button = lookup_widget(geometry_dialog,
                                                "geometry_distance_togglebutton");
@@ -3536,6 +3636,9 @@ graphics_info_t::unset_geometry_dialog_distance_togglebutton() {
 void
 graphics_info_t::unset_geometry_dialog_dynamic_distance_togglebutton() {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_geometry_toggle("dynamic_distance");
+#endif
    if (geometry_dialog) {
       GtkWidget *toggle_button = lookup_widget(geometry_dialog,
                                                "geometry_dynamic_distance_togglebutton");
@@ -3547,6 +3650,9 @@ graphics_info_t::unset_geometry_dialog_dynamic_distance_togglebutton() {
 void
 graphics_info_t::unset_geometry_dialog_angle_togglebutton() {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_geometry_toggle("angle");
+#endif
    if (geometry_dialog) {
       GtkWidget *toggle_button = lookup_widget(geometry_dialog,
                                                "geometry_angle_togglebutton");
@@ -3558,6 +3664,9 @@ graphics_info_t::unset_geometry_dialog_angle_togglebutton() {
 void
 graphics_info_t::unset_geometry_dialog_torsion_togglebutton() {
 
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_release_geometry_toggle("torsion");
+#endif
    if (geometry_dialog) {
       GtkWidget *toggle_button = lookup_widget(geometry_dialog,
                                                "geometry_torsion_togglebutton");
@@ -4607,6 +4716,25 @@ wrapped_create_multi_residue_torsion_dialog(const std::vector<std::pair<mmdb::At
 
    return w;
 }
+
+#ifdef BANDICOOT_UI_WX
+// static
+void
+graphics_info_t::select_multi_residue_torsion_bond(const coot::atom_spec_t &first,
+                                                   const coot::atom_spec_t &second) {
+   if (! moving_atoms_asc || ! moving_atoms_asc->mol) return;
+   int index_1 = -1, index_2 = -1;
+   for (int i = 0; i < moving_atoms_asc->n_selected_atoms; i++) {
+      coot::atom_spec_t s(moving_atoms_asc->atom_selection[i]);
+      if (s == first)  index_1 = i;
+      if (s == second) index_2 = i;
+      if (index_1 != -1 && index_2 != -1) {
+         multi_residue_torsion_rotating_atom_index_pair = std::make_pair(index_1, index_2);
+         return;
+      }
+   }
+}
+#endif
 
 // static
 void

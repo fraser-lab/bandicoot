@@ -18,6 +18,9 @@
 #include <sys/stat.h>  // for stat() — verifying Quicksave wrote a file
 
 #include "bandicoot_appkit.h"
+#ifdef BANDICOOT_UI_WX
+#include "wxUI/main/surface.hh"
+#endif
 
 // Forward-declare Coot C-interface functions we need for the Quicksave
 // toolbar action. These live inside BEGIN_C_DECLS in c-interface.h, so
@@ -329,6 +332,10 @@ extern "C" double bandicoot_get_backing_scale_factor(void) {
 // backingScaleFactor follows the screen the window currently sits on and
 // updates as it is dragged between displays. Falls back to mainScreen, then 1.
 extern "C" double bandicoot_get_backing_scale_factor_for_widget(GtkWidget *w) {
+#ifdef BANDICOOT_UI_WX
+    // The GL surface is wx's; the GTK widget is a hidden stand-in.
+    return bandicoot_wx_surface_backing_scale();
+#endif
     if (w) {
         GtkWidget *top = gtk_widget_get_toplevel(w);
         if (top && top->window) {
@@ -655,7 +662,8 @@ static gboolean bandicoot_action_open_map(gpointer data) {
 // first_coords_imol() if go-to-atom hasn't been used yet (which is also
 // what the original Quicksave did, so behaviour for fresh sessions is
 // unchanged).
-static gboolean bandicoot_action_quicksave(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_quicksave(gpointer data) {
     int imol = go_to_atom_molecule_number();
     if (imol < 0 || !is_valid_model_molecule(imol)) {
         imol = first_coords_imol();
@@ -725,7 +733,8 @@ static gboolean bandicoot_action_quicksave(gpointer data) {
 // BandicootToggleTarget below. Cleaner than keeping a parallel C
 // static, since the button is the user-visible source of truth.
 
-static gboolean bandicoot_action_backrub_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_backrub_apply(gpointer data) {
     // ROTAMERSEARCHLOWRES = 2 is "backrub"; ROTAMERSEARCHAUTOMATIC = 0
     // is Coot's default per-residue selection. See rotamer-search-modes.hh.
     int on = GPOINTER_TO_INT(data);
@@ -735,7 +744,8 @@ static gboolean bandicoot_action_backrub_apply(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-static gboolean bandicoot_action_hydrogen_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_hydrogen_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
     int n = graphics_n_molecules();
     for (int i = 0; i < n; ++i) {
@@ -773,7 +783,8 @@ static gboolean bandicoot_action_full_screen_apply(gpointer data) {
 //
 // All paths use Coot's C++ atom_overlaps_container_t — NOT the guile-
 // gtk-gated do_interactive_probe() (dead in this build).
-static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
     set_do_coot_probe_dots_during_refine(on);
     set_do_probe_dots_post_refine(on);
@@ -799,7 +810,8 @@ static gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
 // the user then clicks an atom and Coot performs the conversion + exits
 // the mode automatically. Each press of the toolbar button re-arms the
 // mode for one more flip.
-static gboolean bandicoot_action_cis_trans(gpointer data) {
+// Not static: the wx build's toolbar calls it too.
+extern "C" gboolean bandicoot_action_cis_trans(gpointer data) {
     do_cis_trans_conversion_setup(1);
     fprintf(stdout, "[bandicoot] Cis↔Trans: click an atom to flip\n");
     fflush(stdout);
@@ -1954,9 +1966,17 @@ extern "C" void bandicoot_sidebar_dock_default(void) {
 // Get / set the sidebar dock state from outside (the "Dock Toolbar?" preference).
 // Keeps the settings-popup Dock/Undock label in sync.
 extern "C" int bandicoot_sidebar_is_docked(void) {
+#ifdef BANDICOOT_UI_WX
+    return bandicoot_wx_sidebar_is_docked() ? 1 : 0;
+#endif
     return bandicoot_sidebar_docked ? 1 : 0;
 }
 extern "C" void bandicoot_sidebar_set_docked_ext(int docked) {
+#ifdef BANDICOOT_UI_WX
+    // the sidebar is the wx main window's
+    bandicoot_wx_set_sidebar_docked(docked != 0);
+    return;
+#endif
     BOOL want = docked ? YES : NO;
     if (want == bandicoot_sidebar_docked) return;
     bandicoot_sidebar_set_docked(want);
@@ -2521,6 +2541,11 @@ extern "C" void bandicoot_install_status_bar(GtkWidget *main_window) {
 }
 
 extern "C" void bandicoot_set_status_text(const char *text) {
+#ifdef BANDICOOT_UI_WX
+    // the status bar is the wx main window's
+    bandicoot_wx_set_status_text(text ? text : "");
+    return;
+#endif
     if (!bandicoot_status_field) return;
     @autoreleasepool {
         NSString *s = text ? [NSString stringWithUTF8String:text] : @"";

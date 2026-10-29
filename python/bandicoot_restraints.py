@@ -212,7 +212,55 @@ def _elbow(args, workdir, stub, what):
             print("ERROR:: elbow output (tail):\n" + output[-2000:])
         return (None, None, "restraint generation failed for %s" % what)
 
+    pdb, cif = keep_generated(pdb, cif)
     return (pdb, cif, None)
+
+
+def _restraints_directory():
+    """coot-restraints in the working directory, or in $HOME if that cannot be
+    made there (as Coot's other coot-* folders). None if neither can."""
+    for base in (os.getcwd(), os.path.expanduser("~")):
+        d = os.path.join(base, "coot-restraints")
+        try:
+            os.makedirs(d, exist_ok=True)
+            return d
+        except Exception as e:
+            print("WARNING:: could not make %s (%s)" % (d, e))
+    return None
+
+
+def keep_generated(pdb, cif):
+    """Copy a generated dictionary (and its coordinates) into coot-restraints.
+
+    A saved session records where its dictionaries were read from, and the
+    generator's own working folder is temporary. Earlier files are never
+    overwritten, so an older session keeps the dictionary it was saved with.
+    Returns the new (pdb, cif), or the originals if they could not be copied.
+    """
+    import shutil
+    d = _restraints_directory()
+    if not d or not cif or not os.path.isfile(cif):
+        return (pdb, cif)
+    stub = os.path.splitext(os.path.basename(cif))[0]
+    n = 1
+    while True:
+        name = stub if n == 1 else "%s-%d" % (stub, n)
+        new_cif = os.path.join(d, name + ".cif")
+        new_pdb = os.path.join(d, name + ".pdb")
+        if not os.path.exists(new_cif) and not os.path.exists(new_pdb):
+            break
+        n += 1
+    try:
+        shutil.copyfile(cif, new_cif)
+        if pdb and os.path.isfile(pdb):
+            shutil.copyfile(pdb, new_pdb)
+        else:
+            new_pdb = pdb
+    except Exception as e:
+        print("WARNING:: could not copy %s into %s (%s)" % (cif, d, e))
+        return (pdb, cif)
+    print("INFO:: generated restraints kept as " + new_cif)
+    return (new_pdb, new_cif)
 
 
 def elbow_from_coordinates(pdb_file_name, comp_id):

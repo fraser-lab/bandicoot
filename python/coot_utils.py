@@ -957,11 +957,13 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
                 process = subprocess.Popen(cmd_args, stdin=stdin_inp,
                                            stdout=subprocess.PIPE,
                                            stderr=stderr_arg,
-                                           env=local_env)
+                                           env=local_env,
+                                           universal_newlines=True)
             else:
                 process = subprocess.Popen(cmd_args, stdin=stdin_inp,
                                            stdout=log, stderr=stderr_arg,
-                                           env=local_env)
+                                           env=local_env,
+                                           universal_newlines=True)
 
             if pipe_data:
                 for data in data_list:
@@ -969,7 +971,7 @@ def popen_command(cmd, args, data_list, log_file, screen_flag=False,
                 process.stdin.close()
             else:
                 # file?
-                if isinstance(stdin_inp, file):
+                if hasattr(stdin_inp, 'close'):
                     stdin_inp.close()
 
             if (screen_flag):
@@ -2413,9 +2415,9 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
 
         print("BL DEBUG:: in overlap_by_main_chain : ---------------- imol-mov: %s imol-ref: %s" %(imol_mov, imol_ref))
         clear_lsq_matches()
-        map(lambda atom_name:
+        for atom_name in [" CA ", " N  ", " C  "]:
             add_lsq_atom_pair([chain_id_ref, res_no_ref, ins_code_ref, atom_name, ""],
-                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name, ""]), [" CA ", " N  ", " C  "])
+                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name, ""])
         apply_lsq_matches(imol_ref, imol_mov)
 
     def is_purine(res_name):
@@ -2461,8 +2463,8 @@ def mutate_by_overlap(imol, chain_id_in, resno, tlc):
                 atom_list_2 = purine_to_pyrimidine_set
 
         for atom_name_1, atom_name_2 in zip(atom_list_1, atom_list_2):
-            add_lsq_atom_pair(chain_id_ref, res_no_ref, ins_code_ref, atom_name_1, "",
-                              chain_id_mov, res_no_mov, ins_code_mov, atom_name_2, "")
+            add_lsq_atom_pair([chain_id_ref, res_no_ref, ins_code_ref, atom_name_1, ""],
+                              [chain_id_mov, res_no_mov, ins_code_mov, atom_name_2, ""])
 
         print("applying matches!")
         apply_lsq_matches(imol_ref, imol_mov)
@@ -3162,13 +3164,12 @@ def save_annotations(file_name):
 
 def load_annotations(file_name):
     if (os.path.isfile(file_name)):
-        from types import ListType
         port = open(file_name, 'r')
         ls = port.readline()
         port.close()
         ls = ls.rstrip("\n")
         ls = eval(ls)
-        if (type(ls) is ListType):
+        if isinstance(ls, list):
             global annotations
             annotations = ls
             for ann in annotations:
@@ -4288,10 +4289,11 @@ def run_concurrently(cmd, args=[], data_list=None, logfile=None, screen_flag=Fal
                 log = open(logfile, 'w')
             try:
                 process = subprocess.Popen(cmd_args, stdin=subprocess.PIPE,
-                                           stdout=log)
+                                           stdout=log, universal_newlines=True)
                 if (data_list):
                     for data in data_list:
                         process.stdin.write(data + "\n")
+                process.stdin.close()
 
                 pid = process.pid            
 

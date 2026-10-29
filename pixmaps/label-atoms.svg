@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 21.4 22.62">
+  <defs>
+    <linearGradient id="linear-gradient" x1="2.82" y1="9.86" x2="4.78" y2="9.86" gradientTransform="translate(2.28 -2.64)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="8.57" y1="16.7" x2="7.59" y2="18.39" gradientTransform="translate(-6.11 31.71) rotate(-120)" xlink:href="#linear-gradient"/>
+    <radialGradient id="radial-gradient" cx="11.81" cy="19.24" fx="11.81" fy="19.24" r="2.98" gradientTransform="translate(8.8 -2.99) rotate(36.03)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="3.8" cy="4.78" fx="3.8" fy="4.78" r="2.98" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-3" cx="3.8" cy="14.91" fx="3.8" fy="14.91" r="2.98" xlink:href="#radial-gradient"/>
+  </defs>
+  <path d="M7.86,6.54c.98.82,1.58,2.06,1.7,2.96" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <rect x="5.1" y="3.65" width="1.96" height="7.12" transform="translate(5.41 -2.2) rotate(36.03)" fill="url(#linear-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <rect x="4.05" y="12.39" width="1.96" height="7.12" transform="translate(16.1 28.47) rotate(156.03)" fill="url(#linear-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="7.04" cy="19.51" r="2.98" fill="url(#radial-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="9.06" cy="3.11" r="2.98" fill="url(#radial-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="3.11" cy="11.3" r="2.98" fill="url(#radial-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <polygon points="7.33 12.53 6.88 9.5 9.5 6.63 12.57 6.82 21.22 14.75 15.99 20.46 7.33 12.53" fill="#f6c26b" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <circle cx="9.26" cy="9.16" r=".74" fill="#fff" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+  <g>
+    <line x1="12.22" y1="14.84" x2="15.29" y2="11.48" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+    <line x1="13.44" y1="15.96" x2="16.52" y2="12.6" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+    <line x1="14.66" y1="17.08" x2="17.74" y2="13.72" fill="none" stroke="#231f20" stroke-miterlimit="10"/>
+  </g>
+  <path d="M9.5,8.85c-.37.05-4.45.59-5.79-1.59-.07-.12-.76-1.26-.27-1.98.41-.6,1.54-.76,2.75-.24" fill="none" stroke="#231f20" stroke-miterlimit="10" stroke-width=".25"/>
+</svg>

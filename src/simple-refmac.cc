@@ -12,6 +12,9 @@
 #include "coot-fileselections.h"
 
 
+// The run itself, without the dialog (the wx build has its own).
+void simple_refmac_run(int imol_coords, const std::string &mtz_in_filename);
+
 // should this be part of graphics_info, with a wrapper?
 
 void
@@ -43,7 +46,13 @@ simple_refmac_run_refmac(GtkWidget *dialog) {
    graphics_info_t g;
    int imol_coords = g.combobox_get_imol(GTK_COMBO_BOX(combobox_coords));
    std::string mtz_in_filename = g.get_active_label_in_comboboxtext(GTK_COMBO_BOX_TEXT(combobox_file));
+   simple_refmac_run(imol_coords, mtz_in_filename);
+}
 
+void
+simple_refmac_run(int imol_coords, const std::string &mtz_in_filename) {
+
+   graphics_info_t g;
    if (! mtz_in_filename.empty())
       g.mtz_file_for_refmac = mtz_in_filename;
 

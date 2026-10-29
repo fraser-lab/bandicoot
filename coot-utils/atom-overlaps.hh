@@ -148,6 +148,9 @@ namespace coot {
       overlap_mode_t overlap_mode;
       mmdb::Manager *mol;
       bool have_dictionary; // for central residue (or should it be all residues?)
+      // BANDICOOT: the molecule whose dictionaries apply (restraints can be
+      // scoped to one molecule); IMOL_ENC_ANY for unscoped ones only
+      int imol_enc;
       bool molecule_has_hydrogens;
       mmdb::Residue *res_central;
       std::vector<mmdb::Residue *> neighbours;
@@ -294,27 +297,32 @@ namespace coot {
       
    public:
       // we need mol to use UDDs to mark the HB donors and acceptors (using coot-h-bonds.hh)
+      // imol_enc_in (BANDICOOT): the molecule whose dictionaries apply
       atom_overlaps_container_t(mmdb::Residue *res_central_in,
 				const std::vector<mmdb::Residue *> &neighbours_in,
 				mmdb::Manager *mol,
-				const protein_geometry *geom_p_in);
+				const protein_geometry *geom_p_in,
+				int imol_enc_in = protein_geometry::IMOL_ENC_ANY);
       atom_overlaps_container_t(mmdb::Residue *res_central_in,
 				mmdb::Residue *neighbour,
 				mmdb::Manager *mol,
-				const protein_geometry *geom_p_in);
+				const protein_geometry *geom_p_in,
+				int imol_enc_in = protein_geometry::IMOL_ENC_ANY);
       // this one for contact dots (around central ligand)
       atom_overlaps_container_t(mmdb::Residue *res_central_in,
 				const std::vector<mmdb::Residue *> &neighbours_in,
 				mmdb::Manager *mol,
 				const protein_geometry *geom_p_in,
 				double clash_spike_length_in,
-				double probe_radius_in = 0.25);
+				double probe_radius_in = 0.25,
+				int imol_enc_in = protein_geometry::IMOL_ENC_ANY);
       // all atom contact dots and atom overlaps
       atom_overlaps_container_t(mmdb::Manager *mol_in,
 				const protein_geometry *geom_p_in,
 				bool ignore_water_contacts_flag,
 				double clash_spike_length_in = 0.5,
-				double probe_radius_in = 0.25);
+				double probe_radius_in = 0.25,
+				int imol_enc_in = protein_geometry::IMOL_ENC_ANY);
 
       // If there are no overlaps, is it because there was no dictionary for one or more residues?
       bool get_have_dictionary() const { return have_dictionary; }

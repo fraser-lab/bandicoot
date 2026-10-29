@@ -100,7 +100,28 @@ lbg(lig_build::molfile_molecule_t mm,
       // If not, we need not call gtk_builder_add_from_file().
       //
 
-      if (use_graphics_interface_flag) {
+      if (use_graphics_interface_flag && lbg_info_t::host && lbg_info_t::host->open) {
+
+	 lbg = new lbg_info_t(imol, geom_p_in);
+	 if (stand_alone_flag_in)
+	    lbg->set_stand_alone();
+	 if (! lbg->init_hosted()) {
+	    std::cout << "ERROR:: lbg init failed." << std::endl;
+	    delete lbg;
+	    lbg = NULL;
+	 } else {
+	    if (ligand_spec_pair.first)
+	       lbg->set_ligand_spec(ligand_spec_pair.second);
+	    widgeted_molecule_t wmol = lbg->import_mol_file(mm, molecule_file_name, mol);
+	    lbg->import_from_widgeted_molecule(wmol);
+	    lbg->render();
+	    lbg->host->open(lbg);
+	    lbg->update_descriptor_attributes();
+	    lbg->update_apply_button_sensitivity();
+	    lbg->save_molecule();
+	 }
+
+      } else if (use_graphics_interface_flag) {
 
 	 GtkBuilder *builder = gtk_builder_new();
 	 guint add_from_file_status =
@@ -192,6 +213,54 @@ lbg(lig_build::molfile_molecule_t mm,
    return lbg;
 }
 #endif // GTK_VERSION
+
+lbg_host_t *lbg_info_t::host = NULL;
+
+// Where the pointer is, in the canvas window. A hosted canvas has no window,
+// and its events already carry the canvas position and the modifier state.
+static void
+pointer_in_canvas(GdkEventButton *event, int *x, int *y, GdkModifierType *state) {
+   if (event->window) {
+      gdk_window_get_pointer(event->window, x, y, state);
+   } else {
+      *x = int(event->x);
+      *y = int(event->y);
+      *state = static_cast<GdkModifierType>(event->state);
+   }
+}
+
+static bool on_canvas_button_press(GooCanvasItem *item, GooCanvasItem *target_item,
+				   GdkEventButton *event, gpointer user_data);
+static bool on_canvas_button_release(GooCanvasItem *item, GooCanvasItem *target_item,
+				     GdkEventButton *event, gpointer user_data);
+static bool on_canvas_motion(GooCanvasItem *item, GooCanvasItem *target_item,
+			     GdkEventMotion *event, gpointer user_data);
+
+// As init() for the GTK window, minus the window: the canvas is never
+// realized, and the host draws it with goo_canvas_render() and passes
+// pointer events to the root item's handlers.
+bool
+lbg_info_t::init_hosted() {
+
+   canvas = goo_canvas_new();
+   g_object_ref_sink(canvas); // owned here, as no container will hold it
+   goo_canvas_set_scale(GOO_CANVAS(canvas), 1.0);
+   gtk_widget_set(GTK_WIDGET(canvas), "bounds-padding", 50.0, NULL);
+   gtk_object_set_user_data(GTK_OBJECT(canvas), (gpointer) this);
+   goo_canvas_set_bounds(GOO_CANVAS(canvas), 0, 0, 1200, 1200);
+
+   GooCanvasItem *root_item = goo_canvas_get_root_item(GOO_CANVAS(canvas));
+   g_object_set(G_OBJECT(root_item), "line_width", 1.5, NULL);
+   g_object_set(G_OBJECT(root_item), "line_cap", CAIRO_LINE_CAP_ROUND, NULL);
+   g_object_set_data_full(G_OBJECT(root_item), "lbg-info", this, NULL);
+   g_signal_connect(G_OBJECT(root_item), "button_press_event",
+		    G_CALLBACK(on_canvas_button_press), NULL);
+   g_signal_connect(G_OBJECT(root_item), "button_release_event",
+		    G_CALLBACK(on_canvas_button_release), NULL);
+   g_signal_connect(G_OBJECT(root_item), "motion_notify_event",
+		    G_CALLBACK(on_canvas_motion), NULL);
+   return true;
+}
 
 void lbg_info_t::init_internal() {
    imol = -1;
@@ -580,6 +649,7 @@ lbg_info_t::write_mdl_molfile_using_default_file_name() const {
 void
 lbg_info_t::untoggle_others_except(GtkToggleToolButton *button_toggled_on) {
 
+   if (is_hosted()) return; // the host keeps its own tool buttons exclusive
    std::map<std::string, GtkToggleToolButton *>::const_iterator it;
    for (it=widget_names.begin(); it!=widget_names.end(); it++) {
       if (it->second != button_toggled_on) {
@@ -601,7 +671,7 @@ on_canvas_button_press(GooCanvasItem  *item,
 
    int x_as_int = -1, y_as_int = -1;
    GdkModifierType state;
-   gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+   pointer_in_canvas(event, &x_as_int, &y_as_int, &state);
    bool button_1_is_pressed = false;
    if (state & GDK_BUTTON1_MASK)
       button_1_is_pressed = true;
@@ -914,6 +984,7 @@ lbg_info_t::clear_and_redraw(const lig_build::pos_t &delta) {
       render();
    }
    draw_all_flev_annotations();
+   redraw_alerts();
 }
 
 void
@@ -923,6 +994,7 @@ lbg_info_t::clear_and_redraw() {
    widgeted_molecule_t saved_mol = mol;
    import_from_widgeted_molecule(saved_mol);
    render();
+   redraw_alerts();
 }
 
 
@@ -1351,6 +1423,7 @@ lbg_info_t::handle_key_press_button_toggle(int keyval, bool ctrl_is_pressed) {
 
 void
 lbg_info_t::lbg_toggle_button_my_toggle(GtkToggleToolButton *tb) {
+   if (! tb) return;
    if (gtk_toggle_tool_button_get_active(tb))
       gtk_toggle_tool_button_set_active(tb, FALSE);
    else
@@ -1447,11 +1520,11 @@ lbg_info_t::handle_item_add(GdkEventButton *event) {
 
    // set button_1_is_pressed:
    bool button_1_is_pressed = false;
-   gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+   pointer_in_canvas(event, &x_as_int, &y_as_int, &state);
    if (state & GDK_BUTTON1_MASK)
       button_1_is_pressed = true;
 
-   gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+   pointer_in_canvas(event, &x_as_int, &y_as_int, &state);
    if (canvas_addition_mode == lbg_info_t::PENTAGON)
       changed_status = try_stamp_polygon(5, x_as_int, y_as_int, shift_is_pressed, 0);
    if (canvas_addition_mode == lbg_info_t::HEXAGON)
@@ -1497,11 +1570,11 @@ lbg_info_t::update_apply_button_sensitivity() {
 	 RDKit::RWMol rdkm = rdkit_mol(mol);
 	 coot::rdkit_mol_sanitize(rdkm);
          // restore sensitive (if needed)
-         gtk_widget_set_sensitive(GTK_WIDGET(lbg_apply_button), TRUE);
+         set_apply_sensitive(true);
       }
       catch (const std::exception &e) {
 	 std::cout << "WARNING:: Oops non-sane molecule " << e.what() << std::endl;
-         gtk_widget_set_sensitive(GTK_WIDGET(lbg_apply_button), FALSE);
+         set_apply_sensitive(false);
       }
    }
 #endif
@@ -1523,7 +1596,11 @@ lbg_info_t::update_descriptor_attributes() {
       catch (const std::exception &e) {
 	 std::cout << "WARNING:: from update_descriptor_attributes() " << e.what() << std::endl;
 
-	 if (lbg_statusbar) {
+	 if (is_hosted()) {
+	    set_status_text("");
+	    show_alert(false, "");
+	    clear_canvas_alerts();
+	 } else if (lbg_statusbar) {
 	    std::string status_string;
 	    guint statusbar_context_id =
 	       gtk_statusbar_get_context_id(GTK_STATUSBAR(lbg_statusbar), status_string.c_str());
@@ -1548,7 +1625,7 @@ lbg_info_t::handle_item_delete(GdkEventButton *event) {
 
    int x_as_int, y_as_int;
    GdkModifierType state;
-   gdk_window_get_pointer(event->window, &x_as_int, &y_as_int, &state);
+   pointer_in_canvas(event, &x_as_int, &y_as_int, &state);
    GooCanvasItem *root = goo_canvas_get_root_item(GOO_CANVAS(canvas));
 
    if (highlight_data.has_contents()) {
@@ -3183,6 +3260,26 @@ lbg_info_t::clear_canvas() {
    gint n_children = goo_canvas_item_get_n_children (root);
    for (int i=0; i<n_children; i++)
       goo_canvas_item_remove_child(root, 0);
+   // these groups were children of root and are gone now
+   alert_group = NULL;
+   key_group = NULL;
+}
+
+// Redrawing the canvas removes the alert marks; put them back.
+void
+lbg_info_t::redraw_alerts() {
+
+#ifdef MAKE_ENHANCED_LIGAND_TOOLS
+   if (! use_graphics_interface_flag || ! show_alerts_user_control) return;
+   try {
+      RDKit::RWMol rdkm = rdkit_mol(mol);
+      coot::rdkit_mol_sanitize(rdkm);
+      update_alerts(rdkm);
+   }
+   catch (const std::exception &) {
+      // a molecule that does not sanitize has no alerts to show
+   }
+#endif
 }
 
 
@@ -3510,6 +3607,8 @@ lbg_info_t::update_qed(const RDKit::RWMol &rdkm) {
 
 #ifdef USE_PYTHON
 
+   if (! lbg_qed_progressbar) return; // nowhere to show it
+
    if (rdkm.getNumAtoms() == 0) {
       // non-interesting case first
       gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(lbg_qed_progressbar), 0);
@@ -3613,7 +3712,7 @@ void
 lbg_info_t::update_alerts(const RDKit::RWMol &rdkm) {
 
    if (rdkm.getNumAtoms() == 0) {
-      gtk_widget_hide(lbg_alert_hbox);
+      show_alert(false, "");
    } else {
 
       if (show_alerts_user_control) {
@@ -3622,9 +3721,19 @@ lbg_info_t::update_alerts(const RDKit::RWMol &rdkm) {
 
 	 if (v.size()) {
 	    GooCanvasItem *root = goo_canvas_get_root_item(GOO_CANVAS(canvas));
-	    gtk_label_set_text(GTK_LABEL(lbg_alert_name_label), v[0].smarts_name.c_str());
-
-	    gtk_widget_show(lbg_alert_hbox);
+	    if (is_hosted()) {
+	       // the hosted window has room for every alert, one per line
+	       std::vector<std::string> names;
+	       for (unsigned int i=0; i<v.size(); i++)
+		  if (std::find(names.begin(), names.end(), v[i].smarts_name) == names.end())
+		     names.push_back(v[i].smarts_name);
+	       std::string all;
+	       for (unsigned int i=0; i<names.size(); i++)
+		  all += (i ? "\n" : "") + names[i];
+	       show_alert(true, all);
+	    } else {
+	       show_alert(true, v[0].smarts_name);
+	    }
 
 	    if (false) // debugging
 	       for (unsigned int i=0; i<v.size(); i++)
@@ -3673,7 +3782,7 @@ lbg_info_t::update_alerts(const RDKit::RWMol &rdkm) {
 	    }
 	    goo_canvas_item_lower(alert_group, NULL); // to the bottom
 	 } else {
-	    gtk_widget_hide(lbg_alert_hbox);
+	    show_alert(false, "");
 	    clear_canvas_alerts();
 	 }
       }
@@ -4566,11 +4675,7 @@ lbg_info_t::rdkit_mol_post_read_handling(RDKit::RWMol *m, const std::string &fil
       std::cout << "WARNING:: " << e.what() << " on reading " << file_name << std::endl;
 
       std::string status_string = "  Can't kekulize mol from " + file_name;
-      guint statusbar_context_id = gtk_statusbar_get_context_id(GTK_STATUSBAR(lbg_statusbar),
-								status_string.c_str());
-      gtk_statusbar_push(GTK_STATUSBAR(lbg_statusbar),
-			 statusbar_context_id,
-			 status_string.c_str());
+      set_status_text(status_string);
    }
 }
 #endif // MAKE_ENHANCED_LIGAND_TOOLS
@@ -4644,6 +4749,14 @@ lbg_info_t::import_mol_from_smiles_string(const std::string &smiles) {
    }
    catch (const RDKit::FileParseException &rte) {
       std::cout << "WARNING:: something bad in import_mol_from_smiles_string() " << rte.what() << std::endl;
+   }
+   catch (const std::exception &e) {
+      // e.g. a SMILES that parses but cannot be kekulized
+      std::cout << "WARNING:: " << e.what() << " on reading SMILES " << smiles << std::endl;
+      if (is_hosted() && host->error)
+	 host->error(this, "Can't make a molecule from the SMILES", smiles);
+      else
+	 set_status_text("  Can't make a molecule from that SMILES");
    }
 
 
@@ -4742,7 +4855,8 @@ lbg_info_t::import_via_rdkit_from_restraints_dictionary(const coot::dictionary_r
 		      << " with new 2D conf_id " << conf_id
 		      << " 3d-flag: " << m.getConformer(conf_id).is3D() << std::endl;
 
-	 gtk_label_set_text(GTK_LABEL(lbg_toolbar_layout_info_label), dict.residue_info.comp_id.c_str());
+	 if (lbg_toolbar_layout_info_label)
+	    gtk_label_set_text(GTK_LABEL(lbg_toolbar_layout_info_label), dict.residue_info.comp_id.c_str());
 	 rdkit_mol_post_read_handling(&m, "from-comp-id");
       }
       catch (const RDKit::MolSanitizeException &e) {
@@ -4979,15 +5093,47 @@ lbg_info_t::update_statusbar_smiles_string(const std::string &smiles_string) con
    // "memory leak" here because we don't dispose of
    // (gtk_statusbar_pop()) the previous label.
    //
-   std::string status_string;
-   if (lbg_statusbar) {
-      status_string = " SMILES:  ";
-      status_string += smiles_string;
+   std::string status_string = " SMILES:  ";
+   status_string += smiles_string;
+   set_status_text(status_string);
+}
+
+void
+lbg_info_t::set_status_text(const std::string &text) const {
+
+   if (is_hosted()) {
+      if (host->status_text) host->status_text(const_cast<lbg_info_t *>(this), text);
+   } else if (lbg_statusbar) {
       guint statusbar_context_id =
-	 gtk_statusbar_get_context_id(GTK_STATUSBAR(lbg_statusbar), status_string.c_str());
+	 gtk_statusbar_get_context_id(GTK_STATUSBAR(lbg_statusbar), text.c_str());
       gtk_statusbar_push(GTK_STATUSBAR(lbg_statusbar),
 			 statusbar_context_id,
-			 status_string.c_str());
+			 text.c_str());
+   }
+}
+
+void
+lbg_info_t::show_alert(bool shown, const std::string &name) {
+
+   if (is_hosted()) {
+      if (host->alert) host->alert(this, shown, name);
+   } else if (lbg_alert_hbox) {
+      if (shown) {
+	 gtk_label_set_text(GTK_LABEL(lbg_alert_name_label), name.c_str());
+	 gtk_widget_show(lbg_alert_hbox);
+      } else {
+	 gtk_widget_hide(lbg_alert_hbox);
+      }
+   }
+}
+
+void
+lbg_info_t::set_apply_sensitive(bool sensitive) {
+
+   if (is_hosted()) {
+      if (host->apply_sensitive) host->apply_sensitive(this, sensitive);
+   } else if (lbg_apply_button) {
+      gtk_widget_set_sensitive(GTK_WIDGET(lbg_apply_button), sensitive ? TRUE : FALSE);
    }
 }
 
@@ -5031,7 +5177,9 @@ void
 lbg_info_t::show_atom_x_dialog() {
 
    // show dialog here.
-   if (lbg_atom_x_dialog && lbg_atom_x_entry) {
+   if (is_hosted()) {
+      if (host->atom_x_dialog) host->atom_x_dialog(this, atom_X);
+   } else if (lbg_atom_x_dialog && lbg_atom_x_entry) {
       gtk_entry_set_text(GTK_ENTRY(lbg_atom_x_entry), atom_X.c_str());
       gtk_widget_show(lbg_atom_x_dialog);
    } else {
@@ -5085,81 +5233,89 @@ lbg_info_t::get_drug(const std::string &drug_name) {
 
       // If we have failed so far, try again with lidia.fetch.
       // But import rdkit first so that import.fetch doesn't crash - !
+      // Reached from UI callbacks, where the GIL is released.
+      PyGILState_STATE gstate = PyGILState_Ensure();
       std::cout << "DEBUG:: --- start import rdkit/lidia.fetch --- " << std::endl;
       PyObject *pName_rdkit = PyString_FromString("rdkit");
       std::cout << "DEBUG:: --- we have pName_rdkit --- " << pName_rdkit << std::endl;
       PyObject *pModule = PyImport_Import(pName_rdkit);
-      if (! pModule) return;
-      std::cout << "DEBUG:: --- we have imported rdkit --- " << pName_rdkit << std::endl;
-
-      PyObject *pName = PyString_FromString("lidia.fetch");
-      std::cout << "DEBUG:: with lidia.fetch pName " << pName << std::endl;
-      pModule = PyImport_Import(pName);
-      if (pModule == NULL) {
-         std::cout << "NULL pModule" << std::endl;
+      if (! pModule) {
+         // Fall through to the failure report rather than returning silently.
+         PyErr_Print();
+         status_string = "Python RDKit module not available to fetch " + drug_name;
       } else {
-         // std::cout << "Hooray - found pModule" << std::endl;
+         std::cout << "DEBUG:: --- we have imported rdkit --- " << pName_rdkit << std::endl;
 
-         PyObject *pDict = PyModule_GetDict(pModule);
-         if (! PyDict_Check(pDict)) {
-            std::cout << "DEBUG:: pDict is not a dict" << std::endl;
+         PyObject *pName = PyString_FromString("lidia.fetch");
+         std::cout << "DEBUG:: with lidia.fetch pName " << pName << std::endl;
+         pModule = PyImport_Import(pName);
+         if (pModule == NULL) {
+            std::cout << "NULL pModule" << std::endl;
          } else {
+            // std::cout << "Hooray - found pModule" << std::endl;
 
-            PyObject *pFunc = PyDict_GetItemString(pDict, "fetch_molecule");
-            if (PyCallable_Check(pFunc)) {
-               std::cout << "DEBUG:: fetch_molecule is a callable function" << std::endl;
-               PyObject *arg_list = PyTuple_New(1);
-               PyObject *drug_name_py = PyString_FromString(drug_name.c_str());
-               PyTuple_SetItem(arg_list, 0, drug_name_py);
-               std::cout << "DEBUG:: fetch_molecule called with arg " << drug_name << std::endl;
-               PyObject *result_py = PyEval_CallObject(pFunc, arg_list);
-               std::cout << "DEBUG:: fetch_molecule got result " << result_py << std::endl;
+            PyObject *pDict = PyModule_GetDict(pModule);
+            if (! PyDict_Check(pDict)) {
+               std::cout << "DEBUG:: pDict is not a dict" << std::endl;
+            } else {
 
-               if (result_py) {
+               PyObject *pFunc = PyDict_GetItemString(pDict, "fetch_molecule");
+               if (PyCallable_Check(pFunc)) {
+                  std::cout << "DEBUG:: fetch_molecule is a callable function" << std::endl;
+                  PyObject *arg_list = PyTuple_New(1);
+                  PyObject *drug_name_py = PyString_FromString(drug_name.c_str());
+                  PyTuple_SetItem(arg_list, 0, drug_name_py);
+                  std::cout << "DEBUG:: fetch_molecule called with arg " << drug_name << std::endl;
+                  PyObject *result_py = PyEval_CallObject(pFunc, arg_list);
+                  std::cout << "DEBUG:: fetch_molecule got result " << result_py << std::endl;
 
-                  if (PyString_Check(result_py)) {
-                     std::cout << "fetch_molecule result was a string " << std::endl;
-                     std::string file_name = PyString_AsString(result_py);
-                     std::cout << "fetch_molecule result was a file_name " << file_name << std::endl;
+                  if (result_py) {
 
-                     try {
-                        bool sanitize = true;
-                        bool removeHs = false;
-                        RDKit::RWMol *m = RDKit::MolFileToMol(file_name, sanitize, removeHs);
-                        unsigned int iconf = 0;
+                     if (PyString_Check(result_py)) {
+                        std::cout << "fetch_molecule result was a string " << std::endl;
+                        std::string file_name = PyString_AsString(result_py);
+                        std::cout << "fetch_molecule result was a file_name " << file_name << std::endl;
 
-                        // we only want to compute coords if there are no coords
-                        //
-                        if (coot::has_zero_coords(m, 0))
-                        iconf = RDDepict::compute2DCoords(*m, NULL, true);
-                        if (m->getNumConformers() == 0)
-                        iconf = RDDepict::compute2DCoords(*m, NULL, true);
+                        try {
+                           bool sanitize = true;
+                           bool removeHs = false;
+                           RDKit::RWMol *m = RDKit::MolFileToMol(file_name, sanitize, removeHs);
+                           unsigned int iconf = 0;
 
-                        if (m) {
-                           rdkit_mol_post_read_handling(m, file_name, iconf);
-                           status = true;
+                           // we only want to compute coords if there are no coords
+                           //
+                           if (coot::has_zero_coords(m, 0))
+                           iconf = RDDepict::compute2DCoords(*m, NULL, true);
+                           if (m->getNumConformers() == 0)
+                           iconf = RDDepict::compute2DCoords(*m, NULL, true);
+
+                           if (m) {
+                              rdkit_mol_post_read_handling(m, file_name, iconf);
+                              status = true;
+                           }
                         }
-                     }
 
-                     catch (const RDKit::FileParseException &fpe) {
-                        std::cout << "WARNING::" << fpe.what() << std::endl;
-                        status_string = "File parsing error on reading " + file_name;
+                        catch (const RDKit::FileParseException &fpe) {
+                           std::cout << "WARNING::" << fpe.what() << std::endl;
+                           status_string = "File parsing error on reading " + file_name;
+                        }
+                     } else {
+                        std::cout << "Null result" << std::endl;
+                        status_string = "Null result on fetching " + drug_name;
                      }
                   } else {
-                     std::cout << "Null result" << std::endl;
-                     status_string = "Null result on fetching " + drug_name;
+                     std::cout << "results_py was not a string" << std::endl;
+                     status_string = "Failed to download molecule " + drug_name;
                   }
-               } else {
-                  std::cout << "results_py was not a string" << std::endl;
-                  status_string = "Failed to download molecule " + drug_name;
-               }
 
-            } else {
-               std::cout << "Non-callable pFunc" << std::endl;
-               status_string = "Non-callable pFunc";
+               } else {
+                  std::cout << "Non-callable pFunc" << std::endl;
+                  status_string = "Non-callable pFunc";
+               }
             }
          }
       }
+      PyGILState_Release(gstate);
    }
 
    if (! status) {
@@ -5167,11 +5323,12 @@ lbg_info_t::get_drug(const std::string &drug_name) {
       clear(true);
       if (status_string.empty())
       status_string = "  Problem downloading molecule " + drug_name;
-      guint statusbar_context_id = gtk_statusbar_get_context_id(GTK_STATUSBAR(lbg_statusbar),
-      status_string.c_str());
-      gtk_statusbar_push(GTK_STATUSBAR(lbg_statusbar),
-      statusbar_context_id,
-      status_string.c_str());
+      if (is_hosted()) {
+         std::cout << "WARNING:: get_drug(): " << status_string << std::endl;
+         host->error(this, "Can't fetch the molecule", drug_name);
+      } else {
+         set_status_text(status_string);
+      }
 
    }
 #else

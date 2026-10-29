@@ -61,7 +61,7 @@ SCM ligand_atom_overlaps_scm(int imol, SCM ligand_spec, double neighb_radius) {
 	    coot::residues_near_residue(residue_p, mol, neighb_radius);
 	 
 	 if (neighb_residues.size()) {
-	    coot::atom_overlaps_container_t ol(residue_p, neighb_residues, mol, g.Geom_p());
+	    coot::atom_overlaps_container_t ol(residue_p, neighb_residues, mol, g.Geom_p(), imol);
 	    ol.make_overlaps();
 	    r = SCM_EOL;
 	    for (unsigned int i=0; i<ol.overlaps.size(); i++) {
@@ -99,7 +99,7 @@ PyObject *ligand_atom_overlaps_py(int imol, PyObject *ligand_spec, double neighb
 	    coot::residues_near_residue(residue_p, mol, neighb_radius);
 	 
 	 if (neighb_residues.size()) {
-	    coot::atom_overlaps_container_t ol(residue_p, neighb_residues, mol, g.Geom_p());
+	    coot::atom_overlaps_container_t ol(residue_p, neighb_residues, mol, g.Geom_p(), imol);
 	    ol.make_overlaps();
 
 	    // convert ol to a python object.  FIXME
@@ -125,7 +125,7 @@ SCM molecule_atom_overlaps_scm(int imol) {
       mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
       bool ignore_waters = false;
 
-      coot::atom_overlaps_container_t overlaps(mol, graphics_info_t::Geom_p(), ignore_waters, 0.5, 0.25);
+      coot::atom_overlaps_container_t overlaps(mol, graphics_info_t::Geom_p(), ignore_waters, 0.5, 0.25, imol);
       overlaps.make_all_atom_overlaps();
       std::vector<coot::atom_overlap_t> olv = overlaps.overlaps;
       r = SCM_EOL;
@@ -167,7 +167,7 @@ PyObject *molecule_atom_overlaps_py(int imol) {
       mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
       bool ignore_waters = false;
 
-      coot::atom_overlaps_container_t overlaps(mol, graphics_info_t::Geom_p(), ignore_waters, 0.5, 0.25);
+      coot::atom_overlaps_container_t overlaps(mol, graphics_info_t::Geom_p(), ignore_waters, 0.5, 0.25, imol);
       overlaps.make_all_atom_overlaps();
       std::vector<coot::atom_overlap_t> olv = overlaps.overlaps;
       PyObject *o_py = PyList_New(olv.size());
@@ -212,7 +212,7 @@ graphics_info_t::do_interactive_coot_probe() {
 
 	 graphics_info_t g;
 	 bool ignore_waters = true;
-	 coot::atom_overlaps_container_t ao(moving_atoms_asc->mol, Geom_p(), ignore_waters);
+	 coot::atom_overlaps_container_t ao(moving_atoms_asc->mol, Geom_p(), ignore_waters, 0.5, 0.25, imol_moving_atoms);
 
 	 // dot density
 	 coot::atom_overlaps_dots_container_t c = ao.all_atom_contact_dots(0.4);

@@ -835,7 +835,13 @@ ligand_search_install_wiggly_ligands() {
 	    bool optim_geom = true;
 	    bool fill_vec = false;
 
-	    if (graphics_info_t::use_graphics_interface_flag) {
+	    bool on_idle = graphics_info_t::use_graphics_interface_flag;
+#ifdef BANDICOOT_UI_WX
+	    // the progress bar's work runs on a GTK idle, which the wx build does
+	    // not have: conformers are made here, as without graphics
+	    on_idle = false;
+#endif
+	    if (on_idle) {
 	       ligand_wiggly_ligand_data_t lfwd_local = setup_ligands_progress_bar();
 	       lfwd.imol_ligand = ligands[i].first;
 	       lfwd.progress_bar        = lfwd_local.progress_bar;
@@ -865,8 +871,12 @@ ligand_search_install_wiggly_ligands() {
 	    std::cout << "ERROR:: failure in flexible ligand definition.\n";
 	    std::cout << mess.what() << std::endl;
 	    if (graphics_info_t::use_graphics_interface_flag) {
+#ifdef BANDICOOT_UI_WX
+	       info_dialog(mess.what());
+#else
 	       GtkWidget *w = wrapped_nothing_bad_dialog(mess.what());
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
+#endif
 	    }
 	    // return solutions;
 	 }
@@ -1040,6 +1050,12 @@ execute_ligand_search_internal(coot::wligand *wlig_p) {
 #endif // USE_PYGTK
 #endif // USE_GUILE
 
+#ifdef BANDICOOT_UI_WX
+	 std::string m = "Found " + graphics_info_t::int_to_string(n_new_ligand);
+	 m += (n_new_ligand == 1) ? " acceptable ligand." : " acceptable ligands.";
+	 m += "\n\nUse the Display Manager and Go To Atom to navigate\nto the new molecules.";
+	 info_dialog(m.c_str());
+#else
 	 GtkWidget *w = create_new_ligands_info_dialog();
 	 GtkWidget *label = lookup_widget(w, "new_ligands_info_dialog_label");
 	 std::string label_str("  Found ");
@@ -1050,9 +1066,17 @@ execute_ligand_search_internal(coot::wligand *wlig_p) {
 	    label_str += " acceptable ligands  ";
 	 gtk_label_set_text(GTK_LABEL(label), label_str.c_str());
 	 gtk_widget_show(w);
+#endif
       } else {
+#ifdef BANDICOOT_UI_WX
+	 info_dialog("Sadly no ligands were found.\n\n"
+		     "Perhaps there were no ligands to be found?\n\n"
+		     "Alternatively you could try to reduce the search\n"
+		     "r.m.s.d. level or the acceptable fit fraction.");
+#else
 	 GtkWidget *w = create_no_new_ligands_info_dialog();
 	 gtk_widget_show(w);
+#endif
       }
    }
 
@@ -1086,7 +1110,7 @@ std::vector<int> ligand_search_make_conformers_internal() {
 	    std::cout << mess.what() << std::endl;
 	    if (graphics_info_t::use_graphics_interface_flag) {
 	       GtkWidget *w = wrapped_nothing_bad_dialog(mess.what());
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
 	 }
       }
@@ -3474,7 +3498,31 @@ coot_contact_dots_for_ligand_internal(int imol, coot::residue_spec_t &res_spec) 
 
    if (residue_p) {
       std::vector<mmdb::Residue *> neighbs = coot::residues_near_residue(residue_p, mol, 5);
-      coot::atom_overlaps_container_t overlaps(residue_p, neighbs, mol, g.Geom_p(), 0.5, 0.25);
+
+      // BANDICOOT: the dots need restraints for the residue and every
+      // neighbour, as this molecule sees them (scoped to it or unscoped); say
+      // which are missing rather than drawing nothing
+      {
+	 std::vector<std::string> missing;
+	 std::vector<mmdb::Residue *> all = neighbs;
+	 all.insert(all.begin(), residue_p);
+	 for (unsigned int i=0; i<all.size(); i++) {
+	    std::string rn = all[i]->GetResName();
+	    if (std::find(missing.begin(), missing.end(), rn) != missing.end()) continue;
+	    if (! g.Geom_p()->get_monomer_restraints(rn, imol).first)
+	       missing.push_back(rn);
+	 }
+	 if (! missing.empty()) {
+	    std::string m = "No contact dots: no restraints for";
+	    for (unsigned int i=0; i<missing.size(); i++) m += (i ? ", " : " ") + missing[i];
+	    std::cout << "WARNING:: " << m << " (the residue at "
+		      << res_spec << " or a neighbour within 5 A)" << std::endl;
+	    if (graphics_info_t::use_graphics_interface_flag) info_dialog(m.c_str());
+	    return;
+	 }
+      }
+
+      coot::atom_overlaps_container_t overlaps(residue_p, neighbs, mol, g.Geom_p(), 0.5, 0.25, imol);
       coot::atom_overlaps_dots_container_t c = overlaps.contact_dots_for_ligand();
       std::cout << "------------- coot_contact_dots_for_ligand_internal(): score " << c.score() << std::endl;
 
@@ -3608,7 +3656,7 @@ void coot_all_atom_contact_dots(int imol) {
       // spike-length ball-radius
       // bool ignore_waters = true;
       bool ignore_waters = g.all_atom_contact_dots_ignore_water_flag;
-      coot::atom_overlaps_container_t overlaps(mol, g.Geom_p(), ignore_waters, 0.5, 0.25); // spike length, ball radius
+      coot::atom_overlaps_container_t overlaps(mol, g.Geom_p(), ignore_waters, 0.5, 0.25, imol); // spike length, ball radius
       // dot density // was 0.95
       coot::atom_overlaps_dots_container_t c = overlaps.all_atom_contact_dots(0.5, true);
 

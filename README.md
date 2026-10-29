@@ -1,13 +1,10 @@
 # Bandicoot
 
-Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/) 0.9.8.95, the structural biology macromolecular model-building program. It
-keeps Coot 0.9's functionality while replacing the UI elements that stop the app from
-functioning in MacOS Tahoe (26.x) on Apple Silicon, and adds some capabilities Coot 0.9
-does not have.
+Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/) 0.9.8.95, the structural biology macromolecular model-building program. It keeps most of Coot 0.9's functionality and look-and-feel, with a rebuilt user interface and new features that Coot 0.9 does not have.
 
 **RELEASES**: Tarballs of binary releases are found at https://github.com/fraser-lab/bandicoot/releases
 
-**NOTE:** Bandicoot targets **macOS Tahoe (26.x) on Apple Silicon**. It is not built or tested on other macOS releases, Linux, or Windows.
+**NOTE:** As of 10.29.2026 Bandicoot UI has been rebuilt in wxWidgets. This enables a port to Linux, which is forthcoming.
 
 **NOTE** Bandicoot is a work in progress; users are welcome to log issues and issue pull requests.
 
@@ -15,15 +12,16 @@ does not have.
 
 The Crystallographic Object-Oriented Tool (Coot) has been the go-to suite of software for molecular modeling, used by thousands of structural biologists all over the world for over twenty years. Recently, Coot has been fully reimagined and redesigned, as well as giving the libraries and packages under the hood a much-needed upgrade. The resulting program (Coot 1) is in wide use today. However, many suites of software for structural biology rely on the old Coot 0.9 framework in order to function, making it necessary for both versions to remain in circulation. 
 
-While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (26.x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, addresses each of these with macOS-specific fixes layered on top of upstream Coot. See [What changed vs Coot 0.9.8.95](#what-changed-vs-coot-09895) below for a list of major changes.
+While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (26.x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, initially addressed each of these with macOS-specific fixes layered on top of upstream Coot. In September of 2026, Bandicoot has become a stand-alone development project, with new features continually added. See [What changed vs Coot 0.9.8.95](#what-changed-vs-coot-09895) below for a list of major changes.
 
 ## Quick start
 
-The easiest way to install Bandicoot is to download a binary tarball (https://github.com/fraser-lab/bandicoot/releases) and install it (see [INSTALL.md](INSTALL.md)): untar it anywhere and launch `<extracted>/bin/bcoot`.
+The easiest way to install Bandicoot is to download a binary tarball (https://github.com/fraser-lab/bandicoot/releases) and install it (see [INSTALL.md](INSTALL.md)).
 
 To build from source instead, see [BUILD.md](BUILD.md). You'll need a
 handful of Homebrew packages and a Miniconda environment that supplies
-Clipper, MMDB2, FFTW2, and a few others.
+Clipper, MMDB2, and a few others.
+
 
 ## What changed vs Coot 0.9.8.95
 
@@ -33,37 +31,17 @@ The changes fall into two categories: adjustments made to enable Coot 0.9 to run
 
 ### MacOS 26.x Tahoe Adjustments
 
-- **No XQuartz.** freeglut is removed entirely, so nothing starts an X11
+- **No XQuartz dependency.** freeglut is removed entirely, so nothing starts an X11
   server.
-- **Menu bar.** Coot's menu bar is mirrored into the system menu bar, and the
-  in-window menu bar is hidden.
-- **Toolbars render outside the GL layer.** The top toolbar is mirrored into a
-  native toolbar on the window's title bar, and the vertical model toolbar is
-  moved into its own window, because widgets over the GL backing layer do not
-  draw.
-- **Docked panels are native.** The docked Accept/Reject bar, sequence view and
-  status bar are drawn as native panels over the content area. The GTK versions
-  paint correctly into a buffer that is never composited, so they were
-  invisible.
-- **Atom labels and axes use native text.** The GLUT text paths that Coot 0.9
-  relies on are broken here and are bypassed.
-- **Retina-correct GL viewport and picking**, so the framebuffer fills the
-  window and a click picks the atom under the pointer rather than an offset
-  one.
-- **Modifier keys are read from the window system directly**, because
-  GTK-Quartz does not report them to the application. Option-click acts as the
-  middle mouse button on trackpads.
-- **Window behaviour.** Dialogs float freely and raise reliably, windows open
-  near the pointer, and external-monitor resolution is handled.
-- **Application identity.** Native Dock icon and Dock Quit handling, a working
-  Exit menu item, and the binary is named so the app menu and Dock show
-  Bandicoot rather than a wrapper script.
+- **wxWidgets-based user interface.** The entire user interface has been rebuilt in wxWidgets, which not only makes Bandicoot run on MacOS but also makes it portable to other operating systems, e.g. Linux
+- **Python 3.** Coot's old Python 2 layer has been ported to Python 3, with the interpreter, NumPy and matplotlib bundled.
+- **Native text atom labels.**
+- **Retina-correct viewport and atom picking.**
 
 ### New and Updated Features
 
 #### Coot 0.9 functionality repaired, modernised or extended.
 
-- **Python 3.** A full replacement of the Python 2 elements of Coot 0.9 with Python 3 code.
 - **mmCIF handling rebuilt on gemmi.** All mmCIF reading and writing goes through [gemmi](https://github.com/project-gemmi/gemmi), with complete fidelity. The Header Browser shows real mmCIF metadata.
 - **CIF files are classified by content.** Bandicoot now distinguishes coordinate vs. restraint mmCIF files if they are drag/dropped into the main window.
 - **More files open:** modern small-molecule CIFs, and Phenix-produced CIFs can now be read in.
@@ -72,17 +50,20 @@ The changes fall into two categories: adjustments made to enable Coot 0.9 to run
 - **Live MolProbity probe dots preview.** With "Interactive Dots" toggled on, moving atoms during real-space refinement previews clashes.
 - **"Modelling" is made into its own top menu item**.
 - **"Glyco" is now an item in "Modelling".** It is also always visible and accessible.
-- **Ctrl-C in the launching terminal shuts the program down.** 
+- **Ctrl-C in the launching terminal shuts the program down.**
+- **Restraint tracking by molecule.** This expands the old Coot 0.9 functionality in which ligand restraints were tracked by molecule name. The new approach allows Bandicoot to create separate, sensible restraints for multiple different molecules that have the same name, e.g. "LIG" or "DRG"
+- **New and consolidated Preferences.** Several preferences were moved from the Draw menu to Preferences; also some preferences were consolidated into sensible groupings. This process is ongoing.
+- **Updated and improved icons.** Many top toolbar icons and menu item icons have been improved, updated, or created. In particular, unique icons have been created for every top toolbar button, making it comprehensible in "icons only" mode.
+- **Bugfixes.** Several bugs inherited from Coot 0.9 have been fixed and odd behaviours ironed out.
+- **Trackpad navigation.** On a Mac laptop, Opt-Left-Click now centers on an atom, same as the middle-click with a three-button mouse. (Also works with attached keyboard and mouse.)
 
 #### New in BANDICOOT
 
 Capabilities with no Coot 0.9 equivalent.
 
-- **Ligand restraints generation.** Restraints are generated for unrecognised
-  ligands on load, through an external generator, and stored per molecule. A
-  dialog lists the components it can describe and lets you exclude any of
-  them; it is also reachable from Modelling -> Generate Ligand Restraints.
+- **Ligand restraints generation.** Restraints are generated for unrecognised ligands on load, through an external generator, and stored per molecule. A dialog lists the components it can describe and lets you exclude any of them; it is also reachable from Modelling -> Generate Ligand Restraints.
 - **Colour by alternate conformation** is now available as an option in the Display Manager; this scheme assigns different colors to residues in alternate conformations. It is now the default bond scheme, with preferences for the scheme itself and for how far the alternate conformers differ in colour from the bulk model.
+- **Scaling by occupancy** accompanies the colouring by alternate conformation; now the line thickness is coarsely proportionate to the occupancy. This works with really thick lines and is gracefully handled with thin line settings.
 - **Session recording.** An optional event log of a modelling session: where the user looked and what the maps showed there, every command Coot echoes, residue-level model edits, and clicks on validation results. Off unless asked for -- start it with `BANDICOOT_RECORD=1 bcoot` or `start_session_recording()` in the scripting console. See  [SESSION_RECORDING.md](SESSION_RECORDING.md).
 - **PanDDA Inspect interface**, with an HTML report, a `--pandda <dir>` option and its own launcher. Can also be invoked by running `<extracted>/bin/bandicoot.inspect` within the panDDA folder itself.
 - **Ligand from SMILES.** Now an option in the Other Modelling Tools window.

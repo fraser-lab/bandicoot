@@ -507,7 +507,7 @@ void delete_checked_waters_baddies(int imol, float b_factor_lim, float map_sigma
 	 s += " waters";
 	 if (graphics_info_t::use_graphics_interface_flag) {
 	    GtkWidget *w = wrapped_nothing_bad_dialog(s);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	    graphics_draw();
 	 }
       }
@@ -1002,10 +1002,15 @@ int probe_available_p() {
       // currently (and there might be none..)
 #ifdef USE_PYTHON
 
+      // the result is a Python object: hold the GIL while it is used
+      // (safe_python_command_with_return() releases it on return)
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyObject *result;
       result = safe_python_command_with_return("command_in_path_qm(probe_command)");
 
       int was_boolean_flag = PyInt_AsLong(result);
+      Py_XDECREF(result);
+      PyGILState_Release(gstate);
       if (was_boolean_flag) {
 	 r = 1;
       } else {
@@ -1027,10 +1032,14 @@ int probe_available_p() {
 int probe_available_p_py() {
     int r=0;
 
+    // the result is a Python object: hold the GIL while it is used
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *result;
     result = safe_python_command_with_return("command_in_path_qm(probe_command)");
 
     int was_boolean_flag = PyInt_AsLong(result);
+    Py_XDECREF(result);
+    PyGILState_Release(gstate);
     if (was_boolean_flag) {
               r = 1;
     }
@@ -1115,7 +1124,7 @@ difference_map_peaks(int imol, int imol_coords,
 	       info_string += graphics_info_t::float_to_string(n_sigma);
 	       info_string += " sigma";
 	       GtkWidget *w = wrapped_nothing_bad_dialog(info_string);
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
 	 } else {
 	    float map_sigma = graphics_info_t::molecules[imol].map_sigma();
@@ -1298,7 +1307,7 @@ void difference_map_peaks_by_widget(GtkWidget *dialog) {
       std::cout << "WARNING:: failed to find a difference map "
 		<< "Can't do peak search" << std::endl;
       GtkWidget *w = wrapped_nothing_bad_dialog("WARNING:: failed to find difference map\nCan't do peak search");
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    }
 }
 
@@ -1594,7 +1603,7 @@ int do_ramachandran_plot_differences_by_widget(GtkWidget *w) {
 	 std::cout << "INFO:: incomprehensible molecule/chain selection" << std::endl;
 	 std::string s = "Can't make sense of chain selection.  Try again?";
 	 GtkWidget *nbd = wrapped_nothing_bad_dialog(s);
-	 gtk_widget_show(nbd);
+	 if (nbd) gtk_widget_show(nbd);
       }
    }
    return istat;
@@ -2321,7 +2330,7 @@ void gln_asn_b_factor_outliers(int imol) {
 	 } else {
 	    std::string label = "Coot detected no GLN or ASN B-factor Outliers";
 	    GtkWidget *w = wrapped_nothing_bad_dialog(label);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	 }
       }
    }
@@ -2375,7 +2384,7 @@ void gln_asn_b_factor_outliers_py(int imol) {
 	 } else {
 	    std::string label = "Coot detected no GLN or ASN B-factor Outliers";
 	    GtkWidget *w = wrapped_nothing_bad_dialog(label);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	 }
       }
    }
@@ -2713,7 +2722,7 @@ int clashes_with_symmetry(int imol, const char *chain_id, int res_no, const char
       if (residue_p) {
 	 if (mol) {
 	    std::vector<mmdb::Residue *> dummy; // neighbours
-	    coot::atom_overlaps_container_t ao(residue_p, dummy, mol, g.Geom_p());
+	    coot::atom_overlaps_container_t ao(residue_p, dummy, mol, g.Geom_p(), imol);
 	    std::vector<coot::atom_overlap_t> v = ao.symmetry_contacts(clash_dist);
 	    if (v.empty())
 	       r = 0;
@@ -3069,7 +3078,7 @@ float atom_overlap_score(int imol) {
       mmdb::Manager *mol = graphics_info_t::molecules[imol].atom_sel.mol;
       graphics_info_t g;
       bool ignore_waters_flag = false;
-      coot::atom_overlaps_container_t ao(mol, g.Geom_p(), ignore_waters_flag);
+      coot::atom_overlaps_container_t ao(mol, g.Geom_p(), ignore_waters_flag, 0.5, 0.25, imol);
       ao.make_all_atom_overlaps();
       s = ao.score();
    }

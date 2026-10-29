@@ -928,7 +928,7 @@ int auto_read_make_and_draw_maps_old(const char *mtz_file_name) {
 	 g.activate_scroll_radio_button_in_display_manager(imol1);
       } else {
 	 GtkWidget *w = wrapped_nothing_bad_dialog("Failed to find any suitable F/phi columns in the MTZ file");
-	 gtk_widget_show(w);
+	 if (w) gtk_widget_show(w);
       }
 
    } else {
@@ -2699,6 +2699,13 @@ void sfcalc_genmap(int imol_model, int imol_map_with_data_attached, int imol_upd
 
 }
 
+#ifdef BANDICOOT_UI_WX
+#include <functional>
+// A repeating timer on the wx event loop, which stops when the callback
+// returns false; 0 if there is no window to run it.
+int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+#endif
+
 /*! \brief As above, calculate structure factors from the model and update the given difference
            map accordingly - but difference map gets updated automatically on modification of
            the imol_model molecule */
@@ -2727,7 +2734,12 @@ void set_auto_updating_sfcalc_genmap(int imol_model,
                updating_model_molecule_parameters_t ummp(imol_model, imol_map_with_data_attached, imol_updating_difference_map);
                updating_model_molecule_parameters_t *u = new updating_model_molecule_parameters_t(ummp);
                GSourceFunc f = GSourceFunc(graphics_info_t::molecules[imol_updating_difference_map].watch_coordinates_updates);
+#ifdef BANDICOOT_UI_WX
+               // the wx build runs no GLib main loop, so the watch runs on a wx timer
+               bandicoot_wx_timeout_add(500, [f, u]() { return f(u) != 0; });
+#else
                g_timeout_add(500, f, u);
+#endif
             }
          }
       }
