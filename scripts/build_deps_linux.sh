@@ -189,11 +189,17 @@ build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
 # wxWidgets on GTK 2, with the parts Bandicoot uses (OpenGL canvas, AUI, SVG
 # icons). The C++ flags must not carry the old-C warning downgrades above.
 CFLAGS_SAVED="${CFLAGS}"
+CPPFLAGS_SAVED="${CPPFLAGS:-}"
 export CFLAGS="-O2"
+# Older GLib (before the gio-unix headers moved into the main include
+# directory) keeps gio/gunixfdlist.h and friends under gio-unix-2.0, which wx
+# includes without asking pkg-config for.
+export CPPFLAGS="${CPPFLAGS_SAVED} $(pkg-config --cflags gio-unix-2.0 2>/dev/null)"
 build_autotools wxWidgets "${WX_OUT}/bin/wx-config" "${WX_OUT}" \
     --with-gtk=2 --with-opengl --enable-aui --enable-svg \
     --disable-webview --disable-mediactrl --disable-tests --disable-precomp-headers
 export CFLAGS="${CFLAGS_SAVED}"
+export CPPFLAGS="${CPPFLAGS_SAVED}"
 
 # gemmi (CMake): headers plus the shared libgemmi_cpp
 if ! skip_if_done gemmi "${GEMMI_OUT}/include/gemmi/model.hpp"; then
