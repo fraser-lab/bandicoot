@@ -363,8 +363,15 @@ main (int argc, char *argv[]) {
    gint64 splash_show_us = 0;  // monotonic microseconds when splash shown
 
 #ifdef BANDICOOT_UI_WX
-   // The splash is a GTK window and the wait below pumps GTK's loop; neither
-   // belongs in a wx build.
+   // The GTK splash and the wait below (which pumps GTK's loop) do not belong
+   // in a wx build; it shows its own.
+   if (graphics_info_t::use_graphics_interface_flag && cld.use_splash_screen) {
+      std::string f = cld.alternate_splash_screen_file_name;
+      if (f.empty())
+         bandicoot_wx_show_splash(coot::package_pixmaps_dir() + "/bandicoot-splash.png", true);
+      else
+         bandicoot_wx_show_splash(f, false);
+   }
    if (false) {
 #else
    if (graphics_info_t::use_graphics_interface_flag) {

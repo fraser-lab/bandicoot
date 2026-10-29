@@ -17,6 +17,12 @@
 // AppKit creates is wx's.
 bool bandicoot_wx_init(int &argc, char **argv);
 
+// The startup splash: shown at once; the main window takes it down (after a
+// minimum time) as it appears. scale_to_default draws a large picture at the
+// splash's usual width.
+void bandicoot_wx_show_splash(const std::string &file_name, bool scale_to_default);
+void bandicoot_wx_close_splash();
+
 // Build and show the main window: GL surface, transient-bar area, toolbar
 // slots. The core is expected to have created its (hidden) GTK widget tree first.
 void bandicoot_wx_create_main_window(const std::string &title);

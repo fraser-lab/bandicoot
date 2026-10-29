@@ -728,6 +728,8 @@ struct bandicoot_ui_view {
    std::function<void(const std::vector<std::string> &bonds)> multi_torsion;
    // a yes/no the core waits on (true for yes)
    std::function<bool(const std::string &question)> question;
+   // a yes/no the core does not wait on; the answer goes to on_answer
+   std::function<void(const std::string &question, std::function<void(bool yes)> on_answer)> ask;
    // molecules to choose among (imol, label), all ticked at first, waiting
    // for the answer: the ticked ones, or none if cancelled
    std::function<std::vector<int>(const std::string &title, const std::string &header,

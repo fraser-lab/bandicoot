@@ -1509,25 +1509,25 @@ void run_clear_backups(int retval) {
 #ifdef USE_PYTHON
 void run_clear_backups_py(int retval) {
 
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *r = safe_python_command_with_return("clear_backups_maybe()");
+   bool did_not_run = (r == NULL || r == Py_None);
+   bool not_needed  = (r == Py_False); // backup gui was not needed/shown
+   Py_XDECREF(r);
+   PyGILState_Release(gstate);
 
-   if (r == NULL || r == Py_None) {
+   if (did_not_run) {
       // not false and not not false, function didn't run then...
-      std::cout << "WARNING:: clear_backups_maybe() returns "
-		<< PyString_AsString(PyObject_Str(r))
-		<< std::endl;
+      std::cout << "WARNING:: clear_backups_maybe() did not run" << std::endl;
       coot_real_exit(retval);
-   } else {
-//       std::cout << "DEBUG:: (clear-babckups-maybe) returned: "
-// 		<< scm_to_locale_string(display_scm(r))
-// 		<< std::endl;
    }
 
    // if r was #f then exit.
    //
-   if (r == Py_False) { // backup gui was not needed/shown
+   if (not_needed)
       coot_real_exit(retval);
-   }
 }
 #endif // PYTHON
 
@@ -1588,6 +1588,8 @@ coot_save_state_and_exit(int retval, int save_state_flag) {
    // atexit handlers never run and the recorder would lose its closing diff.
    // Before close_yourself() below, while the models can still be read.
    {
+      // results are Python objects: hold the GIL while they are used
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyObject *v = safe_python_command_with_return
          ("callable(globals().get('stop_session_recording'))");
       int ret = 0;
@@ -1597,6 +1599,7 @@ coot_save_state_and_exit(int retval, int save_state_flag) {
          PyObject *res = safe_python_command_with_return("stop_session_recording()");
          Py_XDECREF(res);
       }
+      PyGILState_Release(gstate);
    }
 #endif // USE_PYTHON
 

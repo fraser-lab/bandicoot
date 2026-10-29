@@ -71,7 +71,7 @@ struct ScrollingWindow {
 ScrollingWindow scrolling_window(wxWindow *parent, const wxString &title, const wxSize &size) {
    ScrollingWindow w;
    w.frame = new wxFrame(parent, wxID_ANY, title, wxDefaultPosition, size,
-                         wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
+                         wxDEFAULT_FRAME_STYLE);
    wxPanel *panel = new wxPanel(w.frame);
    panel->SetBackgroundColour(palette::face());
    w.scroller = new wxScrolledWindow(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,

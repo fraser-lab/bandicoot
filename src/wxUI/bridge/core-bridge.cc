@@ -1907,6 +1907,12 @@ bool bandicoot_wx_validation_report(const std::string &title, const std::string 
    return true;
 }
 
+bool bandicoot_wx_ask(const std::string &text, std::function<void(bool yes)> on_answer) {
+   if (! ui_view.ask) return false;
+   ui_view.ask(text, on_answer);
+   return true;
+}
+
 int bandicoot_wx_question(const std::string &text) {
    if (! ui_view.question) return -1;
    return ui_view.question(text) ? 1 : 0;

@@ -1248,16 +1248,19 @@ void hydrogenate_region(float radius) {
             python_command += single_quote(pdb_out);
             python_command += ")";
 
+            // the result is a Python object: hold the GIL while it is used
+            // (safe_python_command_with_return() releases it on return)
+            PyGILState_STATE gstate = PyGILState_Ensure();
             PyObject *r = safe_python_command_with_return(python_command);
-            std::cout << "::: safe_python_command_with_return() returned " << r << std::endl;
-            std::cout << "::: safe_python_command_with_return() returned "
-                      << PyString_AsString(display_python(r)) << std::endl;
-            if (r == Py_True) {
-               std::cout << "........ calling add_hydrogens_from_file() with pdb_out "
-                         << pdb_out << std::endl;
-               graphics_info_t::molecules[imol].add_hydrogens_from_file(pdb_out);
-            }
+            bool reduced = (r == Py_True);
             Py_XDECREF(r);
+            PyGILState_Release(gstate);
+            if (reduced) {
+               std::cout << "INFO:: adding hydrogens from " << pdb_out << std::endl;
+               graphics_info_t::molecules[imol].add_hydrogens_from_file(pdb_out);
+            } else {
+               std::cout << "WARNING:: hydrogenate region: reduce did not run" << std::endl;
+            }
 
 #endif // PYTHON
          } else {
@@ -5332,6 +5335,9 @@ int refmac_runs_with_nolabels() {
 
 #else
 #ifdef USE_PYTHON
+  // the result is a Python object: hold the GIL while it is used
+  // (safe_python_command_with_return() releases it on return)
+  PyGILState_STATE gstate = PyGILState_Ensure();
   PyObject *refmac_version;
   refmac_version = safe_python_command_with_return("get_refmac_version()");
   if (refmac_version) {
@@ -5346,6 +5352,7 @@ int refmac_runs_with_nolabels() {
      }
   }
   Py_XDECREF(refmac_version);
+  PyGILState_Release(gstate);
 #endif
 #endif
 

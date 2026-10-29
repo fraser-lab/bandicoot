@@ -600,6 +600,7 @@ if UI_WX
    coot_bin_SOURCES += \
 	wxUI/main/surface.hh         \
 	wxUI/main/main-window.cc     \
+	wxUI/main/splash.cc          \
 	wxUI/main/main-menu.hh       \
 	wxUI/main/main-menu.cc       \
 	wxUI/main/top-toolbar.hh     \

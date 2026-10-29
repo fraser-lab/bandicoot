@@ -1002,10 +1002,15 @@ int probe_available_p() {
       // currently (and there might be none..)
 #ifdef USE_PYTHON
 
+      // the result is a Python object: hold the GIL while it is used
+      // (safe_python_command_with_return() releases it on return)
+      PyGILState_STATE gstate = PyGILState_Ensure();
       PyObject *result;
       result = safe_python_command_with_return("command_in_path_qm(probe_command)");
 
       int was_boolean_flag = PyInt_AsLong(result);
+      Py_XDECREF(result);
+      PyGILState_Release(gstate);
       if (was_boolean_flag) {
 	 r = 1;
       } else {
@@ -1027,10 +1032,14 @@ int probe_available_p() {
 int probe_available_p_py() {
     int r=0;
 
+    // the result is a Python object: hold the GIL while it is used
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *result;
     result = safe_python_command_with_return("command_in_path_qm(probe_command)");
 
     int was_boolean_flag = PyInt_AsLong(result);
+    Py_XDECREF(result);
+    PyGILState_Release(gstate);
     if (was_boolean_flag) {
               r = 1;
     }

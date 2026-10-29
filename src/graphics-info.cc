@@ -1891,6 +1891,9 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
    std::string check_pms = "callable(globals().get('";
    check_pms += pms;
    check_pms += "'))";
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    v = safe_python_command_with_return(check_pms);
    if (v)
       ret = PyInt_AsLong(v);
@@ -1909,6 +1912,7 @@ graphics_info_t::run_post_manipulation_hook_py(int imol, int mode) {
      Py_XDECREF(res);
    }
    Py_XDECREF(v);
+   PyGILState_Release(gstate);
 }
 #endif
 
@@ -1975,6 +1979,8 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
       std::string check_ps = "callable(globals().get('";
       check_ps += ps;
       check_ps += "'))";
+      // results are Python objects: hold the GIL while they are used
+      PyGILState_STATE gstate = PyGILState_Ensure();
       v = safe_python_command_with_return(check_ps);
       if (v)
          ret = PyInt_AsLong(v);
@@ -1988,6 +1994,7 @@ graphics_info_t::run_post_set_rotation_centre_hook_py() {
         Py_XDECREF(res);
       }
       Py_XDECREF(v);
+      PyGILState_Release(gstate);
 }
 #endif
 

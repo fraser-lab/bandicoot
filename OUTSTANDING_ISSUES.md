@@ -13,14 +13,6 @@ worth fixing. Newest info at the top of each entry.
 
 ## P2 — visible bug, workaround exists
 
-### Ligand > Find Ligands crashes when it searches
-With a map, a protein model and some ligand molecules loaded, choosing a ligand to search
-for (one not already in the model) and starting the search crashes Bandicoot. Not yet
-investigated, including whether Coot 0.9 does the same.
-
-- **Workaround:** place the ligand by hand: open it, move it to the density, and fit it
-  with Jiggle-Fit Ligand or real-space refinement.
-
 ### GitHub #19 — User-defined key bindings never work
 `add_key_binding()` does `from types import IntType, StringType`
 (`python/coot_utils.py:1972`). Both names were removed in Python 3, so **any** user key
@@ -60,8 +52,8 @@ show only the first three characters (`coot-utils/gemmi-header.cc:926, :934,
 only the header display is wrong. Saving such a model as PDB is a separate matter and is
 already guarded — the save warns and offers a rename rather than truncating silently.
 
-### GitHub #28 — Side toolbar style is not preserved between sessions
-Reported by alyubimov, 2026-08-28. Every other preference persists in
+### GitHub #28 — Side toolbar style is not preserved between sessions (GTK build)
+Every other preference persists in
 `~/.coot-preferences/coot_preferences.py`, but the model ("side") toolbar always comes back
 as **Icons and Text**, whatever was last chosen from the sidebar's settings popup.
 
@@ -82,6 +74,7 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
   (`src/callbacks.c:7872/7885/7898`), so it updates the state and does persist.
 - Inherited from Coot 0.9 rather than introduced here, but more visible in Bandicoot because
   the sidebar's own settings popup is the natural place to change the style.
+- The wx build saves the style whichever way it is chosen.
 
 ---
 
@@ -168,10 +161,9 @@ application otherwise launches normally, so this does not present as an install 
 
 - **Fix:** run `./setup.sh` from the unpacked tarball.
 
-### GitHub #15 — Model toolbar cannot be repositioned (partially addressed)
-Reported by alyubimov, 2026-08-06. Coot 0.9 lets the docked model toolbar sit on any
-edge of the rendering window; in Bandicoot it is fixed in place (on the **right**, not
-the left as the issue text says — `bandicoot_reposition_sidebar()` pins it to
+### GitHub #15 — Model toolbar cannot be repositioned (GTK build)
+Coot 0.9 lets the docked model toolbar sit on any edge of the rendering window; in the GTK
+build it is fixed in place on the **right** (`bandicoot_reposition_sidebar()` pins it to
 `NSMaxX(usable) - width`).
 
 - **Root cause:** repositioning works by reparenting the legacy
@@ -179,23 +171,10 @@ the left as the issue text says — `bandicoot_reposition_sidebar()` pins it to
   the `GtkToolbar` OUT of that handlebox into the native pinned sidebar
   (`gtk_widget_reparent` in `bandicoot_sidebar_install`, `src/bandicoot_appkit.mm`), so
   every position control moves an empty container between hidden frames.
-- **DONE 2026-08-06:** the inert right-click popup is removed — right-click on the
-  toolbar now does nothing (`on_model_toolbar_button_press_event`). `toolbar_popup_menu()`
-  and `set_model_toolbar_docked_position_callback()` were deleted; the popup also cast the
-  toolbar's parent to `GtkHandleBox` when it is a `GtkVBox`. Dock/undock and toolbar style
-  remain on the sidebar's own settings popup.
-- **STILL OPEN — the same dead UI in Preferences.** `Preferences > Refinement Toolbar`
-  still offers a Model Toolbar Position radio group (`src/callbacks.c:7765-7800`) calling
-  the same `set_model_toolbar_docked_position()`, and it is equally inert. **Decision
-  (2026-08-06): leave it.** If a user reports it we explain or remove it then; the wx
-  interface rework may land first, and it is unclear how many users move the toolbar at
-  all.
-- **Actual repositioning is deferred to the wx interface work.** Supporting left/right on
-  the native sidebar is feasible (a persisted side + x computed in
-  `bandicoot_reposition_sidebar()`), but the A/R bar and docked sequence view both inset
-  themselves from the sidebar's edge, so it is three pinned windows moving together.
-  Top/bottom would additionally need the toolbar re-oriented and would compete with the
-  sequence view for the top edge.
+- **The same dead UI in Preferences.** `Preferences > Refinement Toolbar` still offers a
+  Model Toolbar Position radio group calling the same
+  `set_model_toolbar_docked_position()`, and it is equally inert.
+- The wx build's sidebar docks on the left, right or bottom, or floats.
 
 ### Ball & Stick aromatic-ring toruses not drawing
 _(pre-existing, from the v0.1.4.11 bookmark — needs re-confirmation/detail)_

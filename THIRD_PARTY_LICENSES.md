@@ -21,7 +21,7 @@ at all — its calls have native replacements — so neither it nor Mesa libGL s
 > **Note on completeness.** License classifications below are grouped by
 > component family. Where a component ships its own license file inside the
 > tarball, that file is the authoritative text; the summaries here are for
-> convenience. Versions correspond to Bandicoot 0.1.4.7 and may change between
+> convenience. Versions correspond to Bandicoot 0.3.0.0 and may change between
 > releases.
 
 ---
@@ -76,6 +76,8 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | libthai | `libthai.0.dylib` | LGPL v2.1+ |
 | libdatrie | `libdatrie.1.dylib` | LGPL v2.1+ |
 | Graphite2 | `libgraphite2.3.dylib` | LGPL v2.1 / MPL / GPL (tri-license) |
+| gemmi | `libgemmi_cpp.dylib` | MPL 2.0 |
+| wxWidgets (wx build) | `libwx_baseu-*.dylib`, `libwx_osx_cocoau_*.dylib` | wxWindows Library Licence 3.1 (LGPL v2 with an exception for binary distribution) |
 
 ### 2.3 Permissive (BSD / MIT / zlib / PSF / etc.)
 
@@ -87,27 +89,27 @@ License: **GNU GPL v3** — see [COPYING](COPYING).
 | SQLite | `libsqlite3.dylib` | Public domain |
 | CPython runtime | `libpython3.13.dylib`, `lib/python3.13/*.so` | Python Software Foundation License (`lib/python3.13/LICENSE.txt`) |
 | HarfBuzz | `libharfbuzz.0.dylib` | MIT ("Old MIT") |
-| Little CMS 2 | `liblcms2.2.dylib` | MIT |
 | FreeType | `libfreetype.6.dylib` | FreeType License (BSD-style; dual with GPLv2) |
 | libpng | `libpng16.16.dylib` | libpng / zlib license |
-| libjpeg (IJG) | `libjpeg.62.4.0.dylib` | IJG (BSD-like) |
+| libjpeg-turbo | `libjpeg.8.dylib` | IJG / BSD-3 / zlib |
 | libtiff | `libtiff.6.dylib` | libtiff (BSD-like) |
 | libwebp / sharpyuv | `libwebp*.dylib`, `libsharpyuv.0.dylib` | BSD-3 (Google) |
-| libavif | `libavif.16.4.2.dylib` | BSD-2 |
-| OpenJPEG | `libopenjp2.2.5.4.dylib` | BSD-2 |
-| Brotli | `libbrotli*.dylib` | MIT |
-| libxcb | `libxcb.1.1.0.dylib` | MIT (X.org) |
+| libxcb | `libxcb*.dylib` | MIT (X.org) |
 | libXau | `libXau.6.dylib` | MIT (X.org) |
 | X11 client libs (via Cairo) | `libX11.6.dylib`, `libX11-xcb.1.dylib`, `libXext.6.dylib`, `libXrender.1.dylib`, `libXdmcp.6.dylib` | MIT (X.org) |
 | fontconfig | `libfontconfig.1.dylib` | MIT-style (fontconfig license) |
 | pixman | `libpixman-1.0.dylib` | MIT |
-| PCRE2 | `libpcre2-8.0.dylib` | BSD-3-Clause |
-| zlib-ng | `libz.1.3.1.zlib-ng.dylib` | zlib license |
+| PCRE2 | `libpcre2-8.0.dylib`, `libpcre2-32.0.dylib` | BSD-3-Clause |
+| Zstandard | `libzstd.1.dylib` | BSD-3-Clause |
 | xz / liblzma | `liblzma.5.dylib` | 0BSD / public domain |
 | Expat (libexpat) | `libexpat.1.dylib` | MIT |
 | mpdecimal | `libmpdec.4.dylib` | BSD-2-Clause |
 | bzip2 | `libbz2.dylib` | BSD-like (bzip2 license) |
-| ncurses | `libncursesw.6.dylib`, `libtinfow.6.dylib`, `libpanelw.6.dylib` | MIT (X11-style) |
+| ncurses | `libncursesw.6.dylib`, `libpanelw.6.dylib` | MIT (X11-style) |
+| RDKit (wx build) | `libRDKit*.dylib` | BSD-3-Clause |
+| Boost (wx build) | `libboost_*.dylib` | Boost Software License 1.0 |
+| coordgenlibs (wx build) | `libcoordgen.3.dylib` | BSD-3-Clause |
+| maeparser (wx build) | `libmaeparser.1.dylib` | MIT |
 
 ---
 
@@ -129,22 +131,18 @@ file (`*.dist-info/LICENSE*`), that file is authoritative.
 
 | Package | Version | License |
 |---|---|---|
-| NumPy | 2.5.1 | BSD-3-Clause |
-| matplotlib | 3.11.0 | matplotlib license (PSF-based, BSD-compatible) |
-| Pillow (PIL) | 12.3.0 | MIT-CMU / HPND |
-| contourpy | 1.3.3 | BSD-3-Clause |
-| kiwisolver | 1.5.0 | BSD-3-Clause |
+| NumPy | 2.5.4 | BSD-3-Clause |
+| matplotlib | 3.11.2 | matplotlib license (PSF-based, BSD-compatible) |
+| Pillow (PIL) | 13.0.0 | MIT-CMU / HPND |
+| contourpy | 1.4.0 | BSD-3-Clause |
+| kiwisolver | 1.5.1 | BSD-3-Clause |
 | cycler | 0.12.1 | BSD (matplotlib project) |
-| fontTools | 4.63.0 | MIT |
-| pyparsing | 3.3.2 | MIT |
-| packaging | 26.2 | Apache-2.0 / BSD-2 (dual) |
-| python-dateutil | 2.9.0.post0 | Apache-2.0 / BSD-3 (dual) |
+| fontTools | 4.68.0 | MIT |
+| pyparsing | 3.3.3 | MIT |
+| packaging | 26.3 | Apache-2.0 / BSD-2 (dual) |
+| python-dateutil | 3.0.0 | Apache-2.0 / BSD-3 (dual) |
 | six | 1.17.0 | MIT |
-
-> Housekeeping: the tarball currently ships duplicate dist-info directories for
-> two packages (`numpy-2.4.6` alongside `numpy-2.5.1`, and `pillow-12.2.0`
-> alongside `pillow-12.3.0`). The active/installed versions are numpy 2.5.1 and
-> Pillow 12.3.0; the stale dist-info dirs should be pruned from the build.
+| tzdata | 2026.6 | Apache-2.0 |
 
 ---
 

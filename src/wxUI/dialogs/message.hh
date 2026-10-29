@@ -13,6 +13,8 @@
 
 #include <string>
 
+#include <functional>
+
 class wxWindow;
 
 namespace wxui {
@@ -27,6 +29,13 @@ void error(wxWindow *parent, const wxString &what_failed, const wxString &subjec
 bool confirm(wxWindow *parent, const wxString &question,
              const wxString &yes_label = "OK", const wxString &no_label = "Cancel",
              const wxString &consequence = wxEmptyString);
+
+// As confirm(), but does not wait: on_answer gets the answer (closing the
+// window answers no). It opens in the screen's lower-left corner, each one
+// still open offset from the last, so that a run of them is not lost behind
+// the main window.
+void ask(wxWindow *parent, const wxString &question, std::function<void(bool yes)> on_answer,
+         const wxString &yes_label = "Yes", const wxString &no_label = "No");
 
 } // namespace wxui
 

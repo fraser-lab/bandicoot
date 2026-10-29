@@ -1077,6 +1077,9 @@ private:
          d->Show();
       };
       v.question = [this](const std::string &q) { return wxui::confirm(this, wxString::FromUTF8(q), "Yes", "No"); };
+      v.ask = [this](const std::string &q, std::function<void(bool)> on_answer) {
+         wxui::ask(this, wxString::FromUTF8(q), on_answer);
+      };
       v.choose_molecules = [this](const std::string &title, const std::string &header,
                                   const std::vector<std::pair<int, std::string>> &molecules) {
          return wxui::choose_molecules(this, title, header, molecules);
@@ -1276,6 +1279,7 @@ void bandicoot_wx_create_main_window(const std::string &title) {
 #endif
    main_frame = new MainFrame(wxString::FromUTF8(title));
    wxTheApp->SetTopWindow(main_frame);
+   bandicoot_wx_close_splash();
    main_frame->Show();
    main_frame->place_saved_sidebar();
    main_frame->Raise();

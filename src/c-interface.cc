@@ -1973,10 +1973,7 @@ void do_tw() {
 void info_dialog(const char *txt) {
 
    graphics_info_t::info_dialog(txt);
-   std::string cmd = "info-dialog";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 // As info_dialog, but print to console too. Usefull for error and 
@@ -1986,20 +1983,14 @@ void info_dialog_and_text(const char *txt) {
 
    graphics_info_t g;
    g.info_dialog_and_text(txt);
-   std::string cmd = "info-dialog-and-text";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 void info_dialog_with_markup(const char *txt) {
 
    graphics_info_t g;
    g.info_dialog_and_text(txt, true);
-   std::string cmd = "info-dialog-and-text";
-   std::vector<coot::command_arg_t> args;
-   args.push_back(single_quote(txt));
-   add_to_history_typed(cmd, args);
+   // not added to the history: a message is output, not a command to replay
 }
 
 
@@ -9008,12 +8999,18 @@ void bandicoot_record_navigation(const char *source, const char *label) {
 #ifdef USE_PYTHON
    // The recorder is optional, so ask whether the entry point exists rather
    // than assuming it; an undefined name would raise into the click handler.
+   // results are Python objects: hold the GIL while they are used
+   // (safe_python_command_with_return() releases it on return)
+   PyGILState_STATE gstate = PyGILState_Ensure();
    PyObject *v = safe_python_command_with_return
       ("callable(globals().get('bandicoot_session_record_navigation'))");
    int ret = 0;
    if (v) ret = PyInt_AsLong(v);
    Py_XDECREF(v);
-   if (ret != 1) return;
+   if (ret != 1) {
+      PyGILState_Release(gstate);
+      return;
+   }
    // The command is evaluated as Python source, so the arguments are escaped
    // rather than merely quoted: labels are built from molecule and file names
    // and are not guaranteed to be free of quotes, backslashes or control
@@ -9032,6 +9029,7 @@ void bandicoot_record_navigation(const char *source, const char *label) {
    }
    PyObject *res = safe_python_command_with_return(cmd);
    Py_XDECREF(res);
+   PyGILState_Release(gstate);
 #endif // USE_PYTHON
 }
 

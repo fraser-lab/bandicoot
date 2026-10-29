@@ -6,12 +6,14 @@
 #include <wx/artprov.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
+#include <wx/display.h>
 #include <wx/frame.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 
 #include <iostream>
+#include <memory>
 
 namespace wxui {
 
@@ -86,12 +88,12 @@ void error(wxWindow *parent, const wxString &what_failed, const wxString &subjec
    d.ShowModal();
 }
 
-bool confirm(wxWindow *parent, const wxString &question,
-             const wxString &yes_label, const wxString &no_label,
-             const wxString &consequence) {
+namespace {
 
-   // built by hand so the warning sign sits beside the text
-   wxDialog d(parent, wxID_ANY, "Bandicoot");
+// The warning sign beside the text, then the No and Yes buttons (No the
+// default); built by hand so the sign sits beside the text.
+void fill_question(wxDialog &d, const wxString &question, const wxString &yes_label,
+                   const wxString &no_label, const wxString &consequence) {
    wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
    wxBitmapBundle sign = warning_sign();
    if (sign.IsOk())
@@ -121,10 +123,52 @@ bool confirm(wxWindow *parent, const wxString &question,
    col->Add(row, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 16);
    col->Add(buttons, 0, wxEXPAND | wxALL, 12);
    d.SetSizerAndFit(col);
+}
+
+int open_asks = 0;
+
+} // namespace
+
+bool confirm(wxWindow *parent, const wxString &question,
+             const wxString &yes_label, const wxString &no_label,
+             const wxString &consequence) {
+
+   wxDialog d(parent, wxID_ANY, "Bandicoot");
+   fill_question(d, question, yes_label, no_label, consequence);
    d.Bind(wxEVT_BUTTON, [&d](wxCommandEvent &) { d.EndModal(wxID_YES); }, wxID_YES);
    d.Bind(wxEVT_BUTTON, [&d](wxCommandEvent &) { d.EndModal(wxID_NO); }, wxID_NO);
    d.CentreOnParent();
    return d.ShowModal() == wxID_YES;
+}
+
+void ask(wxWindow *parent, const wxString &question, std::function<void(bool yes)> on_answer,
+         const wxString &yes_label, const wxString &no_label) {
+
+   std::cout << "INFO:: " << question.utf8_string() << std::endl;
+   wxDialog *d = new wxDialog(parent, wxID_ANY, "Bandicoot");
+   fill_question(*d, question, yes_label, no_label, wxEmptyString);
+
+   int screen = parent ? wxDisplay::GetFromWindow(parent) : 0;
+   wxRect area = wxDisplay(screen == wxNOT_FOUND ? 0 : unsigned(screen)).GetClientArea();
+   int step = d->FromDIP(24) * (open_asks % 10);
+   wxSize size = d->GetSize();
+   d->SetPosition(wxPoint(area.GetLeft() + d->FromDIP(16) + step,
+                          area.GetBottom() - size.y - d->FromDIP(16) - step));
+   open_asks++;
+
+   auto answered = std::make_shared<bool>(false);
+   auto finish = [d, on_answer, answered](bool yes) {
+      if (*answered) return;
+      *answered = true;
+      open_asks--;
+      d->Destroy();
+      if (on_answer) on_answer(yes);
+   };
+   d->Bind(wxEVT_BUTTON, [finish](wxCommandEvent &) { finish(true); }, wxID_YES);
+   d->Bind(wxEVT_BUTTON, [finish](wxCommandEvent &) { finish(false); }, wxID_NO);
+   d->Bind(wxEVT_CLOSE_WINDOW, [finish](wxCloseEvent &) { finish(false); });
+   d->Show();
+   d->Raise();
 }
 
 } // namespace wxui

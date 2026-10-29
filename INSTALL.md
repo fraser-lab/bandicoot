@@ -65,7 +65,7 @@ you launch from — clean those up if you want a fully clean removal.
 - **A broken-image graphic appears on the splash, or "couldn't find
   pixmap file: bandicoot-splash.png"** — the bcoot wrapper failed to
   export `COOT_DATA_DIR` correctly. Make sure you launch through
-  `bin/bcoot` (not the bare `libexec/coot-bin`) and confirm the
+  `bin/bcoot` (not the bare `libexec/Bandicoot`) and confirm the
   extracted tree contains `share/coot/pixmaps/`.
 - **Spotlight / Launchpad can't find Bandicoot** — rerun `./setup.sh`;
   the `.desktop` file is installed into `~/.local/share/applications/`.

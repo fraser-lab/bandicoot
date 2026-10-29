@@ -109,6 +109,7 @@ bool bandicoot_wx_results(const std::string &title, const std::vector<bandicoot_
 // not taken it on.
 bool bandicoot_wx_info(const std::string &text, bool markup);
 int  bandicoot_wx_question(const std::string &text);
+bool bandicoot_wx_ask(const std::string &text, std::function<void(bool yes)> on_answer);
 int  bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
 #endif
 #include "c-interface-generic-objects.h" // Ligand menu: solid generic objects
@@ -1641,9 +1642,12 @@ show_fix_nomenclature_errors_gui(int imol,
       if (n > shown)
          q += "and " + coot::util::int_to_string(n - shown) + " more\n";
       q += n > 1 ? "\nCorrect them?" : "\nCorrect it?";
+      // not modal: with several models read at once, each asks on its own
       bandicoot_wx_timeout_add(1, [imol, q]() {
-         if (is_valid_model_molecule(imol) && bandicoot_wx_question(q) == 1)
-            fix_nomenclature_errors(imol);
+         if (is_valid_model_molecule(imol))
+            bandicoot_wx_ask(q, [imol](bool yes) {
+               if (yes && is_valid_model_molecule(imol)) fix_nomenclature_errors(imol);
+            });
          return false;
       });
    }
