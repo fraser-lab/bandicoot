@@ -439,7 +439,7 @@ main (int argc, char *argv[]) {
       window1 = create_window1();
 
       std::string version_string = VERSION;
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(BANDICOOT_UI_WX)
       std::string main_title =
 	 std::string("BANDICOOT ") + BANDICOOT_VERSION + BANDICOOT_BUILD_SUFFIX;
 #else

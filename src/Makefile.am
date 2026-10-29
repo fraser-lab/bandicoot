@@ -287,7 +287,6 @@ coot_bin_SOURCES = \
 	main.cc 		 \
 	bandicoot-version.h	 \
 	bandicoot_appkit.h	 \
-	bandicoot_appkit.mm	 \
 	bandicoot_refine.cc	 \
 	atom-pull.hh		 \
 	boot-python.hh           \
@@ -666,13 +665,9 @@ if UI_WX
 	wxUI/main/sidebar.hh         \
 	wxUI/main/sidebar.cc         \
 	wxUI/main/mac-menu.hh        \
-	wxUI/main/mac-menu.mm        \
 	wxUI/dialogs/file-panel-size.hh \
-	wxUI/dialogs/file-panel-size.mm \
 	wxUI/dialogs/colour-panel.hh \
-	wxUI/dialogs/colour-panel.mm \
 	wxUI/dialogs/caution-icon.hh \
-	wxUI/dialogs/caution-icon.mm \
 	wxUI/assets/icons.hh         \
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \
@@ -720,6 +715,22 @@ if UI_WX
 	wxUI/dialogs/click-through-dialog.cc \
 	wxUI/dialogs/file-dialogs.hh \
 	wxUI/dialogs/file-dialogs.cc
+if OS_DARWIN
+   coot_bin_SOURCES += \
+	wxUI/main/mac-menu.mm        \
+	wxUI/dialogs/file-panel-size.mm \
+	wxUI/dialogs/colour-panel.mm \
+	wxUI/dialogs/caution-icon.mm
+else
+   coot_bin_SOURCES += \
+	wxUI/dialogs/file-panel-size-linux.cc \
+	wxUI/dialogs/colour-panel-linux.cc
+endif
+endif
+
+# macOS integration for both UI builds (AppKit)
+if OS_DARWIN
+   coot_bin_SOURCES += bandicoot_appkit.mm
 endif
 if COOT_USE_PYTHON
    dist_python_PYTHON = coot.py coot.pth

@@ -34,14 +34,19 @@ if ! command -v intltoolize >/dev/null 2>&1; then
     echo "          and reports it as \"Your intltool is too old\".)"     >&2
 fi
 
-BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
-ACLOCAL_M4_DIR="${BREW_PREFIX}/share/aclocal"
+# Homebrew's macro directory on macOS; on Linux the system one is aclocal's
+# default and needs no -I.
+ACLOCAL_EXTRA=""
+if [ "$(uname)" = "Darwin" ]; then
+    BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
+    ACLOCAL_EXTRA="-I ${BREW_PREFIX}/share/aclocal"
+fi
 
 echo "==> $LIBTOOLIZE --copy --no-warn"
 $LIBTOOLIZE --copy --no-warn
 
-echo "==> aclocal -I macros -I ${ACLOCAL_M4_DIR}"
-aclocal -I macros -I "${ACLOCAL_M4_DIR}"
+echo "==> aclocal -I macros ${ACLOCAL_EXTRA}"
+aclocal -I macros ${ACLOCAL_EXTRA}
 
 echo "==> autoconf"
 autoconf

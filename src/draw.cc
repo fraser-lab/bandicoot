@@ -775,8 +775,12 @@ gint draw_hardware_stereo(GtkWidget *widget, GdkEventExpose *event) {
       graphics_info_t::which_eye = graphics_info_t::FRONT_EYE;
 
       // show it
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_swap_buffers();
+#else
       GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable(widget);
       gdk_gl_drawable_swap_buffers(gldrawable);
+#endif
 
    } else {
 
@@ -796,8 +800,12 @@ gint draw_hardware_stereo(GtkWidget *widget, GdkEventExpose *event) {
       graphics_info_t::which_eye = graphics_info_t::FRONT_EYE;
 
       // show it
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_surface_swap_buffers();
+#else
       GdkGLDrawable *gldrawable = gtk_widget_get_gl_drawable(widget);
       gdk_gl_drawable_swap_buffers(gldrawable);
+#endif
    }
    return TRUE;
 }

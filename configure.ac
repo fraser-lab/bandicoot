@@ -229,7 +229,6 @@ if test "x$with_gnomecanvas" != "xno"; then
 fi
 AC_SUBST(GNOME_CANVAS_CFLAGS)
 
-AM_PATH_GTKGLEXT_1_0(1.0.0,,[exit 1])
 MAKE_COOTRC_CMD="sed -e 's/\#GTK2 //' "
 AC_SUBST(MAKE_COOTRC_CMD)
 
@@ -262,11 +261,14 @@ dnl software ships a wrapper of the same name earlier in PATH whose behaviour
 dnl depends on that package's own configuration, so a bare wx-config can
 dnl silently supply the wrong answer or none at all.
 AC_ARG_VAR([WX_CONFIG], [full path to wx-config (not searched on PATH)])
-if test "x$WX_CONFIG" = "x" ; then
+if test "x$WX_CONFIG" = "x" && test "$(uname)" = "Darwin" ; then
    WX_CONFIG=/opt/homebrew/opt/wxwidgets/bin/wx-config
 fi
 
 if test "x$with_ui" = "xwx" ; then
+   if test "x$WX_CONFIG" = "x" ; then
+      AC_MSG_ERROR([no default wx-config on this platform; set WX_CONFIG=/path/to/wx-config])
+   fi
    AC_MSG_CHECKING([for wx-config at $WX_CONFIG])
    if test -x "$WX_CONFIG" ; then
       AC_MSG_RESULT([yes])
@@ -314,6 +316,16 @@ fi
 
 AC_SUBST(WX_CFLAGS)
 AC_SUBST(WX_LIBS)
+
+dnl GtkGLExt makes the GTK build's GL widget; the wx build draws in a wxGLCanvas
+dnl and compiles no GtkGLExt code, so it does not need the library (current
+dnl Linux distributions no longer package it).
+if test "x$with_ui" = "xgtk" ; then
+   AM_PATH_GTKGLEXT_1_0(1.0.0,,[exit 1])
+fi
+
+dnl macOS-only sources (Objective-C++) and their Linux counterparts
+AM_CONDITIONAL(OS_DARWIN, test "$(uname)" = "Darwin")
 AM_CONDITIONAL(UI_WX, test x$with_ui = xwx)
 
 

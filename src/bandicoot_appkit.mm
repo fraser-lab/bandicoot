@@ -64,6 +64,12 @@ extern "C" {
     gboolean bandicoot_action_sphere_regularize_plus(gpointer);
     gboolean bandicoot_action_refine_tandem(gpointer);
     gboolean bandicoot_action_local_probe_dots(gpointer);
+    // Quicksave and the toolbar toggles, also used by the wx build
+    gboolean bandicoot_action_quicksave(gpointer);
+    gboolean bandicoot_action_backrub_apply(gpointer);
+    gboolean bandicoot_action_hydrogen_apply(gpointer);
+    gboolean bandicoot_action_interactive_dots_apply(gpointer);
+    gboolean bandicoot_action_cis_trans(gpointer);
 
     // Clean-exit path (c-interface-gui.cc): saves session state + history,
     // closes all molecules, then exit(retval). Backs the "Exit Bandicoot"
@@ -650,75 +656,6 @@ static gboolean bandicoot_action_open_map(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Quicksave: write the currently-focused molecule to
-// <basename>-quicksave<ext> next to the file it was loaded from.
-// Overwrites on each press, so a model can be checkpointed without
-// filling a directory with N-numbered auto-saves. Bandicoot-only;
-// doesn't exist in upstream Coot 0.9.
-//
-// Picking the molecule: Coot's Go-To-Atom dialog stores its currently-
-// focused molecule and that's the most reliable signal of "the one the
-// user is editing" — they navigated there to make edits. Fall back to
-// first_coords_imol() if go-to-atom hasn't been used yet (which is also
-// what the original Quicksave did, so behaviour for fresh sessions is
-// unchanged).
-// Not static: the wx build's toolbar calls it too.
-extern "C" gboolean bandicoot_action_quicksave(gpointer data) {
-    int imol = go_to_atom_molecule_number();
-    if (imol < 0 || !is_valid_model_molecule(imol)) {
-        imol = first_coords_imol();
-    }
-    if (imol < 0 || !is_valid_model_molecule(imol)) {
-        fprintf(stdout, "[bandicoot] Quicksave: no model molecule loaded\n");
-        fflush(stdout);
-        return G_SOURCE_REMOVE;
-    }
-    const char *name = molecule_name(imol);
-    if (!name || !*name) {
-        fprintf(stdout, "[bandicoot] Quicksave: imol %d has no filename\n", imol);
-        fflush(stdout);
-        return G_SOURCE_REMOVE;
-    }
-
-    // Split off the extension. Use the last '.' in the BASENAME so a
-    // dotted directory like /home/.coot/foo doesn't fool us.
-    std::string n(name);
-    size_t slash = n.find_last_of('/');
-    size_t dot   = n.find_last_of('.');
-    std::string base, ext;
-    if (dot != std::string::npos &&
-        (slash == std::string::npos || dot > slash)) {
-        base = n.substr(0, dot);
-        ext  = n.substr(dot);   // includes leading '.'
-    } else {
-        base = n;
-        ext  = ".pdb";
-    }
-    // If base already ends with "-quicksave", strip it — otherwise each
-    // press cascades the suffix (foo-quicksave-quicksave-quicksave.pdb).
-    // save_coordinates() updates the molecule's name to the saved path,
-    // so molecule_name() on the next press returns the quicksave path.
-    static const std::string qs_suffix = "-quicksave";
-    if (base.size() >= qs_suffix.size() &&
-        base.compare(base.size() - qs_suffix.size(),
-                     qs_suffix.size(), qs_suffix) == 0) {
-        base.resize(base.size() - qs_suffix.size());
-    }
-    std::string qs = base + qs_suffix + ext;
-
-    // save_coordinates() return value is unreliable on Coot 0.9 — the
-    // header comment says 1=success/0=fail but in practice it returns 0
-    // even on successful writes. stat the file after to determine truth.
-    (void)save_coordinates(imol, qs.c_str());
-    struct stat st;
-    if (stat(qs.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
-        fprintf(stdout, "[bandicoot] Quicksave: wrote %s\n", qs.c_str());
-    } else {
-        fprintf(stdout, "[bandicoot] Quicksave: write failed for %s\n", qs.c_str());
-    }
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
 
 // ---- Toggle actions (5 of the simpler Python-replaced items)
 //
@@ -733,28 +670,7 @@ extern "C" gboolean bandicoot_action_quicksave(gpointer data) {
 // BandicootToggleTarget below. Cleaner than keeping a parallel C
 // static, since the button is the user-visible source of truth.
 
-// Not static: the wx build's toolbar calls it too.
-extern "C" gboolean bandicoot_action_backrub_apply(gpointer data) {
-    // ROTAMERSEARCHLOWRES = 2 is "backrub"; ROTAMERSEARCHAUTOMATIC = 0
-    // is Coot's default per-residue selection. See rotamer-search-modes.hh.
-    int on = GPOINTER_TO_INT(data);
-    set_rotamer_search_mode(on ? 2 : 0);
-    fprintf(stdout, "[bandicoot] Backrub rotamers: %s\n", on ? "on" : "off");
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
 
-// Not static: the wx build's toolbar calls it too.
-extern "C" gboolean bandicoot_action_hydrogen_apply(gpointer data) {
-    int on = GPOINTER_TO_INT(data);
-    int n = graphics_n_molecules();
-    for (int i = 0; i < n; ++i) {
-        if (is_valid_model_molecule(i)) set_draw_hydrogens(i, on);
-    }
-    fprintf(stdout, "[bandicoot] Hydrogens: %s\n", on ? "on" : "off");
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
 
 static gboolean bandicoot_action_full_screen_apply(gpointer data) {
     int on = GPOINTER_TO_INT(data);
@@ -764,59 +680,7 @@ static gboolean bandicoot_action_full_screen_apply(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Interactive Dots: enable/disable Coot's pure-C++ probe-dots overlay
-// across every refinement / rotamer-cycle / chi-edit interaction.
-//
-// Three flags work together:
-//   - do_coot_probe_dots_during_refine_flag: live preview dots while
-//     dragging atoms during real-space refine (rendered into
-//     "Intermediate Atoms <type>" objects, vanish when intermediate
-//     atoms are torn down on accept/reject).
-//   - do_probe_dots_post_refine_flag: triggers Bandicoot's post-accept
-//     hook (graphics-info.cc) which routes through setup_for_probe_
-//     dots_on_chis_molprobity → do_probe_dots_on_rotamers_and_chis
-//     (Bandicoot funnel) → bandicoot_render_local_post_refine_dots.
-//     Persistent "Molecule N: <type>" dots scoped to the refined region.
-//   - do_probe_dots_on_rotamers_and_chis_flag: same funnel, triggered
-//     by rotamer cycling (Rotamers dialog) and chi-angle editing (Edit
-//     Chi Angles or mouse-drag chi rotation).
-//
-// All paths use Coot's C++ atom_overlaps_container_t — NOT the guile-
-// gtk-gated do_interactive_probe() (dead in this build).
-// Not static: the wx build's toolbar calls it too.
-extern "C" gboolean bandicoot_action_interactive_dots_apply(gpointer data) {
-    int on = GPOINTER_TO_INT(data);
-    set_do_coot_probe_dots_during_refine(on);
-    set_do_probe_dots_post_refine(on);
-    set_do_probe_dots_on_rotamers_and_chis(on);
-    // Toggling OFF clears the currently-drawn dots (both Local Probe
-    // Dots and Interactive Dots families). This is a longstanding
-    // wishlist item — upstream Coot has no clear-dots UI, just toggles
-    // that affect FUTURE refinements but leave current dots on screen.
-    // Toggling ON does nothing extra; new dots arrive on the next
-    // refinement / rotamer cycle.
-    if (!on) {
-        bandicoot_clear_probe_dot_objects();
-        graphics_draw();
-    }
-    fprintf(stdout, "[bandicoot] Interactive Dots: %s (refine+rotamer+chi%s)\n",
-            on ? "on" : "off", on ? "" : "; cleared existing dots");
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
 
-// Cis ↔ Trans isn't really a toggle — it enters Coot's interactive
-// peptide-flip pick mode. Calling with state=1 turns the pick mode on;
-// the user then clicks an atom and Coot performs the conversion + exits
-// the mode automatically. Each press of the toolbar button re-arms the
-// mode for one more flip.
-// Not static: the wx build's toolbar calls it too.
-extern "C" gboolean bandicoot_action_cis_trans(gpointer data) {
-    do_cis_trans_conversion_setup(1);
-    fprintf(stdout, "[bandicoot] Cis↔Trans: click an atom to flip\n");
-    fflush(stdout);
-    return G_SOURCE_REMOVE;
-}
 
 // ---- Dispatch idle-callbacks (run after AppKit's event-tracking loop)
 
