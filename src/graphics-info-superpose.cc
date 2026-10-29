@@ -229,7 +229,7 @@ graphics_info_t::superpose_with_atom_selection(atom_selection_container_t asc_re
 	       std::cout << " *** undocumented return code: " << rc << "\n";
 	    }
 	    GtkWidget *w = wrapped_nothing_bad_dialog(ws);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	 } else  {
 
 

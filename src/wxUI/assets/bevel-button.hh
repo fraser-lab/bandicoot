@@ -19,6 +19,8 @@ public:
 
    // An icon shown before the label, as on Coot's Accept and Reject.
    void set_icon(const wxBitmapBundle &icon);
+   // Without an icon, the label sits at the left (default: centred).
+   void set_label_left(bool left);
 
 protected:
    void draw(wxDC &dc, const wxRect &rect) override;
@@ -26,6 +28,7 @@ protected:
 
 private:
    wxBitmapBundle icon;
+   bool label_left = false;
 };
 
 } // namespace wxui

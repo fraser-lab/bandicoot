@@ -4329,6 +4329,9 @@ def bandicoot_button_choice_filtered_py(title, buttons, check_label, checked_but
 def bandicoot_generic_objects_window_py():
     return _coot.bandicoot_generic_objects_window_py()
 
+def bandicoot_validation_report_py(title, footnote, imol, metrics, residues):
+    return _coot.bandicoot_validation_report_py(title, footnote, imol, metrics, residues)
+
 def bandicoot_rotation_centre_py():
     return _coot.bandicoot_rotation_centre_py()
 

@@ -507,7 +507,7 @@ void delete_checked_waters_baddies(int imol, float b_factor_lim, float map_sigma
 	 s += " waters";
 	 if (graphics_info_t::use_graphics_interface_flag) {
 	    GtkWidget *w = wrapped_nothing_bad_dialog(s);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	    graphics_draw();
 	 }
       }
@@ -1115,7 +1115,7 @@ difference_map_peaks(int imol, int imol_coords,
 	       info_string += graphics_info_t::float_to_string(n_sigma);
 	       info_string += " sigma";
 	       GtkWidget *w = wrapped_nothing_bad_dialog(info_string);
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
 	 } else {
 	    float map_sigma = graphics_info_t::molecules[imol].map_sigma();
@@ -1298,7 +1298,7 @@ void difference_map_peaks_by_widget(GtkWidget *dialog) {
       std::cout << "WARNING:: failed to find a difference map "
 		<< "Can't do peak search" << std::endl;
       GtkWidget *w = wrapped_nothing_bad_dialog("WARNING:: failed to find difference map\nCan't do peak search");
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    }
 }
 
@@ -1594,7 +1594,7 @@ int do_ramachandran_plot_differences_by_widget(GtkWidget *w) {
 	 std::cout << "INFO:: incomprehensible molecule/chain selection" << std::endl;
 	 std::string s = "Can't make sense of chain selection.  Try again?";
 	 GtkWidget *nbd = wrapped_nothing_bad_dialog(s);
-	 gtk_widget_show(nbd);
+	 if (nbd) gtk_widget_show(nbd);
       }
    }
    return istat;
@@ -2321,7 +2321,7 @@ void gln_asn_b_factor_outliers(int imol) {
 	 } else {
 	    std::string label = "Coot detected no GLN or ASN B-factor Outliers";
 	    GtkWidget *w = wrapped_nothing_bad_dialog(label);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	 }
       }
    }
@@ -2375,7 +2375,7 @@ void gln_asn_b_factor_outliers_py(int imol) {
 	 } else {
 	    std::string label = "Coot detected no GLN or ASN B-factor Outliers";
 	    GtkWidget *w = wrapped_nothing_bad_dialog(label);
-	    gtk_widget_show(w);
+	    if (w) gtk_widget_show(w);
 	 }
       }
    }

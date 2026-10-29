@@ -859,7 +859,40 @@ def add_residue_buttons(subgroups, vbox, imol):
         scrolled_win.show()
         vbox_residue_buttons.show()
 
+# Bandicoot's own window, where the pygtk one cannot appear. Returns True if
+# it was shown.
+def bandicoot_validation_report(entry_validation_info, subgroups, imol):
+    e = entry_validation_info
+    def text(x):
+        return "" if x is False or x is None else str(x)
+    metrics = []
+    for name, absolute, relative, value in [
+            ("Rfree", e.absolute_percentile_DCC_Rfree, e.relative_percentile_DCC_Rfree, e.DCC_Rfree),
+            ("Clashscore", e.absolute_percentile_clashscore, e.relative_percentile_clashscore, e.clashscore),
+            ("Ramachandran outliers", e.absolute_percentile_percent_rama_outliers,
+             e.relative_percentile_percent_rama_outliers, e.percent_rama_outliers),
+            ("Sidechain outliers", e.absolute_percentile_percent_rota_outliers,
+             e.relative_percentile_percent_rota_outliers, e.percent_rota_outliers),
+            ("RSRZ outliers", e.absolute_percentile_percent_RSRZ_outliers,
+             e.relative_percentile_percent_RSRZ_outliers, e.percent_RSRZ_outliers),
+            ("RNA suiteness", e.absolute_percentile_RNAsuiteness,
+             e.relative_percentile_RNAsuiteness, e.RNAsuiteness)]:
+        if absolute is not False and relative is not False:
+            metrics.append([name, text(absolute), text(relative), text(value)])
+    residues = []
+    for group in subgroups:
+        p = group.is_problematic_p()
+        if p:
+            icode = "" if group.icode == " " else group.icode
+            label = "Residue " + group.chain + " " + group.resnum + " " + group.resname + ": " + "; ".join(p)
+            residues.append([label, group.chain, group.resnum, icode])
+    title = "PDB Validation Report for " + (e.pdbid if e.pdbid else e.xml_file_name)
+    footnote = "EDS Resolution: " + e.EDS_resolution if e.EDS_resolution else ""
+    return bandicoot_validation_report_py(title, footnote, imol, metrics, residues) == 1
+
 def validation_to_gui(entry_validation_info, subgroups, imol):
+    if entry_validation_info and bandicoot_validation_report(entry_validation_info, subgroups, imol):
+        return
     vi = validation_entry_to_canvas(entry_validation_info)
     add_residue_buttons(subgroups, vi.vbox, imol)
 

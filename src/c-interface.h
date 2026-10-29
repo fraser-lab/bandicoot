@@ -6740,6 +6740,14 @@ int bandicoot_button_choice_filtered_py(const char *title, PyObject *buttons,
     whose own (pygtk) one cannot appear. Returns 1 if it was shown, 0 if there
     is no native window to show it in. */
 int bandicoot_generic_objects_window_py();
+/*! \brief Bandicoot: a fetched entry's wwPDB validation report, for the
+    script whose own (pygtk) window cannot appear. metrics: [name, percentile
+    among all structures, percentile at similar resolution, value] (empty
+    strings when not given); residues: [label, chain, resno, ins code], the
+    residues of molecule imol listed as problems. Returns 1 if it was shown,
+    0 if there is no native window to show it in. */
+int bandicoot_validation_report_py(const char *title, const char *footnote, int imol,
+                                   PyObject *metrics, PyObject *residues);
 /*! \brief Bandicoot v0.2.0.1: the rotation centre as [x, y, z], without
     adding the read to the command history or echoing it to the console.
     For callers that sample the view repeatedly. */

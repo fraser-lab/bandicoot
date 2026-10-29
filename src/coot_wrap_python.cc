@@ -50713,6 +50713,55 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_bandicoot_validation_report_py(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  char *arg1 = 0 ;
+  char *arg2 = 0 ;
+  int arg3 ;
+  PyObject *arg4 = 0 ;
+  PyObject *arg5 = 0 ;
+  int res1 ;
+  char *buf1 = 0 ;
+  int alloc1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  int val3 ;
+  int ecode3 = 0 ;
+  PyObject *swig_obj[5] ;
+  int result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "bandicoot_validation_report_py", 5, 5, swig_obj)) SWIG_fail;
+  res1 = SWIG_AsCharPtrAndSize(swig_obj[0], &buf1, NULL, &alloc1);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "bandicoot_validation_report_py" "', argument " "1"" of type '" "char const *""'");
+  }
+  arg1 = reinterpret_cast< char * >(buf1);
+  res2 = SWIG_AsCharPtrAndSize(swig_obj[1], &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "bandicoot_validation_report_py" "', argument " "2"" of type '" "char const *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  ecode3 = SWIG_AsVal_int(swig_obj[2], &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "bandicoot_validation_report_py" "', argument " "3"" of type '" "int""'");
+  } 
+  arg3 = static_cast< int >(val3);
+  arg4 = swig_obj[3];
+  arg5 = swig_obj[4];
+  result = (int)bandicoot_validation_report_py((char const *)arg1,(char const *)arg2,arg3,arg4,arg5);
+  resultobj = SWIG_From_int(static_cast< int >(result));
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc1 == SWIG_NEWOBJ) delete[] buf1;
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_bandicoot_rotation_centre_py(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   PyObject *result = 0 ;
@@ -80140,6 +80189,7 @@ static PyMethodDef SwigMethods[] = {
 	 { "bandicoot_button_choice_py", _wrap_bandicoot_button_choice_py, METH_VARARGS, NULL},
 	 { "bandicoot_button_choice_filtered_py", _wrap_bandicoot_button_choice_filtered_py, METH_VARARGS, NULL},
 	 { "bandicoot_generic_objects_window_py", _wrap_bandicoot_generic_objects_window_py, METH_NOARGS, NULL},
+	 { "bandicoot_validation_report_py", _wrap_bandicoot_validation_report_py, METH_VARARGS, NULL},
 	 { "bandicoot_rotation_centre_py", _wrap_bandicoot_rotation_centre_py, METH_NOARGS, NULL},
 	 { "bandicoot_record_navigation", _wrap_bandicoot_record_navigation, METH_VARARGS, NULL},
 	 { "set_tip_of_the_day_flag", _wrap_set_tip_of_the_day_flag, METH_O, NULL},

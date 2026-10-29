@@ -1866,6 +1866,47 @@ void bandicoot_core_go_to_result(const bandicoot_result_row &row) {
    }
 }
 
+void bandicoot_core_go_to_residue(const bandicoot_result_row &row) {
+   bandicoot_record_navigation("results-list", row.label.c_str());
+   set_go_to_atom_molecule(row.imol);
+   set_go_to_atom_from_res_spec(coot::residue_spec_t(row.chain, row.resno, row.ins_code));
+}
+
+// metrics: name, percentile among all, among similar resolution (empty if
+// not given), value; residues: label, chain, resno, ins code.
+bool bandicoot_wx_validation_report(const std::string &title, const std::string &footnote, int imol,
+                                    const std::vector<std::vector<std::string>> &metrics,
+                                    const std::vector<std::vector<std::string>> &residues) {
+   if (! ui_view.validation_report) return false;
+   auto percent = [](const std::string &s) {
+      try { return s.empty() ? -1.0f : std::stof(s); } catch (...) { return -1.0f; }
+   };
+   bandicoot_validation_report r;
+   r.title = title;
+   r.footnote = footnote;
+   for (const auto &m : metrics) {
+      if (m.size() < 4) continue;
+      bandicoot_validation_report::metric x;
+      x.name = m[0];
+      x.absolute = percent(m[1]);
+      x.relative = percent(m[2]);
+      x.value = m[3];
+      r.metrics.push_back(x);
+   }
+   for (const auto &res : residues) {
+      if (res.size() < 4) continue;
+      bandicoot_result_row row;
+      row.label = res[0];
+      row.imol = imol;
+      row.chain = res[1];
+      try { row.resno = std::stoi(res[2]); } catch (...) { continue; }
+      row.ins_code = res[3];
+      r.residues.push_back(row);
+   }
+   ui_view.validation_report(r);
+   return true;
+}
+
 int bandicoot_wx_question(const std::string &text) {
    if (! ui_view.question) return -1;
    return ui_view.question(text) ? 1 : 0;
@@ -3292,6 +3333,33 @@ bool bandicoot_core_active_molecule_tool(const std::string &tool, std::string &w
 
 void bandicoot_core_set_undo_molecule(int imol) {
    set_undo_molecule(imol);
+}
+
+void bandicoot_core_undo_in(int imol) {
+   if (! is_valid_model_molecule(imol)) return;
+   set_undo_molecule(imol);
+   apply_undo();
+}
+
+// A dataset from the command line, opened once the main loop runs.
+bool bandicoot_wx_open_dataset(const std::string &file) {
+   if (! ui_view.open_dataset) return false;
+   return bandicoot_wx_timeout_add(1, [file]() {
+      if (ui_view.open_dataset) ui_view.open_dataset(file);
+      return false;
+   }) != 0;
+}
+
+// Undo is ambiguous: offer the models it could act on.
+bool bandicoot_wx_choose_undo_molecule() {
+   if (! ui_view.choose_undo_molecule) return false;
+   std::vector<std::pair<int, std::string>> models;
+   for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)
+      if (is_valid_model_molecule(imol) && graphics_info_t::molecules[imol].Have_modifications_p())
+         models.push_back({ imol, chooser_label(imol) });
+   if (models.empty()) return true;
+   ui_view.choose_undo_molecule(models);
+   return true;
 }
 
 bool bandicoot_core_find_secondary_structure(bool helices, int helix_template, int helix_length,

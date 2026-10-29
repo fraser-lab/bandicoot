@@ -167,6 +167,9 @@ bool bandicoot_wx_button_choice_filtered(const std::string &title,
                                          const std::vector<std::pair<std::string, std::string>> &checked_buttons,
                                          const std::string &close_label, const std::string &close_command);
 bool bandicoot_wx_generic_objects();
+bool bandicoot_wx_validation_report(const std::string &title, const std::string &footnote, int imol,
+                                    const std::vector<std::vector<std::string>> &metrics,
+                                    const std::vector<std::vector<std::string>> &residues);
 #endif
 
 
@@ -1263,6 +1266,11 @@ int first_unsaved_coords_imol() {
 
 void hardware_stereo_mode() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) { 
       if (graphics_info_t::display_mode != coot::HARDWARE_STEREO_MODE) {
 	 int previous_mode = graphics_info_t::display_mode;
@@ -1316,6 +1324,11 @@ void hardware_stereo_mode() {
 
 void zalman_stereo_mode() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
   // FIXME this is not really zalman!!!!!
    if (graphics_info_t::use_graphics_interface_flag) { 
       if (graphics_info_t::display_mode != coot::HARDWARE_STEREO_MODE) {
@@ -1425,6 +1438,11 @@ void mono_mode() {
 /*! \brief turn on side bye side stereo mode */
 void side_by_side_stereo_mode(short int use_wall_eye_flag) {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
 
       // If it wasn't in side by side stereo mode, then we need to
@@ -1489,6 +1507,11 @@ void side_by_side_stereo_mode(short int use_wall_eye_flag) {
 // when it works, call it dti_side_by_side_stereo_mode()
 void set_dti_stereo_mode(short int state) {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no stereo modes (each would replace the GL area)
+   std::cout << "INFO:: stereo modes are not available; staying in mono" << std::endl;
+   return;
+#endif
    if (graphics_info_t::use_graphics_interface_flag) {
       if (state) { 
 	 short int stereo_mode;
@@ -1745,6 +1768,10 @@ int control_key_for_rotate_state() {
 /*  ------------------------------------------------------------------------ */
 void post_model_fit_refine_dialog() {
 
+#ifdef BANDICOOT_UI_WX
+   // the wx build has no Model/Fit/Refine window (old session files still ask for it)
+   return;
+#endif
    GtkWidget *widget = wrapped_create_model_fit_refine_dialog();
    if (graphics_info_t::use_graphics_interface_flag) { 
       gtk_widget_show(widget);
@@ -1876,7 +1903,9 @@ void set_flev_idle_ligand_interactions(int state) {
    if (state == 0) {
       // turn them off if they were on
       if (g.idle_function_ligand_interactions_token) { 
+#ifndef BANDICOOT_UI_WX
 	 gtk_idle_remove(g.idle_function_ligand_interactions_token);
+#endif
 	 g.idle_function_ligand_interactions_token = 0;
 	 for (unsigned int imol=0; imol<g.molecules.size(); imol++) { 
 	    if (is_valid_model_molecule(imol)) {
@@ -1887,10 +1916,23 @@ void set_flev_idle_ligand_interactions(int state) {
    } else {
       // turn them on if they were off.
       if (g.idle_function_ligand_interactions_token == 0) {
+#ifdef BANDICOOT_UI_WX
+	 // No GTK main loop under wx; a timer whose token is no longer current stops.
+	 static int last_token = 0;
+	 int token = ++last_token;
+	 g.idle_function_ligand_interactions_token = token;
+	 if (! bandicoot_wx_timeout_add(100, [token]() {
+	       if (graphics_info_t::idle_function_ligand_interactions_token != token) return false;
+	       animate_idle_ligand_interactions(nullptr);
+	       return true;
+	    }))
+	    g.idle_function_ligand_interactions_token = 0;
+#else
 	 g.idle_function_ligand_interactions_token =
 	    gtk_timeout_add(100,
 			    (GtkFunction) animate_idle_ligand_interactions,
 			    NULL);
+#endif
 	 g.time_holder_for_ligand_interactions = coot::elapsed_time_ms();
       }
    }
@@ -2873,7 +2915,7 @@ void set_show_symmetry_master(short int state) {
          if (false) { // I don't like this noise in the days of molecular symmetry for EM models
             if (graphics_info_t::use_graphics_interface_flag) {
                GtkWidget *w = g.wrapped_nothing_bad_dialog(s);
-               gtk_widget_show(w);
+               if (w) gtk_widget_show(w);
             }
 	 }
       }
@@ -4672,7 +4714,7 @@ read_phs_and_coords_and_make_map(const gchar *pdb_filename){
       w += "\n";
       w += "Can't make map from phs file.";
       GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-      gtk_widget_show(widget);
+      if (widget) gtk_widget_show(widget);
    } 
 }
 
@@ -4764,7 +4806,7 @@ read_phs_and_make_map_with_reso_limits(int imol_ref, const char* phs_filename,
 	 w += "\n";
 	 w += "Can't make map from phs file.";
 	 GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-	 gtk_widget_show(widget);
+	 if (widget) gtk_widget_show(widget);
       }
    } else {
       g.erase_last_molecule();
@@ -4775,7 +4817,7 @@ read_phs_and_make_map_with_reso_limits(int imol_ref, const char* phs_filename,
       w += "\n";
       w += "Can't make map from phs file.";
       GtkWidget *widget = wrapped_nothing_bad_dialog(w);
-      gtk_widget_show(widget);
+      if (widget) gtk_widget_show(widget);
    }
 
    return istat;
@@ -8895,6 +8937,38 @@ int bandicoot_button_choice_filtered_py(const char *title, PyObject *buttons,
    return bandicoot_wx_button_choice_filtered(title ? title : "", all, check_label ? check_label : "", checked,
                                               close_label ? close_label : "",
                                               close_command ? close_command : "") ? 1 : 0;
+#else
+   return 0;
+#endif
+}
+
+#ifdef BANDICOOT_UI_WX
+// A list of lists, each item converted with str().
+static bool string_rows_from_py(PyObject *list, std::vector<std::vector<std::string>> &rows) {
+   if (! PyList_Check(list)) return false;
+   for (Py_ssize_t i = 0; i < PyList_Size(list); i++) {
+      PyObject *row = PyList_GetItem(list, i);
+      if (! PyList_Check(row)) return false;
+      std::vector<std::string> v;
+      for (Py_ssize_t j = 0; j < PyList_Size(row); j++) {
+         PyObject *s = PyObject_Str(PyList_GetItem(row, j));
+         if (! s) { PyErr_Clear(); return false; }
+         const char *c = PyUnicode_AsUTF8(s);
+         v.push_back(c ? c : "");
+         Py_DECREF(s);
+      }
+      rows.push_back(v);
+   }
+   return true;
+}
+#endif
+
+int bandicoot_validation_report_py(const char *title, const char *footnote, int imol,
+                                   PyObject *metrics, PyObject *residues) {
+#ifdef BANDICOOT_UI_WX
+   std::vector<std::vector<std::string>> m, r;
+   if (! string_rows_from_py(metrics, m) || ! string_rows_from_py(residues, r)) return 0;
+   return bandicoot_wx_validation_report(title ? title : "", footnote ? footnote : "", imol, m, r) ? 1 : 0;
 #else
    return 0;
 #endif

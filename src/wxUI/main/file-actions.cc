@@ -70,6 +70,8 @@ void open_map_action(wxWindow *parent) {
    bandicoot_core_read_map(choice.path.utf8_string(), choice.is_difference_map);
 }
 
+void open_chosen_dataset(wxWindow *parent, const std::string &file);
+
 void open_dataset_action(wxWindow *parent) {
    FileRequest r;
    r.title = "Select Dataset File";
@@ -78,8 +80,10 @@ void open_dataset_action(wxWindow *parent) {
    std::vector<wxString> paths = open_files(parent, r);
    if (paths.empty()) return;
    save_chooser_directory(r.directory);
-   std::string file = paths.front().utf8_string();
+   open_chosen_dataset(parent, paths.front().utf8_string());
+}
 
+void open_chosen_dataset(wxWindow *parent, const std::string &file) {
    switch (bandicoot_core_open_dataset(file)) {
    case bandicoot_dataset_step::columns:
       show_column_labels(parent, file);
@@ -103,7 +107,7 @@ void open_dataset_action(wxWindow *parent) {
    case bandicoot_dataset_step::done:
       break;
    case bandicoot_dataset_step::unreadable:
-      error(parent, "Could not open dataset", wxFileName(paths.front()).GetFullName(),
+      error(parent, "Could not open dataset", wxFileName(wxString::FromUTF8(file)).GetFullName(),
             "Open dataset: " + file + ": not an MTZ, mmCIF, fcf or phs file");
       break;
    }
@@ -254,6 +258,10 @@ bool run_file_action(wxWindow *parent, const std::string &action) {
    if (it == file_actions().end()) return false;
    it->second(parent);
    return true;
+}
+
+void open_dataset_file(wxWindow *parent, const std::string &file) {
+   open_chosen_dataset(parent, file);
 }
 
 void install_file_actions(wxWindow *parent) {

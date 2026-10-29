@@ -27,6 +27,11 @@ void BevelButton::set_icon(const wxBitmapBundle &b) {
    Refresh();
 }
 
+void BevelButton::set_label_left(bool left) {
+   label_left = left;
+   Refresh();
+}
+
 void BevelButton::draw(wxDC &dc, const wxRect &rect) {
 
    FrameStyle style = FrameStyle::Raised;
@@ -55,7 +60,10 @@ void BevelButton::draw(wxDC &dc, const wxRect &rect) {
    if (style == FrameStyle::Sunken)
       inner.Offset(1, 1); // the label sinks with the button, as in GTK
    if (! icon.IsOk()) {
-      dc.DrawLabel(GetLabel(), inner, wxALIGN_CENTRE);
+      if (label_left)
+         dc.DrawLabel(GetLabel(), inner.Deflate(FromDIP(pad_x), 0), wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+      else
+         dc.DrawLabel(GetLabel(), inner, wxALIGN_CENTRE);
       return;
    }
    // icon and label centred together

@@ -1,6 +1,7 @@
 // src/wxUI/main/choosers.cc
 
 #include "wxUI/main/choosers.hh"
+#include "wxUI/dialogs/click-through-dialog.hh"
 #include "wxUI/bridge/core-bridge.hh"
 #include "wxUI/assets/bevel-button.hh"
 #include "wxUI/assets/icons.hh"
@@ -362,7 +363,42 @@ void show_radio_choice(wxWindow *parent, const bandicoot_radio_choice &c) {
 
 // Each button runs its command and the window stays; Close (or the close box)
 // runs the close command and ends it.
+// A filtered choice (the Flips list) as a click-through list, with its check
+// button above the rows.
+static void show_filtered_list(wxWindow *parent, const bandicoot_button_choice &c) {
+   ClickThroughDialog *d = new ClickThroughDialog(parent, wxString::FromUTF8(c.title),
+                                                  ClickThroughList::RowType::Button);
+   auto shown = std::make_shared<std::vector<std::pair<std::string, std::string>>>();
+   ClickThroughList *list = d->list();
+   auto fill = [list, shown](const std::vector<std::pair<std::string, std::string>> &rows) {
+      *shown = rows;
+      list->clear_items();
+      for (const auto &r : rows) list->add_item(wxString::FromUTF8(r.first));
+   };
+   list->on_click = [shown](size_t i) {
+      if (i < shown->size()) bandicoot_core_run_python((*shown)[i].second);
+   };
+   wxCheckBox *check = new wxCheckBox(d->header(), wxID_ANY, wxString::FromUTF8(c.check_label));
+   auto all_rows = c.buttons, checked_rows = c.checked_buttons;
+   check->Bind(wxEVT_CHECKBOX, [fill, all_rows, checked_rows](wxCommandEvent &e) {
+      fill(e.IsChecked() ? checked_rows : all_rows);
+   });
+   d->header_sizer()->Add(check, 0, wxALL, 4);
+   fill(c.buttons);
+   std::string close_command = c.close_command;
+   d->Bind(wxEVT_CLOSE_WINDOW, [close_command](wxCloseEvent &e) {
+      bandicoot_core_run_python(close_command);
+      e.Skip();
+   });
+   d->CentreOnParent();
+   d->Show();
+}
+
 void show_button_choice(wxWindow *parent, const bandicoot_button_choice &c) {
+   if (! c.check_label.empty()) {
+      show_filtered_list(parent, c);
+      return;
+   }
    wxDialog *d = new wxDialog(parent, wxID_ANY, wxString::FromUTF8(c.title), wxDefaultPosition, wxDefaultSize,
                               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
    d->SetBackgroundColour(palette::face());

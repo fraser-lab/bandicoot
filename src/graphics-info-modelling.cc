@@ -119,6 +119,7 @@ void bandicoot_update_ar_bar_from_results(const coot::refinement_results_t &rr);
 bool bandicoot_wx_ar_update(const coot::refinement_results_t &rr);
 bool bandicoot_wx_ar_warnings(const std::string &text);
 void bandicoot_wx_ar_dismiss();
+bool bandicoot_wx_info(const std::string &text, bool markup);
 // And its Rotation & Translation and Select Rotamer windows. False if wx has
 // not taken them on.
 bool bandicoot_wx_rot_trans_present();
@@ -1284,8 +1285,13 @@ graphics_info_t::make_last_restraints(const std::vector<std::pair<bool,mmdb::Res
    } else {
       continue_threaded_refinement_loop = false;
       if (use_graphics_interface_flag) {
-         GtkWidget *widget = create_no_restraints_info_dialog();
-         gtk_widget_show(widget);
+#ifdef BANDICOOT_UI_WX
+         if (! bandicoot_wx_info("No restraints found.\n\nThe residues have no dictionary, or a minimal one.\nCheck that the residue name and atom names match the\ndictionary, or use File > Import CIF Dictionary.", false))
+#endif
+         {
+            GtkWidget *widget = create_no_restraints_info_dialog();
+            gtk_widget_show(widget);
+         }
       }
    }
 
@@ -2985,8 +2991,13 @@ graphics_info_t::rigid_body_fit(const coot::minimol::molecule &mol_without_movin
       // 
    } else {
       if (use_graphics_interface_flag) { 
-	 GtkWidget *w = create_rigid_body_refinement_failed_dialog();
-	 gtk_widget_show(w);
+#ifdef BANDICOOT_UI_WX
+	 if (! bandicoot_wx_info("Rigid body refinement failed: no sensible place to put the atoms.", false))
+#endif
+	 {
+	    GtkWidget *w = create_rigid_body_refinement_failed_dialog();
+	    gtk_widget_show(w);
+	 }
       }
    }
    return success;
@@ -3265,8 +3276,13 @@ graphics_info_t::execute_add_terminal_residue(int imol,
 	       std::cout << "WARNING: failed to find a fit for terminal residue"
 			 << std::endl;
 	       if (use_graphics_interface_flag) { 
-		  GtkWidget *w = create_add_terminal_residue_finds_none_dialog();
-		  gtk_widget_show(w);
+#ifdef BANDICOOT_UI_WX
+		  if (! bandicoot_wx_info("Add Terminal Residue found no acceptable configuration here.", false))
+#endif
+		  {
+		     GtkWidget *w = create_add_terminal_residue_finds_none_dialog();
+		     gtk_widget_show(w);
+		  }
 	       }
 
 	    } else {
@@ -4321,7 +4337,7 @@ graphics_info_t::execute_db_main(int imol,
          if (use_graphics_interface_flag) {
             std::string s("Sorry, failed to convert that residue range.\nToo short, perhaps?");
             GtkWidget *w = wrapped_nothing_bad_dialog(s);
-            gtk_widget_show(w);
+            if (w) gtk_widget_show(w);
          }
       }
       main_chain.clear_results();

@@ -17,6 +17,10 @@ bool is_file_action(const std::string &action);
 // False if action is not one of these.
 bool run_file_action(wxWindow *parent, const std::string &action);
 
+// Open a dataset as File > Open MTZ does once the file is chosen (column
+// labels for an MTZ).
+void open_dataset_file(wxWindow *parent, const std::string &file);
+
 // Lets the core open the save panel once a symmetry atom is picked.
 void install_file_actions(wxWindow *parent);
 

@@ -138,6 +138,8 @@ void open_coords_dialog() {
 // The wx build's windows that list molecules (wxUI/bridge/core-bridge.cc):
 // a molecule was added or closed.
 void bandicoot_wx_molecules_changed();
+// a dataset named on the command line (see manage_column_selector)
+bool bandicoot_wx_open_dataset(const std::string &file);
 #endif
 
 void
@@ -418,11 +420,16 @@ manage_column_selector(const char *filename) {
       // try to read as phs, cif etc, if not, return a selection
       // widget
 
-      GtkWidget *w = coot::column_selector_using_cmtz(filename);
+#ifdef BANDICOOT_UI_WX
+      if (! bandicoot_wx_open_dataset(filename))
+#endif
+      {
+         GtkWidget *w = coot::column_selector_using_cmtz(filename);
 
-      if (w) {
-         gtk_widget_show(w);
-         gtk_window_present(GTK_WINDOW(w));
+         if (w) {
+            gtk_widget_show(w);
+            gtk_window_present(GTK_WINDOW(w));
+         }
       }
    }
 

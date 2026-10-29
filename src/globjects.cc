@@ -2899,10 +2899,13 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
    case GDK_g:
       // say I want to go to residue 1G: first time Ctrl-G (second if)
       // and then the first if.
+#ifndef BANDICOOT_UI_WX
+      // the wx build has no keyboard go-to-residue window
       if (graphics_info_t::control_is_pressed) {
 	 show_go_to_residue_keyboarding_mode_window();
 	 handled = TRUE;
       }
+#endif
       break;
 
    case GDK_i:
@@ -3168,8 +3171,11 @@ gint key_press_event(GtkWidget *widget, GdkEventKey *event)
       break;
 
    case GDK_F5:
+#ifndef BANDICOOT_UI_WX
+      // the wx build has no Model/Fit/Refine window
       post_model_fit_refine_dialog();
       handled = TRUE;
+#endif
       break;
    case GDK_F6:
       post_go_to_atom_window();

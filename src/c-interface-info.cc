@@ -195,7 +195,7 @@ void do_residue_info_dialog() {
       std::string s =  "You have pending (un-Applied) residue edits\n";
       s += "Deal with them first.";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } else {
       std::cout << "Click on an atom..." << std::endl;
       graphics_info_t g;
@@ -286,7 +286,7 @@ void output_residue_info_dialog(int imol, int atom_index) {
       std::string s =  "You have pending (un-Applied) residue edits.\n";
       s += "Deal with them first.";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
 
    } else {
 

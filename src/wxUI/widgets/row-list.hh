@@ -24,6 +24,8 @@ public:
    size_t count() const { return rows.size(); }
    wxWindow *row(size_t index) const { return index < rows.size() ? rows[index] : nullptr; }
    void scroll_to(size_t index);
+   // Scroll sideways too, for rows wider than the list.
+   void allow_horizontal_scroll();
 
 private:
    wxBoxSizer *sizer;

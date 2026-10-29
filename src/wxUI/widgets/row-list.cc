@@ -46,6 +46,12 @@ void RowList::scroll_to(size_t index) {
       Scroll(-1, rows[index]->GetPosition().y / unit_y + GetViewStart().y);
 }
 
+void RowList::allow_horizontal_scroll() {
+   SetScrollRate(10, 10);
+   ShowScrollbars(wxSHOW_SB_DEFAULT, wxSHOW_SB_DEFAULT);
+   relayout();
+}
+
 void RowList::relayout() {
    FitInside();
    Layout();

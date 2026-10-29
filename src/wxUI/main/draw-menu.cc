@@ -479,7 +479,7 @@ class GenericObjectsWindow : public wxFrame {
 public:
    explicit GenericObjectsWindow(wxWindow *parent)
       : wxFrame(parent, wxID_ANY, "Generic Display Objects", wxDefaultPosition, wxSize(420, 420),
-                wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT) {
+                wxDEFAULT_FRAME_STYLE) {
       wxPanel *panel = new wxPanel(this);
       panel->SetBackgroundColour(palette::face());
       BevelButton *all = new BevelButton(panel, wxID_ANY, "Display/Undisplay All");

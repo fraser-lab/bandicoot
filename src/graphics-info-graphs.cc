@@ -230,6 +230,7 @@ graphics_info_t::update_geometry_graphs(mmdb::PResidue *SelResidues, int nSelRes
 // The wx build's sequence views and Ramachandran plot (wxUI/bridge/core-bridge.cc).
 void bandicoot_wx_sequence_view_changed(int imol);
 void bandicoot_wx_rama_changed(int imol);
+bool bandicoot_wx_info(const std::string &text, bool markup);
 #endif
 
 // The molecule-based version of the above.
@@ -775,8 +776,13 @@ graphics_info_t::geometric_distortions_from_mol(int imol, const atom_selection_c
 		     cif_dictionary_read_number += res_types.size();
 		     if (! hd) {
 			if (use_graphics_interface_flag) { 
-			   GtkWidget *widget = create_no_restraints_info_dialog();
-			   gtk_widget_show(widget);
+#ifdef BANDICOOT_UI_WX
+			   if (! bandicoot_wx_info("No restraints found.\n\nThe residues have no dictionary, or a minimal one.\nCheck that the residue name and atom names match the\ndictionary, or use File > Import CIF Dictionary.", false))
+#endif
+			   {
+			      GtkWidget *widget = create_no_restraints_info_dialog();
+			      gtk_widget_show(widget);
+			   }
 			} else {
 			   std::cout << "WARNING:: No dictionary for some residue types " << std::endl;
 			} 

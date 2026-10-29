@@ -4799,7 +4799,7 @@ def user_mods_gui(imol, pdb_file_name):
    # main line
    #
    # user mods will return a pair of lists.
-   if using_gui():
+   if use_graphics_interface_state():
       flips = user_mods(pdb_file_name)
       flip_buttons = make_flip_buttons(flips[0])
       no_adj_buttons = make_no_adj_buttons(flips[1])

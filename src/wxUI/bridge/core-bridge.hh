@@ -665,6 +665,22 @@ struct bandicoot_result_row {
 };
 // Go where a row points.
 void bandicoot_core_go_to_result(const bandicoot_result_row &row);
+// Go to a row's residue (imol, chain, resno, ins_code), not to one atom.
+void bandicoot_core_go_to_residue(const bandicoot_result_row &row);
+
+// A fetched entry's wwPDB validation report: each metric's value and its
+// percentile among all X-ray structures and among those of similar
+// resolution (negative when not given), and the residues it lists as
+// problems.
+struct bandicoot_validation_report {
+   struct metric {
+      std::string name, value;
+      float absolute = -1, relative = -1;
+   };
+   std::string title, footnote;
+   std::vector<metric> metrics;
+   std::vector<bandicoot_result_row> residues;
+};
 
 // A script's radio-button choice: choosing an option runs its Python command
 // (often a preview), and Accept or Reject runs theirs and ends the choice.
@@ -729,8 +745,17 @@ struct bandicoot_ui_view {
    std::function<void(const bandicoot_button_choice &choice)> button_choice;
    // Draw > Generic Display Objects (scripts open it after drawing objects)
    std::function<void()> generic_objects;
+   // Undo found several molecules it could act on: which one (the models
+   // that can, (imol, label); the first is preselected)
+   std::function<void(const std::vector<std::pair<int, std::string>> &models)> choose_undo_molecule;
+   // a dataset named on the command line: open it as File > Open MTZ does
+   std::function<void(const std::string &file)> open_dataset;
+   // a fetched entry's validation report (its own pygtk window cannot appear)
+   std::function<void(const bandicoot_validation_report &report)> validation_report;
 };
 void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
+// Make imol the Undo (and so the Redo) molecule and undo its last change.
+void bandicoot_core_undo_in(int imol);
 
 // Run Refmac: the models offered (imol, label), the MTZ file used last
 // (empty if none), and the run, which goes on in the background and reports

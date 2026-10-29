@@ -37,15 +37,15 @@ Coot 0.9, whose Python layer is Python-2 flavoured throughout; the same pattern 
 - **Workaround:** none for the bindings themselves. Coot's built-in C++ navigation keys
   are unaffected.
 
-### Python-driven dialogs open nothing
-`import gtk` resolves to a stub (`python/coot_load_modules.py.in:163`) because PyGTK was
-never ported to Python 3. Widget code runs, creates no window and raises nothing, so the
-affected menu items appear to do nothing at all. Around 700 call sites across 8 Python
-files are in this state; the wwPDB validation chart is a measured example — it downloads
-and parses correctly and then has nowhere to draw.
+### Python-driven dialogs open nothing (GTK build)
+`import gtk` resolves to a stub because PyGTK was never ported to Python 3. Widget code
+runs, creates no window and raises nothing, so the affected menu items appear to do
+nothing at all. In the GTK build this covers several hundred call sites across the Python
+modules. The wx build replaces the windows its menus and tools reach with native ones
+(including the wwPDB validation report after a PDB fetch, and the Probe flips list).
 
-- **Workaround:** none. Dialogs ported to C++ (the Modelling menu, glyco, the scripting
-  console, PanDDA Inspect, restraints) are unaffected.
+- **Workaround:** none in the GTK build. Dialogs ported to C++ (the Modelling menu, glyco,
+  the scripting console, PanDDA Inspect, restraints) are unaffected.
 
 ### mmCIF export ignores the no-hydrogens and anisotropic options
 `write_cif_file()` (`src/molecule-class-info.cc:7953`) writes hydrogens and ANISOU
@@ -86,6 +86,9 @@ as **Icons and Text**, whatever was last chosen from the sidebar's settings popu
 ---
 
 ## P3 — cosmetic / minor
+
+### Stereo display modes do not work
+Stereo display is not functional; session files that ask for a stereo mode open in mono.
 
 ### Ligand > Hydrogenate region crashes
 Choosing the item crashes Bandicoot. Not yet investigated, including whether Coot 0.9

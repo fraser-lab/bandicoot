@@ -5240,76 +5240,78 @@ lbg_info_t::get_drug(const std::string &drug_name) {
       std::cout << "DEBUG:: --- we have pName_rdkit --- " << pName_rdkit << std::endl;
       PyObject *pModule = PyImport_Import(pName_rdkit);
       if (! pModule) {
-         PyGILState_Release(gstate);
-         return;
-      }
-      std::cout << "DEBUG:: --- we have imported rdkit --- " << pName_rdkit << std::endl;
-
-      PyObject *pName = PyString_FromString("lidia.fetch");
-      std::cout << "DEBUG:: with lidia.fetch pName " << pName << std::endl;
-      pModule = PyImport_Import(pName);
-      if (pModule == NULL) {
-         std::cout << "NULL pModule" << std::endl;
+         // Fall through to the failure report rather than returning silently.
+         PyErr_Print();
+         status_string = "Python RDKit module not available to fetch " + drug_name;
       } else {
-         // std::cout << "Hooray - found pModule" << std::endl;
+         std::cout << "DEBUG:: --- we have imported rdkit --- " << pName_rdkit << std::endl;
 
-         PyObject *pDict = PyModule_GetDict(pModule);
-         if (! PyDict_Check(pDict)) {
-            std::cout << "DEBUG:: pDict is not a dict" << std::endl;
+         PyObject *pName = PyString_FromString("lidia.fetch");
+         std::cout << "DEBUG:: with lidia.fetch pName " << pName << std::endl;
+         pModule = PyImport_Import(pName);
+         if (pModule == NULL) {
+            std::cout << "NULL pModule" << std::endl;
          } else {
+            // std::cout << "Hooray - found pModule" << std::endl;
 
-            PyObject *pFunc = PyDict_GetItemString(pDict, "fetch_molecule");
-            if (PyCallable_Check(pFunc)) {
-               std::cout << "DEBUG:: fetch_molecule is a callable function" << std::endl;
-               PyObject *arg_list = PyTuple_New(1);
-               PyObject *drug_name_py = PyString_FromString(drug_name.c_str());
-               PyTuple_SetItem(arg_list, 0, drug_name_py);
-               std::cout << "DEBUG:: fetch_molecule called with arg " << drug_name << std::endl;
-               PyObject *result_py = PyEval_CallObject(pFunc, arg_list);
-               std::cout << "DEBUG:: fetch_molecule got result " << result_py << std::endl;
+            PyObject *pDict = PyModule_GetDict(pModule);
+            if (! PyDict_Check(pDict)) {
+               std::cout << "DEBUG:: pDict is not a dict" << std::endl;
+            } else {
 
-               if (result_py) {
+               PyObject *pFunc = PyDict_GetItemString(pDict, "fetch_molecule");
+               if (PyCallable_Check(pFunc)) {
+                  std::cout << "DEBUG:: fetch_molecule is a callable function" << std::endl;
+                  PyObject *arg_list = PyTuple_New(1);
+                  PyObject *drug_name_py = PyString_FromString(drug_name.c_str());
+                  PyTuple_SetItem(arg_list, 0, drug_name_py);
+                  std::cout << "DEBUG:: fetch_molecule called with arg " << drug_name << std::endl;
+                  PyObject *result_py = PyEval_CallObject(pFunc, arg_list);
+                  std::cout << "DEBUG:: fetch_molecule got result " << result_py << std::endl;
 
-                  if (PyString_Check(result_py)) {
-                     std::cout << "fetch_molecule result was a string " << std::endl;
-                     std::string file_name = PyString_AsString(result_py);
-                     std::cout << "fetch_molecule result was a file_name " << file_name << std::endl;
+                  if (result_py) {
 
-                     try {
-                        bool sanitize = true;
-                        bool removeHs = false;
-                        RDKit::RWMol *m = RDKit::MolFileToMol(file_name, sanitize, removeHs);
-                        unsigned int iconf = 0;
+                     if (PyString_Check(result_py)) {
+                        std::cout << "fetch_molecule result was a string " << std::endl;
+                        std::string file_name = PyString_AsString(result_py);
+                        std::cout << "fetch_molecule result was a file_name " << file_name << std::endl;
 
-                        // we only want to compute coords if there are no coords
-                        //
-                        if (coot::has_zero_coords(m, 0))
-                        iconf = RDDepict::compute2DCoords(*m, NULL, true);
-                        if (m->getNumConformers() == 0)
-                        iconf = RDDepict::compute2DCoords(*m, NULL, true);
+                        try {
+                           bool sanitize = true;
+                           bool removeHs = false;
+                           RDKit::RWMol *m = RDKit::MolFileToMol(file_name, sanitize, removeHs);
+                           unsigned int iconf = 0;
 
-                        if (m) {
-                           rdkit_mol_post_read_handling(m, file_name, iconf);
-                           status = true;
+                           // we only want to compute coords if there are no coords
+                           //
+                           if (coot::has_zero_coords(m, 0))
+                           iconf = RDDepict::compute2DCoords(*m, NULL, true);
+                           if (m->getNumConformers() == 0)
+                           iconf = RDDepict::compute2DCoords(*m, NULL, true);
+
+                           if (m) {
+                              rdkit_mol_post_read_handling(m, file_name, iconf);
+                              status = true;
+                           }
                         }
-                     }
 
-                     catch (const RDKit::FileParseException &fpe) {
-                        std::cout << "WARNING::" << fpe.what() << std::endl;
-                        status_string = "File parsing error on reading " + file_name;
+                        catch (const RDKit::FileParseException &fpe) {
+                           std::cout << "WARNING::" << fpe.what() << std::endl;
+                           status_string = "File parsing error on reading " + file_name;
+                        }
+                     } else {
+                        std::cout << "Null result" << std::endl;
+                        status_string = "Null result on fetching " + drug_name;
                      }
                   } else {
-                     std::cout << "Null result" << std::endl;
-                     status_string = "Null result on fetching " + drug_name;
+                     std::cout << "results_py was not a string" << std::endl;
+                     status_string = "Failed to download molecule " + drug_name;
                   }
-               } else {
-                  std::cout << "results_py was not a string" << std::endl;
-                  status_string = "Failed to download molecule " + drug_name;
-               }
 
-            } else {
-               std::cout << "Non-callable pFunc" << std::endl;
-               status_string = "Non-callable pFunc";
+               } else {
+                  std::cout << "Non-callable pFunc" << std::endl;
+                  status_string = "Non-callable pFunc";
+               }
             }
          }
       }

@@ -106,6 +106,10 @@
 // wherever Coot's Dynarama was updated.
 void bandicoot_wx_rama_changed(int imol);
 void bandicoot_wx_rama_highlight(int imol, const coot::residue_spec_t &spec);
+bool bandicoot_wx_info(const std::string &text, bool markup);
+bool bandicoot_wx_choose_undo_molecule();
+// Redo acts on the molecule Undo last acted on.
+static int bandicoot_last_undone_molecule = -1;
 #endif
 
 // (Bandicoot dot machinery is funnelled through
@@ -318,6 +322,11 @@ void graphics_info_t::SetMouseClicked(double x, double y) {
 GtkWidget *graphics_info_t::wrapped_nothing_bad_dialog(const std::string &label) {
 
    GtkWidget *w = NULL;
+#ifdef BANDICOOT_UI_WX
+   // a GTK window cannot take input under wx's event loop; callers null-check
+   if (use_graphics_interface_flag && bandicoot_wx_info(label, true))
+      return w;
+#endif
    if (use_graphics_interface_flag) {
       w = create_nothing_bad_dialog();
       GtkWidget *label_widget = lookup_widget(w, "nothing_bad_label");
@@ -540,14 +549,19 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
    } else {
       std::cout << "init_refmac_mon_lib "  << cif_dictionary_filename
 		<< " had no bond restraints\n";
+      std::string s;
+#ifdef BANDICOOT_UI_WX
+      // one message under wx: the headline leads the reader's errors below
+      if (use_graphics_interface_flag && show_no_bonds_dialog_maybe_flag)
+	 s = "CIF dictionary contains no restraints: " + cif_dictionary_filename + "\n\n";
+#else
       if (use_graphics_interface_flag) {
 	 if (show_no_bonds_dialog_maybe_flag) {
 	    GtkWidget *widget = create_no_cif_dictionary_bonds_dialog();
 	    gtk_widget_show(widget);
 	 }
       }
-
-      std::string s;
+#endif
       for (unsigned int i=0; i<rmit.error_messages.size(); i++) {
 	 s += rmit.error_messages[i];
 	 s += "\n";
@@ -4746,6 +4760,9 @@ graphics_info_t::apply_undo() {
    int umol = Undo_molecule(coot::UNDO);
    // std::cout << "DEBUG:: undo molecule : " << umol << std::endl;
    if (umol == -2) {
+#ifdef BANDICOOT_UI_WX
+      if (use_graphics_interface_flag && bandicoot_wx_choose_undo_molecule()) return state;
+#endif
       if (use_graphics_interface_flag) {
 	 GtkWidget *dialog = create_undo_molecule_chooser_dialog();
 	 // GtkWidget *option_menu = lookup_widget(dialog, "undo_molecule_chooser_option_menu");
@@ -4764,6 +4781,9 @@ graphics_info_t::apply_undo() {
 	 if (molecules[umol].Have_modifications_p()) {
 	    if (molecules[umol].is_displayed_p()) {
 	       state = molecules[umol].apply_undo(cwd);
+#ifdef BANDICOOT_UI_WX
+	       bandicoot_last_undone_molecule = umol;
+#endif
 	       if (use_graphics_interface_flag) {
 		  graphics_draw();
 
@@ -4794,7 +4814,7 @@ graphics_info_t::apply_undo() {
 		  std::string s = "WARNING:: Coot will not undo modifications on a \n";
 		  s += "molecule that is not displayed";
 		  GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		  gtk_widget_show(w);
+		  if (w) gtk_widget_show(w);
 	       }
 	    }
 	 } else {
@@ -4822,6 +4842,13 @@ graphics_info_t::apply_redo() {
    int state = 0;
 
    int umol = Undo_molecule(coot::REDO);
+#ifdef BANDICOOT_UI_WX
+   // no chooser for Redo: it follows Undo
+   if (umol == -2) {
+      int last = bandicoot_last_undone_molecule;
+      umol = (is_valid_model_molecule(last) && molecules[last].Have_redoable_modifications_p()) ? last : -1;
+   }
+#endif
    if (umol == -2) { // ambiguity
       GtkWidget *dialog = create_undo_molecule_chooser_dialog();
       GtkWidget *combobox = lookup_widget(dialog, "undo_molecule_chooser_combobox");

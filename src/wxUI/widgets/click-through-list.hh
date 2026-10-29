@@ -36,6 +36,9 @@ public:
    int selected() const { return selection; }
    void select(int index);
 
+   // Button rows added from now on put their labels at the left.
+   void set_labels_left(bool left) { labels_left = left; }
+
    std::function<void(size_t index)> on_click;
    std::function<void(size_t index)> on_action;
 
@@ -43,6 +46,7 @@ private:
    RowType type;
    std::vector<ButtonBase *> buttons;
    int selection = -1;
+   bool labels_left = false;
 };
 
 } // namespace wxui

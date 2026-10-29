@@ -1270,7 +1270,7 @@ void fit_loop_from_widget(GtkWidget *dialog) {
 			 << res2 - res1 + 1 << ".  Using Poly-Ala\n";
 	       std::string s("WARNING:: Mis-matched sequence length\nUsing Poly Ala");
 	       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
             if (swap_flag == 1) {
                t = res1;
@@ -1394,7 +1394,7 @@ int do_align_mutate_sequence(GtkWidget *w) {
       std::string s = "WARNING:: autofit requested, but \n   refinement map not set!";
       std::cout << s << "\n";
       GtkWidget *warn = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(warn);
+      if (warn) gtk_widget_show(warn);
 
    } else {
 
@@ -1586,7 +1586,7 @@ change_chain_id_by_widget(GtkWidget *w) {
 	    graphics_draw();
 	 } else {
 	    GtkWidget *ws = wrapped_nothing_bad_dialog(r.second);
-	    gtk_widget_show(ws);
+	    if (ws) gtk_widget_show(ws);
 	 }
 	 graphics_info_t g;
 	 g.update_geometry_graphs(g.molecules[imol].atom_sel, imol);

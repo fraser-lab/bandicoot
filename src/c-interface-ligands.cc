@@ -875,7 +875,7 @@ ligand_search_install_wiggly_ligands() {
 	       info_dialog(mess.what());
 #else
 	       GtkWidget *w = wrapped_nothing_bad_dialog(mess.what());
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 #endif
 	    }
 	    // return solutions;
@@ -1110,7 +1110,7 @@ std::vector<int> ligand_search_make_conformers_internal() {
 	    std::cout << mess.what() << std::endl;
 	    if (graphics_info_t::use_graphics_interface_flag) {
 	       GtkWidget *w = wrapped_nothing_bad_dialog(mess.what());
-	       gtk_widget_show(w);
+	       if (w) gtk_widget_show(w);
 	    }
 	 }
       }

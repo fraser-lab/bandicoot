@@ -645,6 +645,8 @@ if UI_WX
 	wxUI/main/validate-menu.hh \
 	wxUI/main/validation-graphs.cc \
 	wxUI/main/validation-graphs.hh \
+	wxUI/main/validation-report.cc \
+	wxUI/main/validation-report.hh \
 	wxUI/main/rama-plot.cc \
 	wxUI/main/rama-plot.hh \
 	wxUI/main/modelling-menu.cc \

@@ -20,8 +20,11 @@ size_t ClickThroughList::add_item(const wxString &label, const wxString &action_
    ButtonBase *main = nullptr;
    if (type == RowType::Radio)
       main = new FlatButton(row, wxID_ANY, label, Indicator::Radio);
-   else
-      main = new BevelButton(row, wxID_ANY, label);
+   else {
+      BevelButton *b = new BevelButton(row, wxID_ANY, label);
+      b->set_label_left(labels_left);
+      main = b;
+   }
    main->Bind(wxEVT_BUTTON, [this, index](wxCommandEvent &) {
       if (type == RowType::Radio) select(int(index));
       if (on_click) on_click(index);

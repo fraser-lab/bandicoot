@@ -909,7 +909,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry atoms";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       }
 	    }
@@ -1129,7 +1129,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry items";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       } 
 	    }
@@ -1175,7 +1175,7 @@ graphics_info_t::check_if_in_delete_item_define(GdkEventButton *event,
 		     std::string s = "That was a symmetry atom\n";
 		     s += "Coot currently doesn't delete symmetry atoms";
 		     GtkWidget *w = wrapped_nothing_bad_dialog(s);
-		     gtk_widget_show(w);
+		     if (w) gtk_widget_show(w);
 		  }
 	       }
 	    }

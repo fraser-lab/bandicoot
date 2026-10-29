@@ -110,7 +110,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
 		<< std::endl;
       std::string s("WARNING:: you must have a map to\n search for ligands!");
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } 
    ifound_coords = fill_ligands_dialog_protein_bits(find_ligand_dialog);
    if (ifound_coords == 0) {
@@ -118,7 +118,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
 		<< std::endl;
       std::string s("WARNING:: you must have a protein\n to mask the map");
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    } 
    ifound_ligand = fill_ligands_dialog_ligands_bits(find_ligand_dialog);
    if (ifound_ligand == 0) {
@@ -129,7 +129,7 @@ int fill_ligands_dialog(GtkWidget *find_ligand_dialog) {
       s += coot::util::int_to_string(graphics_info_t::find_ligand_ligand_atom_limit);
       s += " atoms\n";
       GtkWidget *w = wrapped_nothing_bad_dialog(s);
-      gtk_widget_show(w);
+      if (w) gtk_widget_show(w);
    }
 
    // The mask waters toggle buttons:

@@ -50,6 +50,8 @@
 #include "wxUI/main/go-to-atom.hh"
 #include "wxUI/main/display-manager.hh"
 #include "wxUI/dialogs/message.hh"
+#include "wxUI/dialogs/form-dialogs.hh"
+#include "wxUI/main/validation-report.hh"
 #include "wxUI/dialogs/click-through-dialog.hh"
 #include "wxUI/main/refine-dialogs.hh"
 #include "wxUI/main/model-dialogs.hh"
@@ -1065,6 +1067,15 @@ private:
       v.radio_choice = [this](const bandicoot_radio_choice &c) { wxui::show_radio_choice(this, c); };
       v.button_choice = [this](const bandicoot_button_choice &c) { wxui::show_button_choice(this, c); };
       v.generic_objects = [this]() { wxui::run_draw_action(this, "on_generic_display_objects1_activate"); };
+      v.validation_report = [this](const bandicoot_validation_report &r) { wxui::show_validation_report(this, r); };
+      v.open_dataset = [this](const std::string &file) { wxui::open_dataset_file(this, file); };
+      v.choose_undo_molecule = [this](const std::vector<std::pair<int, std::string>> &models) {
+         wxui::ChooserDialog *d = new wxui::ChooserDialog(this, "Choose molecule to Undo:",
+                                                          "Choose Molecule to Undo:", models);
+         d->on_ok = [](int imol) { bandicoot_core_undo_in(imol); };
+         d->CentreOnParent();
+         d->Show();
+      };
       v.question = [this](const std::string &q) { return wxui::confirm(this, wxString::FromUTF8(q), "Yes", "No"); };
       v.choose_molecules = [this](const std::string &title, const std::string &header,
                                   const std::vector<std::pair<int, std::string>> &molecules) {

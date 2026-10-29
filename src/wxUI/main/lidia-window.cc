@@ -356,7 +356,7 @@ public:
       alert_box_row->Add(alert_title, 0, wxALIGN_TOP | wxTOP | wxBOTTOM | wxRIGHT, 4);
       // selectable for copying; scrolls past a few lines so the window stays on screen
       alert_name = new wxTextCtrl(alert_box->content(), wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                  wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+                                  wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
       alert_name->Hide();
       alert_box_row->Add(alert_name, 1, wxALIGN_TOP | wxALL, 4);
       alert_row->Add(alert_box, 1, wxEXPAND | wxRIGHT, 4);
