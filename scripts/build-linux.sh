@@ -75,6 +75,16 @@ if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ]; then
     fi
 fi
 
+# The compilers named by CC / CXX (or the defaults) must exist; configure only
+# reports a missing one as "C compiler cannot create executables".
+for _c in "${CC:-gcc}" "${CXX:-g++}"; do
+    if ! command -v "${_c}" >/dev/null 2>&1; then
+        echo "!! compiler not found: ${_c}" >&2
+        echo "   install it (e.g. sudo apt-get install gcc-10 g++-10), or set CC / CXX" >&2
+        exit 1
+    fi
+done
+
 # --- source-built dependencies -----------------------------------------------
 _preflight_fail=0
 _need() {   # <path> <what>
