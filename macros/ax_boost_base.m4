@@ -163,6 +163,11 @@ AC_DEFUN([_AX_BOOST_BASE_RUNDETECT],[
         done
     ])
 
+    dnl Bandicoot: never pass the compiler's own system include directory with
+    dnl -I; doing so reorders the search and breaks libstdc++'s <cstring>
+    dnl ("strchr has not been declared") when boost is installed under /usr.
+    AS_IF([test "x$BOOST_CPPFLAGS" = "x-I/usr/include"], [BOOST_CPPFLAGS=""])
+
     dnl overwrite ld flags if we have required special directory with
     dnl --with-boost-libdir parameter
     AS_IF([test "x$_AX_BOOST_BASE_boost_lib_path" != "x"],
