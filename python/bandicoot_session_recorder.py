@@ -61,8 +61,8 @@
 # See SESSION_RECORDING.md for the event schema and the caveats.
 
 import atexit
-import io
 import datetime as _bsr_datetime
+import io
 import json
 import math
 import os
@@ -575,7 +575,7 @@ class _BsrRecorder:
         except Exception:
             line = json.dumps({"t": rec["t"], "dt": rec["dt"], "seq": rec["seq"],
                                "event": "error", "where": "json", "text": repr(rec)[:2000]})
-        self._fh.write(_bsr_text(line) + u"\n")
+        self._fh.write(_bsr_text(line) + "\n")
         self._fh.flush()
 
     def _error(self, where):
