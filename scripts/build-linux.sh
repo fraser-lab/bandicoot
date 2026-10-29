@@ -50,7 +50,7 @@ GSL_PREFIX="${DEPS_PREFIX}/gsl"
 # compiler (no Objective-C++ is compiled on Linux).
 APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig gobjc++ cmake curl
-libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev
+libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
 libboost-dev
 libclipper-dev libccp4-dev libmmdb2-dev libssm-dev
