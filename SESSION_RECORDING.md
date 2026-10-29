@@ -28,6 +28,24 @@ starts, for example
 `INFO:: session recording -> <working directory>/bandicoot-sessions/bandicoot-session-20260903-121500-4242.jsonl`.
 Set `BANDICOOT_SESSION_DIR` to write somewhere else.
 
+### Stock Coot 0.9
+
+The recorder also runs in stock Coot 0.9 (MRC-LMB and CCP4 builds), which
+embeds Python 2.7. Coot 0.9 runs every `.py` file in `~/.coot-preferences/` at
+startup, so:
+
+1. Copy `python/bandicoot_session_recorder.py` into `~/.coot-preferences/`.
+2. Launch with `BANDICOOT_RECORD=1 coot`, or add the "always on" file above.
+
+Differences from Bandicoot:
+
+- Commands are echoed in Scheme form, e.g. `(mutate 0 "A" 30 "" "LEU")`, by
+  the Guile + Python builds; `syntax` is `scheme`.
+- There are no `navigate` events: clicks in the peaks and validation dialogs
+  need Bandicoot's C++ hook. The recentre they cause is still a `view`.
+- The view centre is read with `rotation_centre_position`, which Coot echoes,
+  so the recorder's own reads appear in `0-coot-history.py`.
+
 Other console commands:
 
 ```python
