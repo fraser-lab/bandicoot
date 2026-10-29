@@ -62,6 +62,7 @@
 
 import atexit
 import datetime as _bsr_datetime
+import io
 import json
 import math
 import os
@@ -78,6 +79,35 @@ except ImportError:            # command-line use outside Bandicoot
     _bsr_coot_module = None
 
 import __main__ as _bsr_main
+
+# Stock Coot 0.9 binaries (MRC-LMB, CCP4) embed Python 2.7; Bandicoot embeds
+# Python 3. These helpers cover the few Python 3-only calls the recorder makes.
+_BSR_PY2 = sys.version_info[0] == 2
+
+
+def _bsr_makedirs(d):
+    try:
+        os.makedirs(d)
+    except OSError:
+        if not os.path.isdir(d):
+            raise
+
+
+def _bsr_which(name):
+    if hasattr(shutil, "which"):
+        return shutil.which(name)
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        p = os.path.join(d, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+def _bsr_text(s):
+    # json.dumps returns a byte string under Python 2; io.open text files need unicode.
+    if _BSR_PY2 and isinstance(s, bytes):
+        return s.decode("utf-8", "replace")
+    return s
 
 BSR_VERSION = "0.1.0"
 
@@ -146,7 +176,14 @@ def _bsr_parse_pdb_string(text):
 
 
 def _bsr_now_iso():
-    return _bsr_datetime.datetime.now().astimezone().isoformat(timespec="milliseconds")
+    if not _BSR_PY2:
+        return _bsr_datetime.datetime.now().astimezone().isoformat(timespec="milliseconds")
+    now = time.time()
+    off = int(round((_bsr_datetime.datetime.fromtimestamp(now) -
+                     _bsr_datetime.datetime.utcfromtimestamp(now)).total_seconds() / 60.0))
+    stamp = _bsr_datetime.datetime.fromtimestamp(now).strftime("%Y-%m-%dT%H:%M:%S")
+    return "%s.%03d%s%02d:%02d" % (stamp, int(now * 1000) % 1000, "-" if off < 0 else "+",
+                                   abs(off) // 60, abs(off) % 60)
 
 
 def _bsr_env_flag(name, default=False):
@@ -303,7 +340,7 @@ class _BsrStdoutTee:
         self._buf = b""
 
     def start(self):
-        tee = shutil.which("tee")
+        tee = _bsr_which("tee")
         if not tee:
             raise RuntimeError("no `tee` executable on PATH")
         try:
@@ -312,12 +349,12 @@ class _BsrStdoutTee:
             pass
         d = os.path.dirname(self.sidecar)
         if d:
-            os.makedirs(d, exist_ok=True)
+            _bsr_makedirs(d)
         open(self.sidecar, "ab").close()
-        self._fh = open(self.sidecar, "rb")
+        self._fh = io.open(self.sidecar, "rb")   # not stdio: glibc keeps EOF set on a py2 file
         self._saved = os.dup(1)
         self._proc = subprocess.Popen([tee, "-a", self.sidecar], stdin=subprocess.PIPE,
-                                      stdout=self._saved, stderr=subprocess.DEVNULL, close_fds=True)
+                                      stdout=self._saved, stderr=open(os.devnull, "wb"), close_fds=True)
         os.dup2(self._proc.stdin.fileno(), 1)
         self._proc.stdin.close()            # fd 1 is now the only write end we hold
         try:
@@ -424,8 +461,8 @@ class _BsrRecorder:
             return self.path
         d = os.path.dirname(self.path)
         if d:
-            os.makedirs(d, exist_ok=True)
-        self._fh = open(self.path, "a", encoding="utf-8")
+            _bsr_makedirs(d)
+        self._fh = io.open(self.path, "a", encoding="utf-8")
         self._t0 = time.time()
         self._started_at = _bsr_now_iso()
         self.running = True
@@ -538,7 +575,7 @@ class _BsrRecorder:
         except Exception:
             line = json.dumps({"t": rec["t"], "dt": rec["dt"], "seq": rec["seq"],
                                "event": "error", "where": "json", "text": repr(rec)[:2000]})
-        self._fh.write(line + "\n")
+        self._fh.write(_bsr_text(line) + "\n")
         self._fh.flush()
 
     def _error(self, where):
@@ -1339,7 +1376,7 @@ def _bsr_format_event(ev):
 
 def _bsr_read_events(path):
     events = []
-    with open(path, encoding="utf-8") as fh:
+    with io.open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -1507,7 +1544,7 @@ def _bsr_selftest():
     log_path = os.path.join(tmp, "session.jsonl")
 
     fake = _BsrFakeCoot()
-    ns = types.SimpleNamespace()
+    ns = types.ModuleType("coot")
     key_calls = []
 
     def original_key_hook(key, ctrl=0):
