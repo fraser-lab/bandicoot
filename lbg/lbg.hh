@@ -94,6 +94,21 @@ namespace coot {
    mmdb::Residue *get_first_residue_helper_fn(mmdb::Manager *mol);
 }
 
+class lbg_info_t;
+
+// A user interface other than this library's own GTK window can host the
+// builder: lbg() then makes an offscreen canvas and hands the builder to
+// open(), and the builder reports what its GTK window would have shown
+// through these calls. Unset (the default), the GTK window is used.
+struct lbg_host_t {
+   void (*open)(lbg_info_t *l);
+   void (*status_text)(lbg_info_t *l, const std::string &text);
+   void (*alert)(lbg_info_t *l, bool shown, const std::string &name);
+   void (*apply_sensitive)(lbg_info_t *l, bool sensitive);
+   void (*atom_x_dialog)(lbg_info_t *l, const std::string &element);
+   void (*error)(lbg_info_t *l, const std::string &what_failed, const std::string &subject);
+};
+
 // ====================================================================
 //                     lbg_info_t
 // ====================================================================
@@ -1123,6 +1138,7 @@ public:
    // dependencies, let's put those functions outside the
    // MAKE_ENHANCED_LIGAND_TOOLS dependency here.
    void clear_canvas_alerts();
+   void redraw_alerts();
    bool show_alerts_user_control; 
    
    // can throw an exception
@@ -1151,6 +1167,13 @@ public:
    void no_graphics_mode() {
       use_graphics_interface_flag = false;
    }
+
+   static lbg_host_t *host;
+   bool is_hosted() const { return host && canvas && ! lbg_window; }
+   bool init_hosted(); // offscreen canvas and its event handlers, no GTK window
+   void set_status_text(const std::string &text) const;
+   void show_alert(bool shown, const std::string &name);
+   void set_apply_sensitive(bool sensitive);
 
    void show_atom_x_dialog();
    void set_atom_x_string(const std::string &s);

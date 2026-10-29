@@ -8,6 +8,7 @@
 #include "wxUI/assets/palette.hh"
 #include "wxUI/dialogs/file-dialogs.hh"
 #include "wxUI/dialogs/message.hh"
+#include "wxUI/widgets/menu-strip.hh"
 #include "wxUI/widgets/titled-panel.hh"
 
 #include <wx/button.h>
@@ -192,15 +193,11 @@ public:
       p->SetBackgroundColour(palette::face());
       wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
 
-      // Coot's menu bar, a strip of its own along the top of the window (a
-      // real menu bar would take over the main one)
-      TitledPanel *bar = new TitledPanel(p);
-      wxBoxSizer *menus = new wxBoxSizer(wxHORIZONTAL);
-      menus->Add(menu_button(bar->content(), "File", [this]() { return file_menu(); }), 0, wxRIGHT, 2);
-      menus->Add(menu_button(bar->content(), "View", [this]() { return view_menu(); }), 0, wxRIGHT, 2);
-      menus->Add(menu_button(bar->content(), "Help", [this]() { return help_menu(); }), 0);
-      bar->content_sizer()->Add(menus, 0, wxALL, 2);
-      col->Add(bar, 0, wxEXPAND | wxALL, 4);
+      menus = new MenuStrip(p);
+      menus->add("&File", [this]() { return file_menu(); });
+      menus->add("&View", [this]() { return view_menu(); });
+      menus->add("&Help", [this]() { return help_menu(); });
+      col->Add(menus, 0, wxEXPAND | wxBOTTOM, 4);
       col->Add(new wxStaticText(p, wxID_ANY, wxString::FromUTF8(bandicoot_core_rama_heading(imol)),
                                 wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL),
                0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
@@ -298,6 +295,7 @@ public:
 
       // + and - zoom, as Coot's keys did, except while typing a selection
       Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &e) {
+         if (menus->handle_key(e)) return;
          if (FindFocus() == selection) e.Skip();
          else if (e.GetKeyCode() == '+' || e.GetKeyCode() == '=') set_zoom(zoom + 0.2);
          else if (e.GetKeyCode() == '-') set_zoom(zoom - 0.2);
@@ -377,6 +375,7 @@ private:
 
    wxPanel *body;
    ChartCanvas *chart;
+   MenuStrip *menus;
    wxCheckBox *use_selection;
    wxTextCtrl *selection;
    wxToggleButton *outliers_button;
@@ -402,15 +401,6 @@ private:
    static wxString percent(int part, int whole) {
       // Coot's float_to_string: two decimals
       return wxString::Format("%.2f", 100.0 * part / whole);
-   }
-
-   wxButton *menu_button(wxWindow *parent, const wxString &label, std::function<wxMenu *()> make) {
-      wxButton *b = new wxButton(parent, wxID_ANY, label, wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-      b->Bind(wxEVT_BUTTON, [this, b, make](wxCommandEvent &) {
-         std::unique_ptr<wxMenu> m(make());
-         b->PopupMenu(m.get(), 0, b->GetSize().y);
-      });
-      return b;
    }
 
    wxMenu *file_menu() {

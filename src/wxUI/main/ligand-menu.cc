@@ -2,6 +2,7 @@
 
 #include "wxUI/main/ligand-menu.hh"
 #include "wxUI/bridge/core-bridge.hh"
+#include "wxUI/bridge/lidia-bridge.hh"
 #include "wxUI/assets/icons.hh"
 #include "wxUI/dialogs/form-dialogs.hh"
 #include "wxUI/dialogs/message.hh"
@@ -50,6 +51,20 @@ void smiles_to_3d(wxWindow *parent) {
                "SMILES -> simple 3D: " + why_not);
          return false;
       }
+      return true;
+   };
+   d->CentreOnParent();
+   d->Show();
+}
+
+void smiles_to_2d(wxWindow *parent) {
+   EntryDialog *d = new EntryDialog(parent, "SMILES -> 2D", wxEmptyString);
+   d->add_field("SMILES string:");
+   set_ok_label(d, "Send to 2D Viewer");
+   d->on_ok = [](EntryDialog &dialog) {
+      std::string smiles = field_text(dialog, 0);
+      if (smiles.empty()) { wxBell(); return false; }
+      bandicoot_lidia_smiles_to_2d(smiles);
       return true;
    };
    d->CentreOnParent();
@@ -296,6 +311,7 @@ void show_ligand_check_window(wxWindow *parent, const std::string &residue,
 
 const std::map<std::string, std::function<void(wxWindow *)>> &ligand_actions() {
    static const std::map<std::string, std::function<void(wxWindow *)>> actions = {
+      { "BLIG_SMILES_2D",           smiles_to_2d },
       { "BLIG_SMILES_3D",           smiles_to_3d },
       { "BLIG_RENAME_TO_REFERENCE", rename_to_reference },
       { "BLIG_FIND_LIGANDS",        show_find_ligands },

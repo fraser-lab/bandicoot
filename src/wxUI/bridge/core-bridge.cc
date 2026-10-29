@@ -2340,6 +2340,8 @@ static const std::map<std::string, int> &ligand_direct_ops() {
       { "BLIG_JIGGLE_FIT",           BLIG_JIGGLE_FIT },
       { "BLIG_HYDROGENATE",          BLIG_HYDROGENATE },
       { "BLIG_CONTACT_DOTS_LIGAND",  BLIG_CONTACT_DOTS_LIGAND },
+      { "BLIG_RESIDUE_2D",           BLIG_RESIDUE_2D },
+      { "BLIG_FLEV",                 BLIG_FLEV },
       { "BLIG_TOGGLE_FLEV",          BLIG_TOGGLE_FLEV },
       { "BLIG_SOLID_OBJECTS",        BLIG_SOLID_OBJECTS },
       { "BLIG_UNSOLID_OBJECTS",      BLIG_UNSOLID_OBJECTS },

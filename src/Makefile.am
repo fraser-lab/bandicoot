@@ -639,6 +639,8 @@ if UI_WX
 	wxUI/main/about-menu.hh \
 	wxUI/main/map-properties.cc \
 	wxUI/main/map-properties.hh \
+	wxUI/main/lidia-window.cc \
+	wxUI/main/lidia-window.hh \
 	wxUI/main/validate-menu.cc \
 	wxUI/main/validate-menu.hh \
 	wxUI/main/validation-graphs.cc \
@@ -672,6 +674,8 @@ if UI_WX
 	wxUI/assets/icons.cc         \
 	wxUI/bridge/core-bridge.hh   \
 	wxUI/bridge/core-bridge.cc   \
+	wxUI/bridge/lidia-bridge.hh  \
+	wxUI/bridge/lidia-bridge.cc  \
 	wxUI/assets/chart-canvas.hh  \
 	wxUI/assets/chart-canvas.cc  \
 	wxUI/assets/palette.hh       \
@@ -698,6 +702,8 @@ if UI_WX
 	wxUI/widgets/path-box.hh     \
 	wxUI/widgets/path-box.cc     \
 	wxUI/widgets/titled-panel.hh \
+	wxUI/widgets/menu-strip.hh \
+	wxUI/widgets/menu-strip.cc \
 	wxUI/widgets/titled-panel.cc \
 	wxUI/widgets/mixed-row.hh    \
 	wxUI/widgets/mixed-row.cc    \

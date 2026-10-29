@@ -2,6 +2,7 @@
 
 #include "wxUI/main/calculate-menu.hh"
 #include "wxUI/bridge/core-bridge.hh"
+#include "wxUI/bridge/lidia-bridge.hh"
 #include "wxUI/assets/palette.hh"
 #include "wxUI/dialogs/file-dialogs.hh"
 #include "wxUI/dialogs/form-dialogs.hh"
@@ -621,6 +622,7 @@ const std::map<std::string, std::function<void(wxWindow *)>> &calculate_actions(
       { "on_scripting_python1_activate",        show_python_console },
       { "on_pandda_inspect1_activate",          [](wxWindow *p) { show_pandda_inspect(p); } },
       { "on_fit_loop_by_database_search1_activate", show_fit_loop_by_database },
+      { "on_ligand_builder1_activate",          [](wxWindow *) { bandicoot_lidia_start(); } },
    };
    return actions;
 }

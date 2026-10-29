@@ -55,6 +55,7 @@
 #include "wxUI/main/model-dialogs.hh"
 #include "wxUI/main/choosers.hh"
 #include "wxUI/main/delete-waters.hh"
+#include "wxUI/main/lidia-window.hh"
 #include "wxUI/main/sidebar.hh"
 #include "wxUI/assets/icons.hh"
 
@@ -568,6 +569,7 @@ public:
       wxui::install_rama_plot(this);
       wxui::install_pandda_inspect(this);
       wxui::install_modelling_menu(this);
+      wxui::install_lidia(this);
 
       wxBoxSizer *middle = new wxBoxSizer(wxHORIZONTAL);
       middle->Add(left_slot,  0, wxEXPAND);
