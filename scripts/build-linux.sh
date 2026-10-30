@@ -176,8 +176,11 @@ touch src/main.cc
 DEP_RPATHS="-Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib"
 PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
 
-export CPPFLAGS="-I${PREFIX}/include"
-export LDFLAGS="-L${PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
+# Some directories include Clipper / MMDB2 / gemmi headers without asking
+# pkg-config for their flags, so the source-built dependencies go on every
+# compile and link (as scripts/build.sh does with conda's prefix on macOS).
+export CPPFLAGS="-I${PREFIX}/include -I${XTAL_PREFIX}/include -I${GEMMI_PREFIX}/include -I${GSL_PREFIX}/include -I${FFTW_PREFIX}/include"
+export LDFLAGS="-L${PREFIX}/lib -L${XTAL_PREFIX}/lib -L${GEMMI_PREFIX}/lib -L${GSL_PREFIX}/lib -L${FFTW_PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
 # MMDB2 before 2.0.22 (e.g. Ubuntu 20.04's 2.0.5) #defines strchr and strrchr
 # to its own functions, which breaks <cstring> in any file that includes it
