@@ -56,6 +56,7 @@ WX_PREFIX="${DEPS_PREFIX}/wx"
 GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
 GSL_PREFIX="${DEPS_PREFIX}/gsl"
 XTAL_PREFIX="${DEPS_PREFIX}/xtal"
+SWIG_PREFIX="${DEPS_PREFIX}/swig"
 # the source-built Python (build_deps_linux.sh) when present: Bandicoot's
 # Python layer has only ever run on 3.12 and later
 if [ -z "${PYTHON}" ]; then
@@ -90,7 +91,7 @@ esac
 # gobjc++ is needed only because configure probes for an Objective-C++
 # compiler (no Objective-C++ is compiled on Linux).
 APT_PACKAGES="
-build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig ${OBJCXX_PACKAGE} cmake curl
+build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl ${OBJCXX_PACKAGE} cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
 libboost-dev
@@ -144,6 +145,7 @@ _need "${GSL_PREFIX}/bin/gsl-config"               "GSL"
 _need "${XTAL_PREFIX}/lib/pkgconfig/clipper.pc"    "MMDB2 / libccp4 / SSM / Clipper"
 _need "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" "monomer dictionary (checked in)"
 _need "${PYTHON}"                                  "Python"
+_need "${SWIG_PREFIX}/bin/swig"                    "SWIG"
 if [ "${_preflight_fail}" != "0" ]; then
     echo "   fix: ./scripts/build_deps_linux.sh" >&2
     exit 1
@@ -166,6 +168,9 @@ for mod in gtk+-2.0 clipper mmdb2 ssm; do
 done
 [ "${_preflight_fail}" = "0" ] || exit 1
 
+# the Makefiles run plain "swig"
+export PATH="${SWIG_PREFIX}/bin:${PATH}"
+echo "==> SWIG: $(swig -version | awk '/SWIG Version/{print $3}') ($(command -v swig))"
 echo "==> Python: $("${PYTHON}" -c 'import sys; print(sys.version.split()[0])') (${PYTHON})"
 echo "==> wxWidgets: $("${WX_PREFIX}/bin/wx-config" --version) ($("${WX_PREFIX}/bin/wx-config" --selected-config))"
 

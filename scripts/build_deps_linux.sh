@@ -24,6 +24,9 @@
 #   GSL             refinement's minimiser; built here because a distribution's
 #                   libgsl-dev can be unusable when other GSL runtime versions
 #                   are already installed
+#   SWIG            generates the Python wrapper; distribution releases that
+#                   predate Python 3.12 support (e.g. Ubuntu 20.04's 4.0.1)
+#                   generate code for an older Python C API
 #
 # Tarballs are downloaded from upstream and verified against the checksums
 # pinned below, then cached in <prefix>/src so re-runs need no network.
@@ -89,6 +92,7 @@ GEMMI_OUT="${DEPS_PREFIX}/gemmi"
 GSL_OUT="${DEPS_PREFIX}/gsl"
 XTAL_OUT="${DEPS_PREFIX}/xtal"
 PYTHON_OUT="${DEPS_PREFIX}/python"
+SWIG_OUT="${DEPS_PREFIX}/swig"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -107,6 +111,7 @@ ssm|1.4|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/ssm-1.
 clipper|2.1.20180802|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/clipper-2.1.20180802.tar.gz|7c7774f224b59458e0faa104d209da906c129523fa737e81eb3b99ec772b81e0
 python|3.13.12|https://www.python.org/ftp/python/3.13.12/Python-3.13.12.tar.xz|2a84cd31dd8d8ea8aaff75de66fc1b4b0127dd5799aa50a64ae9a313885b4593
 gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
+swig|4.4.1|https://downloads.sourceforge.net/project/swig/swig/swig-4.4.1/swig-4.4.1.tar.gz|UNPINNED
 "
 
 echo "==> deps prefix: ${DEPS_PREFIX}"
@@ -227,6 +232,9 @@ build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
     --disable-static --disable-gtk-doc --disable-python
 build_autotools gsl "${GSL_OUT}/bin/gsl-config" "${GSL_OUT}" \
     --disable-static
+# PCRE is only for SWIG's %rename regex matching, which coot.i does not use
+build_autotools swig "${SWIG_OUT}/bin/swig" "${SWIG_OUT}" \
+    --without-pcre
 
 # Python, shared (Bandicoot embeds libpython), with pip; the rpath lets the
 # installed interpreter and library find each other without LD_LIBRARY_PATH
@@ -335,6 +343,11 @@ if [ -x "${GSL_OUT}/bin/gsl-config" ]; then
     printf '    %-22s %s\n' "GSL" "$("${GSL_OUT}/bin/gsl-config" --version)"
 else
     echo "    GSL: NOT FOUND" >&2; _fail=1
+fi
+if [ -x "${SWIG_OUT}/bin/swig" ]; then
+    printf '    %-22s %s\n' "SWIG" "$("${SWIG_OUT}/bin/swig" -version | awk '/SWIG Version/{print $3}')"
+else
+    echo "    SWIG: NOT FOUND" >&2; _fail=1
 fi
 if [ -x "${WX_OUT}/bin/wx-config" ]; then
     printf '    %-22s %s (%s)\n' "wxWidgets" "$("${WX_OUT}/bin/wx-config" --version)" \
