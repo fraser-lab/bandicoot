@@ -18,7 +18,7 @@
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
 #   DEPS_PREFIX     source-built deps      (default: <repo>/deps, from build_deps_linux.sh)
 #   PYTHON          embedded Python        (default: /usr/bin/python3)
-#   JOBS            parallel make jobs     (default: number of CPUs)
+#   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
 #   BANDICOOT_INCREMENTAL=1  skip `make clean`
 #   BANDICOOT_SKIP_PACKAGE_CHECK=1  skip the system-package check (non-Debian systems)
 
@@ -35,7 +35,17 @@ REPO_ROOT="$PWD"
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
 DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
 PYTHON="${PYTHON:-/usr/bin/python3}"
-JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+# Parallel jobs: one per CPU, but no more than one per 3 GB of RAM. GCC needs
+# several GB for the largest files, and running out of memory freezes the
+# machine rather than failing the build.
+if [ -z "${JOBS:-}" ]; then
+    _cpus="$(nproc 2>/dev/null || echo 2)"
+    _mem_gb="$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo 2>/dev/null || echo 4)"
+    _by_mem=$(( _mem_gb / 3 ))
+    [ "${_by_mem}" -ge 1 ] || _by_mem=1
+    JOBS=$(( _cpus < _by_mem ? _cpus : _by_mem ))
+    unset _cpus _mem_gb _by_mem
+fi
 COOT_DATA_SRC="${REPO_ROOT}/data/coot-data"
 
 FFTW_PREFIX="${DEPS_PREFIX}/fftw2"
@@ -200,7 +210,7 @@ if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
     echo "==> make clean (BANDICOOT_INCREMENTAL=1 to skip)"
     make clean >/dev/null
 fi
-echo "==> make -j${JOBS}"
+echo "==> make -j${JOBS} (set JOBS to change)"
 make -j"${JOBS}"
 
 mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
