@@ -197,7 +197,8 @@ touch src/main.cc
 # --- configure -----------------------------------------------------------------
 # rpaths into the dependency tree so the installed program finds the
 # source-built libraries without LD_LIBRARY_PATH
-DEP_RPATHS="-Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib"
+PYTHON_LIBDIR="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
+DEP_RPATHS="-Wl,-rpath,${PYTHON_LIBDIR} -Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib"
 PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
 
 # Some directories include Clipper / MMDB2 / gemmi headers without asking
@@ -254,7 +255,10 @@ make -j"${JOBS}"
 
 mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
 echo "==> make install -> ${PREFIX}"
-make install
+# No byte-compiling at install: the py-compile script that older automake
+# copies in (e.g. Ubuntu 20.04's) imports 'imp', which Python 3.12 removed.
+# Python compiles the modules itself on first import.
+make install py_compile=/dev/null
 
 # The launcher (bin/coot) runs libexec/Bandicoot, as on macOS.
 if [ -f "${PREFIX}/libexec/coot-bin" ]; then

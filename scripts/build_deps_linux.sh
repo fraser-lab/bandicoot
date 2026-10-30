@@ -209,6 +209,16 @@ build_autotools() {   # <name> <sentinel> <prefix> [configure args...]
 
 build_autotools fftw "${FFTW_OUT}/include/fftw.h" "${FFTW_OUT}" \
     --enable-float --enable-shared --disable-fortran
+# FFTW 2 builds can be installed with prefixed names (libsfftw, sfftw.h) or
+# plain ones; the functions inside are the same. Provide both names for ours,
+# so nothing links a distribution's copy instead (Clipper prefers the prefixed
+# names). Runs every time, so an existing FFTW gets the aliases too.
+for _n in fftw rfftw; do
+    ln -sf "lib${_n}.so"   "${FFTW_OUT}/lib/libs${_n}.so"
+    ln -sf "lib${_n}.so.2" "${FFTW_OUT}/lib/libs${_n}.so.2"
+    ln -sf "${_n}.h"       "${FFTW_OUT}/include/s${_n}.h"
+done
+
 build_autotools libart_lgpl "${PCDIR}/libart-2.0.pc" "${CANVAS_OUT}" \
     --disable-static
 build_autotools libgnomecanvas "${PCDIR}/libgnomecanvas-2.0.pc" "${CANVAS_OUT}" \
