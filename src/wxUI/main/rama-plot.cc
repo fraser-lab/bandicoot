@@ -25,7 +25,11 @@
 #include <wx/textctrl.h>
 #include <wx/tglbtn.h>
 
+#ifdef __APPLE__
 #include <CoreGraphics/CoreGraphics.h>
+#else
+#include <cairo-pdf.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -574,6 +578,7 @@ private:
       double w = chart->world_width(), h = chart->world_height();
       bool written = false;
       if (pdf) {
+#ifdef __APPLE__
          CFURLRef url = CFURLCreateFromFileSystemRepresentation(
             nullptr, (const UInt8 *) path.utf8_str().data(), strlen(path.utf8_str().data()), false);
          CGRect box = CGRectMake(0, 0, w, h);
@@ -595,6 +600,24 @@ private:
             CGPDFContextClose(cg);
             CGContextRelease(cg);
          }
+#else
+         // wx on GTK draws with cairo, which writes PDF directly (top-down, as wx draws)
+         cairo_surface_t *surface = cairo_pdf_surface_create(path.utf8_str().data(), w, h);
+         if (cairo_surface_status(surface) == CAIRO_STATUS_SUCCESS) {
+            cairo_t *cr = cairo_create(surface);
+            std::unique_ptr<wxGraphicsContext> gc(
+               wxGraphicsRenderer::GetDefaultRenderer()->CreateContextFromNativeContext(cr));
+            if (gc) {
+               chart->render(gc.get(), 1.0);
+               written = true;
+            }
+            gc.reset();
+            cairo_show_page(cr);
+            cairo_destroy(cr);
+            cairo_surface_finish(surface);
+         }
+         cairo_surface_destroy(surface);
+#endif
       } else {
          const double scale = 2.0;
          wxBitmap bitmap(int(w * scale), int(h * scale), 24);
