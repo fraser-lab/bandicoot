@@ -210,7 +210,19 @@ echo "==> ./configure --prefix=${PREFIX} --with-ui=wx"
     --with-gsl-prefix="${GSL_PREFIX}" \
     --with-python=/usr \
     PYTHON="${PYTHON}" \
-    PYTHON_CONFIG="${PYTHON_CONFIG}"
+    PYTHON_CONFIG="${PYTHON_CONFIG}" \
+    OBJCXX="${OBJCXX}"
+
+# the final link fails ("unable to infer tagged configuration") unless libtool
+# recognises the Objective-C++ compiler as its C++ one
+_cxx="$(sed -n 's/^CXX = //p' src/Makefile)"
+_objcxx="$(sed -n 's/^OBJCXX = //p' src/Makefile)"
+if [ "${_cxx}" != "${_objcxx}" ]; then
+    echo "!! build-linux.sh: configure recorded OBJCXX='${_objcxx}' but CXX='${_cxx}'" >&2
+    echo "   they must be the same compiler; set OBJCXX to the C++ compiler" >&2
+    exit 1
+fi
+echo "==> compilers: CC=$(sed -n 's/^CC = //p' src/Makefile) CXX=${_cxx} OBJCXX=${_objcxx}"
 
 # configure builds without refinement, quietly, when its GSL test fails
 if ! grep -q "^COOT_GSL_FLAGS = -DHAVE_GSL" src/Makefile; then
