@@ -21,6 +21,8 @@
 #   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
 #   BANDICOOT_INCREMENTAL=1  skip `make clean`
 #   BANDICOOT_SKIP_PACKAGE_CHECK=1  skip the system-package check (non-Debian systems)
+#   BANDICOOT_ASAN=1  build with AddressSanitizer (memory-error diagnosis; slow,
+#                   needs a full rebuild; run with ASAN_OPTIONS=detect_leaks=0)
 
 set -e
 
@@ -64,6 +66,15 @@ if [ -z "${PYTHON}" ]; then
     fi
 fi
 
+# AddressSanitizer goes into the compiler commands themselves: libtool drops
+# sanitizer flags given in CFLAGS/LDFLAGS when it links shared libraries.
+if [ -n "${BANDICOOT_ASAN:-}" ]; then
+    _asan="-fsanitize=address -fno-omit-frame-pointer"
+    export CC="${CC:-gcc} ${_asan}"
+    export CXX="${CXX:-g++} ${_asan}"
+    unset _asan
+fi
+
 # The program is linked with the Objective-C++ compiler (macOS sources are
 # listed in src/Makefile.am), and libtool only recognises a link command whose
 # compiler matches one it was configured with, so OBJCXX must be CXX. A
@@ -71,8 +82,8 @@ fi
 OBJCXX="${OBJCXX:-${CXX:-g++}}"
 export OBJCXX
 OBJCXX_PACKAGE="gobjc++"
-case "${OBJCXX}" in
-    g++-[0-9]*) OBJCXX_PACKAGE="gobjc++-${OBJCXX#g++-}" ;;
+case "${OBJCXX%% *}" in
+    g++-[0-9]*) OBJCXX_PACKAGE="gobjc++-${OBJCXX#g++-}"; OBJCXX_PACKAGE="${OBJCXX_PACKAGE%% *}" ;;
 esac
 
 # --- system packages (Debian / Ubuntu) ---------------------------------------
@@ -107,7 +118,8 @@ fi
 
 # The compilers named by CC / CXX (or the defaults) must exist; configure only
 # reports a missing one as "C compiler cannot create executables".
-for _c in "${CC:-gcc}" "${CXX:-g++}"; do
+_cc="${CC:-gcc}"; _cxx_cmd="${CXX:-g++}"
+for _c in "${_cc%% *}" "${_cxx_cmd%% *}"; do
     if ! command -v "${_c}" >/dev/null 2>&1; then
         echo "!! compiler not found: ${_c}" >&2
         echo "   install it (e.g. sudo apt-get install gcc-10 g++-10), or set CC / CXX" >&2
