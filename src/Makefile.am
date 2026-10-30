@@ -796,6 +796,7 @@ coot_bin_LDADD = $(OPENMP_CFLAGS)       \
 		$(GLOB_LIBS)		\
 		$(GTKGL_CONTEXT_LIBS) 	\
 		$(GLUT_LIBS)		\
+		$(COOT_OPENGL_LIBS)	\
 		$(CANVAS_LIBS) 		\
 		$(GSL_LIBS)		\
 		$(MYSQL_LIBS)		\

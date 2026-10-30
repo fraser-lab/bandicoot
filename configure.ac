@@ -338,6 +338,8 @@ elif test "$(uname)" = "Darwin"; then
   COOT_OPENGL_LIBS="-framework OpenGL"
 else
   AC_CHECK_LIB(GL, glLineWidth, COOT_OPENGL_LIBS="-lGL")
+  dnl GLU (picking, projection); the GTK build got it with GtkGLExt
+  AC_CHECK_LIB(GLU, gluPerspective, COOT_OPENGL_LIBS="-lGLU $COOT_OPENGL_LIBS", [], [-lGL])
 fi
 AC_SUBST([COOT_OPENGL_LIBS], [${COOT_OPENGL_LIBS}])
 
