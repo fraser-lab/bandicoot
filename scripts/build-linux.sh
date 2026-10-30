@@ -55,11 +55,22 @@ GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
 GSL_PREFIX="${DEPS_PREFIX}/gsl"
 XTAL_PREFIX="${DEPS_PREFIX}/xtal"
 
+# The program is linked with the Objective-C++ compiler (macOS sources are
+# listed in src/Makefile.am), and libtool only recognises a link command whose
+# compiler matches one it was configured with, so OBJCXX must be CXX. A
+# versioned g++ (g++-10) needs the matching gobjc++ package.
+OBJCXX="${OBJCXX:-${CXX:-g++}}"
+export OBJCXX
+OBJCXX_PACKAGE="gobjc++"
+case "${OBJCXX}" in
+    g++-[0-9]*) OBJCXX_PACKAGE="gobjc++-${OBJCXX#g++-}" ;;
+esac
+
 # --- system packages (Debian / Ubuntu) ---------------------------------------
 # gobjc++ is needed only because configure probes for an Objective-C++
 # compiler (no Objective-C++ is compiled on Linux).
 APT_PACKAGES="
-build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig gobjc++ cmake curl
+build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl swig ${OBJCXX_PACKAGE} cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
 libboost-dev
