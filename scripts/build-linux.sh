@@ -17,7 +17,7 @@
 # Customise via environment variables (all optional):
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
 #   DEPS_PREFIX     source-built deps      (default: <repo>/deps, from build_deps_linux.sh)
-#   PYTHON          embedded Python        (default: /usr/bin/python3)
+#   PYTHON          embedded Python        (default: <deps>/python/bin/python3.13, else /usr/bin/python3)
 #   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
 #   BANDICOOT_INCREMENTAL=1  skip `make clean`
 #   BANDICOOT_SKIP_PACKAGE_CHECK=1  skip the system-package check (non-Debian systems)
@@ -34,7 +34,7 @@ REPO_ROOT="$PWD"
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
 DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
-PYTHON="${PYTHON:-/usr/bin/python3}"
+PYTHON="${PYTHON:-}"
 # Parallel jobs: one per CPU, but no more than one per 3 GB of RAM. GCC needs
 # several GB for the largest files, and running out of memory freezes the
 # machine rather than failing the build.
@@ -54,6 +54,15 @@ WX_PREFIX="${DEPS_PREFIX}/wx"
 GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
 GSL_PREFIX="${DEPS_PREFIX}/gsl"
 XTAL_PREFIX="${DEPS_PREFIX}/xtal"
+# the source-built Python (build_deps_linux.sh) when present: Bandicoot's
+# Python layer has only ever run on 3.12 and later
+if [ -z "${PYTHON}" ]; then
+    if [ -x "${DEPS_PREFIX}/python/bin/python3.13" ]; then
+        PYTHON="${DEPS_PREFIX}/python/bin/python3.13"
+    else
+        PYTHON=/usr/bin/python3
+    fi
+fi
 
 # The program is linked with the Objective-C++ compiler (macOS sources are
 # listed in src/Makefile.am), and libtool only recognises a link command whose
@@ -128,9 +137,13 @@ if [ "${_preflight_fail}" != "0" ]; then
     exit 1
 fi
 
+# the -config script must belong to the same interpreter
 PYTHON_CONFIG="${PYTHON}-config"
-[ -x "${PYTHON_CONFIG}" ] || PYTHON_CONFIG="$(command -v python3-config || true)"
-[ -n "${PYTHON_CONFIG}" ] || { echo "!! python3-config not found (python3-dev)" >&2; exit 1; }
+if [ ! -x "${PYTHON_CONFIG}" ]; then
+    echo "!! build-linux.sh: ${PYTHON_CONFIG} not found (the -dev package for ${PYTHON})" >&2
+    exit 1
+fi
+PYTHON_PREFIX="$("${PYTHON}" -c 'import sys; print(sys.prefix)')"
 
 export PKG_CONFIG_PATH="${XTAL_PREFIX}/lib/pkgconfig:${CANVAS_PREFIX}/lib/pkgconfig:${GSL_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 for mod in gtk+-2.0 clipper mmdb2 ssm; do
@@ -208,7 +221,7 @@ echo "==> ./configure --prefix=${PREFIX} --with-ui=wx"
     --with-goocanvas-prefix="${CANVAS_PREFIX}" \
     --with-gemmi="${GEMMI_PREFIX}" \
     --with-gsl-prefix="${GSL_PREFIX}" \
-    --with-python=/usr \
+    --with-python="${PYTHON_PREFIX}" \
     PYTHON="${PYTHON}" \
     PYTHON_CONFIG="${PYTHON_CONFIG}" \
     OBJCXX="${OBJCXX}"

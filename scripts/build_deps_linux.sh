@@ -19,6 +19,8 @@
 #                   versions the macOS build uses: older distributions (e.g.
 #                   Ubuntu 20.04's MMDB2 2.0.5) lack functions Bandicoot calls,
 #                   and Clipper and SSM must link the same MMDB2
+#   Python 3.13     the embedded interpreter, at the version the macOS build
+#                   uses; Bandicoot's Python layer has only run on 3.12+
 #   GSL             refinement's minimiser; built here because a distribution's
 #                   libgsl-dev can be unusable when other GSL runtime versions
 #                   are already installed
@@ -57,6 +59,7 @@ APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev
+libssl-dev libffi-dev libbz2-dev libreadline-dev libsqlite3-dev liblzma-dev libncursesw5-dev uuid-dev
 "
 if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ] && command -v dpkg-query >/dev/null 2>&1; then
     _missing=""
@@ -85,6 +88,7 @@ WX_OUT="${DEPS_PREFIX}/wx"
 GEMMI_OUT="${DEPS_PREFIX}/gemmi"
 GSL_OUT="${DEPS_PREFIX}/gsl"
 XTAL_OUT="${DEPS_PREFIX}/xtal"
+PYTHON_OUT="${DEPS_PREFIX}/python"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -101,6 +105,7 @@ mmdb2|2.0.22|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/m
 libccp4|8.0.0|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/libccp4-8.0.0.tar.gz|cb813ae86612a0866329deab7cee96eac573d81be5b240341d40f9ad5322ff2d
 ssm|1.4|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/ssm-1.4.tar.gz|56e7e64ed86d7d9ec59500fd34f26f881bdb9d541916d9a817c3bfb8cf0e9508
 clipper|2.1.20180802|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/clipper-2.1.20180802.tar.gz|7c7774f224b59458e0faa104d209da906c129523fa737e81eb3b99ec772b81e0
+python|3.13.12|https://www.python.org/ftp/python/3.13.12/Python-3.13.12.tar.xz|2a84cd31dd8d8ea8aaff75de66fc1b4b0127dd5799aa50a64ae9a313885b4593
 gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
 "
 
@@ -213,6 +218,12 @@ build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
 build_autotools gsl "${GSL_OUT}/bin/gsl-config" "${GSL_OUT}" \
     --disable-static
 
+# Python, shared (Bandicoot embeds libpython), with pip; the rpath lets the
+# installed interpreter and library find each other without LD_LIBRARY_PATH
+build_autotools python "${PYTHON_OUT}/bin/python3.13" "${PYTHON_OUT}" \
+    --enable-shared --with-ensurepip=install \
+    LDFLAGS="-Wl,-rpath,${PYTHON_OUT}/lib"
+
 # --- crystallographic libraries (the bioconda recipes' configure options) ----
 XTAL_PC="${XTAL_OUT}/lib/pkgconfig"
 export PKG_CONFIG_PATH="${XTAL_PC}:${PKG_CONFIG_PATH}"
@@ -305,6 +316,11 @@ for mod in mmdb2 ccp4c ssm clipper; do
         echo "    ${mod}: NOT FOUND" >&2; _fail=1
     fi
 done
+if "${PYTHON_OUT}/bin/python3.13" -c 'import ssl, ctypes, sqlite3, lzma, bz2' 2>/dev/null; then
+    printf '    %-22s %s\n' "Python" "$("${PYTHON_OUT}/bin/python3.13" -c 'import sys; print(sys.version.split()[0])')"
+else
+    echo "    Python 3.13: NOT FOUND or missing ssl/ctypes/sqlite3/lzma/bz2" >&2; _fail=1
+fi
 if [ -x "${GSL_OUT}/bin/gsl-config" ]; then
     printf '    %-22s %s\n' "GSL" "$("${GSL_OUT}/bin/gsl-config" --version)"
 else
