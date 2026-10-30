@@ -14,6 +14,11 @@
 #                   and GTK 3 cannot be loaded into one process, so the
 #                   distribution's wxGTK (GTK 3) cannot be used
 #   gemmi           mmCIF I/O; needs libgemmi_cpp
+#   MMDB2, libccp4, SSM, Clipper
+#                   the crystallographic libraries, built together at the
+#                   versions the macOS build uses: older distributions (e.g.
+#                   Ubuntu 20.04's MMDB2 2.0.5) lack functions Bandicoot calls,
+#                   and Clipper and SSM must link the same MMDB2
 #   GSL             refinement's minimiser; built here because a distribution's
 #                   libgsl-dev can be unusable when other GSL runtime versions
 #                   are already installed
@@ -79,6 +84,7 @@ CANVAS_OUT="${DEPS_PREFIX}/canvas"
 WX_OUT="${DEPS_PREFIX}/wx"
 GEMMI_OUT="${DEPS_PREFIX}/gemmi"
 GSL_OUT="${DEPS_PREFIX}/gsl"
+XTAL_OUT="${DEPS_PREFIX}/xtal"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -91,6 +97,10 @@ libgnomecanvas|2.30.3|https://download.gnome.org/sources/libgnomecanvas/2.30/lib
 goocanvas|1.0.0|https://download.gnome.org/sources/goocanvas/1.0/goocanvas-1.0.0.tar.bz2|1c072ef88567cad241fb4addee26e9bd96741b1503ff736d1c152fa6d865711e
 wxWidgets|3.3.3|https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.3/wxWidgets-3.3.3.tar.bz2|81b09d6dd9f1ed9301f8c55a968a488d0491f264dc2bab19a7e407ac67009482
 gemmi|0.7.5|https://github.com/project-gemmi/gemmi/archive/refs/tags/v0.7.5.tar.gz|9e2a8a51e62c69bf43f62aadf527ca4312860de8a36c12a8747d3e8ae556f0b3
+mmdb2|2.0.22|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/mmdb2-2.0.22.tar.gz|a9646933ce9f34633e1ae4901f2383af0e5318d6490851328f5b6aa06195ab51
+libccp4|8.0.0|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/libccp4-8.0.0.tar.gz|cb813ae86612a0866329deab7cee96eac573d81be5b240341d40f9ad5322ff2d
+ssm|1.4|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/ssm-1.4.tar.gz|56e7e64ed86d7d9ec59500fd34f26f881bdb9d541916d9a817c3bfb8cf0e9508
+clipper|2.1.20180802|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/clipper-2.1.20180802.tar.gz|7c7774f224b59458e0faa104d209da906c129523fa737e81eb3b99ec772b81e0
 gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
 "
 
@@ -203,6 +213,46 @@ build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
 build_autotools gsl "${GSL_OUT}/bin/gsl-config" "${GSL_OUT}" \
     --disable-static
 
+# --- crystallographic libraries (the bioconda recipes' configure options) ----
+XTAL_PC="${XTAL_OUT}/lib/pkgconfig"
+export PKG_CONFIG_PATH="${XTAL_PC}:${PKG_CONFIG_PATH}"
+
+# autoreconf'd source, then configure + make + install into XTAL_OUT.
+# <pre-configure> is run in the source directory first (source fixes).
+build_xtal() {   # <name> <sentinel> <subdir> <pre-configure> [configure args...]
+    local name="$1" sentinel="$2" sub="$3" pre="$4"; shift 4
+    skip_if_done "${name}" "${sentinel}" && return 0
+    echo "==> ${name}-$(dep_field "${name}" 2)"
+    local srcdir
+    srcdir="$(unpack "${name}")/${sub}"
+    ( cd "${srcdir}"
+      autoreconf -if
+      refresh_autotools_aux "${srcdir}"
+      eval "${pre}"
+      CPPFLAGS="-I${XTAL_OUT}/include -I${FFTW_OUT}/include" \
+      LDFLAGS="-L${XTAL_OUT}/lib -L${FFTW_OUT}/lib -Wl,-rpath,${XTAL_OUT}/lib -Wl,-rpath,${FFTW_OUT}/lib" \
+      CFLAGS="-O2 -fPIC" CXXFLAGS="-O2 -fno-strict-aliasing -Wno-narrowing" \
+        ./configure --prefix="${XTAL_OUT}" --enable-shared --disable-static \
+                    --disable-dependency-tracking "$@"
+      make -j"${JOBS}"
+      make install )
+    [ -e "${sentinel}" ] || { echo "!! ${name} built but ${sentinel} missing" >&2; exit 1; }
+    echo "    installed ${name}"
+}
+
+build_xtal mmdb2 "${XTAL_PC}/mmdb2.pc" "" ":"
+build_xtal libccp4 "${XTAL_PC}/ccp4c.pc" "" \
+    "sed -i 's/int putenv ();/extern int putenv (char *);/' ccp4/library_utils.c" \
+    --disable-fortran
+# superpose.cpp writes "..."superpose_version"...", which C++11 reads as a
+# user-defined literal; a space either side of the macro names fixes it.
+build_xtal ssm "${XTAL_PC}/ssm.pc" "" \
+    "sed -i -E 's/\"(superpose_version|superpose_date)\"/\" \\1 \"/g' superpose.cpp" \
+    --enable-ccp4
+build_xtal clipper "${XTAL_PC}/clipper.pc" "" \
+    "sed -i 's|libccp4c|ccp4c|g' configure" \
+    --enable-mmdb --enable-ccp4 --enable-cif --enable-minimol --enable-cns
+
 # wxWidgets on GTK 2, with the parts Bandicoot uses (OpenGL canvas, AUI, SVG
 # icons). The C++ flags must not carry the old-C warning downgrades above.
 CFLAGS_SAVED="${CFLAGS}"
@@ -248,6 +298,13 @@ if [ -f "${FFTW_OUT}/include/fftw.h" ]; then
 else
     echo "    fftw2: NOT FOUND" >&2; _fail=1
 fi
+for mod in mmdb2 ccp4c ssm clipper; do
+    if pkg-config --exists "${mod}"; then
+        printf '    %-22s %s\n' "${mod}" "$(pkg-config --modversion "${mod}")"
+    else
+        echo "    ${mod}: NOT FOUND" >&2; _fail=1
+    fi
+done
 if [ -x "${GSL_OUT}/bin/gsl-config" ]; then
     printf '    %-22s %s\n' "GSL" "$("${GSL_OUT}/bin/gsl-config" --version)"
 else
