@@ -169,7 +169,10 @@ PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${P
 export CPPFLAGS="-I${PREFIX}/include"
 export LDFLAGS="-L${PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
-export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++20 ${SHIM_INCLUDE}"
+# MMDB2 before 2.0.22 (e.g. Ubuntu 20.04's 2.0.5) #defines strchr and strrchr
+# to its own functions, which breaks <cstring> in any file that includes it
+# after MMDB2. Including <cstring> first in every C++ file avoids that.
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++20 -include cstring ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
 echo "==> ./configure --prefix=${PREFIX} --with-ui=wx"
