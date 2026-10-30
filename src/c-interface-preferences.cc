@@ -331,6 +331,10 @@ static GtkWidget *bandicoot_ancestor_frame(GtkWidget *w) {
    while (w && !GTK_IS_FRAME(w)) w = gtk_widget_get_parent(w);
    return w;
 }
+#endif // __APPLE__
+
+// Bandicoot's Pick Atom, PanDDA and ligand settings: storage and GTK tabs,
+// compiled on every OS (the wx build reads and writes the same settings).
 
 // ---- Bandicoot "Pick Atom" preferences tab --------------------------------
 // Adds a "Pick Atom" notebook page (its own page, like Console/Tips/etc.)
@@ -970,6 +974,8 @@ static void bandicoot_add_ligands_tab(GtkWidget *prefs) {
    }
 }
 
+#ifdef __APPLE__
+// The GTK build's Preferences dialog tailoring (AppKit sidebar and docking)
 // Tailor the Refinement-Toolbar preferences for Bandicoot's native UI:
 //  - drop the "Main Toolbar" tab (we use the native macOS Customize Toolbar);
 //  - replace the "Show Toolbar?" frame (show/hide + screen-edge position, none
