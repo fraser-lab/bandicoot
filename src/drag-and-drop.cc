@@ -25,6 +25,7 @@
 #endif
 
 #include <iostream>
+#include <algorithm>
 #include <gtk/gtk.h>
 #include "drag-and-drop.hh"
 #include "coot-utils/gemmi-coords.hh"   // classify_cif_file()
@@ -376,6 +377,15 @@ int handle_drag_and_drop_single_item(const std::string &file_name) {
 	    std::vector<int> imol_map = auto_read_make_and_draw_maps(file_name.c_str());
 	    if (is_valid_map_molecule(imol_map.front()))
 	       handled = TRUE;
+	 } else {
+	    // A dropped map is most likely an EM map, so read it as an ordinary
+	    // (non-difference) map. Crystallographic difference maps usually
+	    // arrive as an MTZ with phases instead.
+	    const std::vector<std::string> &map_exts = *graphics_info_t::map_glob_extensions;
+	    if (std::find(map_exts.begin(), map_exts.end(), ext) != map_exts.end()) {
+	       if (handle_read_ccp4_map(file_name, 0) >= 0)
+		  handled = TRUE;
+	    }
 	 }
       }
    }
