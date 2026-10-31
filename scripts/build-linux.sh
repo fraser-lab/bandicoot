@@ -266,6 +266,10 @@ fi
 if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
     echo "==> make clean (BANDICOOT_INCREMENTAL=1 to skip)"
     make clean >/dev/null
+    # The link resolves libraries' dependencies through the rpath into
+    # ${PREFIX}/lib, so a previous install's libraries (e.g. from an ASan
+    # build) would be linked instead of the ones being built.
+    rm -f "${PREFIX}"/lib/libcoot* "${PREFIX}"/lib/libccp4mg*
 fi
 echo "==> make -j${JOBS} (set JOBS to change)"
 make -j"${JOBS}"
