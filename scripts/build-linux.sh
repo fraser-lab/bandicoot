@@ -34,6 +34,13 @@ fi
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
+# Only the system and the source-built dependencies may supply tools and
+# libraries. A site software tree on PATH / LD_LIBRARY_PATH / PKG_CONFIG_PATH
+# would otherwise be linked in (e.g. its curl-config, whose libcurl loads a
+# second OpenSSL into the process).
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+unset LD_LIBRARY_PATH PKG_CONFIG_PATH
+
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
 DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
 PYTHON="${PYTHON:-}"
@@ -93,7 +100,7 @@ esac
 APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl ${OBJCXX_PACKAGE} cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
-libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev
+libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev libcurl4-openssl-dev
 libboost-dev
 python3-dev python3-numpy python3-matplotlib
 "
@@ -280,6 +287,26 @@ echo "==> make install -> ${PREFIX}"
 # copies in (e.g. Ubuntu 20.04's) imports 'imp', which Python 3.12 removed.
 # Python compiles the modules itself on first import.
 make install py_compile=/dev/null
+
+# Every library search path baked into the program must point into the
+# install or the dependency tree; anything else is a library the build picked
+# up from elsewhere.
+_rp_fail=0
+for _elf in "${PREFIX}"/libexec/coot-bin "${PREFIX}"/lib/libcoot*.so*; do
+    [ -f "${_elf}" ] && [ ! -L "${_elf}" ] || continue
+    _rp="$(readelf -d "${_elf}" 2>/dev/null | grep -E '\((RUN)?PATH\)' | sed 's/.*\[\(.*\)\]/\1/')"
+    for _d in ${_rp//:/ }; do
+        case "${_d}" in
+            "${PREFIX}"/*|"${DEPS_PREFIX}"/*) ;;
+            *) echo "!! build-linux.sh: $(basename "${_elf}") searches ${_d} for libraries" >&2
+               _rp_fail=1 ;;
+        esac
+    done
+done
+if [ "${_rp_fail}" != "0" ]; then
+    echo "   a library outside the system and ${DEPS_PREFIX} was linked; see config.log" >&2
+    exit 1
+fi
 
 # The launcher (bin/coot) runs libexec/Bandicoot, as on macOS.
 if [ -f "${PREFIX}/libexec/coot-bin" ]; then

@@ -47,6 +47,11 @@ fi
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
 
+# Build against the system and these dependencies only, not a site software
+# tree that PATH / LD_LIBRARY_PATH / PKG_CONFIG_PATH may point at.
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+unset LD_LIBRARY_PATH PKG_CONFIG_PATH
+
 # The compilers named by CC / CXX (or the defaults) must exist; configure only
 # reports a missing one as "C compiler cannot create executables".
 for _c in "${CC:-gcc}" "${CXX:-g++}"; do
