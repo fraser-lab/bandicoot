@@ -98,7 +98,7 @@ fi
 # The program is linked with the Objective-C++ compiler (macOS sources are
 # listed in src/Makefile.am), and libtool only recognises a link command whose
 # compiler matches one it was configured with, so OBJCXX must be CXX. A
-# versioned g++ (g++-10) needs the matching gobjc++ package.
+# versioned g++ (g++-12) needs the matching gobjc++ package.
 OBJCXX="${OBJCXX:-${CXX:-g++}}"
 export OBJCXX
 OBJCXX_PACKAGE="gobjc++"
@@ -141,10 +141,21 @@ _cc="${CC:-gcc}"; _cxx_cmd="${CXX:-g++}"
 for _c in "${_cc%% *}" "${_cxx_cmd%% *}"; do
     if ! command -v "${_c}" >/dev/null 2>&1; then
         echo "!! compiler not found: ${_c}" >&2
-        echo "   install it (e.g. sudo apt-get install gcc-10 g++-10), or set CC / CXX" >&2
+        echo "   install it (e.g. sudo apt-get install gcc-12 g++-12), or set CC / CXX" >&2
         exit 1
     fi
 done
+
+# RDKit, and Bandicoot's code that uses it, is C++20 that needs GCC 12 or newer
+_gnuc="$(echo | "${_cxx_cmd%% *}" -dM -E -x c++ - 2>/dev/null | awk '/^#define __GNUC__ /{print $3}')"
+if ! echo | "${_cxx_cmd%% *}" -dM -E -x c++ - 2>/dev/null | grep -q __clang__ && [ "${_gnuc:-0}" -lt 12 ]; then
+    echo "!! build-linux.sh: ${CXX:-g++} is GCC ${_gnuc:-?}; GCC 12 or newer is needed" >&2
+    echo "   on Ubuntu 20.04:" >&2
+    echo "     sudo add-apt-repository ppa:ubuntu-toolchain-r/test" >&2
+    echo "     sudo apt-get install gcc-12 g++-12 gobjc++-12" >&2
+    echo "   then run with CC=gcc-12 CXX=g++-12" >&2
+    exit 1
+fi
 
 # --- source-built dependencies -----------------------------------------------
 _preflight_fail=0

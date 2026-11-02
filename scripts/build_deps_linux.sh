@@ -66,10 +66,21 @@ unset LD_LIBRARY_PATH PKG_CONFIG_PATH
 for _c in "${CC:-gcc}" "${CXX:-g++}"; do
     if ! command -v "${_c}" >/dev/null 2>&1; then
         echo "!! compiler not found: ${_c}" >&2
-        echo "   install it (e.g. sudo apt-get install gcc-10 g++-10), or set CC / CXX" >&2
+        echo "   install it (e.g. sudo apt-get install gcc-12 g++-12), or set CC / CXX" >&2
         exit 1
     fi
 done
+
+# RDKit, and Bandicoot's code that uses it, is C++20 that needs GCC 12 or newer
+_gnuc="$(echo | "${CXX:-g++}" -dM -E -x c++ - 2>/dev/null | awk '/^#define __GNUC__ /{print $3}')"
+if ! echo | "${CXX:-g++}" -dM -E -x c++ - 2>/dev/null | grep -q __clang__ && [ "${_gnuc:-0}" -lt 12 ]; then
+    echo "!! build_deps_linux.sh: ${CXX:-g++} is GCC ${_gnuc:-?}; GCC 12 or newer is needed" >&2
+    echo "   on Ubuntu 20.04:" >&2
+    echo "     sudo add-apt-repository ppa:ubuntu-toolchain-r/test" >&2
+    echo "     sudo apt-get install gcc-12 g++-12 gobjc++-12" >&2
+    echo "   then run with CC=gcc-12 CXX=g++-12" >&2
+    exit 1
+fi
 
 # --- system packages these builds need (Debian / Ubuntu) ---------------------
 APT_PACKAGES="

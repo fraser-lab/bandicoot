@@ -286,6 +286,28 @@ while :; do
     set_rpaths
 done
 
+# The C++ runtime stays the system's (above), but a system older than the
+# build machine's compiler (e.g. Ubuntu 20.04 for a GCC 12 build) lacks the
+# version these binaries need. A copy goes in compat-cxx/, which the launcher
+# puts in front only where the system's copy is too old.
+echo "==> bundling the C++ runtime for systems with an older one"
+COMPAT="${LIB}/compat-cxx"
+rm -rf "${COMPAT}"
+mkdir -p "${COMPAT}"
+_need_cxx="$(while IFS= read -r f; do objdump -T "$f" 2>/dev/null; done < <(all_elves) | \
+    grep -o 'GLIBCXX_[0-9.]*' | sort -uV | tail -1 || true)"
+[ -n "${_need_cxx}" ] || fail "could not determine the C++ runtime version the binaries need"
+for _n in libstdc++.so.6 libgcc_s.so.1; do
+    _p="$(ldd "${PREFIX}/libexec/coot-bin" "${PREFIX}/libexec/Bandicoot" 2>/dev/null | \
+        awk -v n="${_n}" '$1 == n {print $3; exit}' || true)"
+    [ -n "${_p}" ] || fail "${_n} not found for libexec/Bandicoot"
+    cp -L "${_p}" "${COMPAT}/${_n}"
+done
+grep -qawF "${_need_cxx}" "${COMPAT}/libstdc++.so.6" || \
+    fail "this machine's libstdc++ lacks ${_need_cxx}, which the binaries need"
+echo "${_need_cxx}" > "${COMPAT}/required-glibcxx"
+echo "    binaries need ${_need_cxx}; compat-cxx/ holds this machine's runtime"
+
 # --- 5. strip and prune -----------------------------------------------------------
 echo "==> stripping debug information"
 while IFS= read -r f; do strip --strip-debug "$f" 2>/dev/null || true; done < <(own_elves)
@@ -342,6 +364,7 @@ for _f in libexec/Bandicoot bin/coot bin/bcoot setup.sh \
           lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.so \
           libexec/gdk-pixbuf-query-loaders libexec/gtk-query-immodules-2.0 \
           share/themes/Raleigh/gtk-2.0/gtkrc share/coot/syminfo.lib share/RDKit/Data \
+          lib/compat-cxx/libstdc++.so.6 lib/compat-cxx/required-glibcxx \
           share/coot/lib/data/monomers share/coot/reference-structures share/coot/pixmaps; do
     [ -e "${PREFIX}/${_f}" ] || fail "missing from the bundle: ${_f}"
 done
