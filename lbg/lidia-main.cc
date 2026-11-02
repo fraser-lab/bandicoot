@@ -37,6 +37,7 @@
 #include <algorithm>
 
 #include "compat/coot-sysdep.h"
+#include "compat/fontconfig-null-config.hh"
 
 #ifdef MAKE_ENHANCED_LIGAND_TOOLS
 #include <RDGeneral/versions.h>
@@ -82,7 +83,8 @@ main(int argc, char *argv[]) {
 #endif
    PyRun_SimpleString("global user_defined_alert_smarts ; user_defined_alert_smarts = []");
 #endif
-   
+
+   bandicoot_set_pango_fontconfig_config(); // see compat/fontconfig-null-config.hh
    gtk_init (&argc, &argv);
    std::string molecule_file_name = "";
    lig_build::molfile_molecule_t mm;
