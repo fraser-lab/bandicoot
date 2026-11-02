@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 
 #include <gtk/gtk.h>
+#include "compat/fontconfig-null-config.hh"
 
 #ifdef HAVE_GOOCANVAS
 #include <goocanvas.h>
@@ -292,6 +293,7 @@ main(int argc, char *argv[]) {
          mol->ReadPDBASCII(pdb_file_name.c_str());
       }
 
+      bandicoot_set_pango_fontconfig_config(); // see compat/fontconfig-null-config.hh
       gtk_init (&argc, &argv);
 
       float level_prefered = 0.02;
