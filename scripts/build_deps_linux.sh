@@ -24,6 +24,12 @@
 #   GSL             refinement's minimiser; built here because a distribution's
 #                   libgsl-dev can be unusable when other GSL runtime versions
 #                   are already installed
+#   CMake           RDKit needs a newer one than some distribution releases
+#                   ship (e.g. Ubuntu 20.04's 3.16); the official binary
+#   Boost           with Boost.Python built for the Python above; RDKit and
+#                   Bandicoot's ligand tools link it
+#   RDKit           the 2D ligand view, FLEV and pyrogen; its configure step
+#                   also downloads coordgen, maeparser and RingDecomposerLib
 #   patchelf        sets the library search paths of a relocatable release
 #                   (scripts/release-linux.sh); distribution releases can
 #                   be too old (e.g. Ubuntu 20.04's 0.10)
@@ -68,7 +74,7 @@ done
 # --- system packages these builds need (Debian / Ubuntu) ---------------------
 APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl cmake curl
-libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev
+libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev libeigen3-dev libfreetype6-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev
 libssl-dev libffi-dev libbz2-dev libreadline-dev libsqlite3-dev liblzma-dev libncursesw5-dev uuid-dev
 "
@@ -99,7 +105,17 @@ if ! mkdir -p "${DEPS_PREFIX}" 2>/dev/null || [ ! -w "${DEPS_PREFIX}" ]; then
     echo "     sudo chown $(id -un): ${DEPS_PREFIX}" >&2
     exit 1
 fi
-JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+# One job per CPU, but no more than one per 3 GB of RAM: the larger C++ builds
+# (RDKit, Boost) need several GB per compiler, and running out of memory
+# freezes the machine rather than failing the build.
+if [ -z "${JOBS:-}" ]; then
+    _cpus="$(nproc 2>/dev/null || echo 2)"
+    _mem_gb="$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo 2>/dev/null || echo 4)"
+    _by_mem=$(( _mem_gb / 3 ))
+    [ "${_by_mem}" -ge 1 ] || _by_mem=1
+    JOBS=$(( _cpus < _by_mem ? _cpus : _by_mem ))
+    unset _cpus _mem_gb _by_mem
+fi
 
 SRC_CACHE="${DEPS_PREFIX}/src"
 WORK="${DEPS_PREFIX}/build"
@@ -112,6 +128,9 @@ XTAL_OUT="${DEPS_PREFIX}/xtal"
 PYTHON_OUT="${DEPS_PREFIX}/python"
 SWIG_OUT="${DEPS_PREFIX}/swig"
 PATCHELF_OUT="${DEPS_PREFIX}/patchelf"
+CMAKE_OUT="${DEPS_PREFIX}/cmake"
+BOOST_OUT="${DEPS_PREFIX}/boost"
+RDKIT_OUT="${DEPS_PREFIX}/rdkit"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -131,6 +150,9 @@ clipper|2.1.20180802|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/depend
 python|3.13.12|https://www.python.org/ftp/python/3.13.12/Python-3.13.12.tar.xz|2a84cd31dd8d8ea8aaff75de66fc1b4b0127dd5799aa50a64ae9a313885b4593
 gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
 patchelf|0.19.3|https://github.com/NixOS/patchelf/releases/download/0.19.3/patchelf-0.19.3.tar.bz2|20dbe23e9dbc4ad769078a867ad002c04297a069ff93c95fb72242dd55d4dd6f
+cmake|3.31.6|https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz|5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf
+boost|1.87.0|https://archives.boost.io/release/1.87.0/source/boost_1_87_0.tar.bz2|af57be25cb4c4f4b413ed692fe378affb4352ea50fbe294a11ef548f4d527d89
+rdkit|2026.09.1|https://github.com/rdkit/rdkit/archive/Release_2026_09_1.tar.gz|86711e340759a3a0678a2e62f54f26f7ff564c3a02de0460f60b1ce89ac1bfe9
 swig|4.4.1|https://downloads.sourceforge.net/project/swig/swig/swig-4.4.1/swig-4.4.1.tar.gz|40162a706c56f7592d08fd52ef5511cb7ac191f3593cf07306a0a554c6281fcf
 "
 
@@ -333,6 +355,61 @@ if ! skip_if_done gemmi "${GEMMI_OUT}/include/gemmi/model.hpp"; then
     echo "    installed gemmi"
 fi
 
+# CMake: the release binary, unpacked
+if ! skip_if_done cmake "${CMAKE_OUT}/bin/cmake"; then
+    echo "==> cmake-$(dep_field cmake 2)"
+    _tarball="$(fetch cmake "$(dep_field cmake 3)" "$(dep_field cmake 4)")"
+    rm -rf "${CMAKE_OUT}"
+    mkdir -p "${CMAKE_OUT}"
+    tar -xf "${_tarball}" -C "${CMAKE_OUT}" --strip-components=1
+    echo "    installed cmake"
+fi
+
+# Boost, with Boost.Python for the Python built above
+PY_MM="$("${PYTHON_OUT}/bin/python3.13" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+if ! skip_if_done boost "${BOOST_OUT}/lib/libboost_python${PY_MM/./}.so"; then
+    echo "==> boost-$(dep_field boost 2)"
+    srcdir="$(unpack boost)"
+    ( cd "${srcdir}" && \
+      ./bootstrap.sh --prefix="${BOOST_OUT}" --with-toolset=gcc \
+          --with-libraries=python,serialization,iostreams,system \
+          --with-python="${PYTHON_OUT}/bin/python${PY_MM}" --with-python-version="${PY_MM}" \
+          --with-python-root="${PYTHON_OUT}" && \
+      sed -i "s|^ *using gcc *;|using gcc : : ${CXX:-g++} ;|" project-config.jam && \
+      ./b2 -j"${JOBS}" variant=release link=shared threading=multi runtime-link=shared \
+          "linkflags=-Wl,-rpath,${BOOST_OUT}/lib" install )
+    [ -e "${BOOST_OUT}/lib/libboost_python${PY_MM/./}.so" ] || \
+        { echo "!! boost built but libboost_python${PY_MM/./}.so missing" >&2; exit 1; }
+    echo "    installed boost"
+fi
+
+# RDKit: C++ libraries only (Bandicoot does not use its Python wrappers), with
+# Cairo drawing, as the macOS build's Homebrew RDKit has
+if ! skip_if_done rdkit "${RDKIT_OUT}/include/rdkit/GraphMol/ROMol.h"; then
+    echo "==> rdkit-$(dep_field rdkit 2)"
+    srcdir="$(unpack rdkit)"
+    "${CMAKE_OUT}/bin/cmake" -S "${srcdir}" -B "${srcdir}/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="${RDKIT_OUT}" \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_INSTALL_RPATH="${RDKIT_OUT}/lib;${BOOST_OUT}/lib" \
+        -DCMAKE_PREFIX_PATH="${BOOST_OUT}" \
+        -DBoost_ROOT="${BOOST_OUT}" -DBoost_NO_SYSTEM_PATHS=ON \
+        -DRDK_INSTALL_INTREE=OFF \
+        -DRDK_INSTALL_STATIC_LIBS=OFF \
+        -DRDK_BUILD_PYTHON_WRAPPERS=OFF \
+        -DRDK_BUILD_CPP_TESTS=OFF \
+        -DRDK_BUILD_CAIRO_SUPPORT=ON \
+        -DRDK_BUILD_FREETYPE_SUPPORT=ON \
+        -DRDK_BUILD_COORDGEN_SUPPORT=ON \
+        -DRDK_BUILD_MAEPARSER_SUPPORT=ON \
+        -DRDK_BUILD_INCHI_SUPPORT=OFF \
+        -DRDK_BUILD_PGSQL=OFF
+    "${CMAKE_OUT}/bin/cmake" --build "${srcdir}/build" -j "${JOBS}"
+    "${CMAKE_OUT}/bin/cmake" --install "${srcdir}/build"
+    echo "    installed rdkit"
+fi
+
 # --- verify ----------------------------------------------------------------
 echo "==> verifying"
 _fail=0
@@ -369,6 +446,17 @@ if [ -x "${SWIG_OUT}/bin/swig" ]; then
     printf '    %-22s %s\n' "SWIG" "$("${SWIG_OUT}/bin/swig" -version | awk '/SWIG Version/{print $3}')"
 else
     echo "    SWIG: NOT FOUND" >&2; _fail=1
+fi
+if ls "${BOOST_OUT}"/lib/libboost_python*.so >/dev/null 2>&1; then
+    printf '    %-22s %s (%s)\n' "Boost" "$(dep_field boost 2)" \
+        "$(basename "$(ls "${BOOST_OUT}"/lib/libboost_python*.so | head -1)" .so | sed 's/^lib//')"
+else
+    echo "    Boost.Python: NOT FOUND" >&2; _fail=1
+fi
+if ls "${RDKIT_OUT}"/lib/libRDKitMolDraw2D.so* >/dev/null 2>&1 && [ -d "${RDKIT_OUT}/share/RDKit/Data" ]; then
+    printf '    %-22s %s\n' "RDKit" "$(dep_field rdkit 2)"
+else
+    echo "    RDKit (libRDKitMolDraw2D, share/RDKit/Data): NOT FOUND" >&2; _fail=1
 fi
 if [ -x "${PATCHELF_OUT}/bin/patchelf" ]; then
     printf '    %-22s %s\n' "patchelf" "$("${PATCHELF_OUT}/bin/patchelf" --version | awk '{print $2}')"

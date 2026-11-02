@@ -16,10 +16,9 @@
 #   BANDICOOT_UI  UI toolkit: gtk or wx (default: unset, which configures gtk).
 #                 Both toolkits stay buildable for the duration of the
 #                 changeover; a wx build belongs in its own install prefix.
-#   BANDICOOT_RDKIT  enable RDKit / enhanced ligand tools, which the 2D ligand
-#                 view and FLEV are compiled out without. 1 uses the Homebrew
-#                 location; any other value is used as the prefix. Needs
-#                 boost-python, or configure proceeds without RDKit support.
+#   BANDICOOT_RDKIT  RDKit prefix (default: Homebrew's). RDKit is required:
+#                 the 2D ligand view, FLEV and pyrogen are built on it. A value
+#                 of 1 also means Homebrew's, as it did when RDKit was optional.
 #   BUILD_SKIP_CHECKS=1  skip the closing dependency-closure gate (see the end
 #                 of this script). Default is to FAIL the build on an unresolved
 #                 or build-host dependency, dev builds included.
@@ -116,13 +115,21 @@ _preflight() {   # <test-path> <VARNAME> <current-value> <how-to-fix>
 }
 
 _preflight "${BREW_PREFIX}/lib/pkgconfig/gtk+-2.0.pc" BREW_PREFIX "${BREW_PREFIX}" \
-    "brew install gtk+ gtkglext freeglut gsl boost cairo libpng sqlite bzip2"
+    "brew install gtk+ gtkglext freeglut gsl boost cairo libpng sqlite bzip2 swig"
 _preflight "${CONDA_PREFIX}/bin/python3-config" CONDA_PREFIX "${CONDA_PREFIX}" \
     "install Miniconda, then see BUILD.md section 1 for the conda package list"
 _preflight "${CANVAS_PREFIX}/lib/pkgconfig/goocanvas.pc" CANVAS_PREFIX "${CANVAS_PREFIX}" \
     "./scripts/build_deps.sh    (builds libart/libgnomecanvas/goocanvas + FFTW 2)"
 _preflight "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" COOT_DATA_SRC "${COOT_DATA_SRC}" \
     "this data is checked in -- restore it with: git checkout -- data/coot-data"
+
+# The build generates the Python interface with SWIG (src/Makefile.am).
+if ! command -v swig >/dev/null 2>&1; then
+    echo "!! build.sh: swig not found on PATH; the build generates the Python interface with it." >&2
+    echo "   fix: brew install swig" >&2
+    echo "" >&2
+    _preflight_fail=1
+fi
 
 if [ ! -f "${FFTW_PREFIX}/include/fftw.h" ] && [ ! -f "${FFTW_PREFIX}/include/sfftw.h" ]; then
     echo "!! build.sh: FFTW_PREFIX does not contain single-precision FFTW 2." >&2
@@ -371,23 +378,19 @@ if [ -n "${BANDICOOT_UI:-}" ]; then
     echo "==> UI toolkit: ${BANDICOOT_UI}"
 fi
 
-# RDKit / enhanced ligand tools. This is what un-darkens the 2D ligand view and
-# FLEV, both of which are compiled out without it. Set BANDICOOT_RDKIT to 1 for
-# the Homebrew location, or to an explicit prefix. Unset passes no flag.
-RDKIT_CONFIGURE_ARGS=""
-if [ -n "${BANDICOOT_RDKIT:-}" ]; then
-    if [ "${BANDICOOT_RDKIT}" = "1" ]; then
-        RDKIT_PREFIX="${BREW_PREFIX}/opt/rdkit"
-    else
-        RDKIT_PREFIX="${BANDICOOT_RDKIT}"
-    fi
-    if [ ! -d "${RDKIT_PREFIX}/include/rdkit" ]; then
-        echo "!! BANDICOOT_RDKIT set but ${RDKIT_PREFIX}/include/rdkit is absent" >&2
-        exit 1
-    fi
-    RDKIT_CONFIGURE_ARGS="--with-enhanced-ligand-tools --with-rdkit-prefix=${RDKIT_PREFIX}"
-    echo "==> RDKit: ${RDKIT_PREFIX}"
+# RDKit / enhanced ligand tools: the 2D ligand view, FLEV and pyrogen.
+if [ -z "${BANDICOOT_RDKIT:-}" ] || [ "${BANDICOOT_RDKIT}" = "1" ]; then
+    RDKIT_PREFIX="${BREW_PREFIX}/opt/rdkit"
+else
+    RDKIT_PREFIX="${BANDICOOT_RDKIT}"
 fi
+if [ ! -d "${RDKIT_PREFIX}/include/rdkit" ]; then
+    echo "!! build.sh: RDKit not found at ${RDKIT_PREFIX}" >&2
+    echo "   fix: brew install rdkit boost-python3    (or set BANDICOOT_RDKIT to its prefix)" >&2
+    exit 1
+fi
+RDKIT_CONFIGURE_ARGS="--with-enhanced-ligand-tools --with-rdkit-prefix=${RDKIT_PREFIX}"
+echo "==> RDKit: ${RDKIT_PREFIX}"
 
 echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time fallback; files install to ${PREFIX})"
 ./configure \
@@ -401,6 +404,13 @@ echo "==> ./configure --prefix=${BANDICOOT_COMPILE_PREFIX} (generic compile-time
     --with-python="${CONDA_PREFIX}" \
     PYTHON="${CONDA_PREFIX}/bin/python3" \
     PYTHON_CONFIG="${CONDA_PREFIX}/bin/python3-config"
+# configure leaves RDKit out, or links it without Boost.Python, without failing
+if ! grep -q "^ENHANCED_LIGAND_TOOLS_CPPFLAGS = -DMAKE_ENHANCED_LIGAND_TOOLS" src/Makefile || \
+   ! grep -qE "^RDKIT_LIBS = .*-lboost_python[0-9]" src/Makefile; then
+    echo "!! build.sh: configure did not enable RDKit with Boost.Python; see config.log" >&2
+    echo "   fix: brew install rdkit boost-python3" >&2
+    exit 1
+fi
 # v0.1.0.0: --with-python re-enabled. Coot's C interface is Py2-flavoured
 # throughout; the Py2→Py3 macro shim at compat/python23-shim.hh
 # (force-included via CXXFLAGS above) handles the vast majority of

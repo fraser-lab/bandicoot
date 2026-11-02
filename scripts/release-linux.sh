@@ -77,26 +77,10 @@ esac
 [ -x "${PATCHELF}" ] || fail "patchelf not found at ${PATCHELF}; run scripts/build_deps_linux.sh"
 [ -x "${PYTHON}" ]   || fail "Python not found at ${PYTHON}; run scripts/build_deps_linux.sh"
 
-# Every Linux build regenerates these tracked files (see build-linux.sh), so
-# a tree that is otherwise clean still fails the clean-tree check. After a
-# build they are expected to be modified, and nothing else may be.
-_generated="src/coot.py src/coot_wrap_python.cc src/coot_wrap_python_pre.cc"
-_dirty="$(git status --porcelain --untracked-files=no | awk '{print $2}')"
-_only_generated=0
-if [ -n "${_dirty}" ]; then
-    _only_generated=1
-    for _f in ${_dirty}; do
-        case " ${_generated} " in *" ${_f} "*) ;; *) _only_generated=0 ;; esac
-    done
-fi
-if [ "${SKIP_BUILD}" = "1" ]; then
-    [ -z "${_dirty}" ] || [ "${_only_generated}" = "1" ] || \
-        fail "the tree has changed since the build; run without --skip-build"
-elif [ "${_only_generated}" = "1" ]; then
-    echo "!! release-linux.sh: only the SWIG files a Linux build regenerates are modified." >&2
-    echo "   Restore them, then run this again:" >&2
-    echo "     git restore ${_generated}" >&2
-    exit 1
+# A full run checks the tree in build-linux.sh; a reused build must not have
+# been made from a tree that differs from HEAD.
+if [ "${SKIP_BUILD}" = "1" ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    fail "the tree has uncommitted changes; commit them and run without --skip-build"
 fi
 
 # Files taken from the build machine's system packages
@@ -229,13 +213,19 @@ origin_rpath() {   # <file>
 }
 
 # The ELF files whose search path is ours to set: everything except the
-# wheels in site-packages, which carry their own
+# wheels in site-packages, which carry their own. Bandicoot's own Python
+# extension modules (pyrogen's) sit at the top of site-packages; a wheel's are
+# inside its package directories.
 all_elves() {
     { find "${PREFIX}/bin" "${PREFIX}/libexec" -type f 2>/dev/null
       find "${LIB}" -type f -name '*.so*' 2>/dev/null; } | \
         while IFS= read -r f; do is_elf "$f" && echo "$f"; done || true
 }
-own_elves() { all_elves | grep -vF "${SITE}/" || true; }
+own_elves() {
+    all_elves | grep -vF "${SITE}/" || true
+    find "${SITE}" -maxdepth 1 -type f -name '*.so*' 2>/dev/null | \
+        while IFS= read -r f; do is_elf "$f" && echo "$f"; done || true
+}
 
 set_rpaths() {
     local f n=0
@@ -351,7 +341,7 @@ for _f in libexec/Bandicoot bin/coot bin/bcoot setup.sh \
           "lib/python${PYVER}/encodings/__init__.py" "lib/python${PYVER}/site-packages/coot" \
           lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.so \
           libexec/gdk-pixbuf-query-loaders libexec/gtk-query-immodules-2.0 \
-          share/themes/Raleigh/gtk-2.0/gtkrc share/coot/syminfo.lib \
+          share/themes/Raleigh/gtk-2.0/gtkrc share/coot/syminfo.lib share/RDKit/Data \
           share/coot/lib/data/monomers share/coot/reference-structures share/coot/pixmaps; do
     [ -e "${PREFIX}/${_f}" ] || fail "missing from the bundle: ${_f}"
 done

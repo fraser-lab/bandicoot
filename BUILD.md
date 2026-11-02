@@ -28,9 +28,13 @@ conda activate
 
 Install Homebrew-based dependencies:
 ```sh
-brew install autoconf automake libtool intltool pkg-config \
-             gtk+ gtkglext freeglut gsl boost cairo libpng sqlite bzip2
+brew install autoconf automake libtool intltool pkg-config swig \
+             gtk+ gtkglext freeglut gsl boost cairo libpng sqlite bzip2 \
+             rdkit boost-python3
 ```
+
+SWIG generates the Python interface (`src/coot_wrap_python.cc`, `src/coot.py`)
+during the build; those files are not kept in the repository.
 
 Install Conda-based dependencies:
 ```
@@ -39,7 +43,7 @@ conda install -c bioconda clipper libccp4 mmdb2 ssm
 
 For the wx interface (`BANDICOOT_UI=wx`, below), also:
 ```sh
-brew install wxwidgets rdkit boost-python3
+brew install wxwidgets
 ```
 
 **NOTE**: `gtk+` is GTK **2** (Quartz backend); the wx build still links it. The conda channel these packages come from is **bioconda** (hence `-c bioconda`) and the Clipper library package is `clipper` — not the `clipper-*` set some older instructions listed.
@@ -103,7 +107,7 @@ Set as environment variables on `./scripts/build.sh`:
 | `CONDA_PREFIX` | `/opt/miniconda3` | conda root; also supplies the embedded Python |
 | `JOBS` | CPU count | parallel make jobs |
 | `BANDICOOT_UI` | `gtk` | user interface toolkit: `gtk` or `wx`; give a wx build its own `PREFIX` |
-| `BANDICOOT_RDKIT` | unset | `1` enables RDKit (the 2D ligand view and FLEV) from Homebrew; any other value is used as its prefix |
+| `BANDICOOT_RDKIT` | Homebrew's `rdkit` | RDKit prefix. RDKit is required: the 2D ligand view, FLEV and pyrogen are built on it |
 | `BANDICOOT_CLEAN=1` | — | force a full recompile |
 
 `build.sh` checks every dependency before compiling anything. If one is missing

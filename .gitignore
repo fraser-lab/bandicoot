@@ -39,6 +39,9 @@ macros/lt~obsolete.m4
 src/coot
 src/coot_wrap_guile.cc
 src/coot_wrap_guile_pre.cc
+src/coot_wrap_python.cc
+src/coot_wrap_python_pre.cc
+src/coot.py
 src/git-revision-count.cc
 src/coot-version.h
 src/coot-bin
