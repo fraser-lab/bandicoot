@@ -7,7 +7,9 @@
 #
 # --skip-build starts at step 2 on the install a previous run built, for
 # finishing a run that stopped after its build. It refuses unless that build
-# was a release-mode build (of the same kind) of the current commit.
+# was a release-mode build (of the same kind) of the current commit, or, for a
+# milestone release, of an earlier commit that differs from it only in the
+# packaging scripts (so fixes to this script need no rebuild).
 #
 # Run on the OLDEST distribution release the tarball should support: the
 # result runs there and on anything newer. It
@@ -122,8 +124,19 @@ stamp_field() { sed -n "s/^$1=//p" "${STAMP}"; }
 
 if [ "${SKIP_BUILD}" = "1" ]; then
     [ -f "${STAMP}" ] || fail "${PREFIX} holds no release build to reuse; run without --skip-build"
-    [ "$(stamp_field commit)" = "${HEAD_COMMIT}" ] || \
-        fail "the build in ${PREFIX} is of commit $(stamp_field commit | cut -c1-7), not HEAD; run without --skip-build"
+    _built="$(stamp_field commit)"
+    if [ "${_built}" != "${HEAD_COMMIT}" ]; then
+        # a nightly's title bar names the commit it was built from
+        [ "${MODE}" = "release" ] && git merge-base --is-ancestor "${_built}" HEAD 2>/dev/null || \
+            fail "the build in ${PREFIX} is of commit ${_built:0:7}, not HEAD; run without --skip-build"
+        _changed="$(git diff --name-only "${_built}" HEAD | \
+            grep -vxE 'scripts/(release-linux|setup-install|smoke_test_imports|check_[a-z_]+)\.sh' || true)"
+        [ -z "${_changed}" ] || \
+            fail "files built into Bandicoot changed since the build (${_built:0:7}):
+$(echo "${_changed}" | sed 's/^/     /')
+   run without --skip-build"
+        echo "==> --skip-build: only packaging scripts changed since ${_built:0:7}"
+    fi
     [ "$(stamp_field mode)" = "${MODE}" ] || \
         fail "the build in ${PREFIX} is a $(stamp_field mode) build, not a ${MODE} build; run without --skip-build"
     VERSION="$(stamp_field version)"
@@ -157,7 +170,8 @@ mkdir -p "${LIB}/python${PYVER}"
       --exclude=idlelib --exclude=tkinter --exclude=turtledemo --exclude=ensurepip \
       --exclude='config-*' --exclude=__pycache__ . ) | \
   ( cd "${LIB}/python${PYVER}" && tar xf - )
-rm -f "${LIB}/python${PYVER}"/lib-dynload/_tkinter*.so
+# Tk is not shipped, and the _test* modules belong to the test suite
+rm -f "${LIB}/python${PYVER}"/lib-dynload/_tkinter*.so "${LIB}/python${PYVER}"/lib-dynload/_test*.so
 
 echo "==> bundling numpy + matplotlib (PyPI wheels)"
 # --only-binary: a source build would link this machine's libraries
@@ -226,8 +240,15 @@ own_elves() { all_elves | grep -vF "${SITE}/" || true; }
 set_rpaths() {
     local f n=0
     while IFS= read -r f; do
-        readelf -d "$f" 2>/dev/null | grep -q '(NEEDED)' || continue
         chmod u+w "$f"
+        # a file that loads no libraries needs no search path; one left over
+        # from its build would point outside the bundle
+        if ! readelf -d "$f" 2>/dev/null | grep -q '(NEEDED)'; then
+            if readelf -d "$f" 2>/dev/null | grep -qE '\((RUN)?PATH\)'; then
+                "${PATCHELF}" --remove-rpath "$f"
+            fi
+            continue
+        fi
         # DT_RPATH rather than RUNPATH: it is searched before LD_LIBRARY_PATH,
         # so a library directory in the user's environment cannot replace a
         # bundled library, and it also serves the libraries' own dependencies
