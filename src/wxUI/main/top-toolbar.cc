@@ -151,6 +151,13 @@ void TopToolbar::build() {
    });
    // where the toolkit reports right-clicks on tools (not the macOS toolbar)
    tb->Bind(wxEVT_TOOL_RCLICKED, [this](wxCommandEvent &) { show_menu(); });
+#ifndef __WXOSX__
+   // and on the bar between and beyond the tools, which the tool event misses
+   tb->Bind(wxEVT_RIGHT_DOWN, [this, tb](wxMouseEvent &e) {
+      if (tb->FindToolForPosition(e.GetX(), e.GetY())) { e.Skip(); return; }
+      show_menu();
+   });
+#endif
    frame->Layout();
 }
 
