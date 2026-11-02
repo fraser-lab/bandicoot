@@ -24,6 +24,9 @@
 #   GSL             refinement's minimiser; built here because a distribution's
 #                   libgsl-dev can be unusable when other GSL runtime versions
 #                   are already installed
+#   patchelf        sets the library search paths of a relocatable release
+#                   (scripts/release-linux.sh); distribution releases can
+#                   be too old (e.g. Ubuntu 20.04's 0.10)
 #   SWIG            generates the Python wrapper; distribution releases that
 #                   predate Python 3.12 support (e.g. Ubuntu 20.04's 4.0.1)
 #                   generate code for an older Python C API
@@ -33,7 +36,7 @@
 # The system packages these builds need are listed by scripts/build-linux.sh.
 #
 # ENVIRONMENT (all optional)
-#   DEPS_PREFIX   install prefix     (default: <repo>/deps)
+#   DEPS_PREFIX   install prefix     (default: /opt/bandicoot-deps)
 #   JOBS          parallel make jobs (default: CPU count)
 #   DEPS_FORCE=1  rebuild even if already installed
 
@@ -85,7 +88,17 @@ if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ] && command -v dpkg-query >/dev/nul
     fi
 fi
 
-DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
+# A generic location, not under a home directory: some of these libraries
+# (libpython among them) record their install path in themselves, and a
+# release ships them.
+DEPS_PREFIX="${DEPS_PREFIX:-/opt/bandicoot-deps}"
+if ! mkdir -p "${DEPS_PREFIX}" 2>/dev/null || [ ! -w "${DEPS_PREFIX}" ]; then
+    echo "!! build_deps_linux.sh: ${DEPS_PREFIX} is not writable by $(id -un)" >&2
+    echo "   create it once:" >&2
+    echo "     sudo mkdir -p ${DEPS_PREFIX}" >&2
+    echo "     sudo chown $(id -un): ${DEPS_PREFIX}" >&2
+    exit 1
+fi
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
 SRC_CACHE="${DEPS_PREFIX}/src"
@@ -98,6 +111,7 @@ GSL_OUT="${DEPS_PREFIX}/gsl"
 XTAL_OUT="${DEPS_PREFIX}/xtal"
 PYTHON_OUT="${DEPS_PREFIX}/python"
 SWIG_OUT="${DEPS_PREFIX}/swig"
+PATCHELF_OUT="${DEPS_PREFIX}/patchelf"
 PCDIR="${CANVAS_OUT}/lib/pkgconfig"
 
 mkdir -p "${SRC_CACHE}" "${WORK}" "${PCDIR}"
@@ -116,6 +130,7 @@ ssm|1.4|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/ssm-1.
 clipper|2.1.20180802|https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/clipper-2.1.20180802.tar.gz|7c7774f224b59458e0faa104d209da906c129523fa737e81eb3b99ec772b81e0
 python|3.13.12|https://www.python.org/ftp/python/3.13.12/Python-3.13.12.tar.xz|2a84cd31dd8d8ea8aaff75de66fc1b4b0127dd5799aa50a64ae9a313885b4593
 gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190
+patchelf|0.19.3|https://github.com/NixOS/patchelf/releases/download/0.19.3/patchelf-0.19.3.tar.bz2|20dbe23e9dbc4ad769078a867ad002c04297a069ff93c95fb72242dd55d4dd6f
 swig|4.4.1|https://downloads.sourceforge.net/project/swig/swig/swig-4.4.1/swig-4.4.1.tar.gz|40162a706c56f7592d08fd52ef5511cb7ac191f3593cf07306a0a554c6281fcf
 "
 
@@ -240,6 +255,7 @@ build_autotools gsl "${GSL_OUT}/bin/gsl-config" "${GSL_OUT}" \
 # PCRE is only for SWIG's %rename regex matching, which coot.i does not use
 build_autotools swig "${SWIG_OUT}/bin/swig" "${SWIG_OUT}" \
     --without-pcre
+build_autotools patchelf "${PATCHELF_OUT}/bin/patchelf" "${PATCHELF_OUT}"
 
 # Python, shared (Bandicoot embeds libpython), with pip; the rpath lets the
 # installed interpreter and library find each other without LD_LIBRARY_PATH
@@ -353,6 +369,11 @@ if [ -x "${SWIG_OUT}/bin/swig" ]; then
     printf '    %-22s %s\n' "SWIG" "$("${SWIG_OUT}/bin/swig" -version | awk '/SWIG Version/{print $3}')"
 else
     echo "    SWIG: NOT FOUND" >&2; _fail=1
+fi
+if [ -x "${PATCHELF_OUT}/bin/patchelf" ]; then
+    printf '    %-22s %s\n' "patchelf" "$("${PATCHELF_OUT}/bin/patchelf" --version | awk '{print $2}')"
+else
+    echo "    patchelf: NOT FOUND" >&2; _fail=1
 fi
 if [ -x "${WX_OUT}/bin/wx-config" ]; then
     printf '    %-22s %s (%s)\n' "wxWidgets" "$("${WX_OUT}/bin/wx-config" --version)" \

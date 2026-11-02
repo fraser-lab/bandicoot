@@ -148,10 +148,25 @@ if [ -e $COOT_PREFIX/libexec/guile ] ; then
     GUILE_BIN=$COOT_PREFIX/libexec/guile
 fi
 
-if [ $systype = Linux ] ; then 
-   if [ -z "$LD_LIBRARY_PATH" ] ;  then
+if [ $systype = Linux ] ; then
+   if [ -d "$COOT_PREFIX/lib/gdk-pixbuf-2.0" ] ; then
+      # A release tarball (scripts/release-linux.sh): every binary finds the
+      # bundled libraries through its own search path, so LD_LIBRARY_PATH is
+      # left as it was for the programs Bandicoot starts. GTK, gdk-pixbuf and
+      # GIO are pointed at the bundled modules: the system's are built for its
+      # own, newer GTK and GLib. The caches are written by setup.sh.
+      GDK_PIXBUF_MODULEDIR=$COOT_PREFIX/lib/gdk-pixbuf-2.0/2.10.0/loaders
+      GDK_PIXBUF_MODULE_FILE=$COOT_PREFIX/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+      GTK_PATH=$COOT_PREFIX/lib/gtk-2.0
+      GTK_IM_MODULE_FILE=$COOT_PREFIX/lib/gtk-2.0/2.10.0/gtk.immodules
+      GTK_EXE_PREFIX=$COOT_PREFIX
+      GTK_DATA_PREFIX=$COOT_PREFIX
+      GIO_MODULE_DIR=$COOT_PREFIX/lib/gio/modules
+      export GDK_PIXBUF_MODULEDIR GDK_PIXBUF_MODULE_FILE GTK_PATH \
+             GTK_IM_MODULE_FILE GTK_EXE_PREFIX GTK_DATA_PREFIX GIO_MODULE_DIR
+   elif [ -z "$LD_LIBRARY_PATH" ] ;  then
 	LD_LIBRARY_PATH=$COOT_PREFIX/lib
-   else 
+   else
 	LD_LIBRARY_PATH=$COOT_PREFIX/lib:${LD_LIBRARY_PATH}
    fi
 fi

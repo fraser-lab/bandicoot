@@ -16,9 +16,13 @@
 #
 # Customise via environment variables (all optional):
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
-#   DEPS_PREFIX     source-built deps      (default: <repo>/deps, from build_deps_linux.sh)
+#   DEPS_PREFIX     source-built deps      (default: /opt/bandicoot-deps, else <repo>/deps)
 #   PYTHON          embedded Python        (default: <deps>/python/bin/python3.13, else /usr/bin/python3)
 #   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
+#   BANDICOOT_RELEASE=1  milestone release build: no version suffix, clean
+#                   pushed tree required, generic compile-time prefix (as
+#                   scripts/build.sh); scripts/release-linux.sh sets this
+#   BANDICOOT_NIGHTLY=1  as above, with the commit as the version suffix
 #   BANDICOOT_INCREMENTAL=1  skip `make clean`
 #   BANDICOOT_SKIP_PACKAGE_CHECK=1  skip the system-package check (non-Debian systems)
 #   BANDICOOT_ASAN=1  build with AddressSanitizer (memory-error diagnosis; slow,
@@ -42,7 +46,13 @@ export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH PKG_CONFIG_PATH
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
-DEPS_PREFIX="${DEPS_PREFIX:-${REPO_ROOT}/deps}"
+if [ -z "${DEPS_PREFIX:-}" ]; then
+    if [ -d /opt/bandicoot-deps ]; then
+        DEPS_PREFIX=/opt/bandicoot-deps
+    else
+        DEPS_PREFIX="${REPO_ROOT}/deps"
+    fi
+fi
 PYTHON="${PYTHON:-}"
 # Parallel jobs: one per CPU, but no more than one per 3 GB of RAM. GCC needs
 # several GB for the largest files, and running out of memory freezes the
@@ -192,7 +202,22 @@ fi
 BANDICOOT_VERSION_STR="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' src/bandicoot-version.h)"
 COUNTER_FILE="${REPO_ROOT}/.build-counter"
 BUILD_SUFFIX=""
-if [ -n "${BANDICOOT_DEV:-}" ] || [ -f "${REPO_ROOT}/.bandicoot-dev" ]; then
+# A release or nightly configures with a generic prefix, so the builder's
+# install path is not compiled into the binaries, installs into a staging
+# directory and moves the result into ${PREFIX}.
+CONFIG_PREFIX="${PREFIX}"
+if [ -n "${BANDICOOT_RELEASE:-}" ] && [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    echo "!! build-linux.sh: set BANDICOOT_RELEASE=1 or BANDICOOT_NIGHTLY=1, not both" >&2
+    exit 1
+fi
+if [ -n "${BANDICOOT_RELEASE:-}" ]; then
+    ./scripts/check_clean_tree.sh "a release build (BANDICOOT_RELEASE=1)"
+    CONFIG_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
+elif [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    ./scripts/check_clean_tree.sh "a nightly build (BANDICOOT_NIGHTLY=1)"
+    CONFIG_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
+    BUILD_SUFFIX="-$(git rev-parse --short HEAD)"
+elif [ -n "${BANDICOOT_DEV:-}" ] || [ -f "${REPO_ROOT}/.bandicoot-dev" ]; then
     n=1
     if [ -f "${COUNTER_FILE}" ] && [ "$(awk '{print $1}' "${COUNTER_FILE}")" = "${BANDICOOT_VERSION_STR}" ]; then
         n=$(( $(awk '{print $2}' "${COUNTER_FILE}") + 1 ))
@@ -222,14 +247,14 @@ touch src/main.cc
 # rpaths into the dependency tree so the installed program finds the
 # source-built libraries without LD_LIBRARY_PATH
 PYTHON_LIBDIR="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
-DEP_RPATHS="-Wl,-rpath,${PYTHON_LIBDIR} -Wl,-rpath,${PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib"
+DEP_RPATHS="-Wl,-rpath,${PYTHON_LIBDIR} -Wl,-rpath,${CONFIG_PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib"
 PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
 
 # Some directories include Clipper / MMDB2 / gemmi headers without asking
 # pkg-config for their flags, so the source-built dependencies go on every
 # compile and link (as scripts/build.sh does with conda's prefix on macOS).
-export CPPFLAGS="-I${PREFIX}/include -I${XTAL_PREFIX}/include -I${GEMMI_PREFIX}/include -I${GSL_PREFIX}/include -I${FFTW_PREFIX}/include"
-export LDFLAGS="-L${PREFIX}/lib -L${XTAL_PREFIX}/lib -L${GEMMI_PREFIX}/lib -L${GSL_PREFIX}/lib -L${FFTW_PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
+export CPPFLAGS="-I${CONFIG_PREFIX}/include -I${XTAL_PREFIX}/include -I${GEMMI_PREFIX}/include -I${GSL_PREFIX}/include -I${FFTW_PREFIX}/include"
+export LDFLAGS="-L${CONFIG_PREFIX}/lib -L${XTAL_PREFIX}/lib -L${GEMMI_PREFIX}/lib -L${GSL_PREFIX}/lib -L${FFTW_PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
 # MMDB2 before 2.0.22 (e.g. Ubuntu 20.04's 2.0.5) #defines strchr and strrchr
 # to its own functions, which breaks <cstring> in any file that includes it
@@ -237,9 +262,9 @@ SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
 export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++20 -include cstring ${SHIM_INCLUDE}"
 export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
 
-echo "==> ./configure --prefix=${PREFIX} --with-ui=wx"
+echo "==> ./configure --prefix=${CONFIG_PREFIX} --with-ui=wx"
 ./configure \
-    --prefix="${PREFIX}" \
+    --prefix="${CONFIG_PREFIX}" \
     --with-ui=wx \
     WX_CONFIG="${WX_PREFIX}/bin/wx-config" \
     --with-fftw-prefix="${FFTW_PREFIX}" \
@@ -282,11 +307,29 @@ echo "==> make -j${JOBS} (set JOBS to change)"
 make -j"${JOBS}"
 
 mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
-echo "==> make install -> ${PREFIX}"
 # No byte-compiling at install: the py-compile script that older automake
 # copies in (e.g. Ubuntu 20.04's) imports 'imp', which Python 3.12 removed.
 # Python compiles the modules itself on first import.
-make install py_compile=/dev/null
+if [ "${CONFIG_PREFIX}" = "${PREFIX}" ]; then
+    echo "==> make install -> ${PREFIX}"
+    make install py_compile=/dev/null
+else
+    # DESTDIR only prepends to the install paths; overriding prefix at install
+    # time instead would recompile the objects that embed it.
+    if [ -n "$(ls -A "${PREFIX}" 2>/dev/null)" ] && [ ! -x "${PREFIX}/bin/coot" ]; then
+        echo "!! build-linux.sh: ${PREFIX} is not empty and is not a Bandicoot install;" >&2
+        echo "   a release build replaces its contents, so it will not touch it" >&2
+        exit 1
+    fi
+    _stage="$(mktemp -d)"
+    trap 'rm -rf "${_stage}"' EXIT
+    echo "==> make install (staged, prefix ${CONFIG_PREFIX}) -> ${PREFIX}"
+    make install py_compile=/dev/null DESTDIR="${_stage}"
+    find "${PREFIX}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    find "${_stage}${CONFIG_PREFIX}" -mindepth 1 -maxdepth 1 -exec mv -f {} "${PREFIX}/" \;
+    rm -rf "${_stage}"
+    trap - EXIT
+fi
 
 # Every library search path baked into the program must point into the
 # install or the dependency tree; anything else is a library the build picked
@@ -297,7 +340,7 @@ for _elf in "${PREFIX}"/libexec/coot-bin "${PREFIX}"/lib/libcoot*.so*; do
     _rp="$(readelf -d "${_elf}" 2>/dev/null | grep -E '\((RUN)?PATH\)' | sed 's/.*\[\(.*\)\]/\1/')"
     for _d in ${_rp//:/ }; do
         case "${_d}" in
-            "${PREFIX}"/*|"${DEPS_PREFIX}"/*) ;;
+            "${PREFIX}"/*|"${CONFIG_PREFIX}"/*|"${DEPS_PREFIX}"/*) ;;
             *) echo "!! build-linux.sh: $(basename "${_elf}") searches ${_d} for libraries" >&2
                _rp_fail=1 ;;
         esac
