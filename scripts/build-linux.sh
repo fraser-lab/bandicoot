@@ -307,6 +307,9 @@ echo "==> make -j${JOBS} (set JOBS to change)"
 make -j"${JOBS}"
 
 mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
+# Marks a finished release build for release-linux.sh --skip-build; any new
+# install, of whatever kind, invalidates it (that script writes a fresh one).
+rm -f "${PREFIX}/.bandicoot-release-stamp"
 # No byte-compiling at install: the py-compile script that older automake
 # copies in (e.g. Ubuntu 20.04's) imports 'imp', which Python 3.12 removed.
 # Python compiles the modules itself on first import.

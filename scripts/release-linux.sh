@@ -3,6 +3,11 @@
 #
 #     ./scripts/release-linux.sh                       milestone release
 #     BANDICOOT_NIGHTLY=1 ./scripts/release-linux.sh   nightly (commit in the name)
+#     ./scripts/release-linux.sh --skip-build          reuse the last release build
+#
+# --skip-build starts at step 2 on the install a previous run built, for
+# finishing a run that stopped after its build. It refuses unless that build
+# was a release-mode build (of the same kind) of the current commit.
 #
 # Run on the OLDEST distribution release the tarball should support: the
 # result runs there and on anything newer. It
@@ -27,7 +32,18 @@
 #   OUT           output directory       (default: <repo>/../releases/<version>)
 #   CC / CXX      as for build-linux.sh
 
-set -euo pipefail
+set -Eeuo pipefail
+
+SKIP_BUILD=0
+for _arg in "$@"; do
+    case "${_arg}" in
+        --skip-build) SKIP_BUILD=1 ;;
+        -h|--help)    sed -n '2,/^$/p' "$0"; exit 0 ;;
+        *)            echo "!! release-linux.sh: unknown option ${_arg}" >&2; exit 2 ;;
+    esac
+done
+# a failing command would otherwise end the script without saying where
+trap 'echo "!! release-linux.sh: stopped by a failed command at line ${LINENO}" >&2' ERR
 
 if [ "$(uname)" != "Linux" ]; then
     echo "!! release-linux.sh is for Linux; on macOS use scripts/build.sh + scripts/package.sh" >&2
@@ -60,7 +76,8 @@ esac
 [ -x "${PYTHON}" ]   || fail "Python not found at ${PYTHON}; run scripts/build_deps_linux.sh"
 
 # Every Linux build regenerates these tracked files (see build-linux.sh), so
-# a tree that is otherwise clean still fails the clean-tree check.
+# a tree that is otherwise clean still fails the clean-tree check. After a
+# build they are expected to be modified, and nothing else may be.
 _generated="src/coot.py src/coot_wrap_python.cc src/coot_wrap_python_pre.cc"
 _dirty="$(git status --porcelain --untracked-files=no | awk '{print $2}')"
 _only_generated=0
@@ -70,7 +87,10 @@ if [ -n "${_dirty}" ]; then
         case " ${_generated} " in *" ${_f} "*) ;; *) _only_generated=0 ;; esac
     done
 fi
-if [ "${_only_generated}" = "1" ]; then
+if [ "${SKIP_BUILD}" = "1" ]; then
+    [ -z "${_dirty}" ] || [ "${_only_generated}" = "1" ] || \
+        fail "the tree has changed since the build; run without --skip-build"
+elif [ "${_only_generated}" = "1" ]; then
     echo "!! release-linux.sh: only the SWIG files a Linux build regenerates are modified." >&2
     echo "   Restore them, then run this again:" >&2
     echo "     git restore ${_generated}" >&2
@@ -89,16 +109,40 @@ for _f in "${PIXBUF_SRC}/libpixbufloader-svg.so" "${PIXBUF_QUERY_SRC}" "${IM_SRC
 done
 
 # --- 1. build -----------------------------------------------------------------
+# A stamp in the install records what the build was, for --skip-build. Any
+# other build replaces the install's contents, and the stamp with them.
+STAMP="${PREFIX}/.bandicoot-release-stamp"
 if [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
-    unset BANDICOOT_RELEASE
+    MODE=nightly
 else
-    export BANDICOOT_RELEASE=1
+    MODE=release
 fi
-unset BANDICOOT_INCREMENTAL BANDICOOT_ASAN
-PREFIX="${PREFIX}" DEPS_PREFIX="${DEPS_PREFIX}" ./scripts/build-linux.sh
+HEAD_COMMIT="$(git rev-parse HEAD)"
+stamp_field() { sed -n "s/^$1=//p" "${STAMP}"; }
 
-VERSION="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' src/bandicoot-version.h)"
-SUFFIX="$(awk -F'"' '/BANDICOOT_BUILD_SUFFIX/ {print $2}' src/bandicoot-build-id.h)"
+if [ "${SKIP_BUILD}" = "1" ]; then
+    [ -f "${STAMP}" ] || fail "${PREFIX} holds no release build to reuse; run without --skip-build"
+    [ "$(stamp_field commit)" = "${HEAD_COMMIT}" ] || \
+        fail "the build in ${PREFIX} is of commit $(stamp_field commit | cut -c1-7), not HEAD; run without --skip-build"
+    [ "$(stamp_field mode)" = "${MODE}" ] || \
+        fail "the build in ${PREFIX} is a $(stamp_field mode) build, not a ${MODE} build; run without --skip-build"
+    VERSION="$(stamp_field version)"
+    SUFFIX="$(stamp_field suffix)"
+    echo "==> --skip-build: reusing the ${MODE} build of ${HEAD_COMMIT:0:7} in ${PREFIX}"
+else
+    if [ "${MODE}" = "nightly" ]; then
+        unset BANDICOOT_RELEASE
+    else
+        export BANDICOOT_RELEASE=1
+    fi
+    unset BANDICOOT_INCREMENTAL BANDICOOT_ASAN
+    rm -f "${STAMP}"
+    PREFIX="${PREFIX}" DEPS_PREFIX="${DEPS_PREFIX}" ./scripts/build-linux.sh
+    VERSION="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' src/bandicoot-version.h)"
+    SUFFIX="$(awk -F'"' '/BANDICOOT_BUILD_SUFFIX/ {print $2}' src/bandicoot-build-id.h)"
+    printf 'mode=%s\ncommit=%s\nversion=%s\nsuffix=%s\n' \
+        "${MODE}" "${HEAD_COMMIT}" "${VERSION}" "${SUFFIX}" > "${STAMP}"
+fi
 NAME="bandicoot-${VERSION}${SUFFIX}"
 LIB="${PREFIX}/lib"
 PYVER="$("${PYTHON}" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
@@ -175,7 +219,7 @@ origin_rpath() {   # <file>
 all_elves() {
     { find "${PREFIX}/bin" "${PREFIX}/libexec" -type f 2>/dev/null
       find "${LIB}" -type f -name '*.so*' 2>/dev/null; } | \
-        while IFS= read -r f; do is_elf "$f" && echo "$f"; done
+        while IFS= read -r f; do is_elf "$f" && echo "$f"; done || true
 }
 own_elves() { all_elves | grep -vF "${SITE}/" || true; }
 
@@ -223,7 +267,7 @@ while :; do
             cp -L "${path}" "${LIB}/${name}"
             chmod u+w "${LIB}/${name}"
             _added=$((_added + 1))
-        done < <(LD_LIBRARY_PATH="${DEP_LIBDIRS}" ldd "$f" 2>/dev/null | grep '=>')
+        done < <(LD_LIBRARY_PATH="${DEP_LIBDIRS}" ldd "$f" 2>/dev/null | grep '=>' || true)
     done < <(own_elves)
     echo "    round ${_round}: ${_added} libraries added"
     [ -z "${_missing}" ] || fail "unresolved libraries:${_missing}"
@@ -257,13 +301,14 @@ while IFS= read -r f; do
             "${PREFIX}"/*) ;;
             *) echo "   ${f#"${PREFIX}"/}: ${name} -> ${path}" >&2; _bad=1 ;;
         esac
-    done < <(ldd "$f" 2>/dev/null | grep '=>')
+    done < <(ldd "$f" 2>/dev/null | grep '=>' || true)
 done < <(all_elves)
 [ "${_bad}" = "0" ] || fail "libraries above resolve outside the bundle"
 
 echo "==> check: no search path outside the bundle"
 while IFS= read -r f; do
-    _rp="$(readelf -d "$f" 2>/dev/null | grep -E '\((RUN)?PATH\)' | sed 's/.*\[\(.*\)\]/\1/')"
+    # a file with no dependencies has no search path
+    _rp="$(readelf -d "$f" 2>/dev/null | grep -E '\((RUN)?PATH\)' | sed 's/.*\[\(.*\)\]/\1/' || true)"
     for _d in ${_rp//:/ }; do
         case "${_d}" in
             '$ORIGIN'*) ;;
@@ -291,7 +336,7 @@ for _f in libexec/Bandicoot bin/coot bin/bcoot setup.sh \
 done
 
 echo "==> check: the bundled interpreter imports what a session needs"
-./scripts/smoke_test_imports.sh "${PREFIX}"
+./scripts/smoke_test_imports.sh "${PREFIX}" || fail "a module failed to import in the bundled interpreter"
 
 ./scripts/check_splash_version.sh "${PREFIX}/share/coot/pixmaps/bandicoot-splash.png" "${VERSION}" || \
     fail "the splash screen does not show release ${VERSION}"
@@ -308,6 +353,7 @@ trap 'rm -rf "${_stage}"' EXIT
 cp -a "${PREFIX}" "${_stage}/${NAME}"
 # the caches record absolute paths and are written by setup.sh on the user's machine
 tar -C "${_stage}" --exclude='*/loaders.cache' --exclude='*/gtk.immodules' \
+    --exclude='*/.bandicoot-release-stamp' \
     --exclude='*/__pycache__' --owner=0 --group=0 -czf "${TARBALL}" "${NAME}"
 rm -rf "${_stage}"
 trap - EXIT
