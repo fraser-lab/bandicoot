@@ -2679,25 +2679,34 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                float hlit_point_size =  40.0/zsc * px;
                float ball_point_size = 280.0/zsc * px;
 
-               // the position offset should be clamped between point_size_data[0] and point_size_data[1]
-               //
-               //
+               // the driver draws no point larger than its maximum
                GLdouble point_size_data[2];
                glGetDoublev(GL_POINT_SIZE_RANGE, point_size_data);
-               float off = 0.03;
-
-
                if (ball_point_size > point_size_data[1]) {
-                  off *= (point_size_data[1]/ball_point_size);
                   ball_point_size = point_size_data[1];
                   hlit_point_size = (40.0/280.0) * point_size_data[1];
                }
 
-               // the offset doesn't depend on zoom (until it does (implicitly) by the ball size going bigger
-               // than the graphics card wants to draw it).
-               //
-               coot::Cartesian offset = screen_x * off;
-               offset += screen_y * (-off * 1.25);
+               // The highlight sits a fixed fraction of the ball's radius from its
+               // centre, up and to the right. The ball's size is in framebuffer
+               // pixels, so the offset is converted to model space at the current
+               // view; a fixed model-space offset would drift to the ball's edge in
+               // a larger or denser window.
+               GLdouble mv[16], pj[16];
+               GLint vp[4];
+               glGetDoublev(GL_MODELVIEW_MATRIX, mv);
+               glGetDoublev(GL_PROJECTION_MATRIX, pj);
+               glGetIntegerv(GL_VIEWPORT, vp);
+               coot::Cartesian one_unit_right = centre + screen_x;
+               GLdouble x0, y0, z0, x1, y1, z1;
+               gluProject(centre.x(), centre.y(), centre.z(), mv, pj, vp, &x0, &y0, &z0);
+               gluProject(one_unit_right.x(), one_unit_right.y(), one_unit_right.z(),
+                          mv, pj, vp, &x1, &y1, &z1);
+               double pixels_per_unit = sqrt((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0));
+               double ball_radius = (pixels_per_unit > 0) ? 0.5 * ball_point_size / pixels_per_unit : 0.0;
+
+               coot::Cartesian offset = screen_x * (0.2 * ball_radius);
+               offset += screen_y * (-0.25 * ball_radius);
                offset += z_delta * 2.0;
 
                if (false)
