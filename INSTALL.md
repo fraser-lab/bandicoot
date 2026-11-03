@@ -12,33 +12,21 @@ If you're building from source instead, see [BUILD.md](BUILD.md).
 - macOS Tahoe (26.x), Apple Silicon, or
 - Linux, x86_64: Ubuntu 20.04 or newer, or another distribution of similar age
   or newer, with a graphical desktop (X11, or Wayland with XWayland) and OpenGL.
-  Tested on Ubuntu 22.04.
-
-That's it. As of v0.1.4.10 the binary distribution is fully self-contained:
-the GTK2-Quartz stack and every other third-party library are bundled inside
-the tarball, so **no Homebrew, no XQuartz, and no conda are required** at
-runtime. Extract it anywhere and run.
-
-The Linux tarball is self-contained in the same way, including GTK 2, Python
-and the crystallographic libraries. It uses only a few libraries from the
-system: the C library, OpenGL and the graphics driver, X11, and the font
-libraries. If the system's C++ runtime is older than the one Bandicoot was
-built with, as on Ubuntu 20.04, the launcher uses a copy bundled for that case.
+  Tested on Ubuntu 20.04, 22.04, 24.04 and 26.04.
 
 ## Install
 
 1. Extract the tarball anywhere:
+	a. on MacOS:
    ```sh
    tar -xvf bandicoot-<version>-darwin-arm64.tar.gz
    ```
-   or, on Linux:
+	b. on Linux:
    ```sh
    tar -xvf bandicoot-<version>-linux-x86_64.tar.gz
    ```
-   This creates a `bandicoot-<version>/` directory with `bin/`, `lib/`,
-   `libexec/`, `share/`, and a `setup.sh` helper.
+   This creates a `bandicoot-<version>/` directory (e.g. `bandicoot_0.3.0.2`) with `bin/`, `lib/`, `libexec/`, `share/`, and a `setup.sh` helper.
 
-    **NOTE:** In this case, `<version>` is a placeholder for the Bandicoot version number. E.g. for Bandicoot v0.1.4.10 the tarball will have the filename `bandicoot-0.1.4.10-darwin-arm64.tar.gz`
 
 2. Run the one-time setup script:
    ```sh
@@ -46,24 +34,20 @@ built with, as on Ubuntu 20.04, the launcher uses a copy bundled for that case.
    ./setup.sh --add-to-path
    ```
 
-  **NOTE:** On Linux, `setup.sh` also adds Bandicoot to the desktop's application menu, and `--add-to-path` writes to `~/.bashrc` (or `~/.zshrc`).
+  **NOTE:** On Linux, `setup.sh` also adds Bandicoot to the desktop's application menu; on both operating systems, `--add-to-path` adds the path to Bandicoot executable to the RC file (`.bashrc`, `.zshrc` or the like).
 
-  **NOTE:** If you don't want install to add the Bandicoot path to your `PATH`, omit the `--add-to-path` option. You can add the path manually:
+  **NOTE:** If you don't want install to add the Bandicoot path to your `PATH`, omit the `--add-to-path` option. You can add the path manually, e.g. for `bash` or `zsh`:
    ```sh
    export PATH="$PWD/bin:$PATH"
    ```
 
 ## Launch
 
-```sh
-./bandicoot-<version>/bin/bcoot
-```
+	`./bandicoot-<version>/bin/bcoot`
 
 or, with `PATH` set:
 
-```sh
-bcoot
-```
+	`bcoot`
 
 ## Uninstall
 
@@ -77,18 +61,12 @@ startup file; remove those too.
 
 ## Troubleshooting
 
-- **`dyld: Library not loaded: /opt/homebrew/...`** — should not happen with
-  v0.1.4.10 or later, which bundles every Homebrew library. If you see it,
-  the tarball predates self-containment (upgrade), or a file was moved out of
-  `lib/` — re-extract the tarball cleanly.
+### MacOS
+
+- **Icons missing on most toolbar buttons** - Bandicoot hasn't been properly set up, usually because `setup.sh` was not run after unpacking the tarball. See [Installation](#Install) for how to run the setup script.
 - **`dyld: Library not loaded: @rpath/libclipper-...`** — the bundled
   copy of that library is missing from your extracted tree. Re-extract
   the tarball; do not move individual files out of `lib/`.
-- **A broken-image graphic appears on the splash, or "couldn't find
-  pixmap file: bandicoot-splash.png"** — the bcoot wrapper failed to
-  export `COOT_DATA_DIR` correctly. Make sure you launch through
-  `bin/bcoot` (not the bare `libexec/Bandicoot`) and confirm the
-  extracted tree contains `share/coot/pixmaps/`.
 - **Spotlight / Launchpad can't find Bandicoot** — rerun `./setup.sh`;
   the `.desktop` file is installed into `~/.local/share/applications/`.
 
@@ -101,25 +79,5 @@ startup file; remove those too.
   cancelled because the context is lost`** (often with the screen blanking for
   a moment) — the graphics driver reset the GPU. To confirm it is the driver,
   run `LIBGL_ALWAYS_SOFTWARE=1 bcoot`: slow, but not affected. Updating the
-  graphics driver (Mesa) is the remedy.
-- **Buttons and menus look plain** — expected: Bandicoot uses its own bundled
-  GTK 2 theme rather than the desktop's.
+  graphics driver (Mesa) is the remedy. (**NOTE**: So far this effect has only been seen when using `Ligand -> FLEV This Residue`.)
 
-## Notes
-
-- Starting in v0.1.0.0, Bandicoot embeds Python so it can
-talk to Phenix (live model/map updates during refinement). As of
-v0.1.1.3 `libpython3.13.dylib` is bundled inside the tarball, and as
-of v0.1.4.2 the Python **standard library** is bundled too (under
-`lib/python3.13/`), so Miniconda is no longer required at runtime.
-(Before v0.1.4.2 the embedded interpreter still borrowed its standard
-library from an external conda via `PYTHONHOME`; on a machine without a
-matching conda it aborted at startup with `ModuleNotFoundError: No
-module named 'encodings'`.) The Coot scientific
-libraries (clipper, mmdb2, ssm, ccp4c, fftw2, libc++) and the
-graphics libraries (libpng16, libfreetype6) are bundled too.
-- v0.1.4.2 also bundles **numpy** and **matplotlib** (self-contained
-PyPI wheels, under `lib/python3.13/site-packages/`): numpy is required
-by the PanDDA event-map tiling fix, matplotlib by the pathology plots.
-This is the bulk of the tarball's size; a future lean tarball may fetch
-them on demand at `setup.sh` time instead.

@@ -4,8 +4,6 @@ Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/person
 
 **RELEASES**: Tarballs of binary releases are found at https://github.com/fraser-lab/bandicoot/releases
 
-**NOTE:** As of 10.29.2026 Bandicoot UI has been rebuilt in wxWidgets. This enables a port to Linux, which is forthcoming.
-
 **NOTE** Bandicoot is a work in progress; users are welcome to log issues and issue pull requests.
 
 ## Why a fork?
@@ -14,13 +12,15 @@ The Crystallographic Object-Oriented Tool (Coot) has been the go-to suite of sof
 
 While Coot 0.9.8.95 is distributed alongside Coot 1 in suites such as CCP4, it has become completely unusable on the most recent MacOS version (26.x, Tahoe). Bandicoot, a fork of Coot 0.9.8.95, initially addressed each of these with macOS-specific fixes layered on top of upstream Coot. In September of 2026, Bandicoot has become a stand-alone development project, with new features continually added. See [What changed vs Coot 0.9.8.95](#what-changed-vs-coot-09895) below for a list of major changes.
 
+**NOTE**: Starting with version 0.3.0.1, Bandicoot has also been ported to Linux.
+
 ## Quick start
 
 The easiest way to install Bandicoot is to download a binary tarball (https://github.com/fraser-lab/bandicoot/releases) and install it (see [INSTALL.md](INSTALL.md)).
 
-To build from source instead, see [BUILD.md](BUILD.md). You'll need a
+To build from source instead, see [BUILD.md](BUILD.md). For MacOS, you'll need a
 handful of Homebrew packages and a Miniconda environment that supplies
-Clipper, MMDB2, and a few others.
+Clipper, MMDB2, and a few others. 
 
 
 ## What changed vs Coot 0.9.8.95
@@ -34,7 +34,6 @@ The changes fall into two categories: adjustments made to enable Coot 0.9 to run
 - **No XQuartz dependency.** freeglut is removed entirely, so nothing starts an X11
   server.
 - **wxWidgets-based user interface.** The entire user interface has been rebuilt in wxWidgets, which not only makes Bandicoot run on MacOS but also makes it portable to other operating systems, e.g. Linux
-- **Python 3.** Coot's old Python 2 layer has been ported to Python 3, with the interpreter, NumPy and matplotlib bundled.
 - **Native text atom labels.**
 - **Retina-correct viewport and atom picking.**
 
@@ -42,6 +41,7 @@ The changes fall into two categories: adjustments made to enable Coot 0.9 to run
 
 #### Coot 0.9 functionality repaired, modernised or extended.
 
+- **Python 3.** Coot's old Python 2 layer has been ported to Python 3, with the interpreter, NumPy and matplotlib bundled.
 - **mmCIF handling rebuilt on gemmi.** All mmCIF reading and writing goes through [gemmi](https://github.com/project-gemmi/gemmi), with complete fidelity. The Header Browser shows real mmCIF metadata.
 - **CIF files are classified by content.** Bandicoot now distinguishes coordinate vs. restraint mmCIF files if they are drag/dropped into the main window.
 - **More files open:** modern small-molecule CIFs, and Phenix-produced CIFs can now be read in.
