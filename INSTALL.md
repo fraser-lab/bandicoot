@@ -17,6 +17,7 @@ If you're building from source instead, see [BUILD.md](BUILD.md).
 ## Install
 
 1. Extract the tarball anywhere:
+
 	a. on MacOS:
    ```sh
    tar -xvf bandicoot-<version>-darwin-arm64.tar.gz
@@ -28,7 +29,7 @@ If you're building from source instead, see [BUILD.md](BUILD.md).
    This creates a `bandicoot-<version>/` directory (e.g. `bandicoot_0.3.0.2`) with `bin/`, `lib/`, `libexec/`, `share/`, and a `setup.sh` helper.
 
 
-2. Run the one-time setup script:
+3. Run the one-time setup script:
    ```sh
    cd bandicoot-<version>
    ./setup.sh --add-to-path
