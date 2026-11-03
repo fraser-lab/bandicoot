@@ -163,7 +163,7 @@ gsl|2.8|https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz|6a99eeed15632c6354895b1
 patchelf|0.19.3|https://github.com/NixOS/patchelf/releases/download/0.19.3/patchelf-0.19.3.tar.bz2|20dbe23e9dbc4ad769078a867ad002c04297a069ff93c95fb72242dd55d4dd6f
 cmake|3.31.6|https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz|5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf
 boost|1.87.0|https://archives.boost.io/release/1.87.0/source/boost_1_87_0.tar.bz2|af57be25cb4c4f4b413ed692fe378affb4352ea50fbe294a11ef548f4d527d89
-rdkit|2026.09.1|https://github.com/rdkit/rdkit/archive/Release_2026_09_1.tar.gz|86711e340759a3a0678a2e62f54f26f7ff564c3a02de0460f60b1ce89ac1bfe9
+rdkit|2026.03.6|https://github.com/rdkit/rdkit/archive/refs/tags/Release_2026_03_6.tar.gz|d4d20b3b140237084694518aab34fdba6929d44bd7f720bce69329516abef663
 swig|4.4.1|https://downloads.sourceforge.net/project/swig/swig/swig-4.4.1/swig-4.4.1.tar.gz|40162a706c56f7592d08fd52ef5511cb7ac191f3593cf07306a0a554c6281fcf
 "
 
@@ -395,8 +395,11 @@ if ! skip_if_done boost "${BOOST_OUT}/lib/libboost_python${PY_MM/./}.so"; then
 fi
 
 # RDKit: C++ libraries only (Bandicoot does not use its Python wrappers), with
-# Cairo drawing, as the macOS build's Homebrew RDKit has
-if ! skip_if_done rdkit "${RDKIT_OUT}/include/rdkit/GraphMol/ROMol.h"; then
+# Cairo drawing, at the version and with the drawing support of the macOS
+# build's Homebrew RDKit. The marker names the version, so changing the pin
+# rebuilds it.
+RDKIT_MARKER="${RDKIT_OUT}/.bandicoot-rdkit-$(dep_field rdkit 2)"
+if ! skip_if_done rdkit "${RDKIT_MARKER}"; then
     echo "==> rdkit-$(dep_field rdkit 2)"
     srcdir="$(unpack rdkit)"
     "${CMAKE_OUT}/bin/cmake" -S "${srcdir}" -B "${srcdir}/build" \
@@ -417,7 +420,10 @@ if ! skip_if_done rdkit "${RDKIT_OUT}/include/rdkit/GraphMol/ROMol.h"; then
         -DRDK_BUILD_INCHI_SUPPORT=OFF \
         -DRDK_BUILD_PGSQL=OFF
     "${CMAKE_OUT}/bin/cmake" --build "${srcdir}/build" -j "${JOBS}"
+    # a fresh directory, so nothing from another version is left beside it
+    rm -rf "${RDKIT_OUT}"
     "${CMAKE_OUT}/bin/cmake" --install "${srcdir}/build"
+    touch "${RDKIT_MARKER}"
     echo "    installed rdkit"
 fi
 
