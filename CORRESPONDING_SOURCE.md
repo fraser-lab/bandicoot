@@ -2,8 +2,10 @@
 
 This document is the "clear directions" / written offer for the **Corresponding
 Source** of the GPL- and LGPL-licensed components conveyed in the Bandicoot
-binary tarball (`bandicoot-<version>-darwin-arm64.tar.gz`), as required by
-GNU GPL v3 §6 and GNU LGPL v3.
+binary tarballs (`bandicoot-<version>-darwin-arm64.tar.gz` and
+`bandicoot-<version>-linux-x86_64.tar.gz`), as required by GNU GPL v3 §6 and
+GNU LGPL v3. Sections 2 and 3 cover the macOS tarball, section 5 the Linux
+tarball.
 
 License summaries for *all* bundled components (including the permissive ones
 that require notices but not source) are in
@@ -118,3 +120,49 @@ and the license files inside the tarball cover. For reference (as built):
 3. Confirm each Section 2 URL resolves, **or** attach the exact-version source
    tarballs (and/or conda package files) to the GitHub Release as assets.
 4. Update the year/contact in the §6b written offer if it changes.
+
+---
+
+## 5. Linux tarball
+
+The Linux tarball (`bandicoot-<version>-linux-x86_64.tar.gz`) bundles a
+different set of GPL- and LGPL-licensed libraries. The written offer above
+covers them too. Bandicoot's own source is as in section 1.
+
+### 5.1 Built from source
+
+`scripts/build_deps_linux.sh` downloads these from the URLs below and checks
+each against a pinned SHA-256 before building. Versions as of Bandicoot
+0.3.0.2.
+
+| Component | Version | License | Upstream source |
+|---|---|---|---|
+| **FFTW 2** | 2.1.5 | GPL-2+ | <https://www.fftw.org/fftw-2.1.5.tar.gz> |
+| **GSL** | 2.8 | GPL-3+ | <https://ftpmirror.gnu.org/gnu/gsl/gsl-2.8.tar.gz> |
+| **MMDB2** | 2.0.22 | LGPL-3 | <https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/mmdb2-2.0.22.tar.gz> |
+| **libccp4** | 8.0.0 | LGPL | <https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/libccp4-8.0.0.tar.gz> |
+| **SSM** | 1.4 | LGPL | <https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/ssm-1.4.tar.gz> |
+| **Clipper** | 2.1.20180802 | LGPL / Clipper | <https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/dependencies/clipper-2.1.20180802.tar.gz> |
+| **libart_lgpl** | 2.3.21 | LGPL-2+ | <https://download.gnome.org/sources/libart_lgpl/2.3/libart_lgpl-2.3.21.tar.bz2> |
+| **libgnomecanvas** | 2.30.3 | LGPL-2+ | <https://download.gnome.org/sources/libgnomecanvas/2.30/libgnomecanvas-2.30.3.tar.bz2> |
+| **GooCanvas** | 1.0.0 | LGPL-2 | <https://download.gnome.org/sources/goocanvas/1.0/goocanvas-1.0.0.tar.bz2> |
+| **wxWidgets** | 3.3.3 | wxWindows Library Licence 3.1 | <https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.3/wxWidgets-3.3.3.tar.bz2> |
+| **gemmi** | 0.7.5 | MPL-2.0 | <https://github.com/project-gemmi/gemmi/archive/refs/tags/v0.7.5.tar.gz> |
+
+Permissive, notice only: CPython 3.13.12 (PSF), Boost 1.87.0 (BSL-1.0), RDKit
+2026.03.6 (BSD-3) with the coordgenlibs, maeparser and RingDecomposerLib
+versions it pins (BSD-3, MIT, BSD-3).
+
+### 5.2 From Ubuntu
+
+The remaining bundled libraries are Ubuntu's own builds. Each is listed, for
+that release, in `share/doc/bandicoot/BUNDLED-LINUX.md` inside the tarball,
+with the Ubuntu **source package and version** it was built from. That pair
+identifies the exact Corresponding Source, which Ubuntu publishes at
+
+    https://launchpad.net/ubuntu/+source/<source package>/<version>
+
+or, on an Ubuntu system with source repositories enabled,
+`apt-get source <source package>=<version>`. Packages that came from the
+Ubuntu toolchain PPA (the C++ runtime in `lib/compat-cxx/`) have their source
+in that PPA: <https://launchpad.net/~ubuntu-toolchain-r/+archive/ubuntu/test>.

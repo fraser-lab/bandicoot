@@ -9,7 +9,8 @@
 # finishing a run that stopped after its build. It refuses unless that build
 # was a release-mode build (of the same kind) of the current commit, or, for a
 # milestone release, of an earlier commit that differs from it only in the
-# packaging scripts (so fixes to this script need no rebuild).
+# packaging scripts or the top-level documents the tarball carries (so fixes to
+# those need no rebuild).
 #
 # Run on the OLDEST distribution release the tarball should support: the
 # result runs there and on anything newer. It
@@ -114,7 +115,7 @@ if [ "${SKIP_BUILD}" = "1" ]; then
         [ "${MODE}" = "release" ] && git merge-base --is-ancestor "${_built}" HEAD 2>/dev/null || \
             fail "the build in ${PREFIX} is of commit ${_built:0:7}, not HEAD; run without --skip-build"
         _changed="$(git diff --name-only "${_built}" HEAD | \
-            grep -vxE 'scripts/(release-linux|setup-install|smoke_test_imports|check_[a-z_]+)\.sh' || true)"
+            grep -vxE 'scripts/(release-linux|setup-install|smoke_test_imports|check_[a-z_]+)\.sh|[^/]+\.md' || true)"
         [ -z "${_changed}" ] || \
             fail "files built into Bandicoot changed since the build (${_built:0:7}):
 $(echo "${_changed}" | sed 's/^/     /')
@@ -308,10 +309,86 @@ grep -qawF "${_need_cxx}" "${COMPAT}/libstdc++.so.6" || \
 echo "${_need_cxx}" > "${COMPAT}/required-glibcxx"
 echo "    binaries need ${_need_cxx}; compat-cxx/ holds this machine's runtime"
 
+# --- bundled-component record ---------------------------------------------------
+# Lists where every bundled library came from, for THIRD_PARTY_LICENSES.md and
+# CORRESPONDING_SOURCE.md: the dependency tree (pinned sources), an Ubuntu
+# package (named with its source package and version, which identify the exact
+# source), or Bandicoot itself. Each Ubuntu source package's copyright file is
+# copied beside the list. A library of unknown origin stops the release.
+echo "==> recording the origin of each bundled library"
+DOCDIR="${PREFIX}/share/doc/bandicoot"
+rm -rf "${DOCDIR}/copyright"
+mkdir -p "${DOCDIR}/copyright"
+BUNDLED_MD="${DOCDIR}/BUNDLED-LINUX.md"
+{
+    echo "# Libraries bundled in the Linux tarball"
+    echo ""
+    echo "Bandicoot ${VERSION}${SUFFIX}, built on $(. /etc/os-release && echo "${PRETTY_NAME}") ($(uname -m))."
+    echo "Ubuntu components: source at https://launchpad.net/ubuntu/+source/<source package>/<version>;"
+    echo "their copyright files are in copyright/. Source-built components: see"
+    echo "CORRESPONDING_SOURCE.md at the top of the tarball."
+    echo ""
+    echo "| File | Origin | Package | Source package | Version |"
+    echo "|---|---|---|---|---|"
+} > "${BUNDLED_MD}"
+
+# <bundled file name> <path it was copied from, or empty to look it up>
+record_origin() {
+    local name="$1" from="$2" d pkg src ver
+    for d in "${DEPS_PREFIX}"/*/lib; do
+        if [ -e "${d}/${name}" ]; then
+            echo "| \`${name}\` | built from source | \`$(basename "$(dirname "${d}")")\` | | |" >> "${BUNDLED_MD}"
+            return 0
+        fi
+    done
+    if [ -n "${from}" ]; then
+        pkg="$(dpkg -S "$(readlink -f "${from}")" 2>/dev/null | head -1 | cut -d: -f1 || true)"
+        [ -n "${pkg}" ] || pkg="$(dpkg -S "${from}" 2>/dev/null | head -1 | cut -d: -f1 || true)"
+    else
+        pkg="$(dpkg -S "/${name}" 2>/dev/null | \
+            awk -F': ' -v n="/${name}" 'substr($2, length($2) - length(n) + 1) == n {print $1; exit}' | \
+            cut -d: -f1 | cut -d, -f1 || true)"
+    fi
+    if [ -n "${pkg}" ]; then
+        src="$(dpkg-query -W -f='${source:Package}' "${pkg}" 2>/dev/null || true)"
+        ver="$(dpkg-query -W -f='${source:Version}' "${pkg}" 2>/dev/null || true)"
+        echo "| \`${name}\` | Ubuntu | \`${pkg}\` | \`${src}\` | ${ver} |" >> "${BUNDLED_MD}"
+        [ -f "/usr/share/doc/${pkg}/copyright" ] && [ ! -e "${DOCDIR}/copyright/${src}" ] && \
+            cp -L "/usr/share/doc/${pkg}/copyright" "${DOCDIR}/copyright/${src}"
+        return 0
+    fi
+    case "${name}" in
+        libcoot*|libccp4mg*)
+            echo "| \`${name}\` | Bandicoot (GPL-3) | | | |" >> "${BUNDLED_MD}"
+            return 0 ;;
+    esac
+    fail "cannot tell where the bundled ${name} came from"
+}
+
+while IFS= read -r f; do
+    [ -L "${f}" ] && continue
+    record_origin "$(basename "${f}")" ""
+done < <(find "${LIB}" -maxdepth 1 -name '*.so*' | sort)
+for f in "${LIB}"/gdk-pixbuf-2.0/2.10.0/loaders/*.so; do record_origin "$(basename "${f}")" "${PIXBUF_SRC}/$(basename "${f}")"; done
+for f in "${LIB}"/gtk-2.0/2.10.0/immodules/*.so; do record_origin "$(basename "${f}")" "${IM_SRC}/$(basename "${f}")"; done
+record_origin gdk-pixbuf-query-loaders "${PIXBUF_QUERY_SRC}"
+record_origin gtk-query-immodules-2.0 "${IM_QUERY_SRC}"
+record_origin "Raleigh theme (gtkrc)" "${THEME_SRC}/gtk-2.0/gtkrc"
+for _n in libstdc++.so.6 libgcc_s.so.1; do
+    record_origin "compat-cxx/${_n}" "$(ldd "${PREFIX}/libexec/Bandicoot" 2>/dev/null | awk -v n="${_n}" '$1 == n {print $3; exit}' || true)"
+done
+echo "    $(grep -c '^| `' "${BUNDLED_MD}") components; $(ls "${DOCDIR}/copyright" | wc -l) copyright files"
+
 # --- 5. strip and prune -----------------------------------------------------------
 echo "==> stripping debug information"
 while IFS= read -r f; do strip --strip-debug "$f" 2>/dev/null || true; done < <(own_elves)
 rm -f "${LIB}"/*.a "${LIB}"/*.la
+# libtool installs the Python extension modules (pyrogen's) with a .la and a
+# static .a beside them; the .la records build paths, and the module is the .so
+for _la in "${SITE}"/*.la; do
+    [ -e "${_la}" ] || continue
+    rm -f "${_la}" "${_la%.la}.a"
+done
 rm -rf "${PREFIX}/include" "${LIB}/pkgconfig"
 find "${PREFIX}" -type d -name __pycache__ -prune -exec rm -rf {} +
 
@@ -365,6 +442,7 @@ for _f in libexec/Bandicoot bin/coot bin/bcoot setup.sh \
           libexec/gdk-pixbuf-query-loaders libexec/gtk-query-immodules-2.0 \
           share/themes/Raleigh/gtk-2.0/gtkrc share/coot/syminfo.lib share/RDKit/Data \
           lib/compat-cxx/libstdc++.so.6 lib/compat-cxx/required-glibcxx \
+          share/doc/bandicoot/BUNDLED-LINUX.md \
           share/coot/lib/data/monomers share/coot/reference-structures share/coot/pixmaps; do
     [ -e "${PREFIX}/${_f}" ] || fail "missing from the bundle: ${_f}"
 done
