@@ -2554,12 +2554,26 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
          float zsc = graphics_info_t::zoom;
          coot::Cartesian z_delta = (front - back) * 0.003;
 
+         // Point sizes are in framebuffer pixels. On a high-density display the
+         // viewport is scaled up, so the points must be too: otherwise the atoms
+         // shrink against their highlight offsets, which are in model space.
+#ifdef BANDICOOT_UI_WX
+         float px = bandicoot_wx_surface_backing_scale();
+#else
+         float px = 1.0;
+#endif
+         // While multisampling is on, GL_POINT_SMOOTH is ignored and some
+         // drivers (Mesa among them) draw the points square; restored below.
+         GLboolean multisample_was_on = glIsEnabled(GL_MULTISAMPLE_ARB);
+         if (multisample_was_on)
+            glDisable(GL_MULTISAMPLE_ARB);
+
          // in general, we need to run this loop for every different atom radius
          for (unsigned int ii=0; ii<2; ii++) {
 
             // std::cout << "display_bonds_stick_mode_atoms() ii is " << ii << std::endl;
 
-            float base_point_size =  280.0/zsc;
+            float base_point_size =  280.0/zsc * px;
             if (ii==1)
                base_point_size = 1.5 * base_point_size;
             float current_point_size = base_point_size;
@@ -2662,8 +2676,8 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                // << zsc << std::endl;  -> 1 and 63.375
                //
 
-               float hlit_point_size =  40.0/zsc;
-               float ball_point_size = 280.0/zsc;
+               float hlit_point_size =  40.0/zsc * px;
+               float ball_point_size = 280.0/zsc * px;
 
                // the position offset should be clamped between point_size_data[0] and point_size_data[1]
                //
@@ -2759,6 +2773,8 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                glEnd();
             }
          }
+         if (multisample_was_on)
+            glEnable(GL_MULTISAMPLE_ARB);
       }
    }
 }

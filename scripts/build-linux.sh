@@ -6,18 +6,18 @@
 #     ./scripts/build-linux.sh
 #     $PREFIX/bin/bcoot
 #
-# Tested target: Ubuntu 24.04, x86_64. The script checks for the system
+# Tested on Ubuntu 20.04, x86_64. The script checks for the system
 # packages it needs and prints the apt-get line for any that are missing; it
 # never runs sudo itself.
 #
 # The install runs where it is built: libraries are found through rpaths into
 # the dependency tree and through the system, nothing is bundled. It is not a
-# relocatable distribution.
+# relocatable distribution; scripts/release-linux.sh makes one.
 #
 # Customise via environment variables (all optional):
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
 #   DEPS_PREFIX     source-built deps      (default: /opt/bandicoot-deps, else <repo>/deps)
-#   PYTHON          embedded Python        (default: <deps>/python/bin/python3.13, else /usr/bin/python3)
+#   PYTHON          embedded Python        (default: <deps>/python/bin/python3.13)
 #   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
 #   BANDICOOT_RELEASE=1  milestone release build: no version suffix, clean
 #                   pushed tree required, generic compile-time prefix (as
@@ -76,15 +76,8 @@ XTAL_PREFIX="${DEPS_PREFIX}/xtal"
 SWIG_PREFIX="${DEPS_PREFIX}/swig"
 BOOST_PREFIX="${DEPS_PREFIX}/boost"
 RDKIT_PREFIX="${DEPS_PREFIX}/rdkit"
-# the source-built Python (build_deps_linux.sh) when present: Bandicoot's
-# Python layer has only ever run on 3.12 and later
-if [ -z "${PYTHON}" ]; then
-    if [ -x "${DEPS_PREFIX}/python/bin/python3.13" ]; then
-        PYTHON="${DEPS_PREFIX}/python/bin/python3.13"
-    else
-        PYTHON=/usr/bin/python3
-    fi
-fi
+# the source-built Python (build_deps_linux.sh), which a release bundles
+PYTHON="${PYTHON:-${DEPS_PREFIX}/python/bin/python3.13}"
 
 # AddressSanitizer goes into the compiler commands themselves: libtool drops
 # sanitizer flags given in CFLAGS/LDFLAGS when it links shared libraries.
@@ -113,7 +106,6 @@ APT_PACKAGES="
 build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl ${OBJCXX_PACKAGE} cmake curl
 libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
 libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev libcurl4-openssl-dev
-python3-dev python3-numpy python3-matplotlib
 "
 if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ]; then
     if command -v dpkg-query >/dev/null 2>&1; then
