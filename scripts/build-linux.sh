@@ -257,6 +257,10 @@ touch src/main.cc
 PYTHON_LIBDIR="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
 DEP_RPATHS="-Wl,-rpath,${PYTHON_LIBDIR} -Wl,-rpath,${CONFIG_PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib -Wl,-rpath,${BOOST_PREFIX}/lib -Wl,-rpath,${RDKIT_PREFIX}/lib"
 PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
+# libboost_python does not link libpython on Linux, and the linker drops a
+# library named before anything uses it, so libpython (in LDFLAGS) must also
+# follow Boost.Python: LIBS goes after the objects and libraries on each link.
+PYTHON_EMBED_LIBS="$("${PYTHON_CONFIG}" --libs --embed 2>/dev/null || "${PYTHON_CONFIG}" --libs)"
 
 # Some directories include Clipper / MMDB2 / gemmi headers without asking
 # pkg-config for their flags, so the source-built dependencies go on every
@@ -285,6 +289,7 @@ echo "==> ./configure --prefix=${CONFIG_PREFIX} --with-ui=wx"
     --with-python="${PYTHON_PREFIX}" \
     PYTHON="${PYTHON}" \
     PYTHON_CONFIG="${PYTHON_CONFIG}" \
+    LIBS="${PYTHON_EMBED_LIBS}" \
     OBJCXX="${OBJCXX}"
 
 # the final link fails ("unable to infer tagged configuration") unless libtool
