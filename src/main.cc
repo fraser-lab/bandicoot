@@ -111,6 +111,7 @@
 #endif // DATADIR
 #endif
 #include "compat/sleep-fixups.h"
+#include "compat/fontconfig-null-config.hh"
 
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
@@ -289,6 +290,8 @@ main (int argc, char *argv[]) {
       // app name. See bandicoot_appkit.h.
       bandicoot_set_application_name();
 #endif
+      // before anything renders text: see compat/fontconfig-null-config.hh
+      bandicoot_set_pango_fontconfig_config();
 #ifdef BANDICOOT_UI_WX
       // wx first, so the application object is wx's; GTK then shares it.
       if (! bandicoot_wx_init(argc, argv))
@@ -439,7 +442,7 @@ main (int argc, char *argv[]) {
       window1 = create_window1();
 
       std::string version_string = VERSION;
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(BANDICOOT_UI_WX)
       std::string main_title =
 	 std::string("BANDICOOT ") + BANDICOOT_VERSION + BANDICOOT_BUILD_SUFFIX;
 #else

@@ -19,6 +19,9 @@
 #   6. Optionally adds the install's bin/ to PATH by writing a tagged
 #      `export PATH=...` line to your shell rc (use --add-to-path).
 #
+# On Linux, steps 1 and 2 do not apply and step 5 registers the app with the
+# desktop's application menu.
+#
 # Idempotent: re-running is safe. Never uses sudo.
 #
 # Exit code is 0 on success; non-zero if a prerequisite was missing
@@ -63,14 +66,25 @@ note_problem() { PROBLEMS=$(( PROBLEMS + 1 )); }
 # sanity: macOS + arch
 # ----------------------------------------------------------------------
 
-if [ "$(uname)" != "Darwin" ]; then
-    echo "$WARN this setup script is for macOS only. Skipping." >&2
-    exit 1
-fi
-if [ "$(uname -m)" != "arm64" ]; then
-    echo "$WARN this build is for Apple Silicon (arm64). Detected: $(uname -m)." >&2
-    note_problem
-fi
+OS="$(uname)"
+case "$OS" in
+    Darwin)
+        if [ "$(uname -m)" != "arm64" ]; then
+            echo "$WARN this build is for Apple Silicon (arm64). Detected: $(uname -m)." >&2
+            note_problem
+        fi
+        ;;
+    Linux)
+        if [ "$(uname -m)" != "x86_64" ]; then
+            echo "$WARN this build is for x86_64. Detected: $(uname -m)." >&2
+            note_problem
+        fi
+        ;;
+    *)
+        echo "$WARN this setup script is for macOS and Linux only. Skipping." >&2
+        exit 1
+        ;;
+esac
 
 echo "$ARROW Bandicoot install at: $INSTALL_DIR"
 
@@ -78,15 +92,17 @@ echo "$ARROW Bandicoot install at: $INSTALL_DIR"
 # 1. quarantine
 # ----------------------------------------------------------------------
 
+if [ "$OS" = "Darwin" ]; then
 echo "$ARROW Stripping com.apple.quarantine (so Gatekeeper doesn't prompt)..."
 xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
 echo "    $CHECK quarantine cleared"
+fi
 
 # ----------------------------------------------------------------------
 # 2. ad-hoc codesign (local signature; not Apple Developer notarization)
 # ----------------------------------------------------------------------
 
-if [ "$SKIP_SIGN" -eq 0 ]; then
+if [ "$OS" = "Darwin" ] && [ "$SKIP_SIGN" -eq 0 ]; then
     if [ -x "$INSTALL_DIR/codesign-install.sh" ]; then
         # Delegate to the shared signing helper shipped alongside this
         # script -- the single source of truth for the signing policy. See
@@ -176,13 +192,13 @@ fi
 # Bandicoot ships its own copy of the gdk-pixbuf loaders (PNG / JPEG /
 # SVG / ...) under lib/gdk-pixbuf-2.0/2.10.0/loaders/. The companion
 # loaders.cache file lists each loader's absolute path, so it has to be
-# (re)generated on the user's machine — wherever they extracted the
+# (re)generated on the user's machine -- wherever they extracted the
 # tarball. coot.in points GTK at this cache via GDK_PIXBUF_MODULE_FILE.
 
 PIXBUF_LOADERS_DIR="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 PIXBUF_CACHE="$INSTALL_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
 # Bundled since v0.1.4.10 (scripts/bundle_pixbuf_loaders.sh) so the cache can be
-# generated with NO Homebrew — the install is self-contained. Uses the bundled
+# generated with NO Homebrew -- the install is self-contained. Uses the bundled
 # gdk-pixbuf via @rpath; no /opt/homebrew dependency.
 QUERY_BIN="$INSTALL_DIR/libexec/gdk-pixbuf-query-loaders"
 
@@ -204,7 +220,7 @@ if [ -d "$PIXBUF_LOADERS_DIR" ]; then
             echo "    $WARN no loaders found under $PIXBUF_LOADERS_DIR" >&2
             note_problem
         else
-            # GDK_PIXBUF_MODULEDIR is informational here — the explicit
+            # GDK_PIXBUF_MODULEDIR is informational here -- the explicit
             # file args determine which loaders enter the cache.
             if GDK_PIXBUF_MODULEDIR="$PIXBUF_LOADERS_DIR" \
                "$QUERY_BIN" "${LOADER_FILES[@]}" > "$PIXBUF_CACHE.tmp" 2>/dev/null; then
@@ -262,7 +278,11 @@ fi
 # 5. .desktop + appdata.xml in user-local applications dir
 # ----------------------------------------------------------------------
 
-echo "$ARROW Registering app metadata for Spotlight / Launchpad..."
+if [ "$OS" = "Darwin" ]; then
+    echo "$ARROW Registering app metadata for Spotlight / Launchpad..."
+else
+    echo "$ARROW Adding Bandicoot to the desktop's application menu..."
+fi
 USER_APPS="$HOME/.local/share/applications"
 USER_APPDATA="$HOME/.local/share/appdata"
 mkdir -p "$USER_APPS" "$USER_APPDATA"
@@ -271,6 +291,13 @@ if [ -f "$INSTALL_DIR/share/applications/coot.desktop" ]; then
     # Patch Exec= to absolute path of bcoot so users don't need PATH set
     if [ -x "$INSTALL_DIR/bin/bcoot" ]; then
         sed -i.bak "s|^Exec=.*|Exec=$INSTALL_DIR/bin/bcoot|" "$USER_APPS/bandicoot.desktop" && \
+            rm -f "$USER_APPS/bandicoot.desktop.bak"
+    fi
+    # the menu shows this name and icon
+    sed -i.bak "s|^Name=.*|Name=Bandicoot|" "$USER_APPS/bandicoot.desktop" && \
+        rm -f "$USER_APPS/bandicoot.desktop.bak"
+    if [ -f "$INSTALL_DIR/share/coot/pixmaps/bandicoot.png" ]; then
+        sed -i.bak "s|^Icon=.*|Icon=$INSTALL_DIR/share/coot/pixmaps/bandicoot.png|" "$USER_APPS/bandicoot.desktop" && \
             rm -f "$USER_APPS/bandicoot.desktop.bak"
     fi
     echo "    $CHECK $USER_APPS/bandicoot.desktop"
@@ -290,11 +317,12 @@ if [ "$ADD_TO_PATH" -eq 1 ]; then
     # ~/.zshrc since macOS Catalina made zsh the default.
     case "$(basename "${SHELL:-/bin/bash}")" in
         zsh)  RC_FILE="$HOME/.zshrc" ;;
-        bash) RC_FILE="$HOME/.bash_profile" ;;
+        bash) if [ "$OS" = "Darwin" ]; then RC_FILE="$HOME/.bash_profile"
+              else RC_FILE="$HOME/.bashrc"; fi ;;
         *)    RC_FILE="" ;;
     esac
 
-    # Tagged line — grep target for idempotent re-runs and a hint for
+    # Tagged line -- grep target for idempotent re-runs and a hint for
     # users grepping their rc later to understand what added this.
     PATH_TAG="# bandicoot:path-entry"
     PATH_LINE="export PATH=\"$INSTALL_DIR/bin:\$PATH\"  $PATH_TAG"

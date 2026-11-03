@@ -44,8 +44,10 @@ if [ -x /usr/bin/openssl ]; then
     _hash() { /usr/bin/openssl dgst -sha256 | awk '{print $NF}'; }
 elif [ -x /sbin/md5 ]; then
     _hash() { /sbin/md5 -q; }
+elif [ -x /usr/bin/sha256sum ]; then
+    _hash() { /usr/bin/sha256sum | awk '{print $1}'; }
 else
-    echo "check_build_system_fresh.sh: no usable hash tool (/usr/bin/openssl, /sbin/md5)" >&2
+    echo "check_build_system_fresh.sh: no usable hash tool (/usr/bin/openssl, /sbin/md5, /usr/bin/sha256sum)" >&2
     exit 2
 fi
 

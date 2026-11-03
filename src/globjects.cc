@@ -41,8 +41,11 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h> // for keyboarding.
 
+#ifndef BANDICOOT_UI_WX
+// the GTK build's GL widget (the wx build draws in a wxGLCanvas)
 #include <gdk/gdkglconfig.h>
 #include <gtk/gtkgl.h>
+#endif
 
 #if __APPLE__
 #   include <OpenGL/gl.h>
@@ -1491,6 +1494,10 @@ std::shared_ptr<SceneSetup> graphics_info_t::mol_tri_scene_setup = 0;
 GtkWidget *
 gl_extras(GtkWidget* vbox1, short int try_stereo_flag) {
 
+#ifdef BANDICOOT_UI_WX
+   // no GTK GL widget in the wx build
+   return NULL;
+#else
    graphics_info_t g;
    GdkGLConfig *glconfig = 0;
    bool got_hardware_stereo_flag = 0;
@@ -1769,7 +1776,7 @@ gl_extras(GtkWidget* vbox1, short int try_stereo_flag) {
   } // end while
   //   std::cout << "DEBUG:: gl_extras returns " << drawing_area << std::endl;
   return drawing_area;
-
+#endif // BANDICOOT_UI_WX
 }
 
 

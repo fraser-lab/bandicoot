@@ -1,0 +1,393 @@
+#!/bin/bash
+# Bandicoot: configure + build + install on Linux (wx interface).
+# The macOS build is scripts/build.sh; both build from the same sources.
+#
+#     ./scripts/build_deps_linux.sh    # once: source-built dependencies
+#     ./scripts/build-linux.sh
+#     $PREFIX/bin/bcoot
+#
+# Tested on Ubuntu 20.04, x86_64. The script checks for the system
+# packages it needs and prints the apt-get line for any that are missing; it
+# never runs sudo itself.
+#
+# The install runs where it is built: libraries are found through rpaths into
+# the dependency tree and through the system, nothing is bundled. It is not a
+# relocatable distribution; scripts/release-linux.sh makes one.
+#
+# Customise via environment variables (all optional):
+#   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
+#   DEPS_PREFIX     source-built deps      (default: /opt/bandicoot-deps, else <repo>/deps)
+#   PYTHON          embedded Python        (default: <deps>/python/bin/python3.13)
+#   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
+#   BANDICOOT_RELEASE=1  milestone release build: no version suffix, clean
+#                   pushed tree required, generic compile-time prefix (as
+#                   scripts/build.sh); scripts/release-linux.sh sets this
+#   BANDICOOT_NIGHTLY=1  as above, with the commit as the version suffix
+#   BANDICOOT_INCREMENTAL=1  skip `make clean`
+#   BANDICOOT_SKIP_PACKAGE_CHECK=1  skip the system-package check (non-Debian systems)
+#   BANDICOOT_ASAN=1  build with AddressSanitizer (memory-error diagnosis; slow,
+#                   needs a full rebuild; run with ASAN_OPTIONS=detect_leaks=0)
+
+set -e
+
+if [ "$(uname)" != "Linux" ]; then
+    echo "!! build-linux.sh is for Linux; on macOS use scripts/build.sh" >&2
+    exit 1
+fi
+
+cd "$(dirname "$0")/.."
+REPO_ROOT="$PWD"
+
+# Only the system and the source-built dependencies may supply tools and
+# libraries. A site software tree on PATH / LD_LIBRARY_PATH / PKG_CONFIG_PATH
+# would otherwise be linked in (e.g. its curl-config, whose libcurl loads a
+# second OpenSSL into the process).
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+unset LD_LIBRARY_PATH PKG_CONFIG_PATH
+
+PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
+if [ -z "${DEPS_PREFIX:-}" ]; then
+    if [ -d /opt/bandicoot-deps ]; then
+        DEPS_PREFIX=/opt/bandicoot-deps
+    else
+        DEPS_PREFIX="${REPO_ROOT}/deps"
+    fi
+fi
+PYTHON="${PYTHON:-}"
+# Parallel jobs: one per CPU, but no more than one per 3 GB of RAM. GCC needs
+# several GB for the largest files, and running out of memory freezes the
+# machine rather than failing the build.
+if [ -z "${JOBS:-}" ]; then
+    _cpus="$(nproc 2>/dev/null || echo 2)"
+    _mem_gb="$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo 2>/dev/null || echo 4)"
+    _by_mem=$(( _mem_gb / 3 ))
+    [ "${_by_mem}" -ge 1 ] || _by_mem=1
+    JOBS=$(( _cpus < _by_mem ? _cpus : _by_mem ))
+    unset _cpus _mem_gb _by_mem
+fi
+COOT_DATA_SRC="${REPO_ROOT}/data/coot-data"
+
+FFTW_PREFIX="${DEPS_PREFIX}/fftw2"
+CANVAS_PREFIX="${DEPS_PREFIX}/canvas"
+WX_PREFIX="${DEPS_PREFIX}/wx"
+GEMMI_PREFIX="${DEPS_PREFIX}/gemmi"
+GSL_PREFIX="${DEPS_PREFIX}/gsl"
+XTAL_PREFIX="${DEPS_PREFIX}/xtal"
+SWIG_PREFIX="${DEPS_PREFIX}/swig"
+BOOST_PREFIX="${DEPS_PREFIX}/boost"
+RDKIT_PREFIX="${DEPS_PREFIX}/rdkit"
+# the source-built Python (build_deps_linux.sh), which a release bundles
+PYTHON="${PYTHON:-${DEPS_PREFIX}/python/bin/python3.13}"
+
+# AddressSanitizer goes into the compiler commands themselves: libtool drops
+# sanitizer flags given in CFLAGS/LDFLAGS when it links shared libraries.
+if [ -n "${BANDICOOT_ASAN:-}" ]; then
+    _asan="-fsanitize=address -fno-omit-frame-pointer"
+    export CC="${CC:-gcc} ${_asan}"
+    export CXX="${CXX:-g++} ${_asan}"
+    unset _asan
+fi
+
+# The program is linked with the Objective-C++ compiler (macOS sources are
+# listed in src/Makefile.am), and libtool only recognises a link command whose
+# compiler matches one it was configured with, so OBJCXX must be CXX. A
+# versioned g++ (g++-12) needs the matching gobjc++ package.
+OBJCXX="${OBJCXX:-${CXX:-g++}}"
+export OBJCXX
+OBJCXX_PACKAGE="gobjc++"
+case "${OBJCXX%% *}" in
+    g++-[0-9]*) OBJCXX_PACKAGE="gobjc++-${OBJCXX#g++-}"; OBJCXX_PACKAGE="${OBJCXX_PACKAGE%% *}" ;;
+esac
+
+# --- system packages (Debian / Ubuntu) ---------------------------------------
+# gobjc++ is needed only because configure probes for an Objective-C++
+# compiler (no Objective-C++ is compiled on Linux).
+APT_PACKAGES="
+build-essential autoconf automake libtool pkg-config intltool libxml-parser-perl ${OBJCXX_PACKAGE} cmake curl
+libgtk2.0-dev libgail-dev libcairo2-dev libglu1-mesa-dev freeglut3-dev libxmu-dev
+libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libexpat1-dev libsqlite3-dev libcurl4-openssl-dev
+"
+if [ -z "${BANDICOOT_SKIP_PACKAGE_CHECK:-}" ]; then
+    if command -v dpkg-query >/dev/null 2>&1; then
+        _missing=""
+        for p in ${APT_PACKAGES}; do
+            if ! dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "install ok installed"; then
+                _missing="${_missing} $p"
+            fi
+        done
+        if [ -n "${_missing}" ]; then
+            echo "!! build-linux.sh: missing system packages:${_missing}" >&2
+            echo "   install them with:" >&2
+            echo "     sudo apt-get install${_missing}" >&2
+            echo "   (BANDICOOT_SKIP_PACKAGE_CHECK=1 skips this check)" >&2
+            exit 1
+        fi
+    else
+        echo "==  build-linux.sh: no dpkg-query; skipping the system-package check" >&2
+    fi
+fi
+
+# The compilers named by CC / CXX (or the defaults) must exist; configure only
+# reports a missing one as "C compiler cannot create executables".
+_cc="${CC:-gcc}"; _cxx_cmd="${CXX:-g++}"
+for _c in "${_cc%% *}" "${_cxx_cmd%% *}"; do
+    if ! command -v "${_c}" >/dev/null 2>&1; then
+        echo "!! compiler not found: ${_c}" >&2
+        echo "   install it (e.g. sudo apt-get install gcc-12 g++-12), or set CC / CXX" >&2
+        exit 1
+    fi
+done
+
+# RDKit, and Bandicoot's code that uses it, is C++20 that needs GCC 12 or newer
+_gnuc="$(echo | "${_cxx_cmd%% *}" -dM -E -x c++ - 2>/dev/null | awk '/^#define __GNUC__ /{print $3}')"
+if ! echo | "${_cxx_cmd%% *}" -dM -E -x c++ - 2>/dev/null | grep -q __clang__ && [ "${_gnuc:-0}" -lt 12 ]; then
+    echo "!! build-linux.sh: ${CXX:-g++} is GCC ${_gnuc:-?}; GCC 12 or newer is needed" >&2
+    echo "   on Ubuntu 20.04:" >&2
+    echo "     sudo add-apt-repository ppa:ubuntu-toolchain-r/test" >&2
+    echo "     sudo apt-get install gcc-12 g++-12 gobjc++-12" >&2
+    echo "   then run with CC=gcc-12 CXX=g++-12" >&2
+    exit 1
+fi
+
+# --- source-built dependencies -----------------------------------------------
+_preflight_fail=0
+_need() {   # <path> <what>
+    if [ ! -e "$1" ]; then
+        echo "!! build-linux.sh: $2 not found: $1" >&2
+        _preflight_fail=1
+    fi
+}
+_need "${FFTW_PREFIX}/include/fftw.h"              "single-precision FFTW 2"
+_need "${CANVAS_PREFIX}/lib/pkgconfig/goocanvas.pc" "goocanvas 1.x"
+_need "${CANVAS_PREFIX}/lib/pkgconfig/libgnomecanvas-2.0.pc" "libgnomecanvas"
+_need "${WX_PREFIX}/bin/wx-config"                 "wxWidgets (GTK 2)"
+_need "${GEMMI_PREFIX}/include/gemmi/model.hpp"    "gemmi"
+_need "${GSL_PREFIX}/bin/gsl-config"               "GSL"
+_need "${XTAL_PREFIX}/lib/pkgconfig/clipper.pc"    "MMDB2 / libccp4 / SSM / Clipper"
+_need "${COOT_DATA_SRC}/monomers/list/mon_lib_list.cif" "monomer dictionary (checked in)"
+_need "${PYTHON}"                                  "Python"
+_need "${SWIG_PREFIX}/bin/swig"                    "SWIG"
+_need "${BOOST_PREFIX}/include/boost/python.hpp"   "Boost (with Boost.Python)"
+_need "${RDKIT_PREFIX}/include/rdkit/GraphMol/ROMol.h" "RDKit"
+if [ "${_preflight_fail}" != "0" ]; then
+    echo "   fix: ./scripts/build_deps_linux.sh" >&2
+    exit 1
+fi
+
+# the -config script must belong to the same interpreter
+PYTHON_CONFIG="${PYTHON}-config"
+if [ ! -x "${PYTHON_CONFIG}" ]; then
+    echo "!! build-linux.sh: ${PYTHON_CONFIG} not found (the -dev package for ${PYTHON})" >&2
+    exit 1
+fi
+PYTHON_PREFIX="$("${PYTHON}" -c 'import sys; print(sys.prefix)')"
+
+export PKG_CONFIG_PATH="${XTAL_PREFIX}/lib/pkgconfig:${CANVAS_PREFIX}/lib/pkgconfig:${GSL_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+for mod in gtk+-2.0 clipper mmdb2 ssm; do
+    if ! pkg-config --exists "${mod}"; then
+        echo "!! build-linux.sh: pkg-config cannot find ${mod}" >&2
+        _preflight_fail=1
+    fi
+done
+[ "${_preflight_fail}" = "0" ] || exit 1
+
+# the Makefiles run plain "swig"
+export PATH="${SWIG_PREFIX}/bin:${PATH}"
+echo "==> SWIG: $(swig -version | awk '/SWIG Version/{print $3}') ($(command -v swig))"
+echo "==> Python: $("${PYTHON}" -c 'import sys; print(sys.version.split()[0])') (${PYTHON})"
+echo "==> wxWidgets: $("${WX_PREFIX}/bin/wx-config" --version) ($("${WX_PREFIX}/bin/wx-config" --selected-config))"
+
+# --- build-system freshness (as scripts/build.sh) ----------------------------
+if [ ! -x ./configure ] || ! ./scripts/check_build_system_fresh.sh --quiet; then
+    echo "==> (re)generating the build system"
+    ./scripts/bootstrap.sh
+    ./scripts/check_build_system_fresh.sh --write-stamp
+fi
+
+# --- version suffix (as scripts/build.sh) --------------------------------------
+BANDICOOT_VERSION_STR="$(awk -F'"' '/^#define BANDICOOT_VERSION /{print $2}' src/bandicoot-version.h)"
+COUNTER_FILE="${REPO_ROOT}/.build-counter"
+BUILD_SUFFIX=""
+# A release or nightly configures with a generic prefix, so the builder's
+# install path is not compiled into the binaries, installs into a staging
+# directory and moves the result into ${PREFIX}.
+CONFIG_PREFIX="${PREFIX}"
+if [ -n "${BANDICOOT_RELEASE:-}" ] && [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    echo "!! build-linux.sh: set BANDICOOT_RELEASE=1 or BANDICOOT_NIGHTLY=1, not both" >&2
+    exit 1
+fi
+if [ -n "${BANDICOOT_RELEASE:-}" ]; then
+    ./scripts/check_clean_tree.sh "a release build (BANDICOOT_RELEASE=1)"
+    CONFIG_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
+elif [ -n "${BANDICOOT_NIGHTLY:-}" ]; then
+    ./scripts/check_clean_tree.sh "a nightly build (BANDICOOT_NIGHTLY=1)"
+    CONFIG_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
+    BUILD_SUFFIX="-$(git rev-parse --short HEAD)"
+elif [ -n "${BANDICOOT_DEV:-}" ] || [ -f "${REPO_ROOT}/.bandicoot-dev" ]; then
+    n=1
+    if [ -f "${COUNTER_FILE}" ] && [ "$(awk '{print $1}' "${COUNTER_FILE}")" = "${BANDICOOT_VERSION_STR}" ]; then
+        n=$(( $(awk '{print $2}' "${COUNTER_FILE}") + 1 ))
+    fi
+    echo "${BANDICOOT_VERSION_STR} ${n}" > "${COUNTER_FILE}"
+    BUILD_SUFFIX="-u${n}"
+fi
+echo "==> building version ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX}"
+
+cat > src/bandicoot-build-id.h <<EOF
+// Generated by scripts/build-linux.sh on each invocation. Do not edit; do not
+// commit. See scripts/build.sh for the meaning of the suffix.
+#ifndef BANDICOOT_BUILD_ID_H
+#define BANDICOOT_BUILD_ID_H
+#define BANDICOOT_BUILD_SUFFIX "${BUILD_SUFFIX}"
+#endif
+EOF
+touch src/main.cc
+
+# --- configure -----------------------------------------------------------------
+# rpaths into the dependency tree so the installed program finds the
+# source-built libraries without LD_LIBRARY_PATH
+PYTHON_LIBDIR="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
+DEP_RPATHS="-Wl,-rpath,${PYTHON_LIBDIR} -Wl,-rpath,${CONFIG_PREFIX}/lib -Wl,-rpath,${FFTW_PREFIX}/lib -Wl,-rpath,${CANVAS_PREFIX}/lib -Wl,-rpath,${WX_PREFIX}/lib -Wl,-rpath,${GEMMI_PREFIX}/lib -Wl,-rpath,${GSL_PREFIX}/lib -Wl,-rpath,${XTAL_PREFIX}/lib -Wl,-rpath,${BOOST_PREFIX}/lib -Wl,-rpath,${RDKIT_PREFIX}/lib"
+PYTHON_EMBED_LDFLAGS="$("${PYTHON_CONFIG}" --ldflags --embed 2>/dev/null || "${PYTHON_CONFIG}" --ldflags)"
+# libboost_python does not link libpython on Linux, and the linker drops a
+# library named before anything uses it, so libpython (in LDFLAGS) must also
+# follow Boost.Python: LIBS goes after the objects and libraries on each link.
+PYTHON_EMBED_LIBS="$("${PYTHON_CONFIG}" --libs --embed 2>/dev/null || "${PYTHON_CONFIG}" --libs)"
+
+# Some directories include Clipper / MMDB2 / gemmi headers without asking
+# pkg-config for their flags, so the source-built dependencies go on every
+# compile and link (as scripts/build.sh does with conda's prefix on macOS).
+export CPPFLAGS="-I${CONFIG_PREFIX}/include -I${XTAL_PREFIX}/include -I${GEMMI_PREFIX}/include -I${GSL_PREFIX}/include -I${FFTW_PREFIX}/include -I${BOOST_PREFIX}/include"
+export LDFLAGS="-L${CONFIG_PREFIX}/lib -L${XTAL_PREFIX}/lib -L${GEMMI_PREFIX}/lib -L${GSL_PREFIX}/lib -L${FFTW_PREFIX}/lib -L${BOOST_PREFIX}/lib -L${RDKIT_PREFIX}/lib ${DEP_RPATHS} ${PYTHON_EMBED_LDFLAGS}"
+SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
+# MMDB2 before 2.0.22 (e.g. Ubuntu 20.04's 2.0.5) #defines strchr and strrchr
+# to its own functions, which breaks <cstring> in any file that includes it
+# after MMDB2. Including <cstring> first in every C++ file avoids that.
+export CXXFLAGS="-g -O2 -Wall -Wno-unused -std=c++20 -include cstring ${SHIM_INCLUDE}"
+export CFLAGS="-g -O2 -Wall -Wno-unused ${SHIM_INCLUDE}"
+
+echo "==> ./configure --prefix=${CONFIG_PREFIX} --with-ui=wx"
+./configure \
+    --prefix="${CONFIG_PREFIX}" \
+    --with-ui=wx \
+    WX_CONFIG="${WX_PREFIX}/bin/wx-config" \
+    --with-fftw-prefix="${FFTW_PREFIX}" \
+    --with-goocanvas-prefix="${CANVAS_PREFIX}" \
+    --with-gemmi="${GEMMI_PREFIX}" \
+    --with-gsl-prefix="${GSL_PREFIX}" \
+    --with-boost="${BOOST_PREFIX}" \
+    --with-enhanced-ligand-tools \
+    --with-rdkit-prefix="${RDKIT_PREFIX}" \
+    --with-python="${PYTHON_PREFIX}" \
+    PYTHON="${PYTHON}" \
+    PYTHON_CONFIG="${PYTHON_CONFIG}" \
+    LIBS="${PYTHON_EMBED_LIBS}" \
+    OBJCXX="${OBJCXX}"
+
+# the final link fails ("unable to infer tagged configuration") unless libtool
+# recognises the Objective-C++ compiler as its C++ one
+_cxx="$(sed -n 's/^CXX = //p' src/Makefile)"
+_objcxx="$(sed -n 's/^OBJCXX = //p' src/Makefile)"
+if [ "${_cxx}" != "${_objcxx}" ]; then
+    echo "!! build-linux.sh: configure recorded OBJCXX='${_objcxx}' but CXX='${_cxx}'" >&2
+    echo "   they must be the same compiler; set OBJCXX to the C++ compiler" >&2
+    exit 1
+fi
+echo "==> compilers: CC=$(sed -n 's/^CC = //p' src/Makefile) CXX=${_cxx} OBJCXX=${_objcxx}"
+
+# configure leaves RDKit out, or links it without Boost.Python, without failing
+if ! grep -q "^ENHANCED_LIGAND_TOOLS_CPPFLAGS = -DMAKE_ENHANCED_LIGAND_TOOLS" src/Makefile || \
+   ! grep -qE "^RDKIT_LIBS = .*-lboost_python[0-9]" src/Makefile; then
+    echo "!! build-linux.sh: configure did not enable RDKit with Boost.Python; see config.log" >&2
+    exit 1
+fi
+
+# configure builds without refinement, quietly, when its GSL test fails
+if ! grep -q "^COOT_GSL_FLAGS = -DHAVE_GSL" src/Makefile; then
+    echo "!! build-linux.sh: configure did not enable GSL, so refinement would be missing" >&2
+    echo "   see the GSL section of config.log" >&2
+    exit 1
+fi
+
+# --- make + install -------------------------------------------------------------
+if [ -z "${BANDICOOT_INCREMENTAL:-}" ]; then
+    echo "==> make clean (BANDICOOT_INCREMENTAL=1 to skip)"
+    make clean >/dev/null
+    # The link resolves libraries' dependencies through the rpath into
+    # ${PREFIX}/lib, so a previous install's libraries (e.g. from an ASan
+    # build) would be linked instead of the ones being built.
+    rm -f "${PREFIX}"/lib/libcoot* "${PREFIX}"/lib/libccp4mg*
+fi
+echo "==> make -j${JOBS} (set JOBS to change)"
+make -j"${JOBS}"
+
+mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
+# Marks a finished release build for release-linux.sh --skip-build; any new
+# install, of whatever kind, invalidates it (that script writes a fresh one).
+rm -f "${PREFIX}/.bandicoot-release-stamp"
+# No byte-compiling at install: the py-compile script that older automake
+# copies in (e.g. Ubuntu 20.04's) imports 'imp', which Python 3.12 removed.
+# Python compiles the modules itself on first import.
+if [ "${CONFIG_PREFIX}" = "${PREFIX}" ]; then
+    echo "==> make install -> ${PREFIX}"
+    make install py_compile=/dev/null
+else
+    # DESTDIR only prepends to the install paths; overriding prefix at install
+    # time instead would recompile the objects that embed it.
+    if [ -n "$(ls -A "${PREFIX}" 2>/dev/null)" ] && [ ! -x "${PREFIX}/bin/coot" ]; then
+        echo "!! build-linux.sh: ${PREFIX} is not empty and is not a Bandicoot install;" >&2
+        echo "   a release build replaces its contents, so it will not touch it" >&2
+        exit 1
+    fi
+    _stage="$(mktemp -d)"
+    trap 'rm -rf "${_stage}"' EXIT
+    echo "==> make install (staged, prefix ${CONFIG_PREFIX}) -> ${PREFIX}"
+    make install py_compile=/dev/null DESTDIR="${_stage}"
+    find "${PREFIX}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    find "${_stage}${CONFIG_PREFIX}" -mindepth 1 -maxdepth 1 -exec mv -f {} "${PREFIX}/" \;
+    rm -rf "${_stage}"
+    trap - EXIT
+fi
+
+# Every library search path baked into the program must point into the
+# install or the dependency tree; anything else is a library the build picked
+# up from elsewhere.
+_rp_fail=0
+for _elf in "${PREFIX}"/libexec/coot-bin "${PREFIX}"/lib/libcoot*.so*; do
+    [ -f "${_elf}" ] && [ ! -L "${_elf}" ] || continue
+    _rp="$(readelf -d "${_elf}" 2>/dev/null | grep -E '\((RUN)?PATH\)' | sed 's/.*\[\(.*\)\]/\1/')"
+    for _d in ${_rp//:/ }; do
+        case "${_d}" in
+            "${PREFIX}"/*|"${CONFIG_PREFIX}"/*|"${DEPS_PREFIX}"/*) ;;
+            *) echo "!! build-linux.sh: $(basename "${_elf}") searches ${_d} for libraries" >&2
+               _rp_fail=1 ;;
+        esac
+    done
+done
+if [ "${_rp_fail}" != "0" ]; then
+    echo "   a library outside the system and ${DEPS_PREFIX} was linked; see config.log" >&2
+    exit 1
+fi
+
+# The launcher (bin/coot) runs libexec/Bandicoot, as on macOS.
+if [ -f "${PREFIX}/libexec/coot-bin" ]; then
+    mv -f "${PREFIX}/libexec/coot-bin" "${PREFIX}/libexec/Bandicoot"
+fi
+ln -sf coot "${PREFIX}/bin/bcoot"
+
+# Monomer dictionary and reference structures, checked into the repository
+_copy_tree() {   # <src-dir> <dst-dir> <label>
+    rm -rf "$2"
+    mkdir -p "$2"
+    cp -R "$1/." "$2/"
+    echo "==> installed $3 -> $2"
+}
+_copy_tree "${COOT_DATA_SRC}/monomers" "${PREFIX}/share/coot/lib/data/monomers" "monomer dictionary"
+_copy_tree "${COOT_DATA_SRC}/reference-structures" "${PREFIX}/share/coot/reference-structures" "reference structures"
+# The ligand tools look for RDKit's data at share/RDKit, beside share/coot;
+# Show Chemical Features reads its feature definitions there
+_copy_tree "${RDKIT_PREFIX}/share/RDKit/Data" "${PREFIX}/share/RDKit/Data" "RDKit data"
+
+echo ""
+echo "Bandicoot ${BANDICOOT_VERSION_STR}${BUILD_SUFFIX} installed in ${PREFIX}"
+echo "Launch with: ${PREFIX}/bin/bcoot"

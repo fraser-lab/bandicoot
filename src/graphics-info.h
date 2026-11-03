@@ -49,9 +49,12 @@
 #include "Python.h"
 #endif
 
+#ifndef BANDICOOT_UI_WX
+// the GTK build's GL widget (the wx build draws in a wxGLCanvas)
 #include <gdk/gdkglconfig.h>
 #include <gdk/gdkgldrawable.h>
 #include <gtk/gtkgl.h>
+#endif
 
 #ifdef BANDICOOT_UI_WX
 #include "wxUI/main/surface.hh"

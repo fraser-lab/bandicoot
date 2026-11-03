@@ -1851,7 +1851,7 @@ wrapped_create_fast_ss_search_dialog() {
 // Edit Functions that have been promoted from Extensions -> Modelling
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
-#ifdef __APPLE__
+// Bandicoot native replacements (both UI builds, every OS)
 // BANDICOOT: native C replacements for the molecule_chooser_gui() Python
 // dialogs, which are no-ops here because `gtk` is the stub module (see
 // python/coot_load_modules.py). The underlying ops (copy_molecule,
@@ -4831,7 +4831,7 @@ extern "C" void bandicoot_pandda_dialog_with_folder(const char *dir) {
    if (dir && *dir)
       bandicoot_pandda_load_folder(dir);
 }
-#endif // __APPLE__
+// (end of Bandicoot native replacements)
 
 void  do_edit_copy_molecule() {
 

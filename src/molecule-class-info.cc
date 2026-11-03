@@ -2554,12 +2554,26 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
          float zsc = graphics_info_t::zoom;
          coot::Cartesian z_delta = (front - back) * 0.003;
 
+         // Point sizes are in framebuffer pixels. On a high-density display the
+         // viewport is scaled up, so the points must be too: otherwise the atoms
+         // shrink against their highlight offsets, which are in model space.
+#ifdef BANDICOOT_UI_WX
+         float px = bandicoot_wx_surface_backing_scale();
+#else
+         float px = 1.0;
+#endif
+         // While multisampling is on, GL_POINT_SMOOTH is ignored and some
+         // drivers (Mesa among them) draw the points square; restored below.
+         GLboolean multisample_was_on = glIsEnabled(GL_MULTISAMPLE_ARB);
+         if (multisample_was_on)
+            glDisable(GL_MULTISAMPLE_ARB);
+
          // in general, we need to run this loop for every different atom radius
          for (unsigned int ii=0; ii<2; ii++) {
 
             // std::cout << "display_bonds_stick_mode_atoms() ii is " << ii << std::endl;
 
-            float base_point_size =  280.0/zsc;
+            float base_point_size =  280.0/zsc * px;
             if (ii==1)
                base_point_size = 1.5 * base_point_size;
             float current_point_size = base_point_size;
@@ -2662,28 +2676,37 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                // << zsc << std::endl;  -> 1 and 63.375
                //
 
-               float hlit_point_size =  40.0/zsc;
-               float ball_point_size = 280.0/zsc;
+               float hlit_point_size =  40.0/zsc * px;
+               float ball_point_size = 280.0/zsc * px;
 
-               // the position offset should be clamped between point_size_data[0] and point_size_data[1]
-               //
-               //
+               // the driver draws no point larger than its maximum
                GLdouble point_size_data[2];
                glGetDoublev(GL_POINT_SIZE_RANGE, point_size_data);
-               float off = 0.03;
-
-
                if (ball_point_size > point_size_data[1]) {
-                  off *= (point_size_data[1]/ball_point_size);
                   ball_point_size = point_size_data[1];
                   hlit_point_size = (40.0/280.0) * point_size_data[1];
                }
 
-               // the offset doesn't depend on zoom (until it does (implicitly) by the ball size going bigger
-               // than the graphics card wants to draw it).
-               //
-               coot::Cartesian offset = screen_x * off;
-               offset += screen_y * (-off * 1.25);
+               // The highlight sits a fixed fraction of the ball's radius from its
+               // centre, up and to the right. The ball's size is in framebuffer
+               // pixels, so the offset is converted to model space at the current
+               // view; a fixed model-space offset would drift to the ball's edge in
+               // a larger or denser window.
+               GLdouble mv[16], pj[16];
+               GLint vp[4];
+               glGetDoublev(GL_MODELVIEW_MATRIX, mv);
+               glGetDoublev(GL_PROJECTION_MATRIX, pj);
+               glGetIntegerv(GL_VIEWPORT, vp);
+               coot::Cartesian one_unit_right = centre + screen_x;
+               GLdouble x0, y0, z0, x1, y1, z1;
+               gluProject(centre.x(), centre.y(), centre.z(), mv, pj, vp, &x0, &y0, &z0);
+               gluProject(one_unit_right.x(), one_unit_right.y(), one_unit_right.z(),
+                          mv, pj, vp, &x1, &y1, &z1);
+               double pixels_per_unit = sqrt((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0));
+               double ball_radius = (pixels_per_unit > 0) ? 0.5 * ball_point_size / pixels_per_unit : 0.0;
+
+               coot::Cartesian offset = screen_x * (0.2 * ball_radius);
+               offset += screen_y * (-0.25 * ball_radius);
                offset += z_delta * 2.0;
 
                if (false)
@@ -2759,6 +2782,8 @@ molecule_class_info_t::display_bonds_stick_mode_atoms(const graphical_bonds_cont
                glEnd();
             }
          }
+         if (multisample_was_on)
+            glEnable(GL_MULTISAMPLE_ARB);
       }
    }
 }
