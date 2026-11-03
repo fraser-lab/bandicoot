@@ -36,8 +36,6 @@
 #include <stdexcept>
 
 #include <string.h>
-#include <cmath>
-#include <cstdlib>
 #include <GL/glut.h>
 #include "bandicoot-time.hh"
 
@@ -834,33 +832,6 @@ coot::animated_ligand_interactions_t::draw(mmdb::Manager *mol,
 
       clipper::Coord_orth pt_1 = coot::util::get_coords(at_1);
       clipper::Coord_orth pt_2 = coot::util::get_coords(at_2);
-
-      // TEMPORARY diagnostic for a GPU reset on Linux when FLEV starts: report
-      // the geometry of the first interactions drawn, and let
-      // BANDICOOT_FLEV_DRAW=none skip the cylinders or =lines draw plain lines.
-      {
-         static int n_reported = 0;
-         if (n_reported < 40) {
-            n_reported++;
-            clipper::Coord_orth frag((pt_1 - pt_2) * (1.0/25.0));
-            double len = sqrt(frag.lengthsq());
-            double ratio = (len > 0) ? frag.z()/len : 0.0;
-            double ax = (fabs(frag.z()) > 1e-7) ? 180.0/M_PI*acos(ratio) : 180.0/M_PI*acos(frag.x()/len);
-            std::cout << "FLEV-DIAG interaction length " << sqrt((pt_1-pt_2).lengthsq())
-                      << " z-ratio " << ratio << " angle " << ax
-                      << ((std::isnan(ax) || std::isnan(len)) ? "  NaN" : "") << std::endl;
-         }
-         const char *mode = getenv("BANDICOOT_FLEV_DRAW");
-         if (mode && strcmp(mode, "none") == 0) return;
-         if (mode && strcmp(mode, "lines") == 0) {
-            glColor3f(0.3, 0.3, 0.8);
-            glBegin(GL_LINES);
-            glVertex3f(pt_1.x(), pt_1.y(), pt_1.z());
-            glVertex3f(pt_2.x(), pt_2.y(), pt_2.z());
-            glEnd();
-            return;
-         }
-      }
 //       glBegin(GL_LINES);
 //       glVertex3f(pt_1.x(), pt_1.y(),pt_1.z());
 //       glVertex3f(pt_2.x(), pt_2.y(),pt_2.z());

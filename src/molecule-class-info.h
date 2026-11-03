@@ -3295,6 +3295,7 @@ public:        //                      public
    std::vector<coot::animated_ligand_interactions_t> animated_ligand_interactions_vec;
 
    void add_animated_ligand_interaction(const  coot::fle_ligand_bond_t &lb);
+   void clear_animated_ligand_interactions() { animated_ligand_interactions_vec.clear(); }
 
    void draw_animated_ligand_interactions(const gl_context_info_t &gl,
 					  const long &start_time) const;

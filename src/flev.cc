@@ -688,6 +688,13 @@ void
 coot::add_animated_ligand_interactions(int imol,
 				       const std::vector<coot::fle_ligand_bond_t> &ligand_bonds) {
 
+   // A new FLEV replaces the interactions of earlier ones, on every molecule,
+   // rather than adding to them: all of them are drawn on every frame of the
+   // animation.
+   for (unsigned int jmol=0; jmol<graphics_info_t::molecules.size(); jmol++)
+      if (is_valid_model_molecule(jmol))
+         graphics_info_t::molecules[jmol].clear_animated_ligand_interactions();
+
    for (unsigned int i=0; i<ligand_bonds.size(); i++) {
       // std::cout << "Here....  adding animated ligand interaction " << i << std::endl;
       add_animated_ligand_interaction(imol, ligand_bonds[i]);
