@@ -334,17 +334,23 @@ BUNDLED_MD="${DOCDIR}/BUNDLED-LINUX.md"
 
 # <bundled file name> <path it was copied from, or empty to look it up>
 record_origin() {
-    local name="$1" from="$2" d pkg src ver
+    local name="$1" from="$2" d pkg="" src ver
     for d in "${DEPS_PREFIX}"/*/lib; do
         if [ -e "${d}/${name}" ]; then
             echo "| \`${name}\` | built from source | \`$(basename "$(dirname "${d}")")\` | | |" >> "${BUNDLED_MD}"
             return 0
         fi
     done
+    # where the system has it: packages need not register the soname link,
+    # which ldconfig may have made, so the file it points to is looked up too
+    if [ -z "${from}" ]; then
+        from="$(ldconfig -p 2>/dev/null | awk -v n="${name}" '$1 == n && /x86-64/ {print $NF; exit}' || true)"
+    fi
     if [ -n "${from}" ]; then
         pkg="$(dpkg -S "$(readlink -f "${from}")" 2>/dev/null | head -1 | cut -d: -f1 || true)"
         [ -n "${pkg}" ] || pkg="$(dpkg -S "${from}" 2>/dev/null | head -1 | cut -d: -f1 || true)"
-    else
+    fi
+    if [ -z "${pkg:-}" ]; then
         pkg="$(dpkg -S "/${name}" 2>/dev/null | \
             awk -F': ' -v n="/${name}" 'substr($2, length($2) - length(n) + 1) == n {print $1; exit}' | \
             cut -d: -f1 | cut -d, -f1 || true)"
