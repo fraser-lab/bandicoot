@@ -554,6 +554,7 @@ struct bandicoot_other_preferences {
    float clipping = 0;                       // front and back together
    bool crosshairs = false;
    bool label_on_recentre = false;
+   bandicoot_rgb symmetry_label_colour;
 };
 bandicoot_other_preferences bandicoot_core_other_preferences();
 // What Reset Defaults returns these settings to; the PanDDA directory is kept.
@@ -561,9 +562,11 @@ bandicoot_other_preferences bandicoot_core_other_preference_defaults();
 // The label fonts beyond small, medium and large, from font size 4 on.
 std::vector<std::string> bandicoot_core_other_font_labels();
 bandicoot_rgb bandicoot_core_default_font_colour();
+bandicoot_rgb bandicoot_core_default_symmetry_label_colour();
 void bandicoot_core_set_antialias(bool on);
 void bandicoot_core_set_font_size_preference(int size);
 void bandicoot_core_set_font_colour_preference(const bandicoot_rgb &colour);
+void bandicoot_core_set_symmetry_label_colour_preference(const bandicoot_rgb &colour);
 void bandicoot_core_set_console_commands(bool on);
 void bandicoot_core_set_pointer_size_preference(float angstroms);
 void bandicoot_core_set_refinement_speed(int steps_per_frame);

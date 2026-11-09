@@ -3528,7 +3528,9 @@ molecule_class_info_t::label_symmetry_atom(int i) {
             std::string label =
                make_symm_atom_label_string(atom_sel.atom_selection[iatom_index], st_inv);
 
-            GLfloat blueish[3] = { 0.7, 0.7, 1.0 };
+            GLfloat blueish[3] = { graphics_info_t::symmetry_label_colour.red,
+                                   graphics_info_t::symmetry_label_colour.green,
+                                   graphics_info_t::symmetry_label_colour.blue };
 
             glColor3fv(blueish);
 

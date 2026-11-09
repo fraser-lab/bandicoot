@@ -1475,6 +1475,12 @@ bandicoot_rgb bandicoot_core_default_font_colour() {
    return c;
 }
 
+bandicoot_rgb bandicoot_core_default_symmetry_label_colour() {
+   bandicoot_rgb c;
+   c.r = 0.7f; c.g = 0.7f; c.b = 1.0f;
+   return c;
+}
+
 bandicoot_other_preferences bandicoot_core_other_preferences() {
    bandicoot_other_preferences p;
    p.antialias = graphics_info_t::do_anti_aliasing_flag;
@@ -1502,6 +1508,9 @@ bandicoot_other_preferences bandicoot_core_other_preferences() {
    p.clipping = graphics_info_t::clipping_front;
    p.crosshairs = graphics_info_t::draw_crosshairs_flag != 0;
    p.label_on_recentre = graphics_info_t::label_atom_on_recentre_flag != 0;
+   p.symmetry_label_colour.r = graphics_info_t::symmetry_label_colour.red;
+   p.symmetry_label_colour.g = graphics_info_t::symmetry_label_colour.green;
+   p.symmetry_label_colour.b = graphics_info_t::symmetry_label_colour.blue;
    return p;
 }
 
@@ -1538,6 +1547,14 @@ bandicoot_other_preferences bandicoot_core_other_preference_defaults() {
    d.clipping = default_float(PREFERENCES_CLIPPING, 0.0f);
    d.crosshairs = default_int(PREFERENCES_CROSSHAIRS, 0) != 0;
    d.label_on_recentre = default_int(PREFERENCES_LABEL_ON_RECENTRE, 1) != 0;
+   const coot::preference_info_t *sc = preference_default(PREFERENCES_SYMM_LABEL_COLOUR);
+   if (sc) {
+      d.symmetry_label_colour.r = sc->fvalue1;
+      d.symmetry_label_colour.g = sc->fvalue2;
+      d.symmetry_label_colour.b = sc->fvalue3;
+   } else {
+      d.symmetry_label_colour = bandicoot_core_default_symmetry_label_colour();
+   }
    return d;
 }
 
@@ -1577,6 +1594,11 @@ void bandicoot_core_set_font_size_preference(int size) {
 void bandicoot_core_set_font_colour_preference(const bandicoot_rgb &colour) {
    preferences_internal_change_value_float3(PREFERENCES_FONT_COLOUR, colour.r, colour.g, colour.b);
    set_font_colour(colour.r, colour.g, colour.b);
+}
+
+void bandicoot_core_set_symmetry_label_colour_preference(const bandicoot_rgb &colour) {
+   preferences_internal_change_value_float3(PREFERENCES_SYMM_LABEL_COLOUR, colour.r, colour.g, colour.b);
+   set_symmetry_atom_label_colour(colour.r, colour.g, colour.b);
 }
 
 void bandicoot_core_set_console_commands(bool on) {

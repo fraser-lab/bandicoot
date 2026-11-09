@@ -3875,6 +3875,12 @@ void set_font_colour(float red, float green, float blue) {
    graphics_draw();
 }
 
+void set_symmetry_atom_label_colour(float red, float green, float blue) {
+
+   graphics_info_t::symmetry_label_colour = coot::colour_holder(red, green, blue);
+   graphics_draw();
+}
+
 void set_use_stroke_characters(int state) {
 
    graphics_info_t::stroke_characters = state;

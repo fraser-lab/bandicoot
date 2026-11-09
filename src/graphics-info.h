@@ -1288,6 +1288,7 @@ public:
    static void *atom_label_font;
    static int label_atom_on_recentre_flag;
    static coot::colour_holder font_colour;
+   static coot::colour_holder symmetry_label_colour;
    void remove_all_atom_labels();
 
    static int n_molecules() { return molecules.size();}

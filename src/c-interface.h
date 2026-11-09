@@ -2464,6 +2464,10 @@ int get_font_size();
   in the range 0->1 */
 void set_font_colour(float red, float green, float blue);
 
+/*! \brief set the colour of symmetry atom labels - the arguments are
+  in the range 0->1 */
+void set_symmetry_atom_label_colour(float red, float green, float blue);
+
 /*! \brief set use stroke characters */
 void set_use_stroke_characters(int state);
 

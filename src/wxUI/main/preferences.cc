@@ -107,6 +107,29 @@ YesNo yes_no(wxWindow *page, wxBoxSizer *col, const wxString &title, std::functi
    return yn;
 }
 
+// A titled panel in a tab that holds several settings; its box is the
+// parent of its contents.
+wxStaticBoxSizer *panel(wxWindow *page, wxBoxSizer *col, const wxString &title) {
+   wxStaticBoxSizer *box = frame(page, title);
+   col->Add(box, 0, wxEXPAND | wxBOTTOM, 10);
+   return box;
+}
+
+// Yes / No choice inside a panel, under its question.
+YesNo panel_yes_no(wxStaticBoxSizer *box, const wxString &question, std::function<void(bool)> changed,
+                   const wxString &yes_label = "Yes", const wxString &no_label = "No") {
+   wxWindow *b = box->GetStaticBox();
+   if (! question.empty()) box->Add(new wxStaticText(b, wxID_ANY, question), 0, wxALL, 4);
+   YesNo yn;
+   yn.yes = new wxRadioButton(b, wxID_ANY, yes_label, wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+   yn.no = new wxRadioButton(b, wxID_ANY, no_label);
+   box->Add(yn.yes, 0, wxALL, 4);
+   box->Add(yn.no, 0, wxALL, 4);
+   on_choose(yn.yes, [changed]() { changed(true); });
+   on_choose(yn.no, [changed]() { changed(false); });
+   return yn;
+}
+
 wxBitmap swatch(const bandicoot_rgb &c) {
    wxBitmap bm(36, 16);
    wxMemoryDC dc(bm);
@@ -239,7 +262,7 @@ private:
    std::vector<std::function<void()>> refreshers;
 
    // A category's tabs are built afresh each time it is chosen, since Bond
-   // Colours and Map Colours appear under two categories.
+   // Colours, Map Colours and the atom label colour appear under two categories.
    void show_category(int index) {
       for (size_t i = 0; i < category_buttons.size(); i++) category_buttons[i]->set_on(int(i) == index);
       notebook->DeleteAllPages();
@@ -247,16 +270,15 @@ private:
       std::vector<std::pair<wxPanel *, wxString>> pages;
       switch (index) {
       case 0:
-         pages = { dialogs_page(), toolbar_page(), recentring_page(), smooth_page(), hid_page() };
+         pages = { dialogs_page(), toolbar_page(), recentring_page(), hid_page() };
          break;
       case 1: pages = { bond_parameters_page(), bond_colours_page(), cis_peptides_page() }; break;
       case 2: pages = { map_parameters_page(), map_colours_page(), map_drag_page() }; break;
-      case 3: pages = { bond_colours_page(), map_colours_page(), background_page() }; break;
+      case 3: pages = { bond_colours_page(), map_colours_page(), colours_other_page() }; break;
       case 4:
          // Coot's Tips tab is left out: no tips window opens in Bandicoot
-         pages = { antialias_page(), fonts_page(), console_page(), pointer_page(), speed_page(),
-                   pick_atom_page(), pandda_page(), ligands_page(), clipping_page(),
-                   centre_label_page(), crosshairs_page() };
+         pages = { antialias_page(), fonts_page(), user_interface_page(), speed_page(),
+                   pick_atom_page(), pandda_page(), ligands_page(), centre_label_page() };
          break;
       default: break;
       }
@@ -489,56 +511,31 @@ private:
       return { page, "Refinement Toolbar" };
    }
 
-   // ---- General > Coordinates Recentering
+   // ---- General > Recentring: coordinates recentring and smooth recentring
 
    std::pair<wxPanel *, wxString> recentring_page() {
       wxBoxSizer *col;
       wxPanel *page = new_page(notebook, col);
-      heading(page, col, "Recentre on read new PDB?");
-      wxStaticBoxSizer *box = frame(page, wxEmptyString);
-      wxWindow *b = box->GetStaticBox();
-      wxRadioButton *yes = new wxRadioButton(b, wxID_ANY, "Yes", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-      wxRadioButton *no = new wxRadioButton(b, wxID_ANY, "No");
-      box->Add(yes, 0, wxALL, 4);
-      box->Add(no, 0, wxALL, 4);
-      col->Add(box, 0, wxEXPAND);
-      on_choose(yes, []() { bandicoot_core_set_recentre_on_read(true); });
-      on_choose(no, []() { bandicoot_core_set_recentre_on_read(false); });
-      refreshers.push_back([yes, no]() {
-         bool on = bandicoot_core_recentre_on_read();
-         yes->SetValue(on);
-         no->SetValue(! on);
-      });
-      return { page, "Coordinates Recentering" };
-   }
 
-   // ---- General > Smooth Recentering
+      wxStaticBoxSizer *coords = panel(page, col, "Coordinates Recentring");
+      YesNo on_read = panel_yes_no(coords, "Recentre on read new PDB?",
+                                   [](bool on) { bandicoot_core_set_recentre_on_read(on); });
 
-   std::pair<wxPanel *, wxString> smooth_page() {
-      wxBoxSizer *col;
-      wxPanel *page = new_page(notebook, col);
-      heading(page, col, "Recentering Smooth Scrolling");
-      wxStaticBoxSizer *box = frame(page, wxEmptyString);
-      wxWindow *b = box->GetStaticBox();
-      wxRadioButton *yes = new wxRadioButton(b, wxID_ANY, "Yes", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-      wxRadioButton *no = new wxRadioButton(b, wxID_ANY, "No");
-      box->Add(yes, 0, wxALL, 4);
-      box->Add(no, 0, wxALL, 4);
-      col->Add(box, 0, wxEXPAND | wxBOTTOM, 10);
-
+      wxStaticBoxSizer *smooth = panel(page, col, "Smooth Recentring");
+      wxWindow *b = smooth->GetStaticBox();
+      YesNo scroll = panel_yes_no(smooth, "Recentering Smooth Scrolling",
+                                  [](bool on) { bandicoot_core_set_smooth_scroll(on); });
       wxFlexGridSizer *grid = new wxFlexGridSizer(3, 8, 8);
-      wxTextCtrl *steps = new wxTextCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(160, -1));
-      wxTextCtrl *limit = new wxTextCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(160, -1));
-      grid->Add(new wxStaticText(page, wxID_ANY, "Number of Steps:"), 0, wxALIGN_CENTER_VERTICAL);
+      wxTextCtrl *steps = new wxTextCtrl(b, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(160, -1));
+      wxTextCtrl *limit = new wxTextCtrl(b, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(160, -1));
+      grid->Add(new wxStaticText(b, wxID_ANY, "Number of Steps:"), 0, wxALIGN_CENTER_VERTICAL);
       grid->Add(steps, 0);
       grid->AddSpacer(0);
-      grid->Add(new wxStaticText(page, wxID_ANY, "Do Not Scroll for\ndistances more than:"), 0, wxALIGN_CENTER_VERTICAL);
+      grid->Add(new wxStaticText(b, wxID_ANY, "Do Not Scroll for\ndistances more than:"), 0, wxALIGN_CENTER_VERTICAL);
       grid->Add(limit, 0, wxALIGN_CENTER_VERTICAL);
-      grid->Add(new wxStaticText(page, wxID_ANY, "A"), 0, wxALIGN_CENTER_VERTICAL);
-      col->Add(grid, 0);
+      grid->Add(new wxStaticText(b, wxID_ANY, "A"), 0, wxALIGN_CENTER_VERTICAL);
+      smooth->Add(grid, 0, wxALL, 4);
 
-      on_choose(yes, []() { bandicoot_core_set_smooth_scroll(true); });
-      on_choose(no, []() { bandicoot_core_set_smooth_scroll(false); });
       // a value applies once it reads as one, as in Coot
       steps->Bind(wxEVT_TEXT, [steps](wxCommandEvent &) {
          long v;
@@ -548,14 +545,13 @@ private:
          double v;
          if (limit->GetValue().ToCDouble(&v) && v > 0 && v < 1000) bandicoot_core_set_smooth_scroll_limit(float(v));
       });
-      refreshers.push_back([yes, no, steps, limit]() {
-         bool on = bandicoot_core_smooth_scroll();
-         yes->SetValue(on);
-         no->SetValue(! on);
+      refreshers.push_back([on_read, scroll, steps, limit]() mutable {
+         on_read.set(bandicoot_core_recentre_on_read());
+         scroll.set(bandicoot_core_smooth_scroll());
          steps->ChangeValue(wxString::Format("%d", bandicoot_core_smooth_scroll_steps()));
          limit->ChangeValue(wxString::Format("%.2f", bandicoot_core_smooth_scroll_limit()));
       });
-      return { page, "Smooth Recentering" };
+      return { page, "Recentring" };
    }
 
    // ---- General > HID
@@ -775,13 +771,46 @@ private:
       return { page, "Cis-Peptides" };
    }
 
-   // ---- Colours > Background colour
+   // A Default / Own colour choice in box, the swatch holding the own colour.
+   void colour_choice(wxStaticBoxSizer *box, const wxString &own_label, const char *panel_title,
+                      std::function<bandicoot_rgb()> current, std::function<bandicoot_rgb()> standard_colour,
+                      std::function<void(const bandicoot_rgb &)> apply) {
+      wxWindow *b = box->GetStaticBox();
+      wxRadioButton *standard = new wxRadioButton(b, wxID_ANY, "Default", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+      wxRadioButton *own = new wxRadioButton(b, wxID_ANY, own_label);
+      auto own_colour = std::make_shared<bandicoot_rgb>(standard_colour());
+      auto show = std::make_shared<std::function<void()>>();
+      wxBitmapButton *pick = own_colour_swatch(b, own, panel_title, own_colour, current, apply,
+                                               [show]() { (*show)(); });
+      wxBoxSizer *own_row = new wxBoxSizer(wxHORIZONTAL);
+      own_row->Add(own, 0, wxALIGN_CENTER_VERTICAL);
+      own_row->Add(pick, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
+      box->Add(standard, 0, wxALL, 4);
+      box->Add(own_row, 0, wxALL, 4);
+      on_choose(standard, [apply, standard_colour]() { apply(standard_colour()); });
+      on_choose(own, [apply, own_colour]() { apply(*own_colour); });
 
-   std::pair<wxPanel *, wxString> background_page() {
+      // the default colour shows as Default, any other as own
+      *show = [standard, own, pick, own_colour, current, standard_colour]() {
+         bandicoot_rgb c = current();
+         bandicoot_rgb d = standard_colour();
+         bool is_default = std::fabs(c.r - d.r) < 0.002f && std::fabs(c.g - d.g) < 0.002f &&
+                           std::fabs(c.b - d.b) < 0.002f;
+         standard->SetValue(is_default);
+         own->SetValue(! is_default);
+         *own_colour = c;
+         pick->SetBitmap(swatch(c));
+      };
+      refreshers.push_back([show]() { (*show)(); });
+   }
+
+   // ---- Colours > Other: background, atom label and symmetry label colours
+
+   std::pair<wxPanel *, wxString> colours_other_page() {
       wxBoxSizer *col;
       wxPanel *page = new_page(notebook, col);
-      heading(page, col, "Background colour?");
-      wxStaticBoxSizer *box = frame(page, wxEmptyString);
+
+      wxStaticBoxSizer *box = panel(page, col, "Background");
       wxWindow *b = box->GetStaticBox();
       wxRadioButton *black = new wxRadioButton(b, wxID_ANY, "Black", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
       wxRadioButton *white = new wxRadioButton(b, wxID_ANY, "White");
@@ -800,7 +829,6 @@ private:
       box->Add(black, 0, wxALL, 4);
       box->Add(white, 0, wxALL, 4);
       box->Add(own_row, 0, wxALL, 4);
-      col->Add(box, 0, wxEXPAND);
 
       on_choose(black, [apply]() { apply(bandicoot_rgb()); });
       on_choose(white, [apply]() { bandicoot_rgb w; w.r = w.g = w.b = 1; apply(w); });
@@ -817,7 +845,16 @@ private:
          pick->SetBitmap(swatch(c));
       };
       refreshers.push_back([show]() { (*show)(); });
-      return { page, "Background colour" };
+
+      colour_choice(panel(page, col, "Labels"), "Own label colour", "Atom Label Colour",
+                    []() { return bandicoot_core_other_preferences().font_colour; },
+                    bandicoot_core_default_font_colour,
+                    [](const bandicoot_rgb &c) { bandicoot_core_set_font_colour_preference(c); });
+      colour_choice(panel(page, col, "Symmetry Labels"), "Own label colour", "Symmetry Label Colour",
+                    []() { return bandicoot_core_other_preferences().symmetry_label_colour; },
+                    bandicoot_core_default_symmetry_label_colour,
+                    [](const bandicoot_rgb &c) { bandicoot_core_set_symmetry_label_colour_preference(c); });
+      return { page, "Other" };
    }
 
    // ---- Others > Antialiasing
@@ -867,35 +904,12 @@ private:
       });
 
       wxStaticBoxSizer *colour = frame(page, "Atom Label Colour");
-      wxWindow *cb = colour->GetStaticBox();
-      wxRadioButton *standard = new wxRadioButton(cb, wxID_ANY, "Default", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-      wxRadioButton *own = new wxRadioButton(cb, wxID_ANY, "Own label colour");
-      auto own_colour = std::make_shared<bandicoot_rgb>(bandicoot_core_default_font_colour());
-      auto apply = [](const bandicoot_rgb &c) { bandicoot_core_set_font_colour_preference(c); };
-      auto show_colour = std::make_shared<std::function<void()>>();
-      wxBitmapButton *pick = own_colour_swatch(cb, own, "Atom Label Colour", own_colour,
-                                               []() { return bandicoot_core_other_preferences().font_colour; },
-                                               apply, [show_colour]() { (*show_colour)(); });
-      wxBoxSizer *own_row = new wxBoxSizer(wxHORIZONTAL);
-      own_row->Add(own, 0, wxALIGN_CENTER_VERTICAL);
-      own_row->Add(pick, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
-      colour->Add(standard, 0, wxALL, 4);
-      colour->Add(own_row, 0, wxALL, 4);
       col->Add(colour, 0, wxEXPAND);
-      on_choose(standard, [apply]() { apply(bandicoot_core_default_font_colour()); });
-      on_choose(own, [apply, own_colour]() { apply(*own_colour); });
+      colour_choice(colour, "Own label colour", "Atom Label Colour",
+                    []() { return bandicoot_core_other_preferences().font_colour; },
+                    bandicoot_core_default_font_colour,
+                    [](const bandicoot_rgb &c) { bandicoot_core_set_font_colour_preference(c); });
 
-      // Coot's default label colour shows as Default, any other as own
-      *show_colour = [standard, own, pick, own_colour]() {
-         bandicoot_rgb c = bandicoot_core_other_preferences().font_colour;
-         bandicoot_rgb d = bandicoot_core_default_font_colour();
-         bool is_default = std::fabs(c.r - d.r) < 0.002f && std::fabs(c.g - d.g) < 0.002f &&
-                           std::fabs(c.b - d.b) < 0.002f;
-         standard->SetValue(is_default);
-         own->SetValue(! is_default);
-         *own_colour = c;
-         pick->SetBitmap(swatch(c));
-      };
       refreshers.push_back([=]() {
          int s = bandicoot_core_other_preferences().font_size;
          small->SetValue(s < 2);
@@ -903,44 +917,49 @@ private:
          large->SetValue(s == 3);
          others->SetValue(s > 3);
          fonts->SetSelection(s > 3 && s - 4 < int(fonts->GetCount()) ? s - 4 : wxNOT_FOUND);
-         (*show_colour)();
       });
       return { page, "Fonts" };
    }
 
-   // ---- Others > Console
+   // ---- Others > User Interface: pink pointer size, clipping, crosshairs, console
 
-   std::pair<wxPanel *, wxString> console_page() {
+   std::pair<wxPanel *, wxString> user_interface_page() {
       wxBoxSizer *col;
       wxPanel *page = new_page(notebook, col);
-      YesNo show = yes_no(page, col, "Display state commands in console?",
-                          [](bool on) { bandicoot_core_set_console_commands(on); });
-      refreshers.push_back([show]() mutable { show.set(bandicoot_core_other_preferences().console_commands); });
-      return { page, "Console" };
-   }
 
-   // ---- Others > Pink Pointer Size
-
-   std::pair<wxPanel *, wxString> pointer_page() {
-      wxBoxSizer *col;
-      wxPanel *page = new_page(notebook, col);
-      heading(page, col, "Rotation Centre Cube Size");
-      wxStaticBoxSizer *box = frame(page, wxEmptyString);
-      wxWindow *b = box->GetStaticBox();
-      wxTextCtrl *size = number_entry(b, [](double v) {
+      wxStaticBoxSizer *pointer = panel(page, col, "Pink Pointer Size");
+      wxWindow *pb = pointer->GetStaticBox();
+      pointer->Add(new wxStaticText(pb, wxID_ANY, "Rotation Centre Cube Size"), 0, wxALL, 4);
+      wxTextCtrl *size = number_entry(pb, [](double v) {
          if (v >= 0 && v <= 1000) bandicoot_core_set_pointer_size_preference(float(v));
       });
       wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
-      row->Add(new wxStaticText(b, wxID_ANY, "Size:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+      row->Add(new wxStaticText(pb, wxID_ANY, "Size:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
       row->Add(size, 0, wxALIGN_CENTER_VERTICAL);
-      row->Add(new wxStaticText(b, wxID_ANY, wxString::FromUTF8("\xc3\x85ngstr\xc3\xb6m")), 0,
+      row->Add(new wxStaticText(pb, wxID_ANY, wxString::FromUTF8("\xc3\x85ngstr\xc3\xb6m")), 0,
                wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
-      box->Add(row, 0, wxALL, 6);
-      col->Add(box, 0, wxEXPAND);
-      refreshers.push_back([size]() {
-         size->ChangeValue(wxString::Format("%.2f", bandicoot_core_other_preferences().pointer_size));
+      pointer->Add(row, 0, wxALL, 4);
+
+      wxStaticBoxSizer *clipping = panel(page, col, "Clipping");
+      clipping->Add(new wxStaticText(clipping->GetStaticBox(), wxID_ANY, "Clipping Adjustment"), 0, wxALL, 4);
+      // the range the keyboard clipping keys move through
+      StepSlider *slider = new StepSlider(clipping->GetStaticBox(), -15.0, 15.0, 0.1, 0.0, 1);
+      slider->on_change = [](double v) { bandicoot_core_set_clipping(float(v)); };
+      clipping->Add(slider, 0, wxEXPAND | wxALL, 4);
+
+      YesNo cross = panel_yes_no(panel(page, col, "Crosshairs"), "Display Crosshairs",
+                                 [](bool on) { bandicoot_core_set_crosshairs(on); }, "On", "Off");
+      YesNo console = panel_yes_no(panel(page, col, "Console"), "Display state commands in console?",
+                                   [](bool on) { bandicoot_core_set_console_commands(on); });
+
+      refreshers.push_back([size, slider, cross, console]() mutable {
+         bandicoot_other_preferences o = bandicoot_core_other_preferences();
+         size->ChangeValue(wxString::Format("%.2f", o.pointer_size));
+         slider->set_value(o.clipping);
+         cross.set(o.crosshairs);
+         console.set(o.console_commands);
       });
-      return { page, "Pink Pointer Size" };
+      return { page, "User Interface" };
    }
 
    // ---- Others > Speed Settings
@@ -1227,23 +1246,6 @@ private:
       return { page, "Ligands" };
    }
 
-   // Every setting this window shows, back to its default.
-   // ---- Others > Clipping
-
-   std::pair<wxPanel *, wxString> clipping_page() {
-      wxBoxSizer *col;
-      wxPanel *page = new_page(notebook, col);
-      heading(page, col, "Clipping Adjustment");
-      wxStaticBoxSizer *box = frame(page, wxEmptyString);
-      // the range the keyboard clipping keys move through
-      StepSlider *slider = new StepSlider(box->GetStaticBox(), -15.0, 15.0, 0.1, 0.0, 1);
-      slider->on_change = [](double v) { bandicoot_core_set_clipping(float(v)); };
-      box->Add(slider, 0, wxEXPAND | wxALL, 6);
-      col->Add(box, 0, wxEXPAND);
-      refreshers.push_back([slider]() { slider->set_value(bandicoot_core_other_preferences().clipping); });
-      return { page, "Clipping" };
-   }
-
    // ---- Others > Centre Atom Label
 
    std::pair<wxPanel *, wxString> centre_label_page() {
@@ -1258,17 +1260,7 @@ private:
       return { page, "Centre Atom Label" };
    }
 
-   // ---- Others > Crosshairs
-
-   std::pair<wxPanel *, wxString> crosshairs_page() {
-      wxBoxSizer *col;
-      wxPanel *page = new_page(notebook, col);
-      YesNo cross = yes_no(page, col, "Display Crosshairs",
-                           [](bool on) { bandicoot_core_set_crosshairs(on); }, "On", "Off");
-      refreshers.push_back([cross]() mutable { cross.set(bandicoot_core_other_preferences().crosshairs); });
-      return { page, "Crosshairs" };
-   }
-
+   // Every setting this window shows, back to its default.
    void reset_defaults() {
       bandicoot_general_preferences d = bandicoot_core_general_preference_defaults();
       bandicoot_core_set_ar_docked(d.ar_docked);
@@ -1328,6 +1320,7 @@ private:
       bandicoot_core_set_clipping(o.clipping);
       bandicoot_core_set_crosshairs(o.crosshairs);
       bandicoot_core_set_label_on_recentre(o.label_on_recentre);
+      bandicoot_core_set_symmetry_label_colour_preference(o.symmetry_label_colour);
       refresh();
    }
 };

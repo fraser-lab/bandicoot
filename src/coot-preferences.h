@@ -64,6 +64,8 @@
 #define PREFERENCES_CLIPPING                      47
 #define PREFERENCES_CROSSHAIRS                    48
 #define PREFERENCES_LABEL_ON_RECENTRE             49
+// BANDICOOT: "Symmetry Labels" colour (Preferences > Colours > Other)
+#define PREFERENCES_SYMM_LABEL_COLOUR             50
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1
