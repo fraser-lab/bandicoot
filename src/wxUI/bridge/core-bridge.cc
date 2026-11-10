@@ -3406,6 +3406,20 @@ void bandicoot_core_set_undo_molecule(int imol) {
    set_undo_molecule(imol);
 }
 
+int bandicoot_core_undo_redo_model() {
+   int imol = graphics_info_t::get_undo_molecule_number();
+   return is_valid_model_molecule(imol) ? imol : -1;
+}
+
+void bandicoot_core_set_undo_redo_model(int imol) {
+   if (is_valid_model_molecule(imol))
+      set_undo_molecule(imol);
+   else {
+      graphics_info_t g;
+      g.set_undo_molecule_number(-1);
+   }
+}
+
 void bandicoot_core_undo_in(int imol) {
    if (! is_valid_model_molecule(imol)) return;
    set_undo_molecule(imol);

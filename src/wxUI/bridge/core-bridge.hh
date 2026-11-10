@@ -1307,6 +1307,10 @@ bool bandicoot_core_place_strand_here(int n_residues, std::string &why_not);
 // centre) and Delete Side-chains for Active Chain, by those labels.
 bool bandicoot_core_active_molecule_tool(const std::string &tool, std::string &why_not);
 void bandicoot_core_set_undo_molecule(int imol);
+// The model Undo and Redo act on: one the user chose, or -1 for whichever
+// model is active when they are used.
+int bandicoot_core_undo_redo_model();
+void bandicoot_core_set_undo_redo_model(int imol);
 // A ligand built from SMILES, placed at the screen centre. message says how
 // it went (also on the status bar); false if no molecule was made.
 bool bandicoot_core_ligand_from_smiles(const std::string &smiles, const std::string &code, std::string &message);

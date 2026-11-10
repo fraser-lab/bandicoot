@@ -2806,6 +2806,8 @@ public:
    void activate_redo_button();
    // used by option menu item callback which sets the molecule for undoing
    void set_undo_molecule_number(int i) { undo_molecule = i; }
+   // BANDICOOT: the model chosen for Undo/Redo, -1 if none
+   static int get_undo_molecule_number() { return undo_molecule; }
    // undo_molecule_select uses set_undo_molecule_number()
 
    // who calls this?
