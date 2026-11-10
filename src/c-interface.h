@@ -2468,6 +2468,13 @@ void set_font_colour(float red, float green, float blue);
   in the range 0->1 */
 void set_symmetry_atom_label_colour(float red, float green, float blue);
 
+/*! \brief Bandicoot: add empty molecule slots until there are n of them, so
+  that the next molecule made is number n. Returns the number of slots. */
+int bandicoot_fill_molecule_slots(int n);
+
+/*! \brief Bandicoot: the folder the file choosers open in next */
+void bandicoot_set_file_chooser_directory(const char *directory);
+
 /*! \brief set use stroke characters */
 void set_use_stroke_characters(int state);
 

@@ -27,6 +27,7 @@
 
 #include "wxUI/main/surface.hh"
 #include "wxUI/bridge/core-bridge.hh"
+#include "wxUI/main/file-menu.hh"
 #include "wxUI/main/main-menu.hh"
 #include "wxUI/main/top-toolbar.hh"
 #include "wxUI/main/calculate-menu.hh"
@@ -1075,6 +1076,9 @@ private:
          d->on_ok = [](int imol) { bandicoot_core_undo_in(imol); };
          d->CentreOnParent();
          d->Show();
+      };
+      v.startup_state = [this](const std::string &default_path, const std::vector<std::string> &contents) {
+         wxui::show_startup_state(this, default_path, contents);
       };
       v.question = [this](const std::string &q) { return wxui::confirm(this, wxString::FromUTF8(q), "Yes", "No"); };
       v.ask = [this](const std::string &q, std::function<void(bool)> on_answer) {

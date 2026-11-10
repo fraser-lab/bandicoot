@@ -328,6 +328,11 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
 					g.preferences_internal[i].ivalue1, il));
        break;
 
+     case PREFERENCES_LOAD_SAVED_STATE:
+       commands.push_back(state_command("set-run-state-file-status",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
      case PREFERENCES_SYMM_LABEL_COLOUR:
        commands.push_back(state_command("set-symmetry-atom-label-colour",
 					g.preferences_internal[i].fvalue1,
@@ -711,6 +716,10 @@ graphics_info_t::make_preferences_internal() {
 
   p.preference_type = PREFERENCES_LABEL_ON_RECENTRE;
   p.ivalue1 = graphics_info_t::label_atom_on_recentre_flag;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_LOAD_SAVED_STATE;
+  p.ivalue1 = graphics_info_t::run_state_file_status;
   ret.push_back(p);
 
   p.preference_type = PREFERENCES_SYMM_LABEL_COLOUR;

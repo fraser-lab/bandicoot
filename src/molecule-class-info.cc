@@ -7220,6 +7220,19 @@ molecule_class_info_t::add_dummy_atom(coot::Cartesian pos) {
 
 // Backup filename: return a stub.
 //
+bool
+molecule_class_info_t::write_coordinates_for_state(const std::string &file_name, bool as_cif) {
+
+   if (! has_model()) return false;
+   if (is_from_shelx_ins_flag) {
+      std::pair<int, std::string> r = write_shelx_ins_file(file_name);
+      return r.first == 1;
+   }
+   int istat = write_atom_selection_file(atom_sel, file_name, as_cif, mmdb::io::GZM_NONE,
+                                         1, 1, 0, mmcif_doc.get());
+   return istat == 0;
+}
+
 std::string
 molecule_class_info_t::get_save_molecule_filename(const std::string &dir) {
 

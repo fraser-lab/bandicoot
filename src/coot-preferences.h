@@ -66,6 +66,10 @@
 #define PREFERENCES_LABEL_ON_RECENTRE             49
 // BANDICOOT: "Symmetry Labels" colour (Preferences > Colours > Other)
 #define PREFERENCES_SYMM_LABEL_COLOUR             50
+// BANDICOOT: "Load Saved State" (Preferences > General > Dialogs): whether the
+// auto-saved state is loaded at startup. 0 never, 1 ask, 2 auto -- the values
+// of run_state_file_status.
+#define PREFERENCES_LOAD_SAVED_STATE              51
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

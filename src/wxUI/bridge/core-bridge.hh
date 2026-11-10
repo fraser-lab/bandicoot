@@ -279,6 +279,11 @@ void bandicoot_core_set_save_view(const bandicoot_save_view &view);
 // Save State...: the state file's name (as last saved, else Coot's default).
 std::string bandicoot_core_save_state_name();
 void bandicoot_core_save_state(const std::string &path);
+// Run a saved state file, which adds its models and maps to those loaded;
+// false if there is no such file.
+bool bandicoot_core_load_state(const std::string &path);
+// The models and maps a state file would load, as Coot lists them.
+std::vector<std::string> bandicoot_core_state_file_contents(const std::string &path);
 
 // Recover Session...: the models that have a backup newer than the file they
 // were read from.
@@ -474,6 +479,7 @@ struct bandicoot_general_preferences {
    int smooth_scroll_steps = 40;
    float smooth_scroll_limit = 10.0f;
    bool flat_trackball = false;
+   int load_saved_state = 1;   // 0 never, 1 ask, 2 auto
 };
 // What Reset Defaults returns the General settings to.
 bandicoot_general_preferences bandicoot_core_general_preference_defaults();
@@ -491,6 +497,10 @@ void bandicoot_core_set_smooth_scroll_limit(float angstroms);
 // The virtual trackball: flat (turntable) or spherical (Coot's default).
 bool bandicoot_core_flat_trackball();
 void bandicoot_core_set_flat_trackball(bool flat);
+// Whether the auto-saved state is loaded at startup: 0 never, 1 ask, 2 auto.
+// The saved setting, which a command-line option can override for one run.
+int bandicoot_core_load_saved_state();
+void bandicoot_core_set_load_saved_state(int when);
 
 // The Bonds, Maps, Geometry and Colours settings. Angles in degrees, the map
 // radius in A, increments in e/A^3.
@@ -753,6 +763,9 @@ struct bandicoot_ui_view {
    // Undo found several molecules it could act on: which one (the models
    // that can, (imol, label); the first is preselected)
    std::function<void(const std::vector<std::pair<int, std::string>> &models)> choose_undo_molecule;
+   // at startup: whether to recover the auto-saved state (default_path, with
+   // the models and maps it would load) or another saved state
+   std::function<void(const std::string &default_path, const std::vector<std::string> &contents)> startup_state;
    // a dataset named on the command line: open it as File > Open MTZ does
    std::function<void(const std::string &file)> open_dataset;
    // a fetched entry's validation report (its own pygtk window cannot appear)

@@ -39,6 +39,139 @@
 #include "cc-interface.hh"
 #include "c-interface-scm.hh"
 #include "rotamer-search-modes.hh"
+#include "cc-interface-scripting.hh"
+#include "utils/coot-utils.hh"
+
+#include <ctime>
+#include <filesystem>
+#include <iostream>
+#include <map>
+#include <unistd.h>
+
+namespace {
+
+// A Python string literal for s.
+std::string py_str(const std::string &s) {
+   std::string r = "'";
+   for (char c : s) {
+      if (c == '\\' || c == '\'') r += '\\';
+      r += c;
+   }
+   return r + "'";
+}
+
+// True if the Python expression is true; false if it is not, or fails.
+bool python_true(const std::string &expression) {
+#ifdef USE_PYTHON
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   PyObject *v = safe_python_command_with_return(expression);
+   bool r = v && PyObject_IsTrue(v) == 1;
+   Py_XDECREF(v);
+   PyGILState_Release(gstate);
+   return r;
+#else
+   return false;
+#endif
+}
+
+// BANDICOOT: the models of a saved state go into a gzipped tarball beside the
+// state file, named after it: 0-coot.state.py -> 0-coot.state.tar.gz.
+std::string state_tarball_name(const std::string &state_file) {
+   std::error_code ec;
+   std::filesystem::path p = std::filesystem::absolute(state_file, ec);
+   if (ec) p = state_file;
+   std::string stem = p.filename().string();
+   if (stem.size() > 3 && stem.substr(stem.size() - 3) == ".py")
+      stem = stem.substr(0, stem.size() - 3);
+   return (p.parent_path() / (stem + ".tar.gz")).string();
+}
+
+bool has_coordinate_extension(const std::string &name) {
+   static const char *extensions[] = { ".pdb", ".ent", ".brk", ".cif", ".mmcif", ".res", ".ins" };
+   std::string lower = name;
+   for (char &c : lower) c = std::tolower(static_cast<unsigned char>(c));
+   for (const char *e : extensions) {
+      std::string ext(e);
+      if (lower.size() > ext.size() && lower.substr(lower.size() - ext.size()) == ext) return true;
+   }
+   return false;
+}
+
+std::string file_name_safe(const std::string &s) {
+   std::string r = s;
+   for (char &c : r)
+      if (c == ' ' || c == '/' || c == '\\') c = '_';
+   return r;
+}
+
+// Every model as it is now is written into the tarball, its file named
+// <imol>_<name>: a model read from a file keeps that file's name, one made in
+// the session (e.g. from a dictionary) takes its Display Manager name and is
+// written as mmCIF. Returns, by molecule number, the state line that reads
+// each model back; a model missing from it is read from its file as before.
+std::map<int, std::string> bundle_models_for_state(const std::string &tarball) {
+
+   namespace fs = std::filesystem;
+   std::map<int, std::string> reads;
+   std::error_code ec;
+   static int n_bundles = 0;
+   fs::path staging = fs::temp_directory_path(ec) /
+      ("bandicoot-state-" + std::to_string(getpid()) + "-" + std::to_string(time(0)) +
+       "-" + std::to_string(n_bundles++));
+   if (! ec) fs::create_directories(staging, ec);
+   if (ec) {
+      std::cout << "ERROR:: state: could not make " << staging.string() << ": "
+                << ec.message() << std::endl;
+      return reads;
+   }
+
+   for (int i=0; i<graphics_info_t::n_molecules(); i++) {
+      molecule_class_info_t &m = graphics_info_t::molecules[i];
+      if (! m.has_model()) continue;
+      // A name that is a coordinate file's (also once restored from a state,
+      // when there is no such file) keeps it and its format; any other name
+      // is a molecule made in the session.
+      std::string name = m.get_name();
+      std::string file_name = coot::util::file_name_non_directory(name);
+      std::string plain = file_name;  // written uncompressed: the tarball is
+      if (plain.size() > 3 && plain.substr(plain.size() - 3) == ".gz")
+         plain = plain.substr(0, plain.size() - 3);
+      std::string shown, member;
+      bool as_cif = true;
+      if (has_coordinate_extension(plain)) {
+         shown = file_name;
+         as_cif = coot::is_mmcif_filename(plain);
+         member = std::to_string(i) + "_" + file_name_safe(plain);
+      } else {
+         shown = name;
+         member = std::to_string(i) + "_" + file_name_safe(name) + ".cif";
+      }
+      if (! m.write_coordinates_for_state((staging / member).string(), as_cif)) {
+         std::cout << "ERROR:: state: could not write molecule " << i << " (" << name
+                   << ") for " << tarball << std::endl;
+         continue;
+      }
+      reads[i] = "bandicoot_state_read_model(_bcs, " + std::to_string(i) + ", " +
+         py_str(member) + ", " + py_str(shown) + ")";
+   }
+
+   if (reads.empty()) {
+      fs::remove_all(staging, ec);
+      // no models: a tarball of this name is from an older save of this state
+      fs::remove(tarball, ec);
+      return reads;
+   }
+   if (! python_true("bandicoot_state_bundle(" + py_str(staging.string()) + ", " +
+                     py_str(tarball) + ")")) {
+      std::cout << "ERROR:: state: could not write " << tarball
+                << "; the state reads the models' own files instead" << std::endl;
+      reads.clear();
+   }
+   fs::remove_all(staging, ec);
+   return reads;
+}
+
+} // namespace
 
 // save state
 //
@@ -241,20 +374,46 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
    // 
    int molecule_count = 0;
    int scroll_wheel_map_for_state = -1; // unset
+   std::string scroll_wheel_map_ref;
+
+   // BANDICOOT: molecules keep their numbers, offset past any already loaded
+   // when the state is read (_bcs.base); closed ones leave empty slots.
+   std::map<int, std::string> bundled_reads;
+   const bool numbered = (il == coot::PYTHON_SCRIPT);
+   if (numbered) {
+      std::string tarball = state_tarball_name(filename);
+      if (! disable_state_script_writing)
+         bundled_reads = bundle_models_for_state(tarball);
+      commands.push_back("_bcs = bandicoot_state_restore_begin(" +
+                         (bundled_reads.empty() ? std::string("None") : py_str(tarball)) + ")");
+   }
+   auto state_imol_ref = [numbered, &molecule_count](int i) {
+      return numbered ? "_bcs.base+" + std::to_string(i) : std::to_string(molecule_count);
+   };
+   std::string go_to_atom_ref = numbered ? std::string("_bcs.base") : std::string("0");
+
    for (int i=0; i<n_molecules(); i++) {
       // NXMAP-FIXME
       if (molecules[i].has_xmap() || molecules[i].has_nxmap() || molecules[i].has_model()) { 
 	 // i.e. it was not Closed...
 	 command_strings = molecules[i].save_state_command_strings();
-	 if (command_strings.size() > 0) {
-	    commands.push_back(state_command(command_strings, il));
+	 const std::string mol_ref = state_imol_ref(i);
+	 std::map<int, std::string>::const_iterator it_read = bundled_reads.find(i);
+	 if (it_read != bundled_reads.end() || command_strings.size() > 0) {
+	    if (it_read != bundled_reads.end()) {
+	       commands.push_back(it_read->second);
+	    } else {
+	       if (numbered)
+		  commands.push_back("bandicoot_state_slot(_bcs, " + std::to_string(i) + ")");
+	       commands.push_back(state_command(command_strings, il));
+	    }
 	    std::vector <std::string> display_strings;
 	    std::vector <std::string>  active_strings;
 	    // colour
 	    if (molecules[i].has_model()) { 
 	       display_strings.clear();
 	       display_strings.push_back("set-molecule-bonds-colour-map-rotation");
-	       display_strings.push_back(int_to_string(molecule_count));
+	       display_strings.push_back(mol_ref);
 	       display_strings.push_back(float_to_string(molecules[i].bonds_colour_map_rotation));
 	       commands.push_back(state_command(display_strings, il));
 	    }
@@ -262,14 +421,14 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       if (! molecules[i].draw_it) {
 		  display_strings.clear();
 		  display_strings.push_back("set-mol-displayed");
-		  display_strings.push_back(int_to_string(molecule_count));
+		  display_strings.push_back(mol_ref);
 		  display_strings.push_back(int_to_string(0));
 		  commands.push_back(state_command(display_strings, il));
 	       }
 	       if (! molecules[i].atom_selection_is_pickable()) {
 		  active_strings.clear();
 		  active_strings.push_back("set-mol-active");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  active_strings.push_back(int_to_string(0));
 		  commands.push_back(state_command(active_strings, il));
 	       }
@@ -277,7 +436,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       if (molecules[i].bond_thickness() != default_bond_width) {
 		  display_strings.clear();
 		  display_strings.push_back("set-bond-thickness");
-		  display_strings.push_back(int_to_string(molecule_count));
+		  display_strings.push_back(mol_ref);
 		  display_strings.push_back(int_to_string(molecules[i].bond_thickness()));
 		  commands.push_back(state_command(display_strings, il));
 	       }
@@ -285,7 +444,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       // hydrogens?
 	       display_strings.clear();
 	       display_strings.push_back("set-draw-hydrogens");
-	       display_strings.push_back(int_to_string(molecule_count));
+	       display_strings.push_back(mol_ref);
 	       display_strings.push_back(int_to_string(molecules[i].draw_hydrogens()));
 	       commands.push_back(state_command(display_strings, il));
 	       
@@ -294,7 +453,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  // default would be not CAlphas
 		  active_strings.clear();
 		  active_strings.push_back("symmetry-as-calphas");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  active_strings.push_back(int_to_string(1));
 		  commands.push_back(state_command(active_strings, il));
 	       }
@@ -302,7 +461,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  // default would be to show symmetry
 		  active_strings.clear();
 		  active_strings.push_back("set-show-symmetry-molecule");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  active_strings.push_back(int_to_string(0));
 		  commands.push_back(state_command(active_strings, il));
 	       }
@@ -310,7 +469,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  // default is not to colour by symop
 		  active_strings.clear();
 		  active_strings.push_back("set-symmetry-colour-by-symop");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  active_strings.push_back(int_to_string(1));
 		  commands.push_back(state_command(active_strings, il));
 	       }
@@ -318,7 +477,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  // default is not to colour by symop
 		  active_strings.clear();
 		  active_strings.push_back("set-symmetry-whole-chain");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  active_strings.push_back(int_to_string(1));
 		  commands.push_back(state_command(active_strings, il));
 	       }
@@ -339,7 +498,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		   molecules[i].Bonds_box_type() == coot::BONDS_NO_HYDROGENS) {
 		  active_strings.clear();
 		  active_strings.push_back("graphics-to-bonds-representation");
-		  active_strings.push_back(int_to_string(molecule_count));
+		  active_strings.push_back(mol_ref);
 		  commands.push_back(state_command(active_strings, il));
 	       }
 
@@ -347,49 +506,49 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  if (molecules[i].Bonds_box_type() == coot::CA_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-ca-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_CHAIN_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("set-colour-by-chain");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::CA_BONDS_PLUS_LIGANDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-ca-plus-ligands-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::CA_BONDS_PLUS_LIGANDS_AND_SIDECHAINS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-ca-plus-ligands-and-sidechains-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::BONDS_NO_WATERS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-bonds-no-waters-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::BONDS_SEC_STRUCT_COLOUR) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-sec-struct-bonds-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::CA_BONDS_PLUS_LIGANDS_SEC_STRUCT_COLOUR) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-ca-plus-ligands-sec-struct-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_MOLECULE_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("set-colour-by-molecule");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  // BANDICOOT: "Bonds (Colour by Alt. Conf.)". Missing since the
@@ -400,25 +559,25 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_ALTLOC_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-colour-by-altloc-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_RAINBOW_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-rainbow-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_B_FACTOR_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-b-factor-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 		  if (molecules[i].Bonds_box_type() == coot::COLOUR_BY_OCCUPANCY_BONDS) {
 		     active_strings.clear();
 		     active_strings.push_back("graphics-to-occupancy-representation");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     commands.push_back(state_command(active_strings, il));
 		  }
 	       }
@@ -434,7 +593,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  
 // 		  active_strings.clear();
 // 		  active_strings.push_back("set-show-all-additional-representations");
-// 		  active_strings.push_back(int_to_string(molecule_count));
+// 		  active_strings.push_back(mol_ref);
 // 		  active_strings.push_back(int_to_string(0));
 // 		  commands.push_back(state_command(active_strings, il));
 
@@ -444,7 +603,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		     if (molecules[i].add_reps[iar].atom_sel_info.type ==
 			 coot::atom_selection_info_t::BY_ATTRIBUTES) { 
 			active_strings.push_back("additional-representation-by-attributes");
-			active_strings.push_back(int_to_string(molecule_count));
+			active_strings.push_back(mol_ref);
 			active_strings.push_back(single_quote(molecules[i].add_reps[iar].atom_sel_info.chain_id));
 			active_strings.push_back(int_to_string(molecules[i].add_reps[iar].atom_sel_info.resno_start));
 			active_strings.push_back(int_to_string(molecules[i].add_reps[iar].atom_sel_info.resno_end));
@@ -458,7 +617,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		     if (molecules[i].add_reps[iar].atom_sel_info.type ==
 			 coot::atom_selection_info_t::BY_STRING) { 
 			active_strings.push_back("additional-representation-by-string");
-			active_strings.push_back(int_to_string(molecule_count));
+			active_strings.push_back(mol_ref);
 			active_strings.push_back(single_quote(molecules[i].add_reps[iar].atom_sel_info.atom_selection_str));
 			active_strings.push_back(int_to_string(molecules[i].add_reps[iar].representation_type));
 			active_strings.push_back(int_to_string(molecules[i].add_reps[iar].bonds_box_type));
@@ -473,7 +632,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		     if (! molecules[i].add_reps[iar].show_it) {
 			active_strings.clear();
 			active_strings.push_back("set-show-additional-representation");
-			active_strings.push_back(int_to_string(molecule_count));
+			active_strings.push_back(mol_ref);
 			active_strings.push_back(int_to_string(iar));
 			active_strings.push_back(int_to_string(0));
 			commands.push_back(state_command(active_strings, il));
@@ -486,7 +645,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 		  for (unsigned int iseq=0; iseq<molecules[i].input_sequence.size(); iseq++) {
 		     active_strings.clear();
 		     active_strings.push_back("assign-pir-sequence");
-		     active_strings.push_back(int_to_string(molecule_count));
+		     active_strings.push_back(mol_ref);
 		     active_strings.push_back(single_quote(molecules[i].input_sequence[iseq].first));
 		     std::string title = molecules[i].dotted_chopped_name();
 		     title += " chain ";
@@ -507,7 +666,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       float opacity = molecules[i].density_surface_opacity;
 	       command_strings.clear();
 	       command_strings.push_back("set-solid-density-surface-opacity");
-	       command_strings.push_back(int_to_string(molecule_count));
+	       command_strings.push_back(mol_ref);
 	       command_strings.push_back(float_to_string(opacity));
 	       commands.push_back(state_command(command_strings, il));
 
@@ -525,7 +684,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       if (! molecules[i].is_displayed_p()) {
 		  display_strings.clear();
 		  display_strings.push_back("set-map-displayed");
-		  display_strings.push_back(int_to_string(molecule_count));
+		  display_strings.push_back(mol_ref);
 		  display_strings.push_back(int_to_string(0));
 		  commands.push_back(state_command(display_strings, il));
 	       }
@@ -533,26 +692,29 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	       if (i == imol_refinement_map) {
 		  display_strings.clear();
 		  display_strings.push_back("set-imol-refinement-map");
-		  display_strings.push_back(int_to_string(molecule_count));
+		  display_strings.push_back(mol_ref);
 		  commands.push_back(state_command(display_strings, il));
 	       }
 
 	       if (i == scroll_wheel_map) {
 		  // save for after maps have been read.
 		  scroll_wheel_map_for_state = molecule_count;
+		  scroll_wheel_map_ref = mol_ref;
 	       }
 	    }
 	    if (molecules[i].show_unit_cell_flag) {
 	       display_strings.clear();
 	       display_strings.push_back("set-show-unit-cell");
-	       display_strings.push_back(int_to_string(molecule_count));
+	       display_strings.push_back(mol_ref);
 	       display_strings.push_back(int_to_string(1));
 	       commands.push_back(state_command(display_strings, il));
 	    } 
 	 }
 
-	 if (i==go_to_atom_molecule_)
+	 if (i==go_to_atom_molecule_) {
 	    local_go_to_atom_mol = molecule_count;
+	    go_to_atom_ref = mol_ref;
+	 }
 
 	 molecule_count++; 
       }
@@ -574,6 +736,10 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
       commands.push_back(state_command("set-refine-ramachandran-restraints-weight", rama_restraints_weight, il));
    }
 
+   // the models are read; the files they were read from can go
+   if (numbered)
+      commands.push_back("bandicoot_state_restore_end(_bcs)");
+
    // last things to do:
 
    // did we find a map that was the scroll wheel map?
@@ -581,7 +747,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
    if (scroll_wheel_map_for_state != -1) {
       std::vector <std::string> display_strings;
       display_strings.push_back("set-scroll-wheel-map");
-      display_strings.push_back(int_to_string(scroll_wheel_map_for_state));
+      display_strings.push_back(numbered ? scroll_wheel_map_ref : int_to_string(scroll_wheel_map_for_state));
       commands.push_back(state_command(display_strings, il));
    }
 
@@ -608,11 +774,11 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 	 if (is_valid_model_molecule(sdo.imol_end)) {
 	    std::vector<std::string> s(9);
 	    s[0] = "add-geometry-distance";
-	    s[1] = coot::util::int_to_string(sdo.imol_start);
+	    s[1] = numbered ? state_imol_ref(sdo.imol_start) : coot::util::int_to_string(sdo.imol_start);
 	    s[2] = coot::util::float_to_string(sdo.start_pos.x());
 	    s[3] = coot::util::float_to_string(sdo.start_pos.y());
 	    s[4] = coot::util::float_to_string(sdo.start_pos.z());
-	    s[5] = coot::util::int_to_string(sdo.imol_end);
+	    s[5] = numbered ? state_imol_ref(sdo.imol_end) : coot::util::int_to_string(sdo.imol_end);
 	    s[6] = coot::util::float_to_string(sdo.end_pos.x());
 	    s[7] = coot::util::float_to_string(sdo.end_pos.y());
 	    s[8] = coot::util::float_to_string(sdo.end_pos.z());
@@ -627,7 +793,7 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
    // go to atom
    command_strings.resize(0);
    command_strings.push_back("set-go-to-atom-molecule");
-   command_strings.push_back(int_to_string(local_go_to_atom_mol));
+   command_strings.push_back(numbered ? go_to_atom_ref : int_to_string(local_go_to_atom_mol));
    commands.push_back(state_command(command_strings, il));
 
    command_strings.resize(0);
@@ -740,7 +906,8 @@ graphics_info_t::save_state_data_and_models(short int lang_flag) const {
 	 // save_state_command_strings() is blank).
 	 std::vector <std::string> command_strings =
 	    molecules[i].save_state_command_strings();
-	 if (command_strings.size() > 0) {
+	 // BANDICOOT: every model is, as it goes into the state's tarball
+	 if (molecules[i].has_model() || command_strings.size() > 0) {
 	    std::string s = ";;molecule-info: ";
 	    s += molecules[i].name_for_display_manager();
 	    v.push_back(s);
@@ -828,7 +995,9 @@ graphics_info_t::save_state() {
    //    std::cout << "in save_state() run_state_file_status was " << run_state_file_status
    // << std::endl;
    
-   if (run_state_file_status) {
+   // BANDICOOT: run_state_file_status is about LOADING the state file at
+   // startup; the state is always saved on exit.
+   {
       short int il = coot::SCHEME_SCRIPT;
 #ifdef USE_GUILE
       if (1) { // was state_file_was_run_flag
@@ -844,10 +1013,9 @@ graphics_info_t::save_state() {
       // here. No idea what writing a state file has to do with running one.
       if (1) 
 	 r = save_state_file("0-coot.state.py", il);
-#endif // USE_PYTHON   
-      return r;
+#endif // USE_PYTHON
    }
-   return 0;
+   return r;
 }
 
 std::string 

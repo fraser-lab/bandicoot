@@ -150,6 +150,10 @@ bool bandicoot_wx_display_manager_open();
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
 // A yes/no it waits on: 1 yes, 0 no, -1 if there is no window to ask in.
 int bandicoot_wx_question(const std::string &text);
+// The startup choice of state to recover; false if there is no window to ask in.
+bool bandicoot_wx_startup_state(const std::string &default_path);
+// Where Save Coordinates opens next.
+void bandicoot_wx_set_save_directory(const std::string &directory);
 // A radio-button choice whose options and buttons run Python commands; false
 // if there is no window to show it in.
 bool bandicoot_wx_radio_choice(const std::string &title,
@@ -3881,6 +3885,24 @@ void set_symmetry_atom_label_colour(float red, float green, float blue) {
    graphics_draw();
 }
 
+int bandicoot_fill_molecule_slots(int n) {
+
+   // an empty molecule is a closed one: no model, no map
+   while (graphics_info_t::n_molecules() < n)
+      if (graphics_info_t::create_molecule() < 0) break;
+   return graphics_info_t::n_molecules();
+}
+
+void bandicoot_set_file_chooser_directory(const char *directory) {
+
+   if (! directory) return;
+   graphics_info_t g;
+   g.set_directory_for_filechooser_string(directory);
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_set_save_directory(directory);
+#endif
+}
+
 void set_use_stroke_characters(int state) {
 
    graphics_info_t::stroke_characters = state;
@@ -7510,12 +7532,8 @@ run_state_file_maybe() {
 	    if (graphics_info_t::use_graphics_interface_flag) { 
 #ifdef BANDICOOT_UI_WX
 	       // asked once the wx event loop runs, as the main window is then up
-	       std::string question = "There is a coot auto-save state file here.\n\n";
-	       for (const std::string &m : g.save_state_data_and_models(filename, 1))
-		  question += "    " + m + "\n";
-	       question += "\nDo you want to run it?";
-	       if (bandicoot_wx_timeout_add(1, [question]() {
-		      if (bandicoot_wx_question(question) == 1) run_state_file();
+	       if (bandicoot_wx_timeout_add(1, [filename]() {
+		      bandicoot_wx_startup_state(filename);
 		      return false;
 		   }))
 		  return;

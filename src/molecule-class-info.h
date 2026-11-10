@@ -2000,6 +2000,11 @@ public:        //                      public
    try_align_on_all_chains(const std::string &target, float match_fragment,
 			   mmdb::realtype wgap, mmdb::realtype wspace) const;
 
+   // BANDICOOT: the coordinates as they are now, for a saved state, through
+   // the same preserving writer as backups. Does not change the molecule's
+   // name or its unsaved-changes status. True on success.
+   bool write_coordinates_for_state(const std::string &file_name, bool as_cif);
+
    void make_backup_from_outside(); // when we have a multi mutate, we
 				    // want the wrapper to make a
 				    // backup when we start and set

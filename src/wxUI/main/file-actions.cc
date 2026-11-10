@@ -237,6 +237,7 @@ const std::map<std::string, std::function<void(wxWindow *)>> &file_actions() {
       { "on_save_symmetry_coordinates1_activate", [](wxWindow *) {
            bandicoot_core_pick_symmetry_save(); } },
       { "on_save_state1_activate",         save_state_action },
+      { "bandicoot_load_state_activate",   [](wxWindow *p) { show_load_state(p); } },
       { "on_recover_session1_activate",    [](wxWindow *p) { show_recover_session(p); } },
       { "on_export_map1_activate",         [](wxWindow *p) { show_export_map(p, false); } },
       { "on_export_map_fragment1_activate", [](wxWindow *p) { show_export_map(p, true); } },

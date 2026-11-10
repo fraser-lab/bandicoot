@@ -324,7 +324,18 @@ private:
       row->Add(max_rows, 0, wxALIGN_CENTER_VERTICAL);
       row->Add(new wxStaticText(rb, wxID_ANY, "sequences"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
       rows->Add(row, 0, wxALL, 4);
-      col->Add(rows, 0, wxEXPAND);
+      col->Add(rows, 0, wxEXPAND | wxBOTTOM, 10);
+
+      wxStaticBoxSizer *state = frame(page, "Load Saved State");
+      wxWindow *stb = state->GetStaticBox();
+      wxRadioButton *state_auto = new wxRadioButton(stb, wxID_ANY, "Auto", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+      wxRadioButton *state_ask = new wxRadioButton(stb, wxID_ANY, "Ask");
+      wxRadioButton *state_never = new wxRadioButton(stb, wxID_ANY, "Never");
+      for (wxRadioButton *r : { state_auto, state_ask, state_never }) state->Add(r, 0, wxALL, 4);
+      col->Add(state, 0, wxEXPAND);
+      on_choose(state_auto, []() { bandicoot_core_set_load_saved_state(2); });
+      on_choose(state_ask, []() { bandicoot_core_set_load_saved_state(1); });
+      on_choose(state_never, []() { bandicoot_core_set_load_saved_state(0); });
 
       auto sync_ar = [this, ar, ar_sub, ar_yes]() {
          ar->Show(ar_sub, ar_yes->GetValue());
@@ -363,6 +374,10 @@ private:
          sv_yes->SetValue(sv_docked);
          sv_no->SetValue(! sv_docked);
          max_rows->SetValue(bandicoot_core_sequence_view_max_chains());
+         int load = bandicoot_core_load_saved_state();
+         state_auto->SetValue(load == 2);
+         state_ask->SetValue(load == 1);
+         state_never->SetValue(load == 0);
       });
       return { page, "Dialogs" };
    }
@@ -1279,6 +1294,7 @@ private:
       bandicoot_core_set_smooth_scroll_steps(d.smooth_scroll_steps);
       bandicoot_core_set_smooth_scroll_limit(d.smooth_scroll_limit);
       bandicoot_core_set_flat_trackball(d.flat_trackball);
+      bandicoot_core_set_load_saved_state(d.load_saved_state);
 
       // as in Coot, every category goes back, not only the one shown
       bandicoot_display_preferences p = bandicoot_core_display_preference_defaults();

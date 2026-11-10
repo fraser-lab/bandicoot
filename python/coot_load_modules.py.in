@@ -304,6 +304,7 @@ pre_list = [
     "clear_backup.py",
     "3d_generator_import.py",
     "dictionary_generators.py",
+    "bandicoot_state.py",       # saved states: the tarball of models; functions only
     "bandicoot_restraints.py",  # elbow-based restraint generation for ligands
                                 # with no dictionary; defines only functions,
                                 # so loading it early has no side effects.
