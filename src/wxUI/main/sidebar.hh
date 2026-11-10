@@ -85,6 +85,7 @@ private:
    void update_scroll_room();
    void show_settings_menu();
    void show_rot_trans_menu(wxWindow *anchor);
+   void show_undo_model_menu(wxWindow *anchor);
 };
 
 } // namespace wxui

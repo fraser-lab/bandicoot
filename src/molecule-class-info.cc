@@ -3528,7 +3528,9 @@ molecule_class_info_t::label_symmetry_atom(int i) {
             std::string label =
                make_symm_atom_label_string(atom_sel.atom_selection[iatom_index], st_inv);
 
-            GLfloat blueish[3] = { 0.7, 0.7, 1.0 };
+            GLfloat blueish[3] = { graphics_info_t::symmetry_label_colour.red,
+                                   graphics_info_t::symmetry_label_colour.green,
+                                   graphics_info_t::symmetry_label_colour.blue };
 
             glColor3fv(blueish);
 
@@ -7218,6 +7220,19 @@ molecule_class_info_t::add_dummy_atom(coot::Cartesian pos) {
 
 // Backup filename: return a stub.
 //
+bool
+molecule_class_info_t::write_coordinates_for_state(const std::string &file_name, bool as_cif) {
+
+   if (! has_model()) return false;
+   if (is_from_shelx_ins_flag) {
+      std::pair<int, std::string> r = write_shelx_ins_file(file_name);
+      return r.first == 1;
+   }
+   int istat = write_atom_selection_file(atom_sel, file_name, as_cif, mmdb::io::GZM_NONE,
+                                         1, 1, 0, mmcif_doc.get());
+   return istat == 0;
+}
+
 std::string
 molecule_class_info_t::get_save_molecule_filename(const std::string &dir) {
 

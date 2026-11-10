@@ -327,6 +327,23 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
        commands.push_back(state_command("set-label-on-recentre-flag",
 					g.preferences_internal[i].ivalue1, il));
        break;
+
+     case PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK:
+       commands.push_back(state_command("set-clear-labels-on-double-click",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
+     case PREFERENCES_LOAD_SAVED_STATE:
+       commands.push_back(state_command("set-run-state-file-status",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
+     case PREFERENCES_SYMM_LABEL_COLOUR:
+       commands.push_back(state_command("set-symmetry-atom-label-colour",
+					g.preferences_internal[i].fvalue1,
+					g.preferences_internal[i].fvalue2,
+					g.preferences_internal[i].fvalue3, il));
+       break;
       
      case PREFERENCES_MODEL_TOOLBAR_SHOW:
        if (g.preferences_internal[i].ivalue1 == 0) {
@@ -704,6 +721,20 @@ graphics_info_t::make_preferences_internal() {
 
   p.preference_type = PREFERENCES_LABEL_ON_RECENTRE;
   p.ivalue1 = graphics_info_t::label_atom_on_recentre_flag;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK;
+  p.ivalue1 = graphics_info_t::clear_labels_on_double_click_flag;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_LOAD_SAVED_STATE;
+  p.ivalue1 = graphics_info_t::run_state_file_status;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_SYMM_LABEL_COLOUR;
+  p.fvalue1 = graphics_info_t::symmetry_label_colour.red;
+  p.fvalue2 = graphics_info_t::symmetry_label_colour.green;
+  p.fvalue3 = graphics_info_t::symmetry_label_colour.blue;
   ret.push_back(p);
 
 

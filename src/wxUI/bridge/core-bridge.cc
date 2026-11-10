@@ -514,6 +514,11 @@ static std::string save_directory() {
    return last_save_directory.empty() ? coot::util::current_working_dir() : last_save_directory;
 }
 
+// A restored state sets where Save Coordinates opens next.
+void bandicoot_wx_set_save_directory(const std::string &directory) {
+   last_save_directory = directory;
+}
+
 // A model is saved in the format it was read in, unless the user picks another.
 static coot::coord_file_format_t own_format(int imol) {
    return graphics_info_t::molecules[imol].get_input_molecule_was_in_mmcif_state()
@@ -588,12 +593,30 @@ bool bandicoot_wx_save_symmetry_coords(const coot::save_coords_options_t &opts,
 // ---- File menu: state, recovery, maps, deleting
 
 std::string bandicoot_core_save_state_name() {
-   return graphics_info_t::save_state_file_name;
+   // until a state is saved under a name of the user's choosing, offer one
+   // that the state written on exit (0-coot.state.py) does not overwrite
+   std::string name = graphics_info_t::save_state_file_name;
+   if (name == "0-coot.state.py") name = "1-coot.state.py";
+   return name;
 }
 
 void bandicoot_core_save_state(const std::string &path) {
    save_state_file(path.c_str());
    set_save_state_file_name(path.c_str());
+}
+
+bool bandicoot_core_load_state(const std::string &path) {
+   if (! coot::file_exists(path)) return false;
+   // any name: a state file is a Python script whatever it is called
+   run_python_script(path.c_str());
+   graphics_info_t::state_file_was_run_flag = true;
+   graphics_draw();
+   return true;
+}
+
+std::vector<std::string> bandicoot_core_state_file_contents(const std::string &path) {
+   graphics_info_t g;
+   return g.save_state_data_and_models(path, coot::PYTHON_SCRIPT);
 }
 
 std::vector<bandicoot_backup> bandicoot_core_recoverable_backups() {
@@ -1239,7 +1262,19 @@ bandicoot_general_preferences bandicoot_core_general_preference_defaults() {
    d.smooth_scroll_steps = default_int(PREFERENCES_SMOOTH_SCROLL_STEPS, 40);
    d.smooth_scroll_limit = default_float(PREFERENCES_SMOOTH_SCROLL_LIMIT, 10.0f);
    d.flat_trackball = default_int(PREFERENCES_VT_SURFACE, 2) == 1;
+   d.load_saved_state = default_int(PREFERENCES_LOAD_SAVED_STATE, 1);
    return d;
+}
+
+int bandicoot_core_load_saved_state() {
+   for (const coot::preference_info_t &p : graphics_info_t::preferences_internal)
+      if (p.preference_type == PREFERENCES_LOAD_SAVED_STATE) return p.ivalue1;
+   return graphics_info_t::run_state_file_status;
+}
+
+void bandicoot_core_set_load_saved_state(int when) {
+   preferences_internal_change_value_int(PREFERENCES_LOAD_SAVED_STATE, when);
+   set_run_state_file_status(when);
 }
 
 extern "C" void bandicoot_save_sequence_view_max_chains(int n);
@@ -1475,6 +1510,12 @@ bandicoot_rgb bandicoot_core_default_font_colour() {
    return c;
 }
 
+bandicoot_rgb bandicoot_core_default_symmetry_label_colour() {
+   bandicoot_rgb c;
+   c.r = 0.7f; c.g = 0.7f; c.b = 1.0f;
+   return c;
+}
+
 bandicoot_other_preferences bandicoot_core_other_preferences() {
    bandicoot_other_preferences p;
    p.antialias = graphics_info_t::do_anti_aliasing_flag;
@@ -1502,6 +1543,10 @@ bandicoot_other_preferences bandicoot_core_other_preferences() {
    p.clipping = graphics_info_t::clipping_front;
    p.crosshairs = graphics_info_t::draw_crosshairs_flag != 0;
    p.label_on_recentre = graphics_info_t::label_atom_on_recentre_flag != 0;
+   p.clear_labels_on_double_click = graphics_info_t::clear_labels_on_double_click_flag != 0;
+   p.symmetry_label_colour.r = graphics_info_t::symmetry_label_colour.red;
+   p.symmetry_label_colour.g = graphics_info_t::symmetry_label_colour.green;
+   p.symmetry_label_colour.b = graphics_info_t::symmetry_label_colour.blue;
    return p;
 }
 
@@ -1538,6 +1583,15 @@ bandicoot_other_preferences bandicoot_core_other_preference_defaults() {
    d.clipping = default_float(PREFERENCES_CLIPPING, 0.0f);
    d.crosshairs = default_int(PREFERENCES_CROSSHAIRS, 0) != 0;
    d.label_on_recentre = default_int(PREFERENCES_LABEL_ON_RECENTRE, 1) != 0;
+   d.clear_labels_on_double_click = default_int(PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK, 1) != 0;
+   const coot::preference_info_t *sc = preference_default(PREFERENCES_SYMM_LABEL_COLOUR);
+   if (sc) {
+      d.symmetry_label_colour.r = sc->fvalue1;
+      d.symmetry_label_colour.g = sc->fvalue2;
+      d.symmetry_label_colour.b = sc->fvalue3;
+   } else {
+      d.symmetry_label_colour = bandicoot_core_default_symmetry_label_colour();
+   }
    return d;
 }
 
@@ -1559,6 +1613,11 @@ void bandicoot_core_set_crosshairs(bool on) {
    graphics_draw();
 }
 
+void bandicoot_core_set_clear_labels_on_double_click(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK, on ? 1 : 0);
+   set_clear_labels_on_double_click(on ? 1 : 0);
+}
+
 void bandicoot_core_set_label_on_recentre(bool on) {
    preferences_internal_change_value_int(PREFERENCES_LABEL_ON_RECENTRE, on ? 1 : 0);
    set_label_on_recentre_flag(on ? 1 : 0);
@@ -1577,6 +1636,11 @@ void bandicoot_core_set_font_size_preference(int size) {
 void bandicoot_core_set_font_colour_preference(const bandicoot_rgb &colour) {
    preferences_internal_change_value_float3(PREFERENCES_FONT_COLOUR, colour.r, colour.g, colour.b);
    set_font_colour(colour.r, colour.g, colour.b);
+}
+
+void bandicoot_core_set_symmetry_label_colour_preference(const bandicoot_rgb &colour) {
+   preferences_internal_change_value_float3(PREFERENCES_SYMM_LABEL_COLOUR, colour.r, colour.g, colour.b);
+   set_symmetry_atom_label_colour(colour.r, colour.g, colour.b);
 }
 
 void bandicoot_core_set_console_commands(bool on) {
@@ -1916,6 +1980,14 @@ bool bandicoot_wx_ask(const std::string &text, std::function<void(bool yes)> on_
 int bandicoot_wx_question(const std::string &text) {
    if (! ui_view.question) return -1;
    return ui_view.question(text) ? 1 : 0;
+}
+
+// The startup question about the auto-saved state; false if there is no
+// window to ask in.
+bool bandicoot_wx_startup_state(const std::string &default_path) {
+   if (! ui_view.startup_state) return false;
+   ui_view.startup_state(default_path, bandicoot_core_state_file_contents(default_path));
+   return true;
 }
 
 // Restraints read from one file fit several loaded molecules: which get them.
@@ -3339,6 +3411,20 @@ bool bandicoot_core_active_molecule_tool(const std::string &tool, std::string &w
 
 void bandicoot_core_set_undo_molecule(int imol) {
    set_undo_molecule(imol);
+}
+
+int bandicoot_core_undo_redo_model() {
+   int imol = graphics_info_t::get_undo_molecule_number();
+   return is_valid_model_molecule(imol) ? imol : -1;
+}
+
+void bandicoot_core_set_undo_redo_model(int imol) {
+   if (is_valid_model_molecule(imol))
+      set_undo_molecule(imol);
+   else {
+      graphics_info_t g;
+      g.set_undo_molecule_number(-1);
+   }
 }
 
 void bandicoot_core_undo_in(int imol) {
@@ -5525,6 +5611,8 @@ bool bandicoot_core_run_action(const std::string &action, bool state) {
       bandicoot_action_hydrogen_apply(GINT_TO_POINTER(state ? 1 : 0));
    else if (action == "bandicoot_action_local_probe_dots")
       bandicoot_action_local_probe_dots(nullptr);
+   else if (action == "bandicoot_action_clear_labels")
+      remove_all_atom_labels();
    else
       return false;
    return true;

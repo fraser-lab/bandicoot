@@ -1288,6 +1288,9 @@ public:
    static void *atom_label_font;
    static int label_atom_on_recentre_flag;
    static coot::colour_holder font_colour;
+   static coot::colour_holder symmetry_label_colour;
+   // BANDICOOT: a double click on no atom clears all atom labels
+   static int clear_labels_on_double_click_flag;
    void remove_all_atom_labels();
 
    static int n_molecules() { return molecules.size();}
@@ -2415,8 +2418,14 @@ public:
    // BANDICOOT: for each of those, the comp ids it holds (sorted) and the
    // imol_enc it was read with -- what decides that a later read replaces it
    static std::vector<std::pair<std::vector<std::string>, int> > cif_dictionary_scope_vec;
+   // and the comp ids its restraints were applied under instead of its own,
+   // when it matched a component by atoms and bonds rather than by name
+   static std::vector<std::vector<std::string> > cif_dictionary_applied_as_vec;
    // the dictionaries a saved session should read: each read not replaced by
-   // a later one
+   // a later one, that describes a component of a loaded model (by its own
+   // comp ids or those it was applied under). As indices into the vectors above.
+   std::vector<unsigned int> cif_dictionary_reads_for_state() const;
+   // and their file names
    std::vector<std::string> cif_dictionaries_for_state() const;
 
    // make private?
@@ -2799,6 +2808,8 @@ public:
    void activate_redo_button();
    // used by option menu item callback which sets the molecule for undoing
    void set_undo_molecule_number(int i) { undo_molecule = i; }
+   // BANDICOOT: the model chosen for Undo/Redo, -1 if none
+   static int get_undo_molecule_number() { return undo_molecule; }
    // undo_molecule_select uses set_undo_molecule_number()
 
    // who calls this?

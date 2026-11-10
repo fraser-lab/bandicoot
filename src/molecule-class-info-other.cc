@@ -3802,16 +3802,14 @@ molecule_class_info_t::recent_backup_file_info() const {
       }
       backup_name_glob += t_name_glob;
 
-      // First only the ones withwout gz
-      backup_name_glob += "*.pdb";
-
+      // BANDICOOT: backups of mmCIF models are written as .cif, so both
+      // formats are searched, compressed or not
       glob_t myglob;
-      int flags = 0;
-      glob(backup_name_glob.c_str(), flags, 0, &myglob);
-      // And finally the ones with gz
-      backup_name_glob += ".gz";
-      flags = GLOB_APPEND;
-      glob(backup_name_glob.c_str(), flags, 0, &myglob);
+      const char *extensions[] = { "*.pdb", "*.pdb.gz", "*.cif", "*.cif.gz" };
+      for (unsigned int ie=0; ie<4; ie++) {
+         std::string pattern = backup_name_glob + extensions[ie];
+         glob(pattern.c_str(), ie == 0 ? 0 : GLOB_APPEND, 0, &myglob);
+      }
       size_t count;
 
       char **p;

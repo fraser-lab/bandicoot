@@ -562,6 +562,8 @@ void     *graphics_info_t::atom_label_font = GLUT_BITMAP_HELVETICA_12;
 int       graphics_info_t::label_atom_on_recentre_flag = 1;
 int       graphics_info_t::symmetry_atom_labels_expanded_flag = 1; // BANDICOOT: on, as labels always showed the operator before the setting worked
 coot::colour_holder graphics_info_t::font_colour = coot::colour_holder(1.0, 0.8, 0.8);
+coot::colour_holder graphics_info_t::symmetry_label_colour = coot::colour_holder(0.7, 0.7, 1.0);
+int graphics_info_t::clear_labels_on_double_click_flag = 1;
 
 #ifdef __APPLE__
 // On macOS the bitmap-text path (glRasterPos3f + glutBitmapCharacter) renders
@@ -971,6 +973,7 @@ float       graphics_info_t::residue_density_fit_scale_factor = 1.0;
 // cif dictionary
 std::vector<std::string> *graphics_info_t::cif_dictionary_filename_vec = NULL;
 std::vector<std::pair<std::vector<std::string>, int> > graphics_info_t::cif_dictionary_scope_vec;
+std::vector<std::vector<std::string> > graphics_info_t::cif_dictionary_applied_as_vec;
 int  graphics_info_t::cif_dictionary_read_number = 1;
 // bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = true; // Too annoying
 bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = false;
@@ -3987,7 +3990,9 @@ float rad_50_and_prob_to_radius(float rad_50, float prob) {
 //
 gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && ! defined(BANDICOOT_UI_WX)
+   // (GTK build only: wx reports each click once, and a double click arrives
+   // as a press followed at once by a 2BUTTON_PRESS, which this would drop.)
    // GTK-Quartz on Tahoe fires multiple button_press events (and synthetic
    // 2BUTTON_PRESS / 3BUTTON_PRESS) for a single physical click. That makes
    // any toggle-style handler (atom labeling, which add-or-removes from the
@@ -4102,14 +4107,24 @@ gint glarea_button_press(GtkWidget *widget, GdkEventButton *event) {
                }
             }
 	 } else {
+	    bool symmetry_atom_hit = false;
 	    if (graphics_info_t::show_symmetry) {
 	       coot::Symm_Atom_Pick_Info_t symm_atom_info = info.symmetry_atom_pick();
 	       if (symm_atom_info.success == GL_TRUE) {
+		  symmetry_atom_hit = true;
 		  info.molecules[symm_atom_info.imol].add_atom_to_labelled_symm_atom_list(symm_atom_info.atom_index,
 											  symm_atom_info.symm_trans,
 											  symm_atom_info.pre_shift_to_origin);
 	       }
 	    }
+#ifdef BANDICOOT_UI_WX
+	    // BANDICOOT: a double click on no atom clears every label, if the
+	    // preference allows it
+	    if (! symmetry_atom_hit && graphics_info_t::clear_labels_on_double_click_flag) {
+	       std::cout << "INFO:: double click on no atom: atom labels cleared" << std::endl;
+	       info.remove_all_atom_labels();
+	    }
+#endif
 	 }
 	 graphics_draw();
       }

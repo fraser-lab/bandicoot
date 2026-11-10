@@ -16,7 +16,10 @@
 #include <wx/choice.h>
 #include <wx/dcbuffer.h>
 #include <wx/dialog.h>
+#include <wx/filefn.h>
 #include <wx/filename.h>
+#include <wx/radiobut.h>
+#include <wx/statbox.h>
 #include <wx/frame.h>
 #include <wx/mstream.h>
 #include <wx/scrolwin.h>
@@ -27,6 +30,7 @@
 #include <wx/utils.h>
 
 #include <algorithm>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -421,6 +425,145 @@ void show_recover_session(wxWindow *parent) {
       d->CentreOnParent();
       d->Show();
    }
+}
+
+// ------------------------------------------------------------ Load State
+
+namespace {
+
+FileRequest state_file_request(const wxString &start) {
+   FileRequest r;
+   r.title = "Select State File";
+   FileType t;
+   t.description = "State files";
+   t.extensions = { ".py" };
+   r.types = { t };
+   wxFileName f(start);
+   f.MakeAbsolute();
+   r.directory = start.empty() ? wxGetCwd() : f.GetPath();
+   return r;
+}
+
+// A state file adds its models and maps to those already loaded, so when some
+// are, the user says whether they go first. False if cancelled.
+bool clear_or_keep_loaded(wxWindow *parent) {
+   std::vector<std::pair<int, std::string>> loaded = bandicoot_core_models_and_maps();
+   if (loaded.empty()) return true;
+   wxDialog d(parent, wxID_ANY, "Load State");
+   d.SetBackgroundColour(palette::face());
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(&d, wxID_ANY,
+                             "Molecules or maps are already loaded in this session."), 0, wxALL, 12);
+   wxBoxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
+   buttons->AddStretchSpacer();
+   buttons->Add(new wxButton(&d, wxID_NO, "Keep both"), 0, wxRIGHT, 8);
+   wxButton *replace = new wxButton(&d, wxID_YES, "Replace");
+   buttons->Add(replace, 0, wxRIGHT, 8);
+   buttons->Add(new wxButton(&d, wxID_CANCEL, "Cancel"), 0);
+   replace->SetDefault();
+   col->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+   d.Bind(wxEVT_BUTTON, [&d](wxCommandEvent &e) { d.EndModal(e.GetId()); });
+   d.SetSizerAndFit(col);
+   d.CentreOnParent();
+   int answer = d.ShowModal();
+   if (answer == wxID_CANCEL) return false;
+   if (answer == wxID_YES)
+      for (const auto &m : loaded) bandicoot_core_close_molecule(m.first);
+   return true;
+}
+
+void load_state_file(wxWindow *parent, const wxString &path) {
+   if (! clear_or_keep_loaded(parent)) return;
+   std::string p = path.utf8_string();
+   if (! bandicoot_core_load_state(p)) {
+      std::cout << "ERROR:: Load State: no state file " << p << std::endl;
+      error(parent, "Could not load state", wxFileName(path).GetFullName());
+   }
+}
+
+} // namespace
+
+void show_load_state(wxWindow *parent) {
+   FileRequest r = state_file_request(wxString::FromUTF8(bandicoot_core_save_state_name()));
+   std::vector<wxString> paths = open_files(parent, r);
+   if (paths.empty()) return;
+   load_state_file(parent, paths.front());
+}
+
+void show_startup_state(wxWindow *parent, const std::string &default_path,
+                        const std::vector<std::string> &contents) {
+   wxDialog d(parent, wxID_ANY, "Recover State");
+   d.SetBackgroundColour(palette::face());
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(&d, wxID_ANY, "There is a coot auto-save state file here."), 0, wxALL, 12);
+
+   // the two choices have different parents (the second is in the panel's
+   // box), so wx does not group them; each turns the other off itself
+   wxRadioButton *use_default = new wxRadioButton(&d, wxID_ANY,
+                                                  "Auto-saved state (" + wxString::FromUTF8(default_path) + ")",
+                                                  wxDefaultPosition, wxDefaultSize, wxRB_SINGLE);
+   col->Add(use_default, 0, wxLEFT | wxRIGHT, 12);
+   for (const std::string &m : contents)
+      col->Add(new wxStaticText(&d, wxID_ANY, wxString::FromUTF8(m)), 0, wxLEFT, 36);
+
+   wxStaticBoxSizer *other = new wxStaticBoxSizer(wxVERTICAL, &d, "Open a Saved State");
+   wxWindow *ob = other->GetStaticBox();
+   wxRadioButton *use_path = new wxRadioButton(ob, wxID_ANY, "Saved state:", wxDefaultPosition,
+                                               wxDefaultSize, wxRB_SINGLE);
+   wxTextCtrl *path = new wxTextCtrl(ob, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(320, -1));
+   wxButton *browse = new wxButton(ob, wxID_ANY, "Browse...");
+   wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
+   row->Add(use_path, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+   row->Add(path, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+   row->Add(browse, 0, wxALIGN_CENTER_VERTICAL);
+   other->Add(row, 0, wxEXPAND | wxALL, 6);
+   col->Add(other, 0, wxEXPAND | wxALL, 12);
+   auto choose = [use_default, use_path](bool path_chosen) {
+      use_default->SetValue(! path_chosen);
+      use_path->SetValue(path_chosen);
+   };
+   choose(false);
+   use_default->Bind(wxEVT_RADIOBUTTON, [choose](wxCommandEvent &) { choose(false); });
+   use_path->Bind(wxEVT_RADIOBUTTON, [choose](wxCommandEvent &) { choose(true); });
+
+   // a file chosen with Browse is the one to recover; typing a path does not
+   // change the choice, and nor does cancelling Browse
+   browse->Bind(wxEVT_BUTTON, [&d, path, choose](wxCommandEvent &) {
+      FileRequest r = state_file_request(path->GetValue());
+      std::vector<wxString> paths = open_files(&d, r);
+      if (paths.empty()) return;
+      path->ChangeValue(paths.front());
+      choose(true);
+   });
+
+   wxBoxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
+   buttons->AddStretchSpacer();
+   buttons->Add(new wxButton(&d, wxID_CANCEL, "Cancel"), 0, wxRIGHT, 8);
+   wxButton *recover = new wxButton(&d, wxID_OK, "Recover");
+   buttons->Add(recover, 0);
+   recover->SetDefault();
+   col->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+   wxString chosen;
+   recover->Bind(wxEVT_BUTTON, [&d, &chosen, use_path, path, default_path](wxCommandEvent &) {
+      if (use_path->GetValue()) {
+         wxString p = path->GetValue().Strip(wxString::both);
+         if (p.empty() || ! wxFileName::FileExists(p)) {
+            std::cout << "ERROR:: Recover State: no state file \"" << p.utf8_string() << "\"" << std::endl;
+            error(&d, "Could not recover state", p.empty() ? wxString("(no file given)") : wxFileName(p).GetFullName());
+            return;
+         }
+         chosen = p;
+      } else {
+         chosen = wxString::FromUTF8(default_path);
+      }
+      d.EndModal(wxID_OK);
+   });
+
+   d.SetSizerAndFit(col);
+   d.CentreOnParent();
+   if (d.ShowModal() != wxID_OK) return;
+   load_state_file(parent, chosen);
 }
 
 // ------------------------------------------------------------ Export Map

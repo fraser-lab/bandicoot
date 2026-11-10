@@ -5,6 +5,7 @@
 #include "wxUI/assets/icons.hh"
 #include "wxUI/assets/palette.hh"
 #include "wxUI/assets/toolbar-button.hh"
+#include "wxUI/bridge/core-bridge.hh"
 
 #include <wx/dcclient.h>
 #include <wx/menu.h>
@@ -22,7 +23,7 @@ namespace wxui {
 namespace {
 
 struct SidebarEntry {
-   enum Kind { Push, Tool, ToggleTool, RotateTranslate, Separator };
+   enum Kind { Push, Tool, ToggleTool, RotateTranslate, UndoRedo, Separator };
    Kind kind;
    const char *label;
    const char *icon;    // file in the pixmaps directory
@@ -59,7 +60,7 @@ const std::vector<SidebarEntry> entries = {
    { E::Tool,       "Clear Pending Picks",     "stock-clear.png",      "on_model_toolbar_clear_pending_picks_button_clicked", "model_toolbar_clear_pending_picks_button" },
    { E::Tool,       "Delete...",               "stock-delete.png",     "on_model_toolbar_delete_button_clicked", "model_toolbar_delete_button" },
    { E::Tool,       "Undo",                    "stock-undo.png",       "on_model_toolbar_undo_button_clicked", "model_toolbar_undo_button" },
-   { E::Tool,       "Redo",                    "stock-redo.png",       "on_model_toolbar_redo_button_clicked", "model_toolbar_redo_button" },
+   { E::UndoRedo,   "Redo",                    "stock-redo.png",       "on_model_toolbar_redo_button_clicked", "model_toolbar_redo_button" },
    { E::Separator,  nullptr, nullptr, nullptr, "model_toolbar_hsep_toolitem2" },
    { E::Tool,       "Run Refmac...",           "azerbaijan.svg",       "on_model_toolbar_refmac_button_clicked", "model_toolbar_refmac_button" },
    { E::Separator,  nullptr, nullptr, nullptr, nullptr }
@@ -274,7 +275,8 @@ void Sidebar::populate() {
       }
       case E::Tool:
       case E::ToggleTool:
-      case E::RotateTranslate: {
+      case E::RotateTranslate:
+      case E::UndoRedo: {
          ToolbarButton *b = new ToolbarButton(area, wxID_ANY, wxString::FromUTF8(e.label),
                                               icon(e.icon, wxSize(icon_points, icon_points)),
                                               content_for(style, vertical, e.important));
@@ -296,6 +298,16 @@ void Sidebar::populate() {
             arrow->Bind(wxEVT_BUTTON, [this, arrow](wxCommandEvent &) { show_rot_trans_menu(arrow); });
             tools->Add(arrow, 0, flags, 1);
             // shown and hidden with its button
+            if (e.widget) named.emplace_back(e.widget, arrow);
+         }
+         if (e.kind == E::UndoRedo) {
+            // after Redo: the model Undo and Redo act on
+            ToolbarButton *arrow = new ToolbarButton(area, wxID_ANY,
+                                                     wxString::FromUTF8("\342\226\270"), // U+25B8
+                                                     wxBitmapBundle(), ToolbarButton::Content::Text);
+            arrow->SetToolTip("Undo/Redo Model...");
+            arrow->Bind(wxEVT_BUTTON, [this, arrow](wxCommandEvent &) { show_undo_model_menu(arrow); });
+            tools->Add(arrow, 0, flags, 1);
             if (e.widget) named.emplace_back(e.widget, arrow);
          }
          break;
@@ -380,6 +392,25 @@ void Sidebar::show_rot_trans_menu(wxWindow *anchor) {
       rot_trans_mode = ev.GetId() - 1000;
       if (hooks.on_select)
          hooks.on_select("rot_trans_by", rot_trans_modes[rot_trans_mode], true);
+   });
+   wxPoint at = vertical ? wxPoint(anchor->GetSize().x, 0) : wxPoint(0, anchor->GetSize().y);
+   anchor->PopupMenu(&menu, at);
+}
+
+// "Active Model" (the default) follows whichever model is active when Undo
+// or Redo is used; a model picked here is used whatever is active.
+void Sidebar::show_undo_model_menu(wxWindow *anchor) {
+   const int ID_ACTIVE = 3000;
+   std::vector<std::pair<int, std::string>> models = bandicoot_core_goto_molecules();
+   int chosen = bandicoot_core_undo_redo_model();
+   wxMenu menu;
+   menu.AppendRadioItem(ID_ACTIVE, "Active Model")->Check(chosen < 0);
+   for (size_t i = 0; i < models.size(); i++)
+      menu.AppendRadioItem(ID_ACTIVE + 1 + int(i), wxString::FromUTF8(models[i].second))
+         ->Check(models[i].first == chosen);
+   menu.Bind(wxEVT_MENU, [models](wxCommandEvent &ev) {
+      int i = ev.GetId() - ID_ACTIVE - 1;
+      bandicoot_core_set_undo_redo_model(i >= 0 && i < int(models.size()) ? models[i].first : -1);
    });
    wxPoint at = vertical ? wxPoint(anchor->GetSize().x, 0) : wxPoint(0, anchor->GetSize().y);
    anchor->PopupMenu(&menu, at);

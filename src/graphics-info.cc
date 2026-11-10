@@ -534,6 +534,7 @@ graphics_info_t::add_cif_dictionary(std::string cif_dictionary_filename,
       std::vector<std::string> held = coot::comp_ids_in_dictionary_cif(cif_dictionary_filename);
       std::sort(held.begin(), held.end());
       cif_dictionary_scope_vec.push_back(std::make_pair(held, imol_enc));
+      cif_dictionary_applied_as_vec.push_back(std::vector<std::string>());
       if (show_no_bonds_dialog_maybe_flag) {
 	 display_density_level_this_image = 1;
 	 std::string s;
@@ -4760,6 +4761,23 @@ graphics_info_t::create_empty_molecule(const std::string &molname) {
 // passing an enumerated type.
 //
 //
+#ifdef BANDICOOT_UI_WX
+// Undo or Redo found nothing to do in the model it acts on (imol), or there
+// is no active model (-1): say so on the status bar and in the terminal.
+static void bandicoot_nothing_to_do(const std::string &what, int imol) {
+   graphics_info_t g;
+   std::string s;
+   if (imol < 0)
+      s = "Nothing to " + what + ": there is no active model";
+   else if (graphics_info_t::get_undo_molecule_number() == imol)
+      s = "Nothing to " + what + " in model " + coot::util::int_to_string(imol);
+   else
+      s = "Nothing to " + what + " in active model " + coot::util::int_to_string(imol);
+   std::cout << "INFO:: " << s << std::endl;
+   g.add_status_bar_text(s);
+}
+#endif
+
 int
 graphics_info_t::apply_undo() {
 
@@ -4780,11 +4798,21 @@ graphics_info_t::apply_undo() {
       }
    } else {
       if (umol == -1) {
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_nothing_to_do("undo", -1);
+	 return state;
+#endif
 	 std::cout << "There are no molecules with modifications "
 		   << "that can be undone" << std::endl;
       } else {
 
 	 std::string cwd = coot::util::current_working_dir();
+#ifdef BANDICOOT_UI_WX
+	 if (! molecules[umol].Have_modifications_p()) {
+	    bandicoot_nothing_to_do("undo", umol);
+	    return state;
+	 }
+#endif
 	 if (molecules[umol].Have_modifications_p()) {
 	    if (molecules[umol].is_displayed_p()) {
 	       state = molecules[umol].apply_undo(cwd);
@@ -4863,9 +4891,17 @@ graphics_info_t::apply_redo() {
       gtk_widget_show(dialog);
    } else {
       if (umol == -1) { // unset
+#ifdef BANDICOOT_UI_WX
+	 bandicoot_nothing_to_do("redo", -1);
+	 return state;
+#endif
 	 std::cout << "There are no molecules with modifications "
 		   << "that can be re-done" << std::endl;
       } else {
+#ifdef BANDICOOT_UI_WX
+	 if (! molecules[umol].Have_redoable_modifications_p())
+	    bandicoot_nothing_to_do("redo", umol);
+#endif
 
 	 if (molecules[umol].Have_redoable_modifications_p()) {
 	    // std::cout << "DEBUG:: applying redo" << std::endl;
@@ -4933,6 +4969,14 @@ graphics_info_t::Undo_molecule(coot::undo_type undo_type) const {
    if (is_valid_model_molecule(undo_molecule)) {
       r = undo_molecule;
    } else {
+#ifdef BANDICOOT_UI_WX
+      // BANDICOOT: with no model chosen for Undo/Redo, they act on the
+      // active model -- never on another one, even if only that has changes
+      std::pair<bool, std::pair<int, coot::atom_spec_t> > aa = active_atom_spec();
+      if (aa.first && is_valid_model_molecule(aa.second.first))
+	 return aa.second.first;
+      return -1;
+#endif
       int n_mol = 0;
       for (int imol=0; imol<n_molecules(); imol++) {
 
