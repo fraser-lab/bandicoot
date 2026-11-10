@@ -101,6 +101,14 @@ def bandicoot_state_read_model(restore, saved_imol, member, name):
     return imol
 
 
+def bandicoot_state_read_dictionary(restore, file_name, saved_imol, applied_as):
+    """Read a dictionary back for the molecule it was read for (offset as the
+    models are; a negative number means every molecule), applied without
+    asking under the comp ids it was applied under when the state was saved."""
+    imol = saved_imol if saved_imol < 0 else restore.base + saved_imol
+    return bandicoot_read_cif_dictionary_for_state(file_name, imol, applied_as)
+
+
 def bandicoot_state_restore_end(restore):
     """The models are read: remove the files they were unpacked into."""
     if restore.directory:

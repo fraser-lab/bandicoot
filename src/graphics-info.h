@@ -2416,8 +2416,14 @@ public:
    // BANDICOOT: for each of those, the comp ids it holds (sorted) and the
    // imol_enc it was read with -- what decides that a later read replaces it
    static std::vector<std::pair<std::vector<std::string>, int> > cif_dictionary_scope_vec;
+   // and the comp ids its restraints were applied under instead of its own,
+   // when it matched a component by atoms and bonds rather than by name
+   static std::vector<std::vector<std::string> > cif_dictionary_applied_as_vec;
    // the dictionaries a saved session should read: each read not replaced by
-   // a later one
+   // a later one, that describes a component of a loaded model (by its own
+   // comp ids or those it was applied under). As indices into the vectors above.
+   std::vector<unsigned int> cif_dictionary_reads_for_state() const;
+   // and their file names
    std::vector<std::string> cif_dictionaries_for_state() const;
 
    // make private?

@@ -36,6 +36,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <sstream>
 
 #define HAVE_CIF  // will become unnessary at some stage.
 
@@ -5423,6 +5424,26 @@ int handle_cif_dictionary(const char *filename) {
 // This function now handles the optional generation of a new molecule
 // based on the value of new_molecule_from_dictionary_cif_checkbutton_state
 //
+// BANDICOOT: set while a saved state reads a dictionary back: the comp ids it
+// was applied under when the state was saved, which it is applied under again
+// without asking.
+static const std::vector<std::string> *bandicoot_state_applied_as = nullptr;
+
+int bandicoot_read_cif_dictionary_for_state(const char *filename, int imol_enc,
+					    const char *applied_as) {
+
+   std::vector<std::string> names;
+   if (applied_as) {
+      std::istringstream ss(applied_as);
+      std::string n;
+      while (ss >> n) names.push_back(n);
+   }
+   bandicoot_state_applied_as = &names;
+   int r = handle_cif_dictionary_for_molecule(filename, imol_enc, 0);
+   bandicoot_state_applied_as = nullptr;
+   return r;
+}
+
 int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 				       short int new_molecule_from_dictionary_cif_checkbutton_state) {
 
@@ -5559,6 +5580,20 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 	    }
 	 }
 
+	 // a saved state reads it back for what it was applied to then, of
+	 // what is loaded now
+	 if (bandicoot_state_applied_as) {
+	    matches.clear();
+	    for (const std::string &name : *bandicoot_state_applied_as)
+	       for (int im=0; im<graphics_info_t::n_molecules(); im++)
+		  if (is_valid_model_molecule(im))
+		     if (! coot::comp_id_collision::residues_of_comp_id(g.molecules[im].atom_sel.mol,
+								       name).empty()) {
+			matches.push_back(name);
+			break;
+		     }
+	 }
+
 	 std::string base = coot::util::file_name_non_directory(filename);
 
 	 if (matches.empty()) {
@@ -5588,11 +5623,19 @@ int handle_cif_dictionary_for_molecule(const char *filename, int imol_enc,
 	    bool apply = true;
 	    if (graphics_info_t::use_graphics_interface_flag)
 	       if (graphics_info_t::show_ligand_restraint_warnings_flag)
-		  apply = bandicoot_native_question_dialog(m.c_str());
+		  if (! bandicoot_state_applied_as)
+		     apply = bandicoot_native_question_dialog(m.c_str());
 
 	    if (apply) {
 	       for (unsigned int k=0; k<matches.size(); k++)
 		  g.Geom_p()->duplicate_comp_id(rmit.comp_id, matches[k], imol_enc);
+	       // what a saved state needs to apply it the same way
+	       if (! graphics_info_t::cif_dictionary_applied_as_vec.empty()) {
+		  std::vector<std::string> &as = graphics_info_t::cif_dictionary_applied_as_vec.back();
+		  for (unsigned int k=0; k<matches.size(); k++)
+		     if (std::find(as.begin(), as.end(), matches[k]) == as.end())
+			as.push_back(matches[k]);
+	       }
 	       // The entry under the file's own name serves nothing -- no loaded
 	       // molecule has that component -- and leaving it would collide with
 	       // a later structure that genuinely uses the name.

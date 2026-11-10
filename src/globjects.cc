@@ -972,6 +972,7 @@ float       graphics_info_t::residue_density_fit_scale_factor = 1.0;
 // cif dictionary
 std::vector<std::string> *graphics_info_t::cif_dictionary_filename_vec = NULL;
 std::vector<std::pair<std::vector<std::string>, int> > graphics_info_t::cif_dictionary_scope_vec;
+std::vector<std::vector<std::string> > graphics_info_t::cif_dictionary_applied_as_vec;
 int  graphics_info_t::cif_dictionary_read_number = 1;
 // bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = true; // Too annoying
 bool graphics_info_t::cif_dictionary_file_selector_create_molecule_flag = false;

@@ -2475,6 +2475,12 @@ int bandicoot_fill_molecule_slots(int n);
 /*! \brief Bandicoot: the folder the file choosers open in next */
 void bandicoot_set_file_chooser_directory(const char *directory);
 
+/*! \brief Bandicoot: read a dictionary back from a saved state, for molecule
+  imol_enc (or -999999 for all), applying it without asking under the comp ids
+  in applied_as (space-separated) that it was applied under when saved. */
+int bandicoot_read_cif_dictionary_for_state(const char *filename, int imol_enc,
+					    const char *applied_as);
+
 /*! \brief set use stroke characters */
 void set_use_stroke_characters(int state);
 

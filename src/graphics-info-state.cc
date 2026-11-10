@@ -41,6 +41,7 @@
 #include "rotamer-search-modes.hh"
 #include "cc-interface-scripting.hh"
 #include "utils/coot-utils.hh"
+#include "coot-utils/comp-id-collision.hh"
 
 #include <ctime>
 #include <filesystem>
@@ -724,7 +725,28 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
    //
    // BANDICOOT: after the molecules, so that each dictionary is matched to
    // (and scoped by) the components it describes rather than to nothing.
-   {
+   //
+   // BANDICOOT: each with the molecule it was read for (offset as the models
+   // are) and any comp ids it was applied under, so that reading it back
+   // neither loses its target nor asks again what to apply it to.
+   if (numbered) {
+      for (unsigned int i : cif_dictionary_reads_for_state()) {
+	 int scope = coot::protein_geometry::IMOL_ENC_ANY;
+	 if (i < cif_dictionary_scope_vec.size()) {
+	    scope = cif_dictionary_scope_vec[i].second;
+	    // its molecule has gone: read it for every molecule instead
+	    if (scope >= 0 && ! (scope < n_molecules() && molecules[scope].has_model()))
+	       scope = coot::protein_geometry::IMOL_ENC_ANY;
+	 }
+	 std::string applied_as;
+	 if (i < cif_dictionary_applied_as_vec.size())
+	    for (const std::string &c : cif_dictionary_applied_as_vec[i])
+	       applied_as += (applied_as.empty() ? "" : " ") + c;
+	 commands.push_back("bandicoot_state_read_dictionary(_bcs, " +
+			    py_str((*cif_dictionary_filename_vec)[i]) + ", " +
+			    std::to_string(scope) + ", " + py_str(applied_as) + ")");
+      }
+   } else {
       std::vector<std::string> dictionaries = cif_dictionaries_for_state();
       for (unsigned int i=0; i<dictionaries.size(); i++)
 	 commands.push_back(state_command("read-cif-dictionary", single_quote(dictionaries[i]), il));
@@ -870,28 +892,60 @@ graphics_info_t::save_state_file(const std::string &filename, short int il) {
 
 // BANDICOOT: a read is dropped when a later one has the same file, or holds
 // the same components at the same scope -- the later one superseded it in the
-// session, so replaying both only repeats work. Reads that never got a scope
-// record (there should be none) are kept.
+// session, so replaying both only repeats work. It is also dropped when no
+// loaded model has any component it describes (by its own comp ids or those
+// it was applied under): its molecule has gone, and replaying it would only
+// warn that it matches nothing. Reads that never got a scope record (there
+// should be none) are kept.
+std::vector<unsigned int>
+graphics_info_t::cif_dictionary_reads_for_state() const {
+
+   auto in_a_model = [](const std::string &comp_id) {
+      for (int im=0; im<n_molecules(); im++)
+	 if (molecules[im].has_model())
+	    if (! coot::comp_id_collision::residues_of_comp_id(molecules[im].atom_sel.mol,
+							      comp_id).empty())
+	       return true;
+      return false;
+   };
+
+   std::vector<unsigned int> v;
+   const std::vector<std::string> &files = *cif_dictionary_filename_vec;
+   for (unsigned int i=0; i<files.size(); i++) {
+      if (i >= cif_dictionary_scope_vec.size()) {
+	 v.push_back(i);
+	 continue;
+      }
+      bool replaced = false;
+      for (unsigned int j=i+1; j<files.size() && j<cif_dictionary_scope_vec.size(); j++) {
+	 if (cif_dictionary_scope_vec[j].second != cif_dictionary_scope_vec[i].second) continue;
+	 if (files[j] == files[i] ||
+	     (! cif_dictionary_scope_vec[i].first.empty() &&
+	      cif_dictionary_scope_vec[j].first == cif_dictionary_scope_vec[i].first)) {
+	    replaced = true;
+	    break;
+	 }
+      }
+      if (replaced) continue;
+
+      std::vector<std::string> described = cif_dictionary_scope_vec[i].first;
+      if (i < cif_dictionary_applied_as_vec.size())
+	 described.insert(described.end(), cif_dictionary_applied_as_vec[i].begin(),
+			  cif_dictionary_applied_as_vec[i].end());
+      bool wanted = described.empty();  // nothing to judge it by
+      for (unsigned int k=0; k<described.size() && ! wanted; k++)
+	 if (in_a_model(described[k])) wanted = true;
+      if (wanted) v.push_back(i);
+   }
+   return v;
+}
+
 std::vector<std::string>
 graphics_info_t::cif_dictionaries_for_state() const {
 
    std::vector<std::string> v;
-   const std::vector<std::string> &files = *cif_dictionary_filename_vec;
-   for (unsigned int i=0; i<files.size(); i++) {
-      bool replaced = false;
-      if (i < cif_dictionary_scope_vec.size()) {
-	 for (unsigned int j=i+1; j<files.size() && j<cif_dictionary_scope_vec.size(); j++) {
-	    if (cif_dictionary_scope_vec[j].second != cif_dictionary_scope_vec[i].second) continue;
-	    if (files[j] == files[i] ||
-		(! cif_dictionary_scope_vec[i].first.empty() &&
-		 cif_dictionary_scope_vec[j].first == cif_dictionary_scope_vec[i].first)) {
-	       replaced = true;
-	       break;
-	    }
-	 }
-      }
-      if (! replaced) v.push_back(files[i]);
-   }
+   for (unsigned int i : cif_dictionary_reads_for_state())
+      v.push_back((*cif_dictionary_filename_vec)[i]);
    return v;
 }
 
