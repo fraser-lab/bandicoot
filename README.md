@@ -1,4 +1,4 @@
-![GitHub Release](https://img.shields.io/github/v/release/fraser-lab/bandicoot?sort=date&display_name=release&style=for-the-badge)
+[![GitHub Release](https://img.shields.io/github/v/release/fraser-lab/bandicoot?sort=date&display_name=release&style=for-the-badge)](https://github.com/fraser-lab/bandicoot/releases/latest)
 
 
 # Bandicoot
