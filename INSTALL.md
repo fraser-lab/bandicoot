@@ -10,9 +10,10 @@ If you're building from source instead, see [BUILD.md](BUILD.md).
 ## Requirements
 
 - macOS Tahoe (26.x), Apple Silicon, or
-- Linux, x86_64: Ubuntu 20.04 or newer, or another distribution of similar age
+- Linux, x86_64: Ubuntu 22.04 or newer, or another distribution of similar age
   or newer, with a graphical desktop (X11, or Wayland with XWayland) and OpenGL.
-  Tested on Ubuntu 20.04, 22.04, 24.04 and 26.04.
+  Tested on Ubuntu 22.04, 24.04 and 26.04. (Bandicoot also runs on Ubuntu 20.04,
+  but has to be built from sources.)
 
 ## Install
 
