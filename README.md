@@ -1,3 +1,6 @@
+![GitHub Release](https://img.shields.io/github/v/release/fraser-lab/bandicoot?sort=date&display_name=release&style=for-the-badge)
+
+
 # Bandicoot
 
 Bandicoot is a macOS-native fork of [Coot](https://www2.mrc-lmb.cam.ac.uk/personal/pemsley/coot/) 0.9.8.95, the structural biology macromolecular model-building program. It keeps most of Coot 0.9's functionality and look-and-feel, with a rebuilt user interface and new features that Coot 0.9 does not have.
