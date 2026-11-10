@@ -30,6 +30,14 @@
 
 #include <fstream>
 #include <algorithm>
+// Before support.h (via graphics-info.h): with GNU libstdc++, <filesystem>
+// includes <libintl.h>, whose declarations support.h's gettext stand-in
+// macros would otherwise break.
+#include <ctime>
+#include <filesystem>
+#include <iostream>
+#include <map>
+#include <unistd.h>
 
 #include <gtk/gtk.h>
 #include "interface.h"
@@ -42,12 +50,6 @@
 #include "cc-interface-scripting.hh"
 #include "utils/coot-utils.hh"
 #include "coot-utils/comp-id-collision.hh"
-
-#include <ctime>
-#include <filesystem>
-#include <iostream>
-#include <map>
-#include <unistd.h>
 
 namespace {
 
