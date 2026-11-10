@@ -229,13 +229,17 @@ own_elves() {
 }
 
 set_rpaths() {
-    local f n=0
+    local f dyn n=0
     while IFS= read -r f; do
         chmod u+w "$f"
+        # Read the dynamic section once, then search the text: under pipefail,
+        # `readelf | grep -q` can fail when grep exits before readelf finishes
+        # writing, which made a program look as if it loaded no libraries.
+        dyn="$(readelf -d "$f" 2>/dev/null || true)"
         # a file that loads no libraries needs no search path; one left over
         # from its build would point outside the bundle
-        if ! readelf -d "$f" 2>/dev/null | grep -q '(NEEDED)'; then
-            if readelf -d "$f" 2>/dev/null | grep -qE '\((RUN)?PATH\)'; then
+        if ! grep -q '(NEEDED)' <<< "${dyn}"; then
+            if grep -qE '\((RUN)?PATH\)' <<< "${dyn}"; then
                 "${PATCHELF}" --remove-rpath "$f"
             fi
             continue
