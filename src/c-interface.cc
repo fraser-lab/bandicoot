@@ -3885,6 +3885,11 @@ void set_symmetry_atom_label_colour(float red, float green, float blue) {
    graphics_draw();
 }
 
+void set_clear_labels_on_double_click(int state) {
+
+   graphics_info_t::clear_labels_on_double_click_flag = state ? 1 : 0;
+}
+
 int bandicoot_fill_molecule_slots(int n) {
 
    // an empty molecule is a closed one: no model, no map

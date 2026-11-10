@@ -29,6 +29,7 @@ struct ToolbarEntry {
    bool toggle;
    bool initially_on;
    const char *icon_on = nullptr;  // a toggle's icon while it is on, if it has one
+   const char *tooltip = nullptr;  // if not the label
 };
 
 // The tools that always lead the toolbar, in order.
@@ -55,7 +56,8 @@ const std::vector<ToolbarEntry> optional_entries = {
    { "backrub_toggle",         "Backrub Rotamers",    "auto-fit-rotamer-backrub.svg",    "bandicoot_action_backrub_apply",          true,  false, "auto-fit-rotamer-backrub-on.svg" },
    { "hydrogen_toggle",        "Toggle Hydrogens",    "hydrogen-toggle.svg",              "bandicoot_action_hydrogen_apply",         true,  true, "hydrogen-toggle-on.svg" },
    { "full_screen_toggle",     "Full Screen",         "reset-view-32.svg",       "bandicoot_action_full_screen_apply",      true,  false },
-   { "interactive_dots_toggle","Interactive Dots",    "probe-clash.svg",         "bandicoot_action_interactive_dots_apply", true,  false, "probe-clash-on.svg" }
+   { "interactive_dots_toggle","Interactive Dots",    "probe-clash.svg",         "bandicoot_action_interactive_dots_apply", true,  false, "probe-clash-on.svg" },
+   { "clear_labels",           "Clear Labels",        "clear_labels.png",        "bandicoot_action_clear_labels",           false, false, nullptr, "Clear All Labels" }
 };
 
 const std::vector<std::string> default_layout =
@@ -161,7 +163,7 @@ void TopToolbar::build() {
 
 void TopToolbar::add(wxToolBar *tb, const ToolbarEntry &e) {
    wxToolBarToolBase *tool =
-      tb->AddTool(wxID_ANY, e.label, state_icon(e, e.toggle && toggled[e.id]), e.label,
+      tb->AddTool(wxID_ANY, e.label, state_icon(e, e.toggle && toggled[e.id]), e.tooltip ? e.tooltip : e.label,
                   e.toggle ? wxITEM_CHECK : wxITEM_NORMAL);
    if (e.toggle) tb->ToggleTool(tool->GetId(), toggled[e.id]);
    ids[tool->GetId()] = &e;

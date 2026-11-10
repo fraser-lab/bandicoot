@@ -1289,6 +1289,8 @@ public:
    static int label_atom_on_recentre_flag;
    static coot::colour_holder font_colour;
    static coot::colour_holder symmetry_label_colour;
+   // BANDICOOT: a double click on no atom clears all atom labels
+   static int clear_labels_on_double_click_flag;
    void remove_all_atom_labels();
 
    static int n_molecules() { return molecules.size();}

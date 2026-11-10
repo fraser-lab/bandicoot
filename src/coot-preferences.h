@@ -70,6 +70,8 @@
 // auto-saved state is loaded at startup. 0 never, 1 ask, 2 auto -- the values
 // of run_state_file_status.
 #define PREFERENCES_LOAD_SAVED_STATE              51
+// BANDICOOT: "Clear All Labels on Double-Click" (Preferences > Others > Atom Labels)
+#define PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK     52
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

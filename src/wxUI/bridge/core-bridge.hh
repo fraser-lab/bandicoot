@@ -564,6 +564,7 @@ struct bandicoot_other_preferences {
    float clipping = 0;                       // front and back together
    bool crosshairs = false;
    bool label_on_recentre = false;
+   bool clear_labels_on_double_click = true;
    bandicoot_rgb symmetry_label_colour;
 };
 bandicoot_other_preferences bandicoot_core_other_preferences();
@@ -590,6 +591,7 @@ void bandicoot_core_set_ligand_behaviour(bool auto_rename, bool ask_rename, bool
                                          bool ask_generate, bool apply_restraints_to_all);
 void bandicoot_core_set_clipping(float clipping);
 void bandicoot_core_set_crosshairs(bool on);
+void bandicoot_core_set_clear_labels_on_double_click(bool on);
 void bandicoot_core_set_label_on_recentre(bool on);
 
 // Sequence View: a model's chains as one-letter sequences, residues

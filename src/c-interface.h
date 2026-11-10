@@ -2468,6 +2468,9 @@ void set_font_colour(float red, float green, float blue);
   in the range 0->1 */
 void set_symmetry_atom_label_colour(float red, float green, float blue);
 
+/*! \brief Bandicoot: whether a double click on no atom clears all atom labels */
+void set_clear_labels_on_double_click(int state);
+
 /*! \brief Bandicoot: add empty molecule slots until there are n of them, so
   that the next molecule made is number n. Returns the number of slots. */
 int bandicoot_fill_molecule_slots(int n);

@@ -328,6 +328,11 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
 					g.preferences_internal[i].ivalue1, il));
        break;
 
+     case PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK:
+       commands.push_back(state_command("set-clear-labels-on-double-click",
+					g.preferences_internal[i].ivalue1, il));
+       break;
+
      case PREFERENCES_LOAD_SAVED_STATE:
        commands.push_back(state_command("set-run-state-file-status",
 					g.preferences_internal[i].ivalue1, il));
@@ -716,6 +721,10 @@ graphics_info_t::make_preferences_internal() {
 
   p.preference_type = PREFERENCES_LABEL_ON_RECENTRE;
   p.ivalue1 = graphics_info_t::label_atom_on_recentre_flag;
+  ret.push_back(p);
+
+  p.preference_type = PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK;
+  p.ivalue1 = graphics_info_t::clear_labels_on_double_click_flag;
   ret.push_back(p);
 
   p.preference_type = PREFERENCES_LOAD_SAVED_STATE;

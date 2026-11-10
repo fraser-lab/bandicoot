@@ -1261,7 +1261,7 @@ private:
       return { page, "Ligands" };
    }
 
-   // ---- Others > Centre Atom Label
+   // ---- Others > Atom Labels: the centre atom's label, clearing on double click
 
    std::pair<wxPanel *, wxString> centre_label_page() {
       wxBoxSizer *col;
@@ -1270,9 +1270,15 @@ private:
                            [](bool on) { bandicoot_core_set_label_on_recentre(on); }, "On", "Off");
       col->Add(new wxStaticText(page, wxID_ANY,
                                 "While environment distances are shown, their own\n"
-                                "Label Atom setting is used instead."), 0, wxALIGN_CENTER);
-      refreshers.push_back([label]() mutable { label.set(bandicoot_core_other_preferences().label_on_recentre); });
-      return { page, "Centre Atom Label" };
+                                "Label Atom setting is used instead."), 0, wxALIGN_CENTER | wxBOTTOM, 10);
+      YesNo clear = yes_no(page, col, "Clear All Labels on Double-Click",
+                           [](bool on) { bandicoot_core_set_clear_labels_on_double_click(on); });
+      refreshers.push_back([label, clear]() mutable {
+         bandicoot_other_preferences o = bandicoot_core_other_preferences();
+         label.set(o.label_on_recentre);
+         clear.set(o.clear_labels_on_double_click);
+      });
+      return { page, "Atom Labels" };
    }
 
    // Every setting this window shows, back to its default.
@@ -1336,6 +1342,7 @@ private:
       bandicoot_core_set_clipping(o.clipping);
       bandicoot_core_set_crosshairs(o.crosshairs);
       bandicoot_core_set_label_on_recentre(o.label_on_recentre);
+      bandicoot_core_set_clear_labels_on_double_click(o.clear_labels_on_double_click);
       bandicoot_core_set_symmetry_label_colour_preference(o.symmetry_label_colour);
       refresh();
    }

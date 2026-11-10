@@ -1543,6 +1543,7 @@ bandicoot_other_preferences bandicoot_core_other_preferences() {
    p.clipping = graphics_info_t::clipping_front;
    p.crosshairs = graphics_info_t::draw_crosshairs_flag != 0;
    p.label_on_recentre = graphics_info_t::label_atom_on_recentre_flag != 0;
+   p.clear_labels_on_double_click = graphics_info_t::clear_labels_on_double_click_flag != 0;
    p.symmetry_label_colour.r = graphics_info_t::symmetry_label_colour.red;
    p.symmetry_label_colour.g = graphics_info_t::symmetry_label_colour.green;
    p.symmetry_label_colour.b = graphics_info_t::symmetry_label_colour.blue;
@@ -1582,6 +1583,7 @@ bandicoot_other_preferences bandicoot_core_other_preference_defaults() {
    d.clipping = default_float(PREFERENCES_CLIPPING, 0.0f);
    d.crosshairs = default_int(PREFERENCES_CROSSHAIRS, 0) != 0;
    d.label_on_recentre = default_int(PREFERENCES_LABEL_ON_RECENTRE, 1) != 0;
+   d.clear_labels_on_double_click = default_int(PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK, 1) != 0;
    const coot::preference_info_t *sc = preference_default(PREFERENCES_SYMM_LABEL_COLOUR);
    if (sc) {
       d.symmetry_label_colour.r = sc->fvalue1;
@@ -1609,6 +1611,11 @@ void bandicoot_core_set_crosshairs(bool on) {
    set_draw_crosshairs(on ? 1 : 0);
    // Coot redraws only when they come on
    graphics_draw();
+}
+
+void bandicoot_core_set_clear_labels_on_double_click(bool on) {
+   preferences_internal_change_value_int(PREFERENCES_CLEAR_LABELS_DOUBLE_CLICK, on ? 1 : 0);
+   set_clear_labels_on_double_click(on ? 1 : 0);
 }
 
 void bandicoot_core_set_label_on_recentre(bool on) {
@@ -5604,6 +5611,8 @@ bool bandicoot_core_run_action(const std::string &action, bool state) {
       bandicoot_action_hydrogen_apply(GINT_TO_POINTER(state ? 1 : 0));
    else if (action == "bandicoot_action_local_probe_dots")
       bandicoot_action_local_probe_dots(nullptr);
+   else if (action == "bandicoot_action_clear_labels")
+      remove_all_atom_labels();
    else
       return false;
    return true;
