@@ -3,7 +3,7 @@
 Targets:
 
 - **macOS Tahoe (26.x), Apple Silicon**: see [macOS](#macos).
-- **Linux, x86_64**: tested on Ubuntu 20.04; see [Linux](#linux).
+- **Linux, x86_64**: tested on Ubuntu 22.04, though buildable on 20.04; see [Linux](#linux).
 
 > Looking for the prebuilt app instead? See [INSTALL.md](INSTALL.md). The binary
 > tarballs are fully self-contained and need none of this.
