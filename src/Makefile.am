@@ -175,7 +175,8 @@ AM_CFLAGS = \
 	$(USE_GUILE_GTK) 	\
 	$(GUILE_CFLAGS)		\
 	$(PYTHON_CPPFLAGS)	\
-	$(PYTHON_CFLAGS)
+	$(PYTHON_CFLAGS)	\
+	$(GLOB_CFLAGS)
 
 # must have GUILE and GUILE_GTK flags before $(INCLUDES), and this 
 # does not happen because LTCXXCOMPILE has AM_CXXFLAGS after INCLUDES.
@@ -196,6 +197,7 @@ AM_CXXFLAGS = \
 	$(PYTHON_CPPFLAGS)	\
 	$(PYTHON_CFLAGS)	\
 	$(COOT_WINDOWS_CFLAGS) 	\
+	$(GLOB_CFLAGS)		\
 	$(COOT_GSL_FLAGS) $(OPENMP_CFLAGS)
 
 

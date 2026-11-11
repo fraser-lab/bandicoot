@@ -44,7 +44,7 @@
 #include <libguile.h>
 #endif 
 
-#if !defined(WINDOWS_MINGW) && !defined(_MSC_VER)
+#if !defined(_MSC_VER)
 #include <glob.h> // for globbing.
 #endif
 
