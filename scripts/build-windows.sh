@@ -63,8 +63,12 @@ MSYS_PREFIX=/ucrt64
 # The program is linked with the Objective-C++ compiler (macOS sources are
 # listed in src/Makefile.am), and libtool only recognises a link command whose
 # compiler matches one it was configured with, so OBJCXX must be CXX.
-OBJCXX="${OBJCXX:-${CXX:-g++}}"
-export OBJCXX
+# CC/CXX are set explicitly: with --host given, configure would otherwise
+# choose the target-prefixed names, which no longer match OBJCXX.
+CC="${CC:-gcc}"
+CXX="${CXX:-g++}"
+OBJCXX="${OBJCXX:-${CXX}}"
+export CC CXX OBJCXX
 
 # --- MSYS2 packages ----------------------------------------------------------
 # gcc-objc is needed only because configure probes for an Objective-C++
