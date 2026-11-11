@@ -243,7 +243,7 @@ short int graphics_info_t::model_toolbar_show_hide_state = 1;
 // the refinement toolbar position
 short int graphics_info_t::model_toolbar_position_state = coot::model_toolbar::RIGHT;
 
-// the refinement toolbar style — 1=icons, 2=icons+text, 3=text. Bandicoot
+// the refinement toolbar style -- 1=icons, 2=icons+text, 3=text. Bandicoot
 // defaults to icons+text so button labels are visible on first launch
 // without the user having to flip a preference.
 short int graphics_info_t::model_toolbar_style_state = 2;
@@ -1652,7 +1652,7 @@ gl_extras(GtkWidget* vbox1, short int try_stereo_flag) {
 
 	GtkWindow *window1 = GTK_WINDOW(lookup_widget(vbox1,"window1"));
 	// Default the main window to 1/3 of the screen width by 1/2 the
-	// screen height — works across laptops and large displays without
+	// screen height -- works across laptops and large displays without
 	// hardcoded pixels. Falls back to the historic GL-context-sized
 	// window if the screen can't be queried.
 	int win_w = n_contexts * gl_context_x_size;
