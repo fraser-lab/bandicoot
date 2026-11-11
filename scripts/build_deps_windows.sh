@@ -235,12 +235,28 @@ build_autotools() {   # <name> <sentinel> <prefix> [configure args...]
 
 build_autotools fftw "${FFTW_OUT}/include/fftw.h" "${FFTW_OUT}" \
     --enable-float --enable-shared --disable-fortran
+# FFTW 2's 1999 libtool cannot make Windows DLLs, so it installs static
+# archives only, and libtool refuses to link those into another DLL (Clipper).
+# Build the DLLs from the archives directly; without the .la files, the
+# linker then picks the import libraries. Runs every time, so an existing
+# FFTW install is converted too.
+if [ ! -e "${FFTW_OUT}/bin/libfftw-2.dll" ] || [ ! -e "${FFTW_OUT}/bin/librfftw-2.dll" ]; then
+    echo "==> fftw2: building DLLs from the static archives"
+    mkdir -p "${FFTW_OUT}/bin"
+    ( cd "${FFTW_OUT}/lib" && \
+      gcc -shared -o ../bin/libfftw-2.dll -Wl,--out-implib,libfftw.dll.a \
+          -Wl,--whole-archive libfftw.a -Wl,--no-whole-archive && \
+      gcc -shared -o ../bin/librfftw-2.dll -Wl,--out-implib,librfftw.dll.a \
+          -Wl,--whole-archive librfftw.a -Wl,--no-whole-archive -L. -lfftw )
+fi
+rm -f "${FFTW_OUT}"/lib/*.la
+
 # FFTW 2 builds can be installed with prefixed names (libsfftw, sfftw.h) or
 # plain ones; the functions inside are the same. Provide both names (Clipper
 # prefers the prefixed ones). MSYS2 symlinks are copies, so these are plain
 # copies, refreshed on every run.
 for _n in fftw rfftw; do
-    for _f in "${FFTW_OUT}/lib/lib${_n}".a "${FFTW_OUT}/lib/lib${_n}".dll.a "${FFTW_OUT}/lib/lib${_n}".la; do
+    for _f in "${FFTW_OUT}/lib/lib${_n}".a "${FFTW_OUT}/lib/lib${_n}".dll.a; do
         [ -e "${_f}" ] || continue
         cp -f "${_f}" "${FFTW_OUT}/lib/libs${_f#${FFTW_OUT}/lib/lib}"
     done
