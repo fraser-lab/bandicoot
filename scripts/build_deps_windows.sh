@@ -284,8 +284,10 @@ build_xtal() {   # <name> <sentinel> <subdir> <pre-configure> [configure args...
 }
 
 build_xtal mmdb2 "${XTAL_PC}/mmdb2.pc" "" ":"
+# library_utils.c declares putenv itself; MinGW's <stdlib.h> already does,
+# with a const parameter, so the local declaration is removed.
 build_xtal libccp4 "${XTAL_PC}/ccp4c.pc" "" \
-    "sed -i 's/int putenv ();/extern int putenv (char *);/' ccp4/library_utils.c" \
+    "sed -i 's/int putenv ();//' ccp4/library_utils.c" \
     --disable-fortran
 # superpose.cpp writes "..."superpose_version"...", which C++11 reads as a
 # user-defined literal; a space either side of the macro names fixes it.
