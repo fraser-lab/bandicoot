@@ -265,13 +265,16 @@ build_xtal() {   # <name> <sentinel> <subdir> <pre-configure> [configure args...
     local srcdir
     srcdir="$(unpack "${name}")/${sub}"
     local ldf="-L${XTAL_OUT}/lib -L${FFTW_OUT}/lib"
+    # libccp4 uses int32_t / int64_t without including <stdint.h>; glibc's
+    # headers happen to pull it in, MinGW's do not.
+    # gnu17: libccp4 is older C than the C23 that current GCC defaults to.
     ( cd "${srcdir}"
       autoreconf -if
       refresh_autotools_aux "${srcdir}"
       eval "${pre}"
       CPPFLAGS="-I${XTAL_OUT}/include -I${FFTW_OUT}/include" \
       LDFLAGS="${ldf}" \
-      CFLAGS="-O2" CXXFLAGS="-O2 -fno-strict-aliasing -Wno-narrowing" \
+      CFLAGS="-O2 -std=gnu17 -include stdint.h" CXXFLAGS="-O2 -fno-strict-aliasing -Wno-narrowing" \
         ./configure --prefix="${XTAL_OUT}" --enable-shared --disable-static \
                     --disable-dependency-tracking "$@"
       make -j"${JOBS}" LDFLAGS="${ldf} ${NOUNDEF}"
