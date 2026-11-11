@@ -346,6 +346,9 @@ fi
 # RDKit: C++ libraries only, with Cairo drawing, as on the other platforms.
 # Boost (with Boost.Python for MSYS2's Python) comes from MSYS2. Large
 # translation units exceed the default COFF section limit, hence big-obj.
+# Boost's CMake config picks its static libraries on Windows by default, but
+# RDKit compiles against Boost as DLLs (dllimport), so the shared ones are
+# requested explicitly.
 RDKIT_MARKER="${RDKIT_OUT}/.bandicoot-rdkit-$(dep_field rdkit 2)"
 if ! skip_if_done rdkit "${RDKIT_MARKER}"; then
     echo "==> rdkit-$(dep_field rdkit 2)"
@@ -355,6 +358,7 @@ if ! skip_if_done rdkit "${RDKIT_MARKER}"; then
         -DCMAKE_INSTALL_PREFIX="${RDKIT_OUT}" \
         -DCMAKE_INSTALL_LIBDIR=lib \
         -DCMAKE_CXX_FLAGS="-Wa,-mbig-obj" \
+        -DBoost_USE_STATIC_LIBS=OFF \
         -DRDK_INSTALL_INTREE=OFF \
         -DRDK_INSTALL_STATIC_LIBS=OFF \
         -DRDK_BUILD_PYTHON_WRAPPERS=OFF \
