@@ -437,7 +437,13 @@ else
    # a compiler-only option, so it goes in CXXFLAGS: RDKIT_CXXFLAGS is also
    # handed to swig, which rejects it.
    CXXFLAGS="$CXXFLAGS -fmacro-prefix-map=$rdkit_install_dir/include/rdkit/=rdkit/"
-   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -lboost_serialization -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
+   # Boost.Serialization follows the naming of the Boost.Python found above:
+   # some Boost installs (MSYS2) ship only the tagged -mt names.
+   case "$BOOST_PYTHON_LIB" in
+     *-mt*) boost_serialization_lib=boost_serialization-mt ;;
+     *)     boost_serialization_lib=boost_serialization ;;
+   esac
+   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -l$boost_serialization_lib -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
 fi
 
 if test x$coot_enhanced_ligand_additions = xtrue ; then
