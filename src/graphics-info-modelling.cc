@@ -40,6 +40,7 @@
 // was used for debugging - not needed now.
 // #include <iomanip> // extern char *dcgettext (const char *__domainname, if placed later
 #include <algorithm>
+#include <functional>
 
 #include <iostream>
 #include <stdexcept>
@@ -128,6 +129,7 @@ bool bandicoot_wx_rotamers_present(int imol, int atom_index, bool alt_conf);
 bool bandicoot_wx_delete_open();
 bool bandicoot_wx_delete_keep_active();
 void bandicoot_wx_delete_close();
+int  bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
 #endif
 
 
@@ -547,9 +549,18 @@ void graphics_info_t::thread_for_refinement_loop_threaded() {
             // if there's not a refinement redraw function already running start up a new one.
             if (threaded_refinement_redraw_timeout_fn_id == -1) {
 
-	       int id = gtk_timeout_add(15,
-			       (GtkFunction)(regenerate_intermediate_atoms_bonds_timeout_function_and_draw),
-                               NULL);
+               int id = 0;
+#ifdef BANDICOOT_UI_WX
+               // On wx's timer: nothing runs GLib's main loop under wx on
+               // Windows, so a GLib timeout would never fire there.
+               id = bandicoot_wx_timeout_add(15, []() {
+                  return regenerate_intermediate_atoms_bonds_timeout_function_and_draw() != 0;
+               });
+#endif
+               if (id == 0)
+                  id = gtk_timeout_add(15,
+                                       (GtkFunction)(regenerate_intermediate_atoms_bonds_timeout_function_and_draw),
+                                       NULL);
                threaded_refinement_redraw_timeout_fn_id = id;
             }
          }
