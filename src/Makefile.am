@@ -187,7 +187,6 @@ AM_CXXFLAGS = \
 	-DPKGDATADIR='"$(pkgdatadir)"' \
 	-DPACKAGE_LOCALE_DIR='"$(pkgdatadir)/locale"' \
 	-DPKGPYTHONDIR='"$(pkgpythondir)"' \
-	-DDATADIR='"$(datadir)"'    \
         -DCOOT_SYS_BUILD_TYPE='"$(COOT_SYS_BUILD_TYPE)"' \
         -DCOOT_BUILD_INFO_STRING='"$(COOT_BUILD_INFO_STRING)"' \
 	$(USE_LIBCURL) 	        \
