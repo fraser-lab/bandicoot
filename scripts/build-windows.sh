@@ -294,8 +294,17 @@ done
 
 # Every DLL Bandicoot loads must resolve: from the install, or from Windows
 # or MSYS2 itself.
+# On Windows on ARM, ntldd rejects the system's own DLLs (ARM64X hybrids that
+# x64 programs load normally) as "not found"; a DLL present in the Windows
+# system directory is therefore not counted as missing.
 if command -v ntldd >/dev/null 2>&1; then
-    _unresolved="$(cd "${PREFIX}/libexec" && ntldd -R Bandicoot.exe 2>/dev/null | grep -i "not found" || true)"
+    _sys32="$(cygpath -u "${SYSTEMROOT:-C:\\Windows}")/System32"
+    _unresolved=""
+    while read -r _dll _rest; do
+        [ -n "${_dll}" ] || continue
+        [ -e "${_sys32}/${_dll}" ] && continue
+        _unresolved="${_unresolved}    ${_dll}"$'\n'
+    done < <(cd "${PREFIX}/libexec" && ntldd -R Bandicoot.exe 2>/dev/null | grep -i "not found" || true)
     if [ -n "${_unresolved}" ]; then
         echo "!! build-windows.sh: Bandicoot.exe has DLLs that cannot be found:" >&2
         echo "${_unresolved}" >&2
