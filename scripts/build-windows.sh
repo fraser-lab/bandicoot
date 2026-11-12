@@ -197,6 +197,9 @@ PYTHON_EMBED_LIBS="$("${PYTHON_CONFIG}" --libs --embed 2>/dev/null || "${PYTHON_
 export CPPFLAGS="-I${XTAL_PREFIX}/include -I${GEMMI_PREFIX}/include -I${FFTW_PREFIX}/include"
 export LDFLAGS="-L${PREFIX}/lib -L${XTAL_PREFIX}/lib -L${GEMMI_PREFIX}/lib -L${FFTW_PREFIX}/lib -L${RDKIT_PREFIX}/lib ${PYTHON_EMBED_LDFLAGS}"
 SHIM_INCLUDE="-include ${REPO_ROOT}/compat/python23-shim.hh"
+# windows.h reaches many files indirectly (Clipper includes it), so its API
+# name macros are neutralised for every file, not per file.
+SHIM_INCLUDE="${SHIM_INCLUDE} -include ${REPO_ROOT}/compat/mingw/win32-name-clashes.h"
 # big-obj: the SWIG wrapper and other large files exceed the default COFF
 # section limit. gnu17: current GCC defaults to C23, which the older C in the
 # tree predates.
