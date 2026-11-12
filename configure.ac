@@ -334,6 +334,8 @@ dnl ============================ OPENGL ===================
 if test "$have_windows_mingw" = yes; then
   AC_CHECK_HEADER([GL/gl.h], [], AC_MSG_ERROR([GL header not found]))
   AC_CHECK_LIB(opengl32, main, COOT_OPENGL_LIBS="-lopengl32", AC_MSG_ERROR([GL lib required]))
+  dnl GLU (picking, projection, quadrics) is a separate DLL on Windows
+  AC_CHECK_LIB(glu32, main, COOT_OPENGL_LIBS="-lglu32 $COOT_OPENGL_LIBS", AC_MSG_ERROR([GLU lib required]), [-lopengl32])
 elif test "$(uname)" = "Darwin"; then
   COOT_OPENGL_LIBS="-framework OpenGL"
 else
