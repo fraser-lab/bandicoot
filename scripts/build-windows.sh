@@ -276,6 +276,10 @@ make install py_compile=/dev/null
 if [ -f "${PREFIX}/libexec/coot-bin.exe" ]; then
     mv -f "${PREFIX}/libexec/coot-bin.exe" "${PREFIX}/libexec/Bandicoot.exe"
 fi
+if [ ! -f "${PREFIX}/libexec/Bandicoot.exe" ]; then
+    echo "!! build-windows.sh: ${PREFIX}/libexec/Bandicoot.exe was not installed" >&2
+    exit 1
+fi
 cp -f "${PREFIX}/bin/coot" "${PREFIX}/bin/bcoot"
 
 # Windows looks for a program's DLLs beside it before PATH. Bandicoot's own
@@ -290,7 +294,7 @@ done
 
 # Every DLL Bandicoot loads must resolve: from the install, or from Windows
 # or MSYS2 itself.
-if command -v ntldd >/dev/null 2>&1 && [ -f "${PREFIX}/libexec/Bandicoot.exe" ]; then
+if command -v ntldd >/dev/null 2>&1; then
     _unresolved="$(cd "${PREFIX}/libexec" && ntldd -R Bandicoot.exe 2>/dev/null | grep -i "not found" || true)"
     if [ -n "${_unresolved}" ]; then
         echo "!! build-windows.sh: Bandicoot.exe has DLLs that cannot be found:" >&2
