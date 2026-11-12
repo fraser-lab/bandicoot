@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <gtk/gtk.h>
+#include <glib/gstdio.h>  // g_mkdir
 
 #include "graphics-info.h"
 #include "coot-utils/coot-coord-utils.hh"
@@ -442,7 +443,8 @@ gboolean bandicoot_action_local_probe_dots(gpointer) {
 
     // Stage outputs in a coot-molprobity/ subdir of cwd (matches upstream's
     // convention and keeps tmp files out of the working directory root).
-    mkdir("coot-molprobity", 0755);
+    // g_mkdir: Windows' mkdir() takes no mode argument.
+    g_mkdir("coot-molprobity", 0755);
     std::string pdb_raw      = "coot-molprobity/bandicoot-local-probe.pdb";
     std::string pdb_reduced  = "coot-molprobity/bandicoot-local-probe-H.pdb";
     std::string dots_out     = "coot-molprobity/bandicoot-local-probe.dots";
