@@ -215,21 +215,24 @@ def _bandicoot_glib_timeout_add(interval_ms, callback, *args, **kwargs):
 def _bandicoot_glib_idle_add(callback, *args, **kwargs):
     """gobject.idle_add replacement: schedule the callback once on the
     GLib main loop. Implemented as timeout_add(0, ...) with the callback
-    wrapped to return False so it fires exactly once."""
+    wrapped to return False so it fires exactly once. Exceptions from the
+    callback are discarded."""
     if args or kwargs:
         _bound_args = args
         _bound_kwargs = kwargs
         def _once():
             try:
                 callback(*_bound_args, **_bound_kwargs)
-            finally:
-                return False
+            except BaseException:
+                pass
+            return False
     else:
         def _once():
             try:
                 callback()
-            finally:
-                return False
+            except BaseException:
+                pass
+            return False
     return _bandicoot_glib_timeout_add(0, _once)
 
 def _bandicoot_glib_source_remove(_source_id):

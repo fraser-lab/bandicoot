@@ -332,8 +332,24 @@ build_xtal libccp4 "${XTAL_PC}/ccp4c.pc" "" \
 build_xtal ssm "${XTAL_PC}/ssm.pc" "" \
     "sed -i -E 's/\"(superpose_version|superpose_date)\"/\" \\1 \"/g' superpose.cpp" \
     --enable-ccp4
+# Clipper's itype64 is a plain long: 64 bits on Linux and macOS, 32 on
+# Windows. HKL_sampling squares 2^20 in it, which overflows to 0 and leaves
+# every map read from an MTZ empty. Make the 64-bit types long long.
+clipper_fix_itype64() {
+    local files
+    files="$(grep -rlE 'typedef[[:space:]]+(unsigned[[:space:]]+)?long([[:space:]]+int)?[[:space:]]+u?itype64' clipper || true)"
+    if [ -z "${files}" ]; then
+        grep -rqE 'typedef[[:space:]]+long[[:space:]]+long[[:space:]]+itype64' clipper && return 0
+        echo "!! clipper: itype64 typedef not found" >&2; return 1
+    fi
+    sed -i -E 's/typedef([[:space:]]+)(unsigned[[:space:]]+)?long([[:space:]]+int)?([[:space:]]+)(u?itype64)/typedef\1\2long long\4\5/' ${files}
+    if grep -rqE 'typedef[[:space:]]+(unsigned[[:space:]]+)?long([[:space:]]+int)?[[:space:]]+u?itype64' clipper; then
+        echo "!! clipper: itype64 is still a plain long" >&2; return 1
+    fi
+    grep -rnE 'typedef.*itype64' clipper
+}
 build_xtal clipper "${XTAL_PC}/clipper.pc" "" \
-    "sed -i 's|libccp4c|ccp4c|g' configure" \
+    "sed -i 's|libccp4c|ccp4c|g' configure && clipper_fix_itype64" \
     --enable-mmdb --enable-ccp4 --enable-cif --enable-minimol --enable-cns
 
 # wxWidgets for MSW, with the parts Bandicoot uses (OpenGL canvas, AUI, SVG
