@@ -84,6 +84,11 @@
 #include "utils/coot-utils.hh"
 
 #include <GL/glut.h> // needed (only?) for wirecube
+
+#ifdef WINDOWS_MINGW
+// Windows' gl.h stops at OpenGL 1.1; GL_MULTISAMPLE_ARB is in glext.h
+#include <GL/glext.h>
+#endif // WINDOWS_MINGW
 #include "bandicoot-gl-primitives.hh"
 
 #ifndef CLIPPER_MAP_INTERP
