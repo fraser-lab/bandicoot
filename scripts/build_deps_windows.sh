@@ -268,6 +268,26 @@ build_autotools libgnomecanvas "${PCDIR}/libgnomecanvas-2.0.pc" "${CANVAS_OUT}" 
 build_autotools goocanvas "${PCDIR}/goocanvas.pc" "${CANVAS_OUT}" \
     --disable-static --disable-gtk-doc --disable-python
 
+# The canvas tarballs' libtool predates Windows DLL support too, so they
+# install static archives whatever configure is told (as FFTW above). Make
+# each DLL from its archive, linked against the libraries its .pc names, and
+# drop the .la so libtool and the linker use the import library.
+canvas_dll() {   # <archive basename, no lib/.a> <pkg-config module> <dll name>
+    local base="$1" mod="$2" dll="$3" reqs
+    [ -e "${CANVAS_OUT}/lib/lib${base}.dll.a" ] && return 0
+    [ -e "${CANVAS_OUT}/lib/lib${base}.a" ] || { echo "!! ${CANVAS_OUT}/lib/lib${base}.a missing" >&2; exit 1; }
+    echo "==> ${mod}: building ${dll} from the static archive"
+    reqs="$(pkg-config --print-requires --print-requires-private "${mod}" | awk '{print $1}' | tr '\n' ' ')"
+    mkdir -p "${CANVAS_OUT}/bin"
+    ( cd "${CANVAS_OUT}/lib" && \
+      gcc -shared -o "../bin/${dll}" -Wl,--out-implib,"lib${base}.dll.a" \
+          -Wl,--whole-archive "lib${base}.a" -Wl,--no-whole-archive \
+          -L. $(pkg-config --libs ${reqs}) )
+}
+canvas_dll gnomecanvas-2 libgnomecanvas-2.0 libgnomecanvas-2-0.dll
+canvas_dll goocanvas goocanvas libgoocanvas-3.dll
+rm -f "${CANVAS_OUT}"/lib/libgnomecanvas-2.la "${CANVAS_OUT}"/lib/libgoocanvas.la
+
 # --- crystallographic libraries (the bioconda recipes' configure options) ----
 XTAL_PC="${XTAL_OUT}/lib/pkgconfig"
 export PKG_CONFIG_PATH="${XTAL_PC}:${PKG_CONFIG_PATH}"
