@@ -309,6 +309,10 @@ return wxGLCanvas::IsDisplaySupported(attrs) ? 0 : 1;]])],
    LIBS="$bandicoot_save_LIBS"
 
    WX_CFLAGS="-DBANDICOOT_UI_WX $WX_CFLAGS"
+   dnl Windows: the resource compiler command for the program's manifest
+   if test "$have_windows_mingw" = yes; then
+      WX_RESCOMP=`$WX_CONFIG --rescomp`
+   fi
 else
    WX_CFLAGS=""
    WX_LIBS=""
@@ -316,6 +320,7 @@ fi
 
 AC_SUBST(WX_CFLAGS)
 AC_SUBST(WX_LIBS)
+AC_SUBST(WX_RESCOMP)
 
 dnl GtkGLExt makes the GTK build's GL widget; the wx build draws in a wxGLCanvas
 dnl and compiles no GtkGLExt code, so it does not need the library (current
