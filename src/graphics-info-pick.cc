@@ -728,7 +728,13 @@ graphics_info_t::move_atom_pull_target_position(int screen_x, int screen_y) {
 
    continue_threaded_refinement_loop = false;
    while (restraints_lock) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2)); // not sure about the delay
+#ifdef _WIN32
+      // Windows rounds any sleep up to a scheduler tick, and this wait runs on
+      // every mouse movement of a pull; yield and check again instead.
+      std::this_thread::yield();
+#else
+      std::this_thread::sleep_for(std::chrono::milliseconds(2)); // not sure about the delay
+#endif
    }
 
    // add to or replace in atom_pulls (for representation)
