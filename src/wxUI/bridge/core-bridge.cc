@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <map>
 #include <cctype>
 #include <cmath>
@@ -2009,6 +2010,21 @@ bool bandicoot_wx_select_map() {
    if (! ui_view.select_map) return false;
    ui_view.select_map();
    return true;
+}
+
+// Called by the refinement thread after each pass. The redraw timer alone is
+// not enough on Windows: timer messages are delivered only when no input is
+// waiting, so while the mouse moves a pull would show nothing. A queued call
+// is delivered ahead of input. One at a time, so fast passes cannot flood it.
+void bandicoot_wx_refinement_pass_done() {
+   static std::atomic<bool> pending(false);
+   if (! ui_view.call_after) return;
+   if (pending.exchange(true)) return;
+   ui_view.call_after([]() {
+      pending = false;
+      if (graphics_info_t::update_moving_atoms_representation())
+         graphics_draw();
+   });
 }
 
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback) {

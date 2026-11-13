@@ -1070,6 +1070,8 @@ private:
       v.release_geometry_toggle = [](const std::string &kind) { wxui::release_geometry_toggle(kind); };
       v.step_list = [](int step) { return wxui::step_validate_list(step); };
       v.multi_torsion = [this](const std::vector<std::string> &bonds) { wxui::show_multi_torsion(this, bonds); };
+      // wx queues it as an event, which is safe from any thread
+      v.call_after = [](std::function<void()> callback) { wxTheApp->CallAfter(std::move(callback)); };
       v.timeout_add = [](int interval_ms, std::function<bool()> callback) {
          CallbackTimer *t = new CallbackTimer(std::move(callback));
          t->Start(std::max(interval_ms, 1));

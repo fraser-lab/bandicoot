@@ -130,6 +130,8 @@ bool bandicoot_wx_delete_open();
 bool bandicoot_wx_delete_keep_active();
 void bandicoot_wx_delete_close();
 int  bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+// Asks the main thread to show a finished refinement pass (wxUI/bridge/core-bridge.cc).
+void bandicoot_wx_refinement_pass_done();
 #endif
 
 
@@ -515,6 +517,9 @@ graphics_info_t::refinement_loop_threaded() {
       }
 
       graphics_info_t::threaded_refinement_loop_counter++;
+#ifdef BANDICOOT_UI_WX
+      bandicoot_wx_refinement_pass_done();
+#endif
 
       if (false)
 	 std::cout << "threaded_refinement_loop_counter "
@@ -839,6 +844,33 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function() {
       }
    }
 
+   update_moving_atoms_representation();
+
+   if (! restraints_lock)
+      continue_status = 0; // stop the timeout function
+
+   if (continue_status == 0) {
+      // unset the timeout function token
+      graphics_info_t::threaded_refinement_redraw_timeout_fn_id = -1; // we've finished
+   }
+
+   return continue_status; // return 0 to stop
+}
+
+// static
+//
+// Show the refinement's latest coordinates, if they have not been shown yet:
+// rebuild the moving atoms' bonds, update the Accept/Reject numbers. Returns
+// whether it did. Called by the redraw timer and, in the wx build, as soon as
+// each refinement pass finishes (Windows delivers the timer late while the
+// mouse moves). Showing a pass twice is prevented by the pass counters.
+bool
+graphics_info_t::update_moving_atoms_representation() {
+
+   if (! use_graphics_interface_flag) return false;
+   if (moving_atoms_asc == NULL) return false;
+   if (moving_atoms_asc->atom_selection == NULL) return false;
+
    bool do_the_redraw = false;
    if (threaded_refinement_loop_counter_bonds_gen < threaded_refinement_loop_counter)
       do_the_redraw = true;
@@ -918,17 +950,9 @@ graphics_info_t::regenerate_intermediate_atoms_bonds_timeout_function() {
       if (accept_reject_dialog)
 	 update_accept_reject_dialog_with_results(accept_reject_dialog, coot::CHI_SQUAREDS,
 						  saved_dragged_refinement_results);
+      return true;
    }
-
-   if (! restraints_lock)
-      continue_status = 0; // stop the timeout function
-
-   if (continue_status == 0) {
-      // unset the timeout function token
-      graphics_info_t::threaded_refinement_redraw_timeout_fn_id = -1; // we've finished
-   }
-
-   return continue_status; // return 0 to stop
+   return false;
 }
 
 void
