@@ -358,8 +358,8 @@ mkdir -p "${OUTDIR}"
 rm -f "${SETUP}" "${SETUP}.sha256"
 echo "==> writing ${SETUP}"
 makensis -V2 -DVERSION="${VERSION}${SUFFIX}" -DSRCDIR="$(cygpath -w "${S}")" \
-    -DOUTFILE="$(cygpath -w "${SETUP}")" -DICON="$(cygpath -w pixmaps/bandicoot.ico)" \
-    "$(cygpath -w scripts/windows/bandicoot.nsi)"
+    -DOUTFILE="$(cygpath -w "${SETUP}")" -DICON="$(cygpath -w "${REPO_ROOT}/pixmaps/bandicoot.ico")" \
+    "$(cygpath -w "${REPO_ROOT}/scripts/windows/bandicoot.nsi")"
 ( cd "${OUTDIR}" && sha256sum "${SETUPBASE}" > "${SETUPBASE}.sha256" )
 
 echo ""
