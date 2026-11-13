@@ -21,6 +21,9 @@
 
 #include <gtk/gtk.h>
 #include <glib/gstdio.h>  // g_mkdir
+#ifndef _WIN32
+#include <sys/wait.h>      // WIFEXITED
+#endif
 
 #include "graphics-info.h"
 #include "coot-utils/coot-coord-utils.hh"
@@ -411,11 +414,39 @@ gboolean bandicoot_action_refine_tandem(gpointer) {
 // Local Probe Dots: one-shot probe-dot overlay for the active residue's
 // neighbourhood. Coot upstream wires this through Python (generic_objects.py
 // probe(), interactive_probe()) which depends on the Py3 port — disabled in
-// Bandicoot. We do the same dance in C++: write a temp PDB, fork+exec
+// Bandicoot. We do the same dance in C++: write a temp PDB, run
 // `probe`, read its dots output back via handle_read_draw_probe_dots_
 // unformatted(). The `probe` binary itself ships in <install>/bin/probe
 // (BSD-3 Richardson Lab build from CCP4 9.0.014_arm, see
 // scripts/bundle_external_tools.sh).
+// Run a program with its standard output written to out_file, and its
+// error output discarded. No shell is involved, so it works the same on
+// Windows, where std::system() runs cmd.exe. Returns the program's exit
+// code, or -1 (with the reason in why_not) if it could not be started.
+static int bandicoot_run_to_file(const std::vector<std::string> &args,
+                                 const std::string &out_file, std::string &why_not) {
+    std::vector<char *> argv;
+    for (const std::string &a : args) argv.push_back(const_cast<char *>(a.c_str()));
+    argv.push_back(nullptr);
+    gchar *out = nullptr;
+    gint wait_status = 0;
+    GError *error = nullptr;
+    if (! g_spawn_sync(nullptr, argv.data(), nullptr,
+                       GSpawnFlags(G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL),
+                       nullptr, nullptr, &out, nullptr, &wait_status, &error)) {
+        why_not = error ? error->message : "unknown error";
+        if (error) g_error_free(error);
+        return -1;
+    }
+    g_file_set_contents(out_file.c_str(), out ? out : "", -1, nullptr);
+    g_free(out);
+#ifdef _WIN32
+    return wait_status;   // the exit code itself
+#else
+    return WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) : -1;
+#endif
+}
+
 gboolean bandicoot_action_local_probe_dots(gpointer) {
     auto p = graphics_info_t::active_atom_spec();
     if (!p.first) {
@@ -435,6 +466,10 @@ gboolean bandicoot_action_local_probe_dots(gpointer) {
             std::string p = std::string(prefix_env) + "/bin/" + name;
             struct stat st;
             if (stat(p.c_str(), &st) == 0) return p;
+#ifdef _WIN32
+            p += ".exe";
+            if (stat(p.c_str(), &st) == 0) return p;
+#endif
         }
         return std::string(name); // PATH lookup
     };
@@ -461,11 +496,15 @@ gboolean bandicoot_action_local_probe_dots(gpointer) {
     //    its heteroatom dictionary from REDUCE_HET_DICT (exported by
     //    coot.in to point at <install>/share/coot/reduce_wwPDB_het_dict.txt).
     //    -quiet suppresses chatty stderr; -allalt processes all altLocs.
-    char reduce_cmd[2048];
-    snprintf(reduce_cmd, sizeof(reduce_cmd),
-             "'%s' -build -quiet -allalt '%s' > '%s' 2>/dev/null",
-             reduce_path.c_str(), pdb_raw.c_str(), pdb_reduced.c_str());
-    int rc = std::system(reduce_cmd);
+    std::string why_not;
+    int rc = bandicoot_run_to_file({ reduce_path, "-build", "-quiet", "-allalt", pdb_raw },
+                                   pdb_reduced, why_not);
+    if (rc == -1 && ! why_not.empty()) {
+        fprintf(stdout, "[bandicoot] Local Probe Dots: cannot run %s: %s\n",
+                reduce_path.c_str(), why_not.c_str());
+        fflush(stdout);
+        return G_SOURCE_REMOVE;
+    }
     // reduce's exit code is unreliable (it returns 1 on warnings); judge
     // success by whether the output file is non-empty.
     struct stat rst;
@@ -495,15 +534,18 @@ gboolean bandicoot_action_local_probe_dots(gpointer) {
     char src[256];
     snprintf(src, sizeof(src), "%s%d", chain_token.c_str(), as.res_no);
 
-    char probe_cmd[2048];
-    snprintf(probe_cmd, sizeof(probe_cmd),
-             "'%s' -u -mc -quiet -both '%s' 'ALL' '%s' > '%s' 2>/dev/null",
-             probe_path.c_str(), src, pdb_reduced.c_str(), dots_out.c_str());
-
-    fprintf(stdout, "[bandicoot] Local Probe Dots: %s\n", probe_cmd);
+    fprintf(stdout, "[bandicoot] Local Probe Dots: %s -u -mc -quiet -both \"%s\" ALL %s > %s\n",
+            probe_path.c_str(), src, pdb_reduced.c_str(), dots_out.c_str());
     fflush(stdout);
 
-    rc = std::system(probe_cmd);
+    rc = bandicoot_run_to_file({ probe_path, "-u", "-mc", "-quiet", "-both", src, "ALL", pdb_reduced },
+                               dots_out, why_not);
+    if (rc == -1 && ! why_not.empty()) {
+        fprintf(stdout, "[bandicoot] Local Probe Dots: cannot run %s: %s\n",
+                probe_path.c_str(), why_not.c_str());
+        fflush(stdout);
+        return G_SOURCE_REMOVE;
+    }
     if (rc != 0) {
         fprintf(stdout, "[bandicoot] Local Probe Dots: probe exited %d "
                         "(is %s on PATH?)\n",

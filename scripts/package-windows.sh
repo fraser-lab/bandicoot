@@ -80,6 +80,12 @@ echo "==> programs"
 for _f in "${PREFIX}"/libexec/*.exe "${PREFIX}"/bin/*.exe; do
     [ -e "${_f}" ] && cp -f "${_f}" "${S}/bin/"
 done
+# GLib starts other programs (reduce, probe) through helper programs it looks
+# for beside its own DLL
+for _h in gspawn-win64-helper.exe gspawn-win64-helper-console.exe; do
+    [ -f "${MSYS_PREFIX}/bin/${_h}" ] || fail "${_h} not found in ${MSYS_PREFIX}/bin"
+    cp -f "${MSYS_PREFIX}/bin/${_h}" "${S}/bin/"
+done
 # The launcher scripts need a Unix shell; Windows gets its own, with the line
 # endings cmd.exe expects.
 sed 's/$/\r/' scripts/windows/bandicoot.bat > "${S}/bandicoot.bat"
@@ -101,40 +107,35 @@ echo "==> Python ${PYVER} standard library"
   ( cd "${S}/lib/python${PYVER}" && tar xf - )
 rm -f "${S}/lib/python${PYVER}"/lib-dynload/_tkinter* "${S}/lib/python${PYVER}"/lib-dynload/_test*
 
-# numpy and matplotlib with every package they need: PyPI's wheels are built
-# for python.org's Python, not MSYS2's. Only their Python files are taken
-# here; the DLLs they load are collected in step 3.
+# numpy and matplotlib with the Python packages they need: PyPI's wheels are
+# built for python.org's Python, not MSYS2's. Only Python packages are
+# followed, and only their files under site-packages taken; the DLLs they load,
+# from whatever package, are collected in step 3.
 echo "==> numpy + matplotlib (MSYS2 packages)"
 declare -A _visited=()
+PY_SITE="${MSYS_PREFIX}/lib/python${PYVER}/site-packages"
 PY_FILES="$(mktemp)"
 collect_python_files() {   # <package>
     local pkg="$1" dep
     [ -n "${_visited[${pkg}]:-}" ] && return 0
     _visited[${pkg}]=1
-    pacman -Qlq "${pkg}" 2>/dev/null | \
-        grep "^${MSYS_PREFIX}/lib/python${PYVER}/site-packages/." | grep -v '/__pycache__/' | \
-        grep -v '/$' >> "${PY_FILES}" || true
+    pacman -Qlq "${pkg}" 2>/dev/null | grep "^${PY_SITE}/." | grep -v -e '/__pycache__/' -e '/$' | \
+        sed "s#^${PY_SITE}/##" >> "${PY_FILES}" || true
     # the field may continue on indented lines
     for dep in $(pacman -Qi "${pkg}" | \
                  awk '/^Depends On/ {f = 1; sub(/^[^:]*:/, ""); print; next}
                       f && /^[^ ]/ {f = 0}
                       f {print}'); do
-        [ "${dep}" = "None" ] && continue
         dep="${dep%%[<>=]*}"
-        if pacman -Q "${dep}" >/dev/null 2>&1; then
-            collect_python_files "${dep}"
-        else
-            echo "    (dependency ${dep} of ${pkg} is not an installed package name; skipped)"
-        fi
+        case "${dep}" in
+            "${PKG}"-python-*) collect_python_files "${dep}" ;;
+        esac
     done
 }
 collect_python_files "${PKG}-python-numpy"
 collect_python_files "${PKG}-python-matplotlib"
-while IFS= read -r _f; do
-    _rel="${_f#"${MSYS_PREFIX}/lib/python${PYVER}/site-packages/"}"
-    mkdir -p "${SITE}/$(dirname "${_rel}")"
-    cp -f "${_f}" "${SITE}/${_rel}"
-done < "${PY_FILES}"
+echo "    $(wc -l < "${PY_FILES}") files from ${#_visited[@]} packages"
+tar -C "${PY_SITE}" -cf - -T "${PY_FILES}" | tar -C "${SITE}" -xf -
 rm -f "${PY_FILES}"
 rm -rf "${SITE}/bin"
 
@@ -152,7 +153,6 @@ cp -R "${MSYS_PREFIX}/etc/ssl" "${S}/etc/ssl"
 
 # --- 3. DLLs ----------------------------------------------------------------------------
 pe_files() { find "${S}" -type f \( -iname '*.exe' -o -iname '*.dll' -o -iname '*.pyd' \); }
-imports() { objdump -p "$1" 2>/dev/null | sed -n 's/^[[:space:]]*DLL Name: //p' | tr -d '\r'; }
 find_dll() {   # <name>: where it would be bundled from, if not Windows'
     local d
     for d in ${DLL_DIRS}; do
@@ -165,29 +165,70 @@ is_windows_dll() {   # <name>
     [ -e "${SYS32}/$1" ]
 }
 
+# The DLLs each file imports, read once per file: objdump takes many files at
+# a time, since starting programs is slow on Windows. Its output names files
+# by Windows path, so they are matched to ours by order.
+declare -A IMPORTS=()
+scan_imports() {   # <file>...
+    local -a files=("$@")
+    local out count idx name f
+    out="$(objdump -p "${files[@]}" 2>/dev/null | tr -d '\r' | awk '
+        /:[ \t]+file format / { n++; next }
+        /^[ \t]*DLL Name: / { sub(/^[ \t]*DLL Name: /, ""); print n "\t" $0 }
+        END { print "count\t" n + 0 }')"
+    count="$(echo "${out}" | awk -F'\t' '$1 == "count" {print $2}')"
+    if [ "${count}" != "${#files[@]}" ]; then
+        # a file objdump could not read upsets the order: one at a time
+        [ "${#files[@]}" -gt 1 ] || { IMPORTS[${files[0]}]=""; return 0; }
+        for f in "${files[@]}"; do scan_imports "$f"; done
+        return 0
+    fi
+    for f in "${files[@]}"; do IMPORTS[$f]=""; done
+    while IFS=$'\t' read -r idx name; do
+        [ "${idx}" = "count" ] && continue
+        f="${files[$((idx - 1))]}"
+        IMPORTS[$f]+="${name}"$'\n'
+    done <<< "${out}"
+}
+scan_new_files() {   # prints the files scanned
+    local -a batch=()
+    local f
+    while IFS= read -r f; do
+        [ -n "${IMPORTS[$f]+x}" ] && continue
+        batch+=("$f")
+        echo "$f"
+        if [ "${#batch[@]}" -ge 100 ]; then scan_imports "${batch[@]}"; batch=(); fi
+    done < <(pe_files)
+    [ "${#batch[@]}" -eq 0 ] || scan_imports "${batch[@]}"
+}
+
 echo "==> DLLs"
 declare -A _have=()
-for _f in "${S}"/bin/*; do _n="$(basename "${_f}")"; _have[${_n,,}]=1; done
+for _f in "${S}"/bin/*; do _n="${_f##*/}"; _have[${_n,,}]=1; done
 _round=0
 while :; do
     _round=$((_round + 1))
     _added=0
     _missing=""
+    # scan_new_files runs here, not in a subshell, so IMPORTS keeps what it reads
+    _new="$(mktemp)"
+    scan_new_files > "${_new}"
     while IFS= read -r f; do
         while IFS= read -r name; do
             [ -n "${name}" ] || continue
             [ -n "${_have[${name,,}]:-}" ] && continue
             # a module's own folder, as for numpy's bundled libraries
-            [ -e "$(dirname "$f")/${name}" ] && continue
+            [ -e "${f%/*}/${name}" ] && continue
             if src="$(find_dll "${name}")"; then
                 cp -f "${src}" "${S}/bin/${name}"
                 _have[${name,,}]=1
                 _added=$((_added + 1))
             elif ! is_windows_dll "${name}"; then
-                _missing="${_missing} ${name}($(basename "$f"))"
+                _missing="${_missing} ${name}(${f##*/})"
             fi
-        done < <(imports "$f")
-    done < <(pe_files)
+        done <<< "${IMPORTS[$f]}"
+    done < "${_new}"
+    rm -f "${_new}"
     echo "    round ${_round}: ${_added} DLLs added"
     [ -z "${_missing}" ] || fail "DLLs not found:${_missing}"
     [ "${_added}" -gt 0 ] || break
@@ -209,10 +250,21 @@ BUNDLED_MD="${DOCDIR}/BUNDLED-WINDOWS.md"
     echo "| File | Origin | Package | Version |"
     echo "|---|---|---|---|"
 } > "${BUNDLED_MD}"
-declare -A _lic=()
+# one pacman call for every file taken from MSYS2: it is slow to start
+declare -A _owner=() _lic=()
+_msys_files=()
+for f in "${S}"/bin/*; do
+    [ -e "${MSYS_PREFIX}/bin/${f##*/}" ] && _msys_files+=("${MSYS_PREFIX}/bin/${f##*/}")
+done
+for f in "${S}"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll; do
+    _msys_files+=("${MSYS_PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders/${f##*/}")
+done
+_msys_files+=("${MSYS_PREFIX}/lib/python${PYVER}/os.py" "${MSYS_PREFIX}/etc/ssl/certs/ca-bundle.crt")
+while IFS= read -r line; do
+    _owner[${line%% is owned by *}]="${line##* is owned by }"
+done < <(pacman -Qo "${_msys_files[@]}" 2>/dev/null | tr -d '\r')
 record_msys2() {   # <file in MSYS2> <label>
-    local owner pkg ver short
-    owner="$(pacman -Qo "$1" 2>/dev/null | sed -n 's/.* is owned by //p' || true)"
+    local owner="${_owner[$1]:-}" pkg ver short
     [ -n "${owner}" ] || return 1
     pkg="${owner% *}"; ver="${owner##* }"
     echo "| \`$2\` | MSYS2 | \`${pkg}\` | ${ver} |" >> "${BUNDLED_MD}"
@@ -223,29 +275,30 @@ record_msys2() {   # <file in MSYS2> <label>
     fi
 }
 for f in "${S}"/bin/*; do
-    n="$(basename "$f")"
-    if [ -e "${MSYS_PREFIX}/bin/${n}" ] && record_msys2 "${MSYS_PREFIX}/bin/${n}" "${n}"; then continue; fi
+    n="${f##*/}"
+    record_msys2 "${MSYS_PREFIX}/bin/${n}" "${n}" && continue
     _src="$(find_dll "${n}" || true)"
     case "${_src}" in
+        "${PREFIX}"/*|"")
+            echo "| \`${n}\` | Bandicoot (GPL-3) | | |" >> "${BUNDLED_MD}" ;;
         "${DEPS_PREFIX}"/*)
             _dep="${_src#"${DEPS_PREFIX}"/}"
             echo "| \`${n}\` | built from source | \`${_dep%%/*}\` | |" >> "${BUNDLED_MD}" ;;
-        *) echo "| \`${n}\` | Bandicoot (GPL-3) | | |" >> "${BUNDLED_MD}" ;;
+        *)  # from MSYS2, but pacman did not name its package
+            fail "cannot tell which MSYS2 package ${n} came from (${_src})" ;;
     esac
 done
-record_msys2 "${MSYS_PREFIX}/lib/python${PYVER}/os.py" "Python standard library"
-for _p in "${!_visited[@]}"; do
-    _ver="$(pacman -Q "${_p}" | awk '{print $2}')"
-    case "${_p}" in
-        ${PKG}-python-*) echo "| Python package | MSYS2 | \`${_p}\` | ${_ver} |" >> "${BUNDLED_MD}"
-                         _short="${_p#"${PKG}-"}"
-                         [ -d "${MSYS_PREFIX}/share/licenses/${_short}" ] && [ -z "${_lic[${_short}]:-}" ] && \
-                             cp -R "${MSYS_PREFIX}/share/licenses/${_short}" "${DOCDIR}/licenses/${_short}" && \
-                             _lic[${_short}]=1 ;;
-    esac
-done
+record_msys2 "${MSYS_PREFIX}/lib/python${PYVER}/os.py" "Python standard library" || true
+while read -r _p _ver; do
+    echo "| Python package | MSYS2 | \`${_p}\` | ${_ver} |" >> "${BUNDLED_MD}"
+    _short="${_p#"${PKG}-"}"
+    if [ -z "${_lic[${_short}]:-}" ] && [ -d "${MSYS_PREFIX}/share/licenses/${_short}" ]; then
+        cp -R "${MSYS_PREFIX}/share/licenses/${_short}" "${DOCDIR}/licenses/${_short}"
+        _lic[${_short}]=1
+    fi
+done < <(pacman -Q "${!_visited[@]}" | tr -d '\r')
 for f in "${S}"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.dll; do
-    record_msys2 "${MSYS_PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders/$(basename "$f")" "$(basename "$f")" || true
+    record_msys2 "${MSYS_PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders/${f##*/}" "${f##*/}" || true
 done
 record_msys2 "${MSYS_PREFIX}/etc/ssl/certs/ca-bundle.crt" "certificate bundle" || true
 echo "    $(grep -c '^| `' "${BUNDLED_MD}") entries; $(ls "${DOCDIR}/licenses" | wc -l) license folders"
@@ -261,13 +314,14 @@ find "${S}" -type d -name __pycache__ -prune -exec rm -rf {} +
 
 echo "==> check: every DLL resolves inside the package or is Windows' own"
 _bad=0
-while IFS= read -r f; do
+# (stripping leaves the import tables as they were read in step 3)
+for f in "${!IMPORTS[@]}"; do
     while IFS= read -r name; do
         [ -n "${name}" ] || continue
-        [ -e "${S}/bin/${name}" ] || [ -e "$(dirname "$f")/${name}" ] || is_windows_dll "${name}" || {
+        [ -n "${_have[${name,,}]:-}" ] || [ -e "${f%/*}/${name}" ] || is_windows_dll "${name}" || {
             echo "   ${f#"${S}"/}: ${name}" >&2; _bad=1; }
-    done < <(imports "$f")
-done < <(pe_files)
+    done <<< "${IMPORTS[$f]}"
+done
 [ "${_bad}" = "0" ] || fail "the DLLs above are not in the package"
 
 echo "==> check: no file names the build machine's home folder"
@@ -282,7 +336,7 @@ if [ -n "${_hits}" ]; then
 fi
 
 echo "==> check: required files present"
-for _f in bandicoot.bat bin/Bandicoot.exe "lib/python${PYVER}/encodings/__init__.py" \
+for _f in bandicoot.bat bin/Bandicoot.exe bin/gspawn-win64-helper-console.exe "lib/python${PYVER}/encodings/__init__.py" \
           "lib/python${PYVER}/site-packages/coot" "lib/python${PYVER}/site-packages/numpy" \
           "lib/python${PYVER}/site-packages/matplotlib" etc/ssl/certs/ca-bundle.crt \
           share/coot/syminfo.lib share/coot/lib/data/monomers share/coot/reference-structures \
