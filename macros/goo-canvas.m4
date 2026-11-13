@@ -41,14 +41,7 @@ if test x$goocanvas_prefix != x; then
  # --with-goocanvas-prefix=/some/thing
  #
 
-  case $ac_cv_build_alias in
-  *-mingw*)
-    GOOCANVAS_CFLAGS="-I$goocanvas_prefix/include/goocanvas-1.0.0/goocanvas"
-    break;;
-  *)
-    GOOCANVAS_CFLAGS="-I$goocanvas_prefix/include/goocanvas-1.0"
-    break;;
-  esac
+  GOOCANVAS_CFLAGS="-I$goocanvas_prefix/include/goocanvas-1.0"
   #
   # Similarly for goocanvas, the uninstalled library position is simply in
   # $goocanvas_prefix, but the installed is in the standard prefixed subdirectory.

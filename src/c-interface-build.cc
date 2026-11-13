@@ -70,6 +70,7 @@
 #include "coords/Bond_lines.h"
 
 #include "graphics-info.h"
+#include "bandicoot-main-loop.hh"
 
 #include "coot-utils/coot-coord-utils.hh"
 #include "coot-utils/coot-package-paths.hh"
@@ -6439,7 +6440,7 @@ void res_tracer(int imol_map, const std::string &pir_file_name) {
       return return_status;
    };
 
-   g_timeout_add(500, watching_timeout_func, watch_data_p);
+   bandicoot_timeout_add(500, watching_timeout_func, watch_data_p);
 
    t.detach();
 }

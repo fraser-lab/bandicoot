@@ -309,6 +309,10 @@ return wxGLCanvas::IsDisplaySupported(attrs) ? 0 : 1;]])],
    LIBS="$bandicoot_save_LIBS"
 
    WX_CFLAGS="-DBANDICOOT_UI_WX $WX_CFLAGS"
+   dnl Windows: the resource compiler command for the program's manifest
+   if test "$have_windows_mingw" = yes; then
+      WX_RESCOMP=`$WX_CONFIG --rescomp`
+   fi
 else
    WX_CFLAGS=""
    WX_LIBS=""
@@ -316,6 +320,7 @@ fi
 
 AC_SUBST(WX_CFLAGS)
 AC_SUBST(WX_LIBS)
+AC_SUBST(WX_RESCOMP)
 
 dnl GtkGLExt makes the GTK build's GL widget; the wx build draws in a wxGLCanvas
 dnl and compiles no GtkGLExt code, so it does not need the library (current
@@ -334,6 +339,8 @@ dnl ============================ OPENGL ===================
 if test "$have_windows_mingw" = yes; then
   AC_CHECK_HEADER([GL/gl.h], [], AC_MSG_ERROR([GL header not found]))
   AC_CHECK_LIB(opengl32, main, COOT_OPENGL_LIBS="-lopengl32", AC_MSG_ERROR([GL lib required]))
+  dnl GLU (picking, projection, quadrics) is a separate DLL on Windows
+  AC_CHECK_LIB(glu32, main, COOT_OPENGL_LIBS="-lglu32 $COOT_OPENGL_LIBS", AC_MSG_ERROR([GLU lib required]), [-lopengl32])
 elif test "$(uname)" = "Darwin"; then
   COOT_OPENGL_LIBS="-framework OpenGL"
 else
@@ -437,7 +444,13 @@ else
    # a compiler-only option, so it goes in CXXFLAGS: RDKIT_CXXFLAGS is also
    # handed to swig, which rejects it.
    CXXFLAGS="$CXXFLAGS -fmacro-prefix-map=$rdkit_install_dir/include/rdkit/=rdkit/"
-   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -lboost_serialization -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
+   # Boost.Serialization follows the naming of the Boost.Python found above:
+   # some Boost installs (MSYS2) ship only the tagged -mt names.
+   case "$BOOST_PYTHON_LIB" in
+     *-mt*) boost_serialization_lib=boost_serialization-mt ;;
+     *)     boost_serialization_lib=boost_serialization ;;
+   esac
+   RDKIT_LIBS="-L$rdkit_install_dir/lib -lRDKitMolDraw2D -lRDKitForceFieldHelpers -lRDKitDescriptors -lRDKitForceField -lRDKitSubstructMatch -lRDKitOptimizer -lRDKitDistGeomHelpers -lRDKitDistGeometry -lRDKitChemReactions -lRDKitAlignment -lRDKitEigenSolvers -lRDKitDepictor -lRDKitMolChemicalFeatures -lRDKitSubgraphs -lRDKitPartialCharges -lRDKitFileParsers -lRDKitRDGeometryLib -lRDKitGraphMol -lRDKitShapeHelpers -lRDKitFingerprints -lRDKitMolAlign -lRDKitMolTransforms -lRDKitChemTransforms -lRDKitSmilesParse -lRDKitFilterCatalog -lRDKitCatalogs -lRDKitSubgraphs -lRDKitDataStructs -lRDKitPartialCharges -lRDKitRDGeneral -l$boost_serialization_lib -l$BOOST_PYTHON_LIB $PYTHON_LIBS"
 fi
 
 if test x$coot_enhanced_ligand_additions = xtrue ; then

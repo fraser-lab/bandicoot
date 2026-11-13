@@ -1014,7 +1014,7 @@ double coot::distortion_score(const gsl_vector *v, void *params) {
 	 }
 
 	 while (done_count_for_threads != n_dispatched_restraints_sets) {
-	    std::this_thread::sleep_for(std::chrono::nanoseconds(80));
+	    thread_pool_wait_pause(std::chrono::nanoseconds(80));
 	 }
 
 	 for (unsigned int i_thread=0; i_thread<n_restraints_sets; i_thread++)

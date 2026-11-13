@@ -122,15 +122,17 @@ struct option
    `getopt'.  */
 
 
-int coot_getopt_long (int __argc, char *const *__argv, const char *__shortopts,
+/* Three underscores, as in getopt_int.h: MinGW defines __argc and __argv
+   as macros. */
+int coot_getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
                       const struct option *__longopts, int *__longind);
 
-int coot_getopt_long_only (int __argc, char *const *__argv,
+int coot_getopt_long_only (int ___argc, char *const *___argv,
                            const char *__shortopts,
                            const struct option *__longopts, int *__longind);
 
 /* Internal only.  Users should not call this directly.  */
-int _coot_getopt_internal (int __argc, char *const *__argv,
+int _coot_getopt_internal (int ___argc, char *const *___argv,
                            const char *__shortopts,
                            const struct option *__longopts, int *__longind,
                            int __long_only);

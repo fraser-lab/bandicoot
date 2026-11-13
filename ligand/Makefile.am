@@ -56,7 +56,9 @@ libcoot_ligand_la_SOURCES = ligand.cc ligand-extras.cc  residue_by_phi_psi.cc \
 #   $(top_builddir)/coords/libcoot-coords.la           # library re-order
 
 # clean
-libcoot_ligand_la_LIBADD = \
+# Shared by both libraries: a Windows DLL must name every library it calls
+# into, not rely on reaching them through libcoot-ligand.
+LIGAND_DEP_LIBS = \
    $(top_builddir)/ideal/libcoot-ideal.la             \
    $(top_builddir)/coot-utils/libcoot-map-heavy.la    \
    $(top_builddir)/cootaneer/libcootaneer.la          \
@@ -71,6 +73,8 @@ libcoot_ligand_la_LIBADD = \
    $(top_builddir)/utils/libcoot-utils.la             \
    $(CLIPPER_LIBS) $(MMDB_LIBS) $(SQLITE3_LIBS) $(GSL_LIBS) $(RDKIT_LIBS) -lpthread
 
+libcoot_ligand_la_LIBADD = $(LIGAND_DEP_LIBS)
+
 libcoot_ligand_la_LDFLAGS = $(SHARED_LDFLAGS)
 
 # 20210818-PE consolidating libcoot-res-tracer into libcoot-ligand created various head-scratching memory errors.
@@ -78,7 +82,7 @@ libcoot_res_tracer_la_SOURCES = libres-tracer.cc rama-rsr-extend-fragments.cc ne
 
 libcoot_res_tracer_la_LDFLAGS = $(SHARED_LDFLAGS)
 
-libcoot_res_tracer_la_LIBADD = libcoot-ligand.la
+libcoot_res_tracer_la_LIBADD = libcoot-ligand.la $(LIGAND_DEP_LIBS)
 
 AM_CXXFLAGS = \
          $(OPENMP_CFLAGS) \

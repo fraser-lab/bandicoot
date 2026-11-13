@@ -43,6 +43,7 @@
 
 
 #include "graphics-info.h"
+#include "bandicoot-main-loop.hh"
 #include "cc-interface.hh"
 #include "c-interface.h"
 #include "c-interface-gtk-widgets.h"
@@ -643,7 +644,7 @@ int make_updating_map(const char *mtz_file_name,
 							     use_weights, is_diff_map);
       graphics_info_t::molecules[imol].continue_watching_mtz = true;
       GSourceFunc f = GSourceFunc(graphics_info_t::molecules[imol].watch_mtz);
-      guint updating_map_timeout_idx = g_timeout_add(500, f, ump);
+      guint updating_map_timeout_idx = bandicoot_timeout_add(500, f, ump);
    }
 
    return status;
@@ -2762,7 +2763,7 @@ void set_auto_updating_sfcalc_genmaps(int imol_model, int imol_map_with_data_att
                   updating_model_molecule_parameters_t *u = new updating_model_molecule_parameters_t(ummp);
                   // notice that the trigger in this case is on the *model* (not the difference map as above)
                   GSourceFunc f = GSourceFunc(graphics_info_t::molecules[imol_model].updating_coordinates_updates_genmaps);
-                  g_timeout_add(1000, f, u);
+                  bandicoot_timeout_add(1000, f, u);
                }
             }
          }

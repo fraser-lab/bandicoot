@@ -109,6 +109,7 @@
 
 // #include "xmap-interface.h"
 #include "graphics-info.h"
+#include "bandicoot-main-loop.hh"
 
 #include "skeleton/BuildCas.h"
 
@@ -575,7 +576,7 @@ SCM test_function_scm(SCM i_scm, SCM j_scm) {
                                       return return_status;
                                    };
 
-      g_timeout_add(500, watching_timeout_func, watch_data_p);
+      bandicoot_timeout_add(500, watching_timeout_func, watch_data_p);
 
       t.detach();
 

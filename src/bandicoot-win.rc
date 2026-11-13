@@ -1,0 +1,13 @@
+// Windows resources for Bandicoot.exe (MinGW builds).
+//
+// wx.rc embeds the application manifest that selects version 6 of the
+// Windows Common Controls. wxWidgets calls functions that exist only in that
+// version, so without the manifest Windows refuses to start the program.
+// It also supplies the cursors and bitmaps wxWidgets loads from resources.
+//
+// The program's icon. Explorer shows a program's first icon resource, and
+// named ones come first in name order, hence AAAA. The main window loads it
+// by the same name.
+AAAA ICON "bandicoot.ico"
+
+#include "wx/msw/wx.rc"

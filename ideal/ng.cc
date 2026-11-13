@@ -1058,7 +1058,7 @@ coot::restraints_container_t::make_non_bonded_contact_restraints_using_threads_n
 
    // wait for the thread pool to empty - not the right way.
    while (done_count != n_threads) {
-      std::this_thread::sleep_for(std::chrono::microseconds(10000));
+      thread_pool_wait_pause(std::chrono::microseconds(10000));
    }
    auto tp_5 = std::chrono::high_resolution_clock::now();
 

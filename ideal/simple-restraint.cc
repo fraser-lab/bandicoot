@@ -2126,7 +2126,7 @@ coot::electron_density_score_from_restraints(const gsl_vector *v,
 					   std::ref(done_count_for_restraints_sets));
       }
       while (done_count_for_restraints_sets < ranges.size())
-	 std::this_thread::sleep_for(std::chrono::nanoseconds(300));
+	 thread_pool_wait_pause(std::chrono::nanoseconds(300));
 
       // consolidate
       for(unsigned int i=0; i<n_ranges; i++)

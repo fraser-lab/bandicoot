@@ -14,6 +14,8 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <map>
 #include <cctype>
 #include <cmath>
@@ -2009,6 +2011,31 @@ bool bandicoot_wx_select_map() {
    if (! ui_view.select_map) return false;
    ui_view.select_map();
    return true;
+}
+
+// Called by the refinement thread after each pass. On Windows the redraw
+// timer alone is not enough: timer messages are delivered only when no input
+// is waiting, so while the mouse moves a pull would show nothing. A queued
+// call is delivered ahead of input. It is limited to the timer's rate, and to
+// one waiting at a time, so the main thread is not kept busy redrawing at the
+// expense of the mouse and the refinement. Elsewhere the timer is not starved
+// and does this alone.
+void bandicoot_wx_refinement_pass_done() {
+#ifdef _WIN32
+   static std::atomic<bool> pending(false);
+   static std::atomic<long long> last_ms(0);
+   const long long now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+   if (now_ms - last_ms.load() < 15) return;
+   if (! ui_view.call_after) return;
+   if (pending.exchange(true)) return;
+   last_ms = now_ms;
+   ui_view.call_after([]() {
+      pending = false;
+      if (graphics_info_t::update_moving_atoms_representation())
+         graphics_draw();
+   });
+#endif
 }
 
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback) {

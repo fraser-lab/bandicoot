@@ -756,6 +756,8 @@ struct bandicoot_ui_view {
    // run callback every interval_ms until it returns false (scripts'
    // timeouts, which in the GTK build ran on GLib's main loop)
    std::function<void(int interval_ms, std::function<bool()> callback)> timeout_add;
+   // run callback on the main thread soon; may be called from any thread
+   std::function<void(std::function<void()> callback)> call_after;
    // a script's choice among radio buttons (its own pygtk one cannot appear)
    std::function<void(const bandicoot_radio_choice &choice)> radio_choice;
    // a script's column of buttons (its own pygtk one cannot appear)

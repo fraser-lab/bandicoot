@@ -116,6 +116,7 @@
 
 // #include "xmap-interface.h"
 #include "graphics-info.h"
+#include "bandicoot-main-loop.hh"
 
 #include "skeleton/BuildCas.h"
 
@@ -519,7 +520,7 @@ int make_updating_model_molecule(const char *filename) {
 	 new updating_coordinates_molecule_parameters_t(filename);
       graphics_info_t::molecules[imol].continue_watching_coordinates_file = true;
       GSourceFunc f = GSourceFunc(graphics_info_t::molecules[imol].watch_coordinates_file);
-      guint updating_mol_timeout_idx = g_timeout_add(500, f, ucp);
+      guint updating_mol_timeout_idx = bandicoot_timeout_add(500, f, ucp);
       graphics_info_t::molecules[imol].continue_watching_mtz = true;
    } else {
       status = 0;
@@ -631,7 +632,7 @@ void updating_refmac_refinement_files(const char *updating_refmac_refinement_fil
       // set a timeout function that looks for this file
       GSourceFunc f = GSourceFunc(updating_refmac_refinement_json_timeout_function);
       std::string *fn_p = new std::string(updating_refmac_refinement_files_json_file_name);
-      guint updating_idx = g_timeout_add(500, f, fn_p); // possibly illegal.
+      guint updating_idx = bandicoot_timeout_add(500, f, fn_p); // possibly illegal.
    }
 #else
    std::cout << "ERROR:: updating_refmac_refinement_files() is just a stub - needs CXX11"
@@ -8843,8 +8844,8 @@ void make_socket_listener_maybe() {
       if (graphics_info_t::coot_socket_listener_idle_function_token == -1)
 	 if (graphics_info_t::listener_socket_have_good_socket_state) 
 	    graphics_info_t::coot_socket_listener_idle_function_token =
-	       gtk_idle_add((GtkFunction) coot_socket_listener_idle_func,
-			    graphics_info_t::glarea);
+	       bandicoot_idle_add((GSourceFunc) coot_socket_listener_idle_func,
+			          graphics_info_t::glarea);
    }
 }
 

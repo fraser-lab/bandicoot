@@ -15,6 +15,9 @@
 #include <wx/splitter.h>
 #include <wx/dnd.h>
 #include <wx/display.h>
+#ifdef __WXMSW__
+#include <wx/msw/wrapwin.h>   // GetModuleHandleW
+#endif
 
 #include <algorithm>
 #include <cstdlib>
@@ -458,6 +461,12 @@ class MainFrame : public wxFrame {
 public:
    explicit MainFrame(const wxString &title)
       : wxFrame(nullptr, wxID_ANY, title) {
+
+#ifdef __WXMSW__
+      // The title bar and taskbar show the window's icon, not the program's:
+      // give it the program's, in all its sizes (src/bandicoot-win.rc).
+      SetIcons(wxIconBundle("AAAA", (WXHINSTANCE) GetModuleHandleW(nullptr)));
+#endif
 
       wxui::set_icon_directory(wxString::FromUTF8(bandicoot_core_pixmaps_dir()));
 
@@ -1061,6 +1070,8 @@ private:
       v.release_geometry_toggle = [](const std::string &kind) { wxui::release_geometry_toggle(kind); };
       v.step_list = [](int step) { return wxui::step_validate_list(step); };
       v.multi_torsion = [this](const std::vector<std::string> &bonds) { wxui::show_multi_torsion(this, bonds); };
+      // wx queues it as an event, which is safe from any thread
+      v.call_after = [](std::function<void()> callback) { wxTheApp->CallAfter(std::move(callback)); };
       v.timeout_add = [](int interval_ms, std::function<bool()> callback) {
          CallbackTimer *t = new CallbackTimer(std::move(callback));
          t->Start(std::max(interval_ms, 1));

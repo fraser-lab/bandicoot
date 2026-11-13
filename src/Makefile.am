@@ -175,7 +175,8 @@ AM_CFLAGS = \
 	$(USE_GUILE_GTK) 	\
 	$(GUILE_CFLAGS)		\
 	$(PYTHON_CPPFLAGS)	\
-	$(PYTHON_CFLAGS)
+	$(PYTHON_CFLAGS)	\
+	$(GLOB_CFLAGS)
 
 # must have GUILE and GUILE_GTK flags before $(INCLUDES), and this 
 # does not happen because LTCXXCOMPILE has AM_CXXFLAGS after INCLUDES.
@@ -186,7 +187,6 @@ AM_CXXFLAGS = \
 	-DPKGDATADIR='"$(pkgdatadir)"' \
 	-DPACKAGE_LOCALE_DIR='"$(pkgdatadir)/locale"' \
 	-DPKGPYTHONDIR='"$(pkgpythondir)"' \
-	-DDATADIR='"$(datadir)"'    \
         -DCOOT_SYS_BUILD_TYPE='"$(COOT_SYS_BUILD_TYPE)"' \
         -DCOOT_BUILD_INFO_STRING='"$(COOT_BUILD_INFO_STRING)"' \
 	$(USE_LIBCURL) 	        \
@@ -196,6 +196,7 @@ AM_CXXFLAGS = \
 	$(PYTHON_CPPFLAGS)	\
 	$(PYTHON_CFLAGS)	\
 	$(COOT_WINDOWS_CFLAGS) 	\
+	$(GLOB_CFLAGS)		\
 	$(COOT_GSL_FLAGS) $(OPENMP_CFLAGS)
 
 
@@ -265,15 +266,9 @@ endif
 endif
 
 
-if OS_WIN32
-# no more libexec for windows
-bin_PROGRAMS =  coot-bin coot-density-score-by-residue-bin \
-	coot-fix-nomenclature-errors dynarama-bin
-else
 libexec_PROGRAMS = coot-bin coot-density-score-by-residue-bin \
 	dynarama-bin
 bin_PROGRAMS =  coot-fix-nomenclature-errors
-endif
 dist_bin_SCRIPTS = coot coot-density-score-by-residue dynarama
 check_PROGRAMS = test-coot-align test-cholesky 
 
@@ -808,6 +803,16 @@ coot_bin_LDADD = $(OPENMP_CFLAGS)       \
 		$(SQLITE3_LIBS)         \
 		$(WX_LIBS)              \
 		@GTK_LIBS@
+
+if OS_WIN32
+# Windows resources for Bandicoot.exe: wx's application manifest, without
+# which the program does not load (see bandicoot-win.rc).
+bandicoot-win-res.o: $(srcdir)/bandicoot-win.rc $(top_srcdir)/pixmaps/bandicoot.ico
+	$(WX_RESCOMP) --include-dir $(top_srcdir)/pixmaps -i $(srcdir)/bandicoot-win.rc -o $@
+coot_bin_LDADD += bandicoot-win-res.o
+CLEANFILES = bandicoot-win-res.o
+endif
+EXTRA_DIST += bandicoot-win.rc
 
 
 #		$(INTLLIBS) 		Fix when GETTEXT workds

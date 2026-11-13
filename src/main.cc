@@ -222,6 +222,99 @@ static gboolean bandicoot_signal_quit(gpointer data) {
 }
 #endif // ! _WIN32
 
+#ifdef _WIN32
+#include <windows.h>
+#include <filesystem>
+#include <regex>
+#include <sstream>
+
+// Windows has no launcher script, so the program sets up for itself the
+// environment that bin/coot provides on the other platforms, relative to
+// where it is installed: the parent of the folder it is in (bin/, or
+// libexec/ in a developer install). Mirror any change here in src/coot.in.
+static void bandicoot_win_setup_environment() {
+
+   namespace fs = std::filesystem;
+   std::wstring exe(32768, L'\0');
+   DWORD n = GetModuleFileNameW(NULL, exe.data(), DWORD(exe.size()));
+   if (n == 0 || n >= exe.size()) {
+      std::cout << "WARNING:: cannot find the program's location; data files may not be found"
+                << std::endl;
+      return;
+   }
+   exe.resize(n);
+   const fs::path prefix = fs::path(exe).parent_path().parent_path();
+   // UTF-8 with forward slashes: the paths are joined with "/" downstream
+   auto utf8 = [] (const fs::path &p) {
+      std::u8string s = p.generic_u8string();
+      return std::string(s.begin(), s.end());
+   };
+   auto set = [] (const char *name, const std::string &value) {
+      g_setenv(name, value.c_str(), TRUE);
+   };
+   const std::string P = utf8(prefix);
+   const std::string data = P + "/share/coot";
+
+   set("COOT_PREFIX",            P);
+   set("COOT_DATA_DIR",          data);
+   set("COOT_PIXMAPS_DIR",       data + "/pixmaps");
+   set("SYMINFO",                data + "/syminfo.lib");
+   set("COOT_STANDARD_RESIDUES", data + "/standard-residues.pdb");
+   set("COOT_RESOURCES_FILE",    data + "/cootrc");
+   set("COOT_REF_STRUCTS",       data + "/reference-structures");
+   set("COOT_SCHEME_DIR",        data + "/scheme");
+   set("REDUCE_HET_DICT",        data + "/reduce_wwPDB_het_dict.txt");
+   // a user's own monomer library wins over the bundled one
+   if (! g_getenv("CLIBD_MON") && ! g_getenv("COOT_REFMAC_LIB_DIR"))
+      set("COOT_REFMAC_LIB_DIR", data + "/lib");
+   set("LANG",       "C");
+   set("LC_ALL",     "C");
+   set("LC_NUMERIC", "C");
+   // Preferences live in the home folder, which Windows does not name in
+   // HOME. bandicoot.bat sets COOT_HOME; started without it, use the profile.
+   if (! g_getenv("HOME") && ! g_getenv("COOT_HOME") && g_getenv("USERPROFILE"))
+      set("COOT_HOME", g_getenv("USERPROFILE"));
+
+   // programs Bandicoot runs are installed beside it
+   std::string path = utf8(prefix / "bin");
+   if (const char *e = g_getenv("PATH")) path += std::string(";") + e;
+   set("PATH", path);
+
+   // Python: the bundled standard library when there is one; a developer
+   // install uses the build machine's.
+   const std::string pyver = "python" + std::to_string(PY_MAJOR_VERSION) + "." +
+                             std::to_string(PY_MINOR_VERSION);
+   const fs::path pylib = prefix / "lib" / pyver;
+   const fs::path coot_py = pylib / "site-packages" / "coot";
+   std::error_code ec;
+   if (fs::is_directory(pylib / "encodings", ec))
+      set("PYTHONHOME", P);
+   else
+      g_unsetenv("PYTHONHOME");   // never one inherited from another Python
+   const bool have_coot_py = fs::is_directory(coot_py, ec);
+   if (have_coot_py)
+      set("COOT_PYTHON_DIR", utf8(coot_py));
+   // Keep the caller's PYTHONPATH (Phenix's modules ride along this way),
+   // less any other Python version's modules, which would shadow ours.
+   std::string python_path = have_coot_py ? utf8(coot_py) : "";
+   if (const char *e = g_getenv("PYTHONPATH")) {
+      static const std::regex other_python("python[23]\\.[0-9]+");
+      std::stringstream ss(e);
+      std::string item;
+      while (std::getline(ss, item, ';')) {
+         std::smatch m;
+         if (item.empty()) continue;
+         if (std::regex_search(item, m, other_python) && m.str(0) != pyver) continue;
+         python_path += (python_path.empty() ? "" : ";") + item;
+      }
+   }
+   if (python_path.empty())
+      g_unsetenv("PYTHONPATH");
+   else
+      set("PYTHONPATH", python_path);
+}
+#endif // _WIN32
+
 // This main is used for both python/guile useage and unscripted.
 int
 main (int argc, char *argv[]) {
@@ -229,13 +322,18 @@ main (int argc, char *argv[]) {
    GtkWidget *window1 = NULL;
    GtkWidget *glarea = NULL;
 
+#ifdef _WIN32
+   bandicoot_win_setup_environment();
+#endif
+
    graphics_info_t graphics_info;
 
    // Expose the Bandicoot version to the embedded Python (hello.py reads it via
    // os.getenv) so the welcome banner shows the Bandicoot version rather than
    // Coot's underlying snapshot. Set before Python init / module loading.
-   setenv("BANDICOOT_VERSION",
-          (std::string(BANDICOOT_VERSION) + BANDICOOT_BUILD_SUFFIX).c_str(), 1);
+   // g_setenv: the C library on Windows has no setenv.
+   g_setenv("BANDICOOT_VERSION",
+            (std::string(BANDICOOT_VERSION) + BANDICOOT_BUILD_SUFFIX).c_str(), TRUE);
   
 #ifdef ENABLE_NLS // not used currently in Gtk1. Gkt2, yes.
    // 
@@ -461,10 +559,6 @@ main (int argc, char *argv[]) {
 	 main_title += coot::util::int_to_string(git_revision_count());
 	 main_title += ")";
       }
-#endif
-     
-#ifdef WINDOWS_MINGW
-      main_title = "Win" + main_title;
 #endif
 
       gtk_window_set_title(GTK_WINDOW (window1), main_title.c_str());

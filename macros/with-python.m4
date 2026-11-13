@@ -76,18 +76,7 @@ if test x$with_python != x; then
 	echo error
    fi
    
-   # BL says: we need to have something special for MinGW since Python 
-   # files are called different! E.g. no dots in version name
-   # and put -lglob there too, dunno where else to put it
-   
-   # for MinGW
-   if test $have_windows_mingw = yes ; then 
-      py_cmd='import sys, os; drive, path = os.path.splitdrive(sys.prefix); drive = "/" + drive.replace(":",""); path = path.replace("\\", "/"); print(drive + path + "/include")'
-      PYTHON_CFLAGS="-DUSE_PYTHON -I`$PYTHON -c "$py_cmd"`"
-      py_cmd='import sys, os; drive, path = os.path.splitdrive(sys.prefix); drive = "/" + drive.replace(":",""); path = path.replace("\\", "/"); print(drive + path + "/libs -lpython" + sys.version[[0]]+sys.version[[2]])'
-      PYTHON_LIBS_PRE="-L`$PYTHON -c "$py_cmd"`"
-   else 
-      # normal execution proceeds..
+   # MinGW (MSYS2) Python ships python3-config like the other platforms.
       PYTHON_CFLAGS="-DUSE_PYTHON `$PYTHON_CONFIG --includes`"
       # PYTHON_LIBS="-L/h/paule/build/lib/python2.2/config -lpython2.2 -lutil"
       config_dir=`$PYTHON -c "import sys; print(sys.prefix + '/$acl_libdirstem/python' + sys.version[[:3]] + '/config')"`
@@ -123,9 +112,7 @@ if test x$with_python != x; then
      fi
 
      # echo PYTHON_LIBS_PRE is $PYTHON_LIBS_PRE
-     
-   fi
-	
+
    # now we have to deal with the -lutil issue.  On GNU/Linux, we need
    # it, MacOS X we don't (it doesn't exist and the compliation fails)
    # Cygwin is like MacOS X.

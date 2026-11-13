@@ -93,6 +93,7 @@
 #include "coords/Bond_lines.h"
 
 #include "graphics-info.h"
+#include "bandicoot-main-loop.hh"
 
 #include "pick.h"
 
@@ -3542,7 +3543,7 @@ gint key_release_event(GtkWidget *widget, GdkEventKey *event)
 	 // istate = graphics_info_t::molecules[s].change_contour(-1); // no longer needed
 	 graphics_info_t::molecules[s].pending_contour_level_change_count--;
          int is_from_contour_level_change = 1; // true
-	 int contour_idle_token = gtk_idle_add((GtkFunction) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
+	 int contour_idle_token = bandicoot_idle_add((GSourceFunc) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
 	 g.set_density_level_string(s, g.molecules[s].contour_level);
 	 g.display_density_level_this_image = 1;
 
@@ -3561,7 +3562,7 @@ gint key_release_event(GtkWidget *widget, GdkEventKey *event)
 
 	 graphics_info_t::molecules[s].pending_contour_level_change_count++;
          int is_from_contour_level_change = 1; // true
-	 int contour_idle_token = gtk_idle_add((GtkFunction) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
+	 int contour_idle_token = bandicoot_idle_add((GSourceFunc) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
 
 	 // graphics_info_t::molecules[s].change_contour(1); // positive change
 	 // graphics_info_t::molecules[s].update_map();
@@ -4402,7 +4403,7 @@ void handle_scroll_density_level_event(int scroll_up_down_flag) {
             // short int istate = info.molecules[s].change_contour(1);
             info.molecules[imol_map_for_scroll].pending_contour_level_change_count++;
             int is_from_contour_level_change = 1;
-            int contour_idle_token = gtk_idle_add((GtkFunction) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
+            int contour_idle_token = bandicoot_idle_add((GSourceFunc) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
             info.set_density_level_string(imol_map_for_scroll, info.molecules[imol_map_for_scroll].contour_level);
             info.display_density_level_this_image = 1;
          } else {
@@ -4417,7 +4418,7 @@ void handle_scroll_density_level_event(int scroll_up_down_flag) {
             // short int istate = info.molecules[s].change_contour(-1);
             info.molecules[imol_map_for_scroll].pending_contour_level_change_count--;
             int is_from_contour_level_change = 1;
-            int contour_idle_token = gtk_idle_add((GtkFunction) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
+            int contour_idle_token = bandicoot_idle_add((GSourceFunc) idle_contour_function, GINT_TO_POINTER(is_from_contour_level_change));
             info.set_density_level_string(imol_map_for_scroll, info.molecules[imol_map_for_scroll].contour_level);
             info.display_density_level_this_image = 1;
          } else {
