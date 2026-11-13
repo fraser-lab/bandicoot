@@ -560,10 +560,6 @@ main (int argc, char *argv[]) {
 	 main_title += ")";
       }
 #endif
-     
-#ifdef WINDOWS_MINGW
-      main_title = "Win" + main_title;
-#endif
 
       gtk_window_set_title(GTK_WINDOW (window1), main_title.c_str());
 
