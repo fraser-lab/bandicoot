@@ -807,8 +807,8 @@ coot_bin_LDADD = $(OPENMP_CFLAGS)       \
 if OS_WIN32
 # Windows resources for Bandicoot.exe: wx's application manifest, without
 # which the program does not load (see bandicoot-win.rc).
-bandicoot-win-res.o: $(srcdir)/bandicoot-win.rc
-	$(WX_RESCOMP) -i $(srcdir)/bandicoot-win.rc -o $@
+bandicoot-win-res.o: $(srcdir)/bandicoot-win.rc $(top_srcdir)/pixmaps/bandicoot.ico
+	$(WX_RESCOMP) --include-dir $(top_srcdir)/pixmaps -i $(srcdir)/bandicoot-win.rc -o $@
 coot_bin_LDADD += bandicoot-win-res.o
 CLEANFILES = bandicoot-win-res.o
 endif

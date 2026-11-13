@@ -7,9 +7,9 @@
 #     ./scripts/build-windows.sh
 #     $PREFIX/bin/bcoot                  # from the UCRT64 shell
 #
-# Development builds only: the install runs where it is built, from the
-# UCRT64 shell, and uses MSYS2's own DLLs from /ucrt64/bin. It is not a
-# relocatable distribution.
+# The install runs where it is built, from the UCRT64 shell, and uses MSYS2's
+# own DLLs from /ucrt64/bin. scripts/package-windows.sh turns it into a
+# self-contained package that needs no MSYS2.
 #
 # Customise via environment variables (all optional):
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)

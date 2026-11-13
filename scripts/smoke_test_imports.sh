@@ -44,6 +44,13 @@ fi
 INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd)"
 
 COOT="$INSTALL_DIR/bin/coot"
+# A Windows package has no launcher script: the program sets up its own
+# environment, and as a native program it needs Windows paths.
+native_path() { echo "$1"; }
+if [ ! -x "$COOT" ] && [ -x "$INSTALL_DIR/bin/Bandicoot.exe" ]; then
+    COOT="$INSTALL_DIR/bin/Bandicoot.exe"
+    native_path() { cygpath -m "$1"; }
+fi
 if [ ! -x "$COOT" ]; then
     echo "!! smoke_test_imports.sh: no launcher at $COOT" >&2
     exit 2
@@ -70,7 +77,7 @@ PY="$WORK/smoke.py"
 trap 'rm -rf "$WORK"' EXIT
 
 cat > "$PY" <<PYEOF
-res = r"""$RES"""
+res = r"""$(native_path "$RES")"""
 critical = "$CRITICAL".split()
 optional = "$OPTIONAL".split()
 lines = []
@@ -100,7 +107,7 @@ open(res, "w").write("\n".join(lines) + "\n")
 PYEOF
 
 echo "==> import smoke test via $COOT (headless)"
-( cd "$WORK" && "$COOT" --no-graphics --no-state-script --script "$PY" ) \
+( cd "$WORK" && "$COOT" --no-graphics --no-state-script --script "$(native_path "$PY")" ) \
     >"$WORK/run.log" 2>&1 &
 pid=$!
 # Poll for completion (macOS base has no `timeout`); cap at ~120s.

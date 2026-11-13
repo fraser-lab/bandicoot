@@ -15,6 +15,9 @@
 #include <wx/splitter.h>
 #include <wx/dnd.h>
 #include <wx/display.h>
+#ifdef __WXMSW__
+#include <wx/msw/wrapwin.h>   // GetModuleHandleW
+#endif
 
 #include <algorithm>
 #include <cstdlib>
@@ -458,6 +461,12 @@ class MainFrame : public wxFrame {
 public:
    explicit MainFrame(const wxString &title)
       : wxFrame(nullptr, wxID_ANY, title) {
+
+#ifdef __WXMSW__
+      // The title bar and taskbar show the window's icon, not the program's:
+      // give it the program's, in all its sizes (src/bandicoot-win.rc).
+      SetIcons(wxIconBundle("AAAA", (WXHINSTANCE) GetModuleHandleW(nullptr)));
+#endif
 
       wxui::set_icon_directory(wxString::FromUTF8(bandicoot_core_pixmaps_dir()));
 
