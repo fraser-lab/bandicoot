@@ -36,6 +36,7 @@
 
 #include <thread>
 #include <atomic>
+#include <chrono>
 #endif // HAVE_CXX_THREAD
 #endif // __NVCC__
 
@@ -84,6 +85,21 @@ extern int getopt ();
 namespace coot {
 
    enum { UNSET_INDEX = -1 };
+
+#ifdef HAVE_CXX_THREAD
+   // A pause in a loop polling for thread-pool jobs to finish. Windows
+   // rounds any sleep up to at least a millisecond, usually a full scheduler
+   // tick, which makes each evaluation during refinement slow; yielding hands
+   // the time slice to the workers and checks again straight away.
+   inline void thread_pool_wait_pause(std::chrono::nanoseconds d) {
+#ifdef _WIN32
+      (void) d;
+      std::this_thread::yield();
+#else
+      std::this_thread::sleep_for(d);
+#endif
+   }
+#endif // HAVE_CXX_THREAD
 
    class rama_triple_t {
    public:
