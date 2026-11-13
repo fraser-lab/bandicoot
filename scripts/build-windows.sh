@@ -13,6 +13,7 @@
 #
 # Customise via environment variables (all optional):
 #   PREFIX          install root           (default: $HOME/sw/bandicoot-install)
+#   BANDICOOT_COMPILE_PREFIX  prefix compiled into the binaries (default: /opt/bandicoot)
 #   DEPS_PREFIX     source-built deps      (default: /opt/bandicoot-deps)
 #   PYTHON          embedded Python        (default: /ucrt64/bin/python3)
 #   JOBS            parallel make jobs     (default: CPUs, capped at one per 3 GB RAM)
@@ -40,6 +41,10 @@ export PATH="/ucrt64/bin:/usr/bin:${_winsys}/System32:${_winsys}"
 unset _winsys PKG_CONFIG_PATH
 
 PREFIX="${PREFIX:-$HOME/sw/bandicoot-install}"
+# As on macOS: the binaries are configured with a generic prefix, so the
+# builder's install path is not compiled into them (they find their files from
+# where they are installed), and are installed through a staging directory.
+CONFIG_PREFIX="${BANDICOOT_COMPILE_PREFIX:-/opt/bandicoot}"
 DEPS_PREFIX="${DEPS_PREFIX:-/opt/bandicoot-deps}"
 PYTHON="${PYTHON:-/ucrt64/bin/python3}"
 if [ -z "${JOBS:-}" ]; then
@@ -208,10 +213,17 @@ export CFLAGS="-g -O2 -Wall -Wno-unused -std=gnu17 ${SHIM_INCLUDE}"
 
 # --build/--host are explicit: configure's MinGW detection (AM_MINGW_WINDOWS)
 # reads the build alias, which is empty unless given.
-echo "==> ./configure --prefix=${PREFIX} --with-ui=wx (x86_64-w64-mingw32)"
+# The prefix is compiled into objects that make does not know depend on it
+_old_prefix="$(sed -n 's/^prefix = //p' src/Makefile 2>/dev/null || true)"
+if [ -n "${BANDICOOT_INCREMENTAL:-}" ] && [ -n "${_old_prefix}" ] && [ "${_old_prefix}" != "${CONFIG_PREFIX}" ]; then
+    echo "!! build-windows.sh: the tree was configured with prefix ${_old_prefix}, not ${CONFIG_PREFIX};" >&2
+    echo "   objects that embed it would not be rebuilt. Run without BANDICOOT_INCREMENTAL." >&2
+    exit 1
+fi
+echo "==> ./configure --prefix=${CONFIG_PREFIX} --with-ui=wx (x86_64-w64-mingw32); installs to ${PREFIX}"
 ./configure \
     --build=x86_64-w64-mingw32 --host=x86_64-w64-mingw32 \
-    --prefix="${PREFIX}" \
+    --prefix="${CONFIG_PREFIX}" \
     --with-ui=wx \
     WX_CONFIG="${WX_PREFIX}/bin/wx-config" \
     --with-fftw-prefix="${FFTW_PREFIX}" \
@@ -268,9 +280,25 @@ echo "==> make -j${JOBS} (set JOBS to change)"
 make -j"${JOBS}"
 
 mkdir -p "${PREFIX}" || { echo "!! cannot create ${PREFIX}" >&2; exit 1; }
+# The install replaces the folder's contents, which also clears out files an
+# earlier build left that this one no longer installs.
+if [ -n "$(ls -A "${PREFIX}" 2>/dev/null)" ] && [ ! -e "${PREFIX}/libexec/Bandicoot.exe" ] && \
+   [ ! -e "${PREFIX}/bin/coot" ]; then
+    echo "!! build-windows.sh: ${PREFIX} is not empty and is not a Bandicoot install;" >&2
+    echo "   the install replaces its contents, so it will not touch it" >&2
+    exit 1
+fi
+# DESTDIR only prepends to the install paths; overriding prefix at install
+# time instead would recompile the objects that embed it.
 # No byte-compiling at install (as on Linux); Python compiles on first import.
-echo "==> make install -> ${PREFIX}"
-make install py_compile=/dev/null
+_stage="$(mktemp -d)"
+trap 'rm -rf "${_stage}"' EXIT
+echo "==> make install (staged, prefix ${CONFIG_PREFIX}) -> ${PREFIX}"
+make install py_compile=/dev/null DESTDIR="${_stage}"
+find "${PREFIX}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+find "${_stage}${CONFIG_PREFIX}" -mindepth 1 -maxdepth 1 -exec mv -f {} "${PREFIX}/" \;
+rm -rf "${_stage}"
+trap - EXIT
 
 # The launcher (bin/coot) runs libexec/Bandicoot, as on the other platforms.
 if [ -f "${PREFIX}/libexec/coot-bin.exe" ]; then
