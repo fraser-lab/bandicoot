@@ -142,11 +142,10 @@ rm -rf "${SITE}/bin"
 echo "==> GTK image loaders"
 mkdir -p "${S}/lib/gdk-pixbuf-2.0/2.10.0"
 cp -R "${MSYS_PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders" "${S}/lib/gdk-pixbuf-2.0/2.10.0/"
-cp -f "${MSYS_PREFIX}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" "${S}/lib/gdk-pixbuf-2.0/2.10.0/"
-# a cache naming loaders by absolute path would point back at MSYS2
-if grep -qiE '"[a-z]:[/\\]|"/' "${S}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"; then
-    fail "MSYS2's loaders.cache names its loaders by absolute path; it cannot be reused"
-fi
+# The loaders' cache names them by absolute path, so it is written on the
+# user's machine: the installer runs this, which finds the loaders and the
+# cache relative to where it is installed.
+cp -f "${MSYS_PREFIX}/bin/gdk-pixbuf-query-loaders.exe" "${S}/bin/"
 
 echo "==> certificates (Python's ssl and libcurl)"
 cp -R "${MSYS_PREFIX}/etc/ssl" "${S}/etc/ssl"
@@ -336,7 +335,8 @@ if [ -n "${_hits}" ]; then
 fi
 
 echo "==> check: required files present"
-for _f in bandicoot.bat bin/Bandicoot.exe bin/gspawn-win64-helper-console.exe "lib/python${PYVER}/encodings/__init__.py" \
+for _f in bandicoot.bat bin/Bandicoot.exe bin/gspawn-win64-helper-console.exe \
+          bin/gdk-pixbuf-query-loaders.exe "lib/python${PYVER}/encodings/__init__.py" \
           "lib/python${PYVER}/site-packages/coot" "lib/python${PYVER}/site-packages/numpy" \
           "lib/python${PYVER}/site-packages/matplotlib" etc/ssl/certs/ca-bundle.crt \
           share/coot/syminfo.lib share/coot/lib/data/monomers share/coot/reference-structures \

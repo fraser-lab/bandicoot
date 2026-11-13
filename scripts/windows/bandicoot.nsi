@@ -69,6 +69,13 @@ Section "Bandicoot"
   SetOutPath "$INSTDIR"
   File /r "${SRCDIR}\*"
 
+  ; the image loaders' cache names them by absolute path, so it is written here
+  nsExec::ExecToLog '"$INSTDIR\bin\gdk-pixbuf-query-loaders.exe" --update-cache'
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "Writing the image loaders' cache failed ($0)"
+  ${EndIf}
+
   ; the shortcuts start in the installation folder, as WinCoot's do
   CreateDirectory "$SMPROGRAMS\${APP}"
   CreateShortcut "$SMPROGRAMS\${APP}\${APP}.lnk" "$INSTDIR\bandicoot.bat" "" "$INSTDIR\bin\Bandicoot.exe" 0
