@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 470.1 470.1">
+  <defs>
+    <radialGradient id="radial-gradient" cx="115.57" cy="235.31" fx="115.57" fy="235.31" r="55.22" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#de0000"/>
+      <stop offset="1" stop-color="#9c0000"/>
+    </radialGradient>
+  </defs>
+  <circle cx="115.57" cy="235.31" r="55.22" fill="url(#radial-gradient)" stroke="#000" stroke-miterlimit="10"/>
+  <g>
+    <path d="M201.96,189.75h32.19c16.46,0,30.62,7.5,30.62,25.54,0,12.95-7.26,20.21-17.19,23.36l20.94,31.95h-21.79l-18.52-29.65h-7.62v29.65h-18.64v-80.85ZM245.29,215.28c0-6.78-4.84-9.44-11.26-9.44h-13.43v18.88h13.43c6.42,0,11.26-2.66,11.26-9.44Z"/>
+    <path d="M282.81,189.75h57.25v18.03h-36.79v12.22h21.06v18.03h-21.06v14.52h37.28v18.03h-57.73v-80.85Z"/>
+    <path d="M354.95,230.17c0-25.54,13.56-41.88,34.86-41.88,13.31,0,23.48,7.38,28.68,19.37l-15.98,5.93c-2.66-6.66-7.26-9.08-12.22-9.08-8.96,0-15.49,9.56-15.49,25.66s6.9,25.66,16.1,25.66c3.63,0,9.44-1.57,12.47-8.96l15.49,5.81c-5.57,11.86-15.86,19.37-29.17,19.37-21.54,0-34.74-15.86-34.74-41.88Z"/>
+  </g>
+  <polyline points="60.35 337.31 12.35 337.31 12.35 133.31 60.35 133.31" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
+  <polyline points="407.15 337.31 455.15 337.31 455.15 133.31 407.15 133.31" fill="none" stroke="#000" stroke-miterlimit="10" stroke-width="7"/>
+  <rect width="470.1" height="470.1" fill="none"/>
+</svg>

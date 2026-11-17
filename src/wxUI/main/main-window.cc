@@ -1067,6 +1067,9 @@ private:
          if (sidebar) sidebar->release(widget);
       };
       v.release_tools_toggle = [](const std::string &widget) { wxui::release_tools_toggle(widget); };
+      v.session_recording = [](bool on) {
+         wxui::set_top_toolbar_toggle("bandicoot_action_session_recording_apply", on);
+      };
       v.release_geometry_toggle = [](const std::string &kind) { wxui::release_geometry_toggle(kind); };
       v.step_list = [](int step) { return wxui::step_validate_list(step); };
       v.multi_torsion = [this](const std::vector<std::string> &bonds) { wxui::show_multi_torsion(this, bonds); };

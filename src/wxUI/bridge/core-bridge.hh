@@ -774,6 +774,8 @@ struct bandicoot_ui_view {
    std::function<void(const std::string &file)> open_dataset;
    // a fetched entry's validation report (its own pygtk window cannot appear)
    std::function<void(const bandicoot_validation_report &report)> validation_report;
+   // the session recorder started (true) or stopped
+   std::function<void(bool on)> session_recording;
 };
 void bandicoot_core_set_ui_view(const bandicoot_ui_view &view);
 // Make imol the Undo (and so the Redo) molecule and undo its last change.

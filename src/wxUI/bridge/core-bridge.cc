@@ -4362,6 +4362,10 @@ void bandicoot_wx_release_tools_toggle(const std::string &widget) {
    if (ui_view.release_tools_toggle) ui_view.release_tools_toggle(widget);
 }
 
+void bandicoot_wx_session_recording_changed(bool on) {
+   if (ui_view.session_recording) ui_view.session_recording(on);
+}
+
 // ---- Multi-Residue Torsion
 
 // the bonds last offered, in the window's order
@@ -5605,6 +5609,26 @@ void bandicoot_core_rot_trans_by(int which) {
    do_rot_trans_setup(1);
 }
 
+// Session Recording. The recorder reports its own state back to the
+// button, so a start that fails leaves it off.
+static void set_session_recording(bool on) {
+
+   safe_python_command(on ? "start_session_recording()" : "stop_session_recording()");
+   if (! on) return;
+   // results are Python objects: hold the GIL while they are used
+   PyGILState_STATE gstate = PyGILState_Ensure();
+   PyObject *r = safe_python_command_with_return
+      ("callable(globals().get('session_recording_active')) and session_recording_active()");
+   bool active = r && PyObject_IsTrue(r) == 1;
+   Py_XDECREF(r);
+   PyGILState_Release(gstate);
+   if (! active) {
+      std::cout << "WARNING:: session recording did not start" << std::endl;
+      bandicoot_wx_session_recording_changed(false);
+      bandicoot_wx_info("Session recording could not be started.", false);
+   }
+}
+
 bool bandicoot_core_run_action(const std::string &action, bool state) {
 
    if (run_accept_reject_action(action, state))
@@ -5640,6 +5664,8 @@ bool bandicoot_core_run_action(const std::string &action, bool state) {
       bandicoot_action_local_probe_dots(nullptr);
    else if (action == "bandicoot_action_clear_labels")
       remove_all_atom_labels();
+   else if (action == "bandicoot_action_session_recording_apply")
+      set_session_recording(state);
    else
       return false;
    return true;

@@ -1238,7 +1238,10 @@ def start_session_recording(path=None, capture_stdout=None, rank_peaks=None):
                        rank_peaks=rank_peaks,
                        record_all_stdout=_bsr_env_flag("BANDICOOT_RECORD_ALL_STDOUT", False))
     setattr(_bsr_main, "_bandicoot_session_recorder", rec)
-    p = rec.start()
+    try:
+        p = rec.start()
+    finally:
+        _bsr_report_state()
     print("INFO:: session recording -> " + p)
     return p
 
@@ -1249,9 +1252,30 @@ def stop_session_recording():
     if rec is None or not rec.running:
         print("INFO:: session recording is not running")
         return None
-    rec.stop()
+    try:
+        rec.stop()
+    finally:
+        _bsr_report_state()
     print("INFO:: session recording stopped: " + rec.path)
     return rec.path
+
+
+def session_recording_active():
+    """True while a session is being recorded."""
+    rec = _bsr_current()
+    return bool(rec is not None and rec.running)
+
+
+def _bsr_report_state():
+    # Bandicoot's toolbar button follows the recorder however it was started
+    # or stopped; stock Coot has no such entry point.
+    f = getattr(_bsr_coot_module, "bandicoot_session_recording_changed", None)
+    if f is None:
+        return
+    try:
+        f(1 if session_recording_active() else 0)
+    except Exception:
+        traceback.print_exc()
 
 
 def session_recording_status():
@@ -1707,7 +1731,7 @@ if _bsr_coot_module is not None:
     # public functions are already there; if imported as a module instead,
     # publish them to __main__ so the scripting console and C hooks find them.
     for _bsr_name in ("start_session_recording", "stop_session_recording",
-                      "session_recording_status", "session_note",
+                      "session_recording_status", "session_recording_active", "session_note",
                       "bandicoot_session_record_navigation"):
         if not hasattr(_bsr_main, _bsr_name):
             setattr(_bsr_main, _bsr_name, globals()[_bsr_name])

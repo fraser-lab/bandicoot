@@ -94,7 +94,7 @@ koppi-green-tick-64.png rygle-red-cross-64.png forest51690-dwcheckno-incomplete-
   refine-tandem-1.svg probe-clash-local.svg auto-fit-rotamer-backrub.svg hydrogen-toggle.svg \
   hydrogen-toggle-on.svg probe-clash-on.svg auto-fit-rotamer-backrub-on.svg \
   preferences-general.svg preferences-bonds.svg preferences-maps.svg preferences-colours.svg \
-  preferences-others.svg
+  preferences-others.svg session-recording-off.svg session-recording-on.svg
 
 if CLIPPER_TOP8000
 dist_cootpixmap_DATA += \

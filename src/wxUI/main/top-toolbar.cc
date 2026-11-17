@@ -30,6 +30,7 @@ struct ToolbarEntry {
    bool initially_on;
    const char *icon_on = nullptr;  // a toggle's icon while it is on, if it has one
    const char *tooltip = nullptr;  // if not the label
+   const char *tooltip_on = nullptr;  // a toggle's tooltip while it is on, if it has one
 };
 
 // The tools that always lead the toolbar, in order.
@@ -57,7 +58,9 @@ const std::vector<ToolbarEntry> optional_entries = {
    { "hydrogen_toggle",        "Toggle Hydrogens",    "hydrogen-toggle.svg",              "bandicoot_action_hydrogen_apply",         true,  true, "hydrogen-toggle-on.svg" },
    { "full_screen_toggle",     "Full Screen",         "reset-view-32.svg",       "bandicoot_action_full_screen_apply",      true,  false },
    { "interactive_dots_toggle","Interactive Dots",    "probe-clash.svg",         "bandicoot_action_interactive_dots_apply", true,  false, "probe-clash-on.svg" },
-   { "clear_labels",           "Clear Labels",        "clear_labels.png",        "bandicoot_action_clear_labels",           false, false, nullptr, "Clear All Labels" }
+   { "clear_labels",           "Clear Labels",        "clear_labels.png",        "bandicoot_action_clear_labels",           false, false, nullptr, "Clear All Labels" },
+   { "session_recording_toggle", "Session Recording",   "session-recording-off.svg", "bandicoot_action_session_recording_apply", true,  false,
+     "session-recording-on.svg", "Start Session Recording", "Stop Session Recording" }
 };
 
 const std::vector<std::string> default_layout =
@@ -82,6 +85,16 @@ long style_flags(int style) {
 // A toggle with an "on" icon shows its state by its icon.
 wxBitmapBundle state_icon(const ToolbarEntry &e, bool on) {
    return icon(on && e.icon_on ? e.icon_on : e.icon, icon_size);
+}
+
+// and one with an "on" tooltip says what a click would do
+wxString state_tooltip(const ToolbarEntry &e, bool on) {
+   return wxString::FromUTF8(on && e.tooltip_on ? e.tooltip_on : e.tooltip ? e.tooltip : e.label);
+}
+
+void show_state(wxToolBar *tb, int tool_id, const ToolbarEntry &e, bool on) {
+   if (e.icon_on) tb->SetToolNormalBitmap(tool_id, state_icon(e, on));
+   if (e.tooltip_on) tb->SetToolShortHelp(tool_id, state_tooltip(e, on));
 }
 
 class TopToolbar {
@@ -146,8 +159,7 @@ void TopToolbar::build() {
       const ToolbarEntry *e = it->second;
       if (e->toggle) {
          toggled[e->id] = ev.IsChecked();
-         if (e->icon_on)
-            frame->GetToolBar()->SetToolNormalBitmap(ev.GetId(), state_icon(*e, ev.IsChecked()));
+         show_state(frame->GetToolBar(), ev.GetId(), *e, ev.IsChecked());
       }
       if (on_select) on_select(e->action, e->label, e->toggle ? ev.IsChecked() : true);
    });
@@ -162,8 +174,9 @@ void TopToolbar::build() {
 }
 
 void TopToolbar::add(wxToolBar *tb, const ToolbarEntry &e) {
+   bool on = e.toggle && toggled[e.id];
    wxToolBarToolBase *tool =
-      tb->AddTool(wxID_ANY, e.label, state_icon(e, e.toggle && toggled[e.id]), e.tooltip ? e.tooltip : e.label,
+      tb->AddTool(wxID_ANY, e.label, state_icon(e, on), state_tooltip(e, on),
                   e.toggle ? wxITEM_CHECK : wxITEM_NORMAL);
    if (e.toggle) tb->ToggleTool(tool->GetId(), toggled[e.id]);
    ids[tool->GetId()] = &e;
@@ -231,7 +244,7 @@ void TopToolbar::set_toggle(const std::string &action, bool on) {
       toggled[e->id] = on;
       if (tb) {
          tb->ToggleTool(i.first, on);
-         if (e->icon_on) tb->SetToolNormalBitmap(i.first, state_icon(*e, on));
+         show_state(tb, i.first, *e, on);
       }
       return;
    }

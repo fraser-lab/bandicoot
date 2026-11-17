@@ -13,9 +13,9 @@
 #                 MolProbity binaries + dictionary; auto-probed from a CCP4
 #                 install, and merely warned about if absent
 #   JOBS          parallel make jobs   (default: number of CPUs)
-#   BANDICOOT_UI  UI toolkit: gtk or wx (default: unset, which configures gtk).
-#                 Both toolkits stay buildable for the duration of the
-#                 changeover; a wx build belongs in its own install prefix.
+#   BANDICOOT_UI  UI toolkit: wx or gtk (default: wx). The GTK interface is
+#                 deprecated and still buildable as a fallback; builds of the
+#                 two toolkits belong in separate install prefixes.
 #   BANDICOOT_RDKIT  RDKit prefix (default: Homebrew's). RDKit is required:
 #                 the 2D ligand view, FLEV and pyrogen are built on it. A value
 #                 of 1 also means Homebrew's, as it did when RDKit was optional.
@@ -370,12 +370,13 @@ ${CONDA_PREFIX}/lib/pkgconfig"
 # naming the script -- previously a missing canvas tree just silently dropped
 # Sequence View and the ligand editor from the build.
 
-# UI toolkit selection. Unset means the flag is not passed at all, so the
-# default build's configure line is unchanged from before the option existed.
-UI_CONFIGURE_ARG=""
-if [ -n "${BANDICOOT_UI:-}" ]; then
-    UI_CONFIGURE_ARG="--with-ui=${BANDICOOT_UI}"
-    echo "==> UI toolkit: ${BANDICOOT_UI}"
+# UI toolkit selection. Always passed explicitly: configure's own default is
+# still gtk.
+BANDICOOT_UI="${BANDICOOT_UI:-wx}"
+UI_CONFIGURE_ARG="--with-ui=${BANDICOOT_UI}"
+echo "==> UI toolkit: ${BANDICOOT_UI}"
+if [ "${BANDICOOT_UI}" = "gtk" ]; then
+    echo "WARNING:: the GTK interface is deprecated; wx is the default"
 fi
 
 # RDKit / enhanced ligand tools: the 2D ligand view, FLEV and pyrogen.

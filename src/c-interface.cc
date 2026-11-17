@@ -149,6 +149,8 @@ bool bandicoot_wx_display_manager_open();
 // A repeating timer on the wx event loop, which stops when the callback
 // returns false; 0 if there is no window to run it.
 int bandicoot_wx_timeout_add(int interval_ms, std::function<bool()> callback);
+// The toolbar's Session Recording button, set to the session recorder's state.
+void bandicoot_wx_session_recording_changed(bool on);
 // A yes/no it waits on: 1 yes, 0 no, -1 if there is no window to ask in.
 int bandicoot_wx_question(const std::string &text);
 // The startup choice of state to recover; false if there is no window to ask in.
@@ -9061,6 +9063,12 @@ void bandicoot_record_navigation(const char *source, const char *label) {
    Py_XDECREF(res);
    PyGILState_Release(gstate);
 #endif // USE_PYTHON
+}
+
+void bandicoot_session_recording_changed(int on) {
+#ifdef BANDICOOT_UI_WX
+   bandicoot_wx_session_recording_changed(on != 0);
+#endif
 }
 
 void set_remote_control_port(int port_number) {

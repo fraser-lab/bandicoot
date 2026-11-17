@@ -6779,6 +6779,11 @@ PyObject *bandicoot_rotation_centre_py();
     button text; source names the dialog. A no-op when not recording. */
 void bandicoot_record_navigation(const char *source, const char *label);
 
+/*! \brief Bandicoot: called by the session recorder when it starts (on = 1)
+    or stops (on = 0), so the toolbar's Session Recording button shows its state
+    however recording was started or stopped. */
+void bandicoot_session_recording_changed(int on);
+
 
 /* tooltip */
 void set_tip_of_the_day_flag(int state);
