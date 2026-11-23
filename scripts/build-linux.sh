@@ -374,6 +374,8 @@ if [ -f "${PREFIX}/libexec/coot-bin" ]; then
     mv -f "${PREFIX}/libexec/coot-bin" "${PREFIX}/libexec/Bandicoot"
 fi
 ln -sf coot "${PREFIX}/bin/bcoot"
+# The pyrogen command is no longer installed; remove one left by an older build.
+rm -f "${PREFIX}/bin/pyrogen"
 
 # Monomer dictionary and reference structures, checked into the repository
 _copy_tree() {   # <src-dir> <dst-dir> <label>

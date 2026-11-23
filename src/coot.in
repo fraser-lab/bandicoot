@@ -17,9 +17,6 @@
 #    IFS=$'\t\n'
 # fi
 
-# you will want to redefine this if you are ccp4
-PYTHON=@PYTHON@
-
 
 function check_for_no_graphics {
 
@@ -234,6 +231,19 @@ if [ $systype = Darwin ] ; then
    # found there drags in a second libgio the same way.
    GIO_MODULE_DIR=$COOT_PREFIX/lib/gio/modules
    export GIO_MODULE_DIR
+
+   # The bundled libraries were built in a package manager's prefix and fall
+   # back to configuration and data under it when these are unset. Pinning
+   # them keeps a Mac that has that package manager behaving like one that
+   # does not.
+   FONTCONFIG_FILE=$COOT_PREFIX/etc/fonts/fonts.conf
+   XDG_DATA_DIRS=$COOT_PREFIX/share
+   XDG_CONFIG_DIRS=$COOT_PREFIX/etc/xdg
+   GSETTINGS_BACKEND=memory
+   XLOCALEDIR=$COOT_PREFIX/share/X11/locale
+   LIBTHAI_DICTDIR=$COOT_PREFIX/share/libthai
+   export FONTCONFIG_FILE XDG_DATA_DIRS XDG_CONFIG_DIRS GSETTINGS_BACKEND \
+          XLOCALEDIR LIBTHAI_DICTDIR
 fi
 if [ $systype = IRIX ] ; then 
    if [ -z "$LD_LIBRARYN32_PATH" ] ;  then
@@ -334,12 +344,6 @@ else
 
    for arg in "$@" ;
    do
-       if [ "$arg" = --ccp4-mode ] ; then
-           ccp4_mode=true
-       fi
-       if [ "$arg" = --ccp4 ] ; then
-           ccp4_mode=true
-       fi
        if [ "$arg" = --disable-libtool-hack ] ; then
            LTDL_LIBRARY_PATH=$OLD_LTDL_LIBRARY_PATH
        fi
@@ -352,18 +356,9 @@ else
    # export DYLD_FALLBACK_LIBRARY_PATH=/Users/pemsley/autobuild/build-coot+rdkit-pre-release-gtk2-python/lib:/Users/pemsley/ccp4/ccp4-src-2015-02-05/ccp4-6.5/lib
    # install librsvg: that fixes the svg icon/library problem
 
-   # normal path
    # "Use $@ to stop word splitting" from Ben Eisenbraun.
-   if [ -z "$ccp4_mode" ] ; then
-       # echo ::: DYLD_FALLBACK_LIBRARY_PATH is $DYLD_FALLBACK_LIBRARY_PATH
-       $coot_bin "$@"
-       status=$?
-   else
-      # shift # --ccp4 is removed in the python coot_output_to_window script
-      coot_py_dir=$COOT_PYTHON_DIR
-      $PYTHON $coot_py_dir/coot_output_to_window.py "$@"
-      status=$?
-   fi
+   $coot_bin "$@"
+   status=$?
    # BANDICOOT v0.2: 130 and 143 are "interrupted", not "crashed".
    #
    # Ctrl-C twice (or `kill` twice) makes Bandicoot take its escape hatch and

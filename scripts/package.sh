@@ -168,6 +168,15 @@ if [ "${PACKAGE_SKIP_CHECKS:-0}" != "1" ]; then
         echo "            set PACKAGE_SKIP_CHECKS=1 to override." >&2
         exit 1
     fi
+    # Opens a Bandicoot window for STANDALONE_TRACE_SECONDS (default 30).
+    echo "==> pre-ship gate: standalone (no package-manager dependencies)"
+    if ! "$SCRIPT_DIR/check_standalone.sh" "$INSTALL"; then
+        echo "package.sh: ERROR -- the install reaches into Homebrew, conda or another" >&2
+        echo "            package-manager prefix (see the findings above). Set" >&2
+        echo "            STANDALONE_SKIP_RUNTIME=1 to skip only the runtime trace," >&2
+        echo "            or PACKAGE_SKIP_CHECKS=1 to skip every gate." >&2
+        exit 1
+    fi
 fi
 
 echo "==> packaging Bandicoot ${VERSION}${SUFFIX} (${ARCH})"

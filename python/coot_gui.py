@@ -372,7 +372,7 @@ def smiles_gui():
       smiles_label = gtk.Label("SMILES string ")
       smiles_entry = gtk.Entry()
       if enhanced_ligand_coot_p():
-          text = gtk.Label("  [SMILES interface works by using Pyrogen]  ")
+          text = gtk.Label("  [SMILES interface works by using acedrg]  ")
       else:
           text = gtk.Label("  [SMILES interface works by using CCP4's LIBCHECK]  ")
       go_button = gtk.Button("  Go  ")

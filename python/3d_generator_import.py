@@ -1,6 +1,6 @@
 
 # Dont prejudice (well we do later anyway)
-# this could be e.g. "acedrg" or "cprodrg" or "pyrogen" at the moment
+# this could be e.g. "acedrg" or "cprodrg" at the moment
 global my_favourite_3d_generator
 my_favourite_3d_generator=None
 
@@ -90,34 +90,6 @@ def import_from_3d_generator_from_mdl_using_acedrg(mdl_file_name, comp_id):
         read_cif_dictionary(cif_out_file_name)
 
 
-def import_from_3d_generator_from_mdl_using_pyrogen(mdl_file_name, comp_id):
-
-    if not command_in_path_qm("pyrogen"):
-        info_dialog("pyrogen not found in path")
-    else:
-        # happy path, maybe!?
-        #  -m for sdf (default) and -c for mmcif
-        file_type_flag = "-c" if file_name_extension(mdl_file_name)=="cif" else "-m"
-        # depends on if we have mogul as well...
-        if command_in_path_qm("mogul"):
-            args = [file_type_flag, mdl_file_name, "--residue-type", comp_id]
-        else:
-            args = ["--no-mogul", file_type_flag, mdl_file_name, "--residue-type", comp_id]
-        status = popen_command("pyrogen", args,
-                 [], "pyrogen.log", True)
-        if status:
-            info_dialog("WARNING:: Bad exit status for pyrogen\n - see pyrogen.log")
-        else:
-            active_res = active_residue()  # what for?
-            pdb_out_file_name = comp_id + "-pyrogen.pdb"
-            cif_out_file_name = comp_id + "-pyrogen.cif"
-            imol_ligand = handle_read_draw_molecule_and_move_molecule_here(pdb_out_file_name)
-            if not valid_model_molecule_qm(imol_ligand):
-                info_dialog("WARNING:: Something bad happened running pyrogen")
-            else:
-                read_cif_dictionary(cif_out_file_name)
-                return imol_ligand   # should return False otherwise? FIXME
-
 # to be over-ridden by your favourite 3d conformer and restraints generator, if you like...
 #
 def import_from_3d_generator_from_mdl(mdl_file_name, comp_id):
@@ -128,21 +100,14 @@ def import_from_3d_generator_from_mdl(mdl_file_name, comp_id):
         if command_in_path_qm("acedrg"):
             import_from_3d_generator_from_mdl_using_acedrg(mdl_file_name, comp_id)
         else:
-            if command_in_path_qm("pyrogen"):
-                import_from_3d_generator_from_mdl_using_pyrogen(mdl_file_name, comp_id)
-            else:
-                # fallback, to prodrg for now
-                import_from_prodrg("mini-no", comp_id)
+            # fallback, to prodrg for now
+            import_from_prodrg("mini-no", comp_id)
     else:
-        if (my_favourite_3d_generator == "pyrogen"):
-            import_from_3d_generator_from_mdl_using_pyrogen(mdl_file_name,
-                                                            comp_id)
+        if my_favourite_3d_generator == "cprodrg":
+            import_from_prodrg("mini-no", comp_id)
         else:
-            if my_favourite_3d_generator == "cprodrg":
-                import_from_prodrg("mini-no", comp_id)
-            else:
-                print("WARNING:: No 3d generator available")
-                info_dialog("WARNING:: No 3d generator available")
+            print("WARNING:: No 3d generator available")
+            info_dialog("WARNING:: No 3d generator available")
 
 
 def import_ligand_with_overlay(prodrg_xyzout, prodrg_cif):
@@ -333,7 +298,7 @@ def import_from_prodrg(minimize_mode, res_name):
 #
 def new_molecule_by_smiles_string(tlc_text, smiles_text, force_libcheck=False):
 
-    # generator is "pyrogen" or "acedrg"
+    # generator is "acedrg"
     #
     def dict_gen(generator, comp_id, args, working_dir):
 
@@ -412,45 +377,6 @@ def new_molecule_by_smiles_string(tlc_text, smiles_text, force_libcheck=False):
 
 
 
-    def use_pyrogen(three_letter_code):
-
-        global use_mogul
-
-        working_dir = get_directory("coot-pyrogen")
-        log_file_name = "pyrogen.log"  # in working_dir
-
-        # Embed a test for mogul
-
-        # needs with_working_directory macro (or such)
-        #
-        current_dir = os.getcwd()
-        os.chdir(working_dir)
-        comp_id = tlc_text if tlc_text else "LIG"
-
-        if use_mogul:
-            args = ["--residue-type", comp_id, smiles_text]
-        else:
-            if command_in_path_qm("mogul"):
-                args = ["--residue-type", comp_id, smiles_text]
-            else:
-                args = ["--no-mogul", "-M", "--residue-type", comp_id, smiles_text]
-
-        print("---------- args:", args)
-        # BL says:: may have to find pyrogen first?! FIXME
-        status = popen_command("pyrogen", args, [], log_file_name, True)
-
-        if (ok_popen_status_qm(status)):
-            pdb_file_name = comp_id + "-pyrogen.pdb"
-            cif_file_name = comp_id + "-pyrogen.cif"
-            sc = rotation_centre()
-            imol = handle_read_draw_molecule_with_recentre(pdb_file_name, 0)
-            if (is_valid_model_molecule(imol)):
-                mc = molecule_centre(imol)
-                sc_mc = [sc[i]-mc[i] for i in range(len(mc))]
-                translate_molecule_by(imol, *sc_mc)
-            read_cif_dictionary(cif_file_name)
-        os.chdir(current_dir)
-
     # main line
     #
     if len(smiles_text) > 0:
@@ -465,10 +391,7 @@ def new_molecule_by_smiles_string(tlc_text, smiles_text, force_libcheck=False):
         if (force_libcheck):
             use_libcheck(three_letter_code)
         else:
-            if not enhanced_ligand_coot_p():
-                use_acedrg(three_letter_code)
-            else:
-                use_pyrogen(three_letter_code)
+            use_acedrg(three_letter_code)
     else:
         # invalid smiles length
         print("BL WARNING:: no smiles text found. Bailing out.")

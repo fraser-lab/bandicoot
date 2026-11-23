@@ -312,6 +312,10 @@ const std::vector<MenuEntry> entries = {
          item("Move Molecule Here...", "on_move_molecule_here1_activate"),
          item("Mutate Residue Range...", "on_mutate_molecule1_activate"),
          item("NCS Maps...", "on_ncs_maps1_activate"),
+         submenu("NCS Tools", {
+            item("Copy NCS Residue Range...", "BNCS_COPY_RESIDUE_RANGE"),
+            item("Copy NCS Chain...", "BNCS_COPY_CHAIN"),
+         }),
          item("Run Script...", "on_run_script1_activate"),
          item("SSM Superpose...", "on_ssm_superposition1_activate"),
          submenu("Scripting...", {

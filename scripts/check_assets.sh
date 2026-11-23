@@ -83,7 +83,10 @@ require "python stdlib (encodings/)"               has_glob "$I/lib/python3.*/en
 require "pixmaps/ (icons)"                         has_dir  "$I/share/coot/pixmaps"
 require "SVG pixbuf loader"                        has_file "$I/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.dylib"
 require "gdk-pixbuf-query-loaders (setup.sh)"      has_exe  "$I/libexec/gdk-pixbuf-query-loaders"
-require "Raleigh GTK theme"                        has_dir  "$I/share/themes/Raleigh"
+require "Raleigh GTK theme (gtkrc)"                has_file "$I/share/themes/Raleigh/gtk-2.0/gtkrc"
+require "fontconfig configuration"                 has_file "$I/etc/fonts/fonts.conf"
+require "fontconfig rules (conf.d)"                has_glob "$I/etc/fonts/conf.d/*.conf"
+require "libthai dictionary"                       has_file "$I/share/libthai/thbrk.tri"
 require "fonts"                                    has_glob "$I/share/coot/fonts/*"
 
 # --- bundled external tools (Local Probe Dots) -----------------------------

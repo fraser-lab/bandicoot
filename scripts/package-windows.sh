@@ -350,6 +350,10 @@ echo "==> check: the bundled interpreter imports what a session needs"
 PATH="/usr/bin:${SYS32}" ./scripts/smoke_test_imports.sh "${S}" || \
     fail "a module failed to import in the packaged interpreter"
 
+# Static part only: there is no file-access tracer in MSYS2.
+./scripts/check_standalone.sh --static-only "${S}" || \
+    fail "the package reaches into MSYS2 or another package-manager prefix (see above)"
+
 # --- 5. installer --------------------------------------------------------------------
 OUTDIR="${OUT:-$(dirname "${REPO_ROOT}")/releases/${VERSION}}"
 SETUPBASE="${NAME}-windows-x86_64-setup.exe"

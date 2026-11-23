@@ -836,6 +836,15 @@ void bandicoot_core_set_map_skeleton(int imol, bool on, bool prune);
 std::vector<std::pair<int, std::string>> bandicoot_core_ncs_models();
 void bandicoot_core_make_ncs_maps(int imol_model, int imol_map);
 
+// Copy NCS Residue Range / Copy NCS Chain: the current NCS master chain ("" if
+// there is none), making another chain the master, and copying the master's
+// residues onto the other NCS copies.
+std::string bandicoot_core_ncs_master_chain(int imol);
+void bandicoot_core_set_ncs_master_chain(int imol, const std::string &chain_id);
+void bandicoot_core_copy_ncs_residue_range(int imol, const std::string &master_chain_id,
+                                           int first, int last);
+void bandicoot_core_copy_ncs_chain(int imol, const std::string &master_chain_id);
+
 // Updating Maps: recalculate a difference map from a model and a map with
 // data attached, once or each time the model changes.
 std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps();

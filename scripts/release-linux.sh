@@ -463,6 +463,11 @@ echo "==> check: the bundled interpreter imports what a session needs"
 ./scripts/check_splash_version.sh "${PREFIX}/share/coot/pixmaps/bandicoot-splash.png" "${VERSION}" || \
     fail "the splash screen does not show release ${VERSION}"
 
+# Opens a Bandicoot window for STANDALONE_TRACE_SECONDS (default 30); needs
+# strace and a display. STANDALONE_SKIP_RUNTIME=1 skips only the trace.
+DEPS_PREFIX="${DEPS_PREFIX}" ./scripts/check_standalone.sh "${PREFIX}" || \
+    fail "the bundle reaches into the deps prefix, Linuxbrew, conda or /usr/local (see above)"
+
 # --- 7. tarball ----------------------------------------------------------------------
 OUTDIR="${OUT:-$(dirname "${REPO_ROOT}")/releases/${VERSION}}"
 TARBASE="${NAME}-linux-${ARCH}"

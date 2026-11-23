@@ -138,12 +138,9 @@ pyrogen_boost_la_LIBADD = libcoot_py_restraints.la \
 
 libpyrogen_boost_la_LIBDFLAGS = -no-undefined
 
-if OS_WIN32
-# need to dist pyrogen.bat too
-dist_bin_SCRIPTS = pyrogen.bat pyrogen
-else
-dist_bin_SCRIPTS = pyrogen
-endif
+# The pyrogen command (pyrogen, pyrogen.bat) is not installed: it needs a
+# standalone Python with RDKit's Python package, neither of which the
+# install ships. Bandicoot generates restraints with other tools.
 
 dist_pkgpython_PYTHON = pyrogen.py atom_types.py jay_util.py tautomer.py pyrogen_swig.py \
 	coot_git.py

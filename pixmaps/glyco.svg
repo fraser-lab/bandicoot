@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="linear-gradient" x1="657.15" y1="-339.57" x2="682.89" y2="-339.57" gradientTransform="translate(-571.64 -293.31) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#385e00"/>
+      <stop offset=".32" stop-color="#36b300"/>
+      <stop offset="1" stop-color="#002900"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="375.77" y1="-335.45" x2="401.51" y2="-335.45" gradientTransform="translate(-231.45 436.96)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-3" x1="579.06" y1="-340.51" x2="604.79" y2="-340.51" gradientTransform="translate(-231.45 436.96)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-4" x1="579.06" y1="-8.31" x2="604.79" y2="-8.31" gradientTransform="translate(-231.45 436.96)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-5" x1="385.65" y1="-133.38" x2="411.38" y2="-133.38" gradientTransform="translate(-231.45 436.96)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-6" x1="297.4" y1="-126.97" x2="323.14" y2="-126.97" gradientTransform="translate(-231.45 436.96)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-7" x1="564.84" y1="-182.14" x2="590.58" y2="-182.14" gradientTransform="translate(-321.89 -28.65) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-8" x1="385" y1="-174.96" x2="410.73" y2="-174.96" gradientTransform="translate(-134.87 187.43) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-9" x1="627.03" y1="-97.85" x2="652.76" y2="-97.85" gradientTransform="translate(-225.39 311.17) scale(1 1.08)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-10" x1="349.34" y1="-218.02" x2="375.07" y2="-218.02" gradientTransform="translate(-239.68 524.07)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-11" x1="599.35" y1="-111.82" x2="625.08" y2="-111.82" gradientTransform="translate(-497.69 95.32) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-12" x1="887.37" y1="12.29" x2="913.1" y2="12.29" gradientTransform="translate(-486.8 329.84) scale(1 -1.16)" xlink:href="#linear-gradient"/>
+    <radialGradient id="radial-gradient" cx="157.19" cy="44.47" fx="157.19" fy="44.47" r="35.71" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5e875a"/>
+      <stop offset="1" stop-color="#002300"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="43.12" cy="44.53" fx="43.12" fy="44.53" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-3" cy="155.15" fy="155.15" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-4" cx="167.07" cy="246.54" fx="167.07" fy="246.54" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-5" cx="78.82" cy="255.76" fx="78.82" fy="255.76" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-6" cx="167.07" cy="360.62" fx="167.07" fy="360.62" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-7" cx="360.48" cy="153.48" fx="360.48" fy="153.48" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-8" cx="360.48" cy="39.41" fx="360.48" fy="39.41" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-9" cx="468.52" cy="257.24" fx="468.52" fy="257.24" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-10" cx="360.48" cy="369.84" fx="360.48" fy="369.84" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-11" cx="360.48" cy="472.59" fx="360.48" fy="472.59" r="35.71" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-12" cx="78.82" cy="369.84" fx="78.82" fy="369.84" r="35.71" xlink:href="#radial-gradient"/>
+  </defs>
+  <g>
+    <rect x="85.52" y="-12.55" width="25.73" height="117.62" transform="translate(144.64 -52.12) rotate(90)" fill="url(#linear-gradient)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="144.33" y="42.7" width="25.73" height="117.62" fill="url(#linear-gradient-2)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="347.61" y="37.64" width="25.73" height="117.62" fill="url(#linear-gradient-3)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="347.61" y="369.84" width="25.73" height="117.62" fill="url(#linear-gradient-4)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="154.2" y="244.77" width="25.73" height="117.62" fill="url(#linear-gradient-5)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="65.95" y="251.18" width="25.73" height="117.62" fill="url(#linear-gradient-6)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="242.95" y="47.68" width="25.73" height="211.61" transform="translate(409.3 -102.33) rotate(90)" fill="url(#linear-gradient-7)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="250.13" y="256.58" width="25.73" height="211.61" transform="translate(625.39 99.39) rotate(90)" fill="url(#linear-gradient-8)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="401.64" y="130.26" width="25.73" height="149.94" transform="translate(-23.71 353.21) rotate(-45)" fill="url(#linear-gradient-9)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="109.66" y="236.69" width="25.73" height="138.54" transform="translate(-180.46 176.26) rotate(-45)" fill="url(#linear-gradient-10)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="101.66" y="137.91" width="25.73" height="138.54" transform="translate(180.05 -20.3) rotate(45)" fill="url(#linear-gradient-11)" stroke="#000" stroke-miterlimit="10"/>
+    <rect x="400.57" y="235.38" width="25.73" height="160.44" transform="translate(344.26 -199.91) rotate(45)" fill="url(#linear-gradient-12)" stroke="#000" stroke-miterlimit="10"/>
+  </g>
+  <circle cx="157.19" cy="44.47" r="35.71" fill="url(#radial-gradient)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="43.12" cy="44.53" r="35.71" fill="url(#radial-gradient-2)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="157.19" cy="155.15" r="35.71" fill="url(#radial-gradient-3)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="167.07" cy="246.54" r="35.71" fill="url(#radial-gradient-4)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="78.82" cy="255.76" r="35.71" fill="url(#radial-gradient-5)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="167.07" cy="360.62" r="35.71" fill="url(#radial-gradient-6)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="360.48" cy="153.48" r="35.71" fill="url(#radial-gradient-7)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="360.48" cy="39.41" r="35.71" fill="url(#radial-gradient-8)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="468.52" cy="257.24" r="35.71" fill="url(#radial-gradient-9)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="360.48" cy="369.84" r="35.71" fill="url(#radial-gradient-10)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="360.48" cy="472.59" r="35.71" fill="url(#radial-gradient-11)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <circle cx="78.82" cy="369.84" r="35.71" fill="url(#radial-gradient-12)" stroke="#5e5a5a" stroke-miterlimit="10"/>
+  <rect width="512" height="512" fill="none"/>
+</svg>

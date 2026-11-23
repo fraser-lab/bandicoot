@@ -603,12 +603,87 @@ void show_fit_loop_by_database(wxWindow *parent) {
    show(d, col);
 }
 
+// ------------------------------------------------------------ NCS Tools: Copy NCS Residue Range / Chain
+
+// Copying from a chain that is not the current NCS master first makes it the
+// master, so the user is asked, as Coot asked. False: nothing is to be copied.
+bool ncs_master_change_agreed(wxWindow *parent, int imol, const std::string &chain) {
+   std::string current = bandicoot_core_ncs_master_chain(imol);
+   if (current.empty() || current == chain) return true;
+   wxString question = "Current master chain is " + wxString::FromUTF8(current) +
+                       ", but you asked to copy from " + wxString::FromUTF8(chain) +
+                       ".\nApply this master change?\n\nN.B. if no, then nothing is copied.";
+   if (! confirm(parent, question, "Yes", "No")) {
+      info(parent, "Master chain was not changed and copy not applied.");
+      return false;
+   }
+   bandicoot_core_set_ncs_master_chain(imol, chain);
+   return true;
+}
+
+// The two share one window: the residue range rows are only in Copy NCS
+// Residue Range. Coot asked for the molecule and master chain first and the
+// range in a second window; here they are one.
+void show_ncs_copy(wxWindow *parent, bool residue_range) {
+   MoleculeChooser::molecule_list models = bandicoot_core_ncs_models();
+   if (models.empty()) {
+      info(parent, "No models with NCS");
+      return;
+   }
+   wxDialog *d = new_dialog(parent, residue_range ? "Copy NCS Residue Range" : "Copy NCS Chain");
+   wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+   col->Add(new wxStaticText(d, wxID_ANY, residue_range ? "Apply NCS Range from Master"
+                                                        : "Apply NCS edits from NCS Master Chain to Other Chains"),
+            0, wxBOTTOM, 6);
+   MoleculeChooser *chooser = new MoleculeChooser(d, wxEmptyString, models);
+   col->Add(chooser, 0, wxEXPAND | wxBOTTOM, 8);
+
+   wxFlexGridSizer *grid = new wxFlexGridSizer(2, 6, 6);
+   wxChoice *chain = new wxChoice(d, wxID_ANY);
+   fill_chains(chain, chooser->get_imol(), bandicoot_core_ncs_master_chain(chooser->get_imol()));
+   grid->Add(new wxStaticText(d, wxID_ANY, "Master Chain ID:"), 0, wxALIGN_CENTER_VERTICAL);
+   grid->Add(chain, 0);
+   wxTextCtrl *first = nullptr;
+   wxTextCtrl *last = nullptr;
+   if (residue_range) {
+      first = new wxTextCtrl(d, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(90, -1));
+      last = new wxTextCtrl(d, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(90, -1));
+      grid->Add(new wxStaticText(d, wxID_ANY, "Start of Residue Number Range:"), 0, wxALIGN_CENTER_VERTICAL);
+      grid->Add(first, 0);
+      grid->Add(new wxStaticText(d, wxID_ANY, "End of Residue Number Range:"), 0, wxALIGN_CENTER_VERTICAL);
+      grid->Add(last, 0);
+   }
+   col->Add(grid, 0, wxBOTTOM, 10);
+   col->Add(dialog_buttons(d, residue_range ? "Apply NCS Residue Range" : "OK"), 0, wxEXPAND);
+
+   chooser->on_change = [chain](int imol) { fill_chains(chain, imol, bandicoot_core_ncs_master_chain(imol)); };
+   d->Bind(wxEVT_BUTTON, [d, chooser, chain, first, last, residue_range](wxCommandEvent &) {
+      int imol = chooser->get_imol();
+      std::string master = chain_of(chain);
+      if (master.empty()) {
+         wxBell();
+         return;
+      }
+      int r1 = 0, r2 = 0;
+      if (residue_range && (! int_from(first, r1) || ! int_from(last, r2))) return;
+      if (ncs_master_change_agreed(d, imol, master)) {
+         if (residue_range) bandicoot_core_copy_ncs_residue_range(imol, master, r1, r2);
+         else               bandicoot_core_copy_ncs_chain(imol, master);
+      }
+      d->Destroy();
+   }, wxID_OK);
+   d->SetMinSize(wxSize(360, -1));
+   show(d, col);
+}
+
 // The Calculate menu's items, by the GTK build's handler names.
 const std::map<std::string, std::function<void(wxWindow *)>> &calculate_actions() {
    static const std::map<std::string, std::function<void(wxWindow *)>> actions = {
       { "on_map_sharpening1_activate",          show_map_sharpening },
       { "on_skeleton1_activate",                [](wxWindow *p) { show_map_skeleton(p, wxEmptyString, nullptr); } },
       { "on_ncs_maps1_activate",                show_ncs_maps },
+      { "BNCS_COPY_RESIDUE_RANGE",              [](wxWindow *p) { show_ncs_copy(p, true); } },
+      { "BNCS_COPY_CHAIN",                      [](wxWindow *p) { show_ncs_copy(p, false); } },
       { "on_calculate_updating_maps1_activate", show_updating_maps },
       { "on_move_molecule_here1_activate",      show_move_molecule_here },
       { "on_lsq_superpose1_activate",           show_lsq_superpose },

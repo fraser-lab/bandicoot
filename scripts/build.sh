@@ -718,6 +718,9 @@ fi
 ln -sf coot "${PREFIX}/bin/bcoot"
 echo "==> created ${PREFIX}/bin/bcoot"
 
+# The pyrogen command is no longer installed; remove one left by an older build.
+rm -f "${PREFIX}/bin/pyrogen"
+
 # Install the pandda.inspect-compatible launcher (delegates to bcoot with
 # --pandda "$(pwd)"); users can alias `pandda.inspect` to it.
 if [ -f "${REPO_ROOT}/scripts/bandicoot.inspect" ]; then
@@ -778,15 +781,49 @@ fi
 
 # GTK theme (Raleigh) ships with Homebrew's gtk+2 itself
 # ($BREW_PREFIX/share/themes/Raleigh) -- no hand-staged tree needed.
-if [ ! -d "${PREFIX}/share/themes/Raleigh" ]; then
+# Homebrew's tree is symlinks into its Cellar, so the copy dereferences them
+# (-L): a copied symlink would point outside the install. The test is on the
+# file, not the directory, so an install holding such a link is repaired.
+if [ ! -f "${PREFIX}/share/themes/Raleigh/gtk-2.0/gtkrc" ]; then
     if [ -d "${BREW_PREFIX}/share/themes/Raleigh" ]; then
         echo "==> copying Raleigh GTK theme from ${BREW_PREFIX}/share/themes/"
+        rm -rf "${PREFIX}/share/themes/Raleigh"
         mkdir -p "${PREFIX}/share/themes"
-        cp -R "${BREW_PREFIX}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
+        cp -RL "${BREW_PREFIX}/share/themes/Raleigh" "${PREFIX}/share/themes/Raleigh"
     else
         echo "    !! warning: Raleigh theme not found under ${BREW_PREFIX}/share/themes;" >&2
         echo "       widgets will fall back to the GTK default theme." >&2
     fi
+fi
+
+# libthai's word-break dictionary (pango uses it to break Thai text). The
+# launcher points LIBTHAI_DICTDIR here so the library never looks for it in
+# the Homebrew prefix it was built in.
+if [ ! -f "${PREFIX}/share/libthai/thbrk.tri" ]; then
+    if [ -f "${BREW_PREFIX}/share/libthai/thbrk.tri" ]; then
+        echo "==> copying libthai dictionary from ${BREW_PREFIX}/share/libthai/"
+        mkdir -p "${PREFIX}/share/libthai"
+        cp -L "${BREW_PREFIX}/share/libthai/thbrk.tri" "${PREFIX}/share/libthai/thbrk.tri"
+    else
+        echo "    !! warning: libthai dictionary not found under ${BREW_PREFIX}/share/libthai." >&2
+    fi
+fi
+
+# fontconfig configuration. The launcher sets FONTCONFIG_FILE to it, so the
+# bundled fontconfig reads this file instead of the one in its build prefix.
+# conf.d is fontconfig's own standard rule set, dereferenced like the theme.
+mkdir -p "${PREFIX}/etc/fonts"
+cp -f "${REPO_ROOT}/scripts/macos/fonts.conf" "${PREFIX}/etc/fonts/fonts.conf"
+if [ -d "${BREW_PREFIX}/etc/fonts/conf.d" ]; then
+    rm -rf "${PREFIX}/etc/fonts/conf.d"
+    mkdir -p "${PREFIX}/etc/fonts/conf.d"
+    for _fc in "${BREW_PREFIX}"/etc/fonts/conf.d/*.conf; do
+        cp -L "$_fc" "${PREFIX}/etc/fonts/conf.d/"
+    done
+    unset _fc
+else
+    echo "    !! warning: fontconfig rules not found under ${BREW_PREFIX}/etc/fonts/conf.d;" >&2
+    echo "       generic font families (sans, serif, monospace) will resolve arbitrarily." >&2
 fi
 
 # Hard gate: refinement is dead without the monomer dictionaries -- fail the

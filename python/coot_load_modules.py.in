@@ -146,8 +146,8 @@ def _bandicoot_gtk_main_quit(*args, **kwargs):
     Bandicoot kept running with a now-stale Phenix socket. Route it to Coot's
     clean-exit path instead (saves state + history, closes molecules, exits).
 
-    The other in-tree callers (coot_gui.py / coot_output_to_window.py) only
-    reach gtk.main_quit() from real GtkWidget "delete_event"/"destroy"
+    The other in-tree caller (coot_gui.py) only
+    reaches gtk.main_quit() from real GtkWidget "delete_event"/"destroy"
     handlers, which never fire against these invisible stub widgets (the
     stub's connect() is a no-op), so terminating here doesn't disturb them.
     """

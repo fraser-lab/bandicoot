@@ -2252,6 +2252,28 @@ void bandicoot_core_make_ncs_maps(int imol_model, int imol_map) {
    make_dynamically_transformed_ncs_maps(imol_model, imol_map, 0);
 }
 
+// The master is the first chain of the first NCS group, as Coot's
+// ncs_master_chain_id() reads it.
+std::string bandicoot_core_ncs_master_chain(int imol) {
+   if (! is_valid_model_molecule(imol)) return std::string();
+   std::vector<std::vector<std::string>> groups = graphics_info_t::molecules[imol].ncs_ghost_chains();
+   if (groups.empty() || groups[0].empty()) return std::string();
+   return groups[0][0];
+}
+
+void bandicoot_core_set_ncs_master_chain(int imol, const std::string &chain_id) {
+   ncs_control_change_ncs_master_to_chain_id(imol, chain_id.c_str());
+}
+
+void bandicoot_core_copy_ncs_residue_range(int imol, const std::string &master_chain_id,
+                                           int first, int last) {
+   copy_residue_range_from_ncs_master_to_others(imol, master_chain_id.c_str(), first, last);
+}
+
+void bandicoot_core_copy_ncs_chain(int imol, const std::string &master_chain_id) {
+   copy_from_ncs_master_to_others(imol, master_chain_id.c_str());
+}
+
 std::vector<std::pair<int, std::string>> bandicoot_core_difference_maps() {
    std::vector<std::pair<int, std::string>> v;
    for (int imol=0; imol<graphics_info_t::n_molecules(); imol++)

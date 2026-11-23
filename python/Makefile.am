@@ -40,7 +40,7 @@ dist_pkgpython_PYTHON = \
    enhanced_ligand.py	gui_ligand_sliders.py sharpen_blur.py    \
    acedrg_link.py coot_toolbuttons.py rcrane_loader.py add_linked_cho.py find_baddies.py \
    dynamic_atom_overlaps_and_other_outliers.py \
-   chemical_feature_clusters.py res_spec_utils.py coot_output_to_window.py \
+   chemical_feature_clusters.py res_spec_utils.py \
    bandicoot_pandda.py bandicoot_console.py bandicoot_session_recorder.py \
    bandicoot_restraints.py bandicoot_db_loop.py bandicoot_state.py \
    $(TEXI_FILE)

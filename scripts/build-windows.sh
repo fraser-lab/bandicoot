@@ -309,6 +309,8 @@ if [ ! -f "${PREFIX}/libexec/Bandicoot.exe" ]; then
     exit 1
 fi
 cp -f "${PREFIX}/bin/coot" "${PREFIX}/bin/bcoot"
+# The pyrogen command is no longer installed; remove one left by an older build.
+rm -f "${PREFIX}/bin/pyrogen" "${PREFIX}/bin/pyrogen.bat"
 
 # Windows looks for a program's DLLs beside it before PATH. Bandicoot's own
 # DLLs (installed into bin/ by libtool) and the source-built dependencies'
