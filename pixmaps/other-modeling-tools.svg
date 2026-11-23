@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><metadata><?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmpMM:DocumentID="xmp.did:cb9f5498-bb58-4572-8043-8c369e6bfb9b" xmpMM:InstanceID="xmp.iid:cb9f5498-bb58-4572-8043-8c369e6bfb9b" dcterms:provenance="https://cai-manifests.adobe.com/manifests/urn-c2pa-51651680-5d31-4306-a84d-3f0c907a3529-adobe"> </rdf:Description></rdf:RDF></x:xmpmeta>
+<?xpacket end="w"?></metadata>
+  <defs>
+    <linearGradient id="linear-gradient" x1="169.95" y1="293.81" x2="216.63" y2="293.81" gradientTransform="translate(143.83 -77.88)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="86.78" y1="131.1" x2="110.15" y2="90.59" gradientTransform="translate(320.09 395.34) rotate(150)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-3" x1="306.73" y1="130.63" x2="283.39" y2="90.4" gradientTransform="translate(-107.31 356.51) rotate(-60)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </linearGradient>
+    <radialGradient id="radial-gradient" cx="332.71" cy="104.75" fx="332.71" fy="104.75" r="52.87" gradientTransform="translate(-280.59 380.06) rotate(-57.59) scale(1.34)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#69c"/>
+      <stop offset=".13" stop-color="#618ec6"/>
+      <stop offset=".34" stop-color="#5472b7"/>
+      <stop offset=".63" stop-color="#3f459f"/>
+      <stop offset=".96" stop-color="#22077e"/>
+      <stop offset="1" stop-color="#1f007a"/>
+    </radialGradient>
+    <radialGradient id="radial-gradient-2" cx="190.56" cy="178.85" fx="190.56" fy="178.85" gradientTransform="translate(-123.64 330.21) rotate(-57.59) scale(1.34)" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-3" cx="62.25" cy="101.77" fx="62.25" fy="101.77" r="52.87" gradientTransform="translate(-7.43 430.9) rotate(-57.59) scale(1.34)" xlink:href="#radial-gradient"/>
+    <radialGradient id="radial-gradient-4" cx="190.56" cy="345.59" fx="190.56" fy="345.59" r="52.87" gradientTransform="translate(-94.16 161.48) rotate(-57.59) scale(1.34)" xlink:href="#radial-gradient"/>
+  </defs>
+  <g>
+    <rect x="313.78" y="131.25" width="46.68" height="169.35" transform="translate(199.86 592.01) rotate(-102.59)" fill="url(#linear-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <rect x="94.71" y="325.06" width="169.35" height="46.68" transform="translate(565.51 281.48) rotate(107.41)" fill="url(#linear-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <rect x="113.07" y="71.55" width="46.68" height="169.35" transform="translate(-69.75 133.52) rotate(-42.59)" fill="url(#linear-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <circle cx="77.47" cy="78.42" r="71.02" transform="translate(-32.76 77.75) rotate(-45)" fill="url(#radial-gradient)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <circle cx="216.12" cy="242.95" r="71.02" transform="translate(-108.49 223.98) rotate(-45)" fill="url(#radial-gradient-2)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <circle cx="152.68" cy="433.58" r="71.02" transform="translate(-261.87 234.95) rotate(-45)" fill="url(#radial-gradient-3)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+    <circle cx="434.53" cy="194.18" r="71.02" transform="translate(-10.03 364.13) rotate(-45)" fill="url(#radial-gradient-4)" stroke="#231f20" stroke-miterlimit="10" stroke-width="5"/>
+  </g>
+  <path d="M444.52,500.36c15.28-2.76,26.46-15.89,27.67-31.02.69-8.72-2.33-16.43-7.99-22.73l-59.25-65.82,46.79-6.68c5.99-.86,10.3-5.42,11.64-11.13.86-5.35-1.32-10.56-6.04-13.57l-110.68-70.56-75.99-48.12c-5.45-3.45-12.08-3.16-17.12.28-5,3.42-7.54,9.5-6.36,15.73,0,0,24.01,113.38,26.55,127.01l17.56,94.47c.8,4.3,4.93,7.31,8.3,8.07,4.35.98,8.92-.21,11.73-3.73l43.44-54.53,63.17,74.04c6.4,7.5,16.86,10.06,26.62,8.3Z" fill="#8c8888" stroke="#231f20" stroke-miterlimit="10" stroke-width="10"/>
+  <rect width="512" height="512" fill="none"/>
+</svg>
