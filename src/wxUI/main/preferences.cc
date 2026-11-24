@@ -457,7 +457,7 @@ private:
          row->Add(new wxStaticText(list, wxID_ANY, wxString::FromUTF8(icons[i].label)), 0,
                   wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
          items->Add(row, 0, wxALL, 4);
-         int pos = int(i);
+         int pos = icons[i].pos;
          box->Bind(wxEVT_CHECKBOX, [box, pos](wxCommandEvent &) {
             bandicoot_core_set_sidebar_icon_shown(pos, box->IsChecked());
          });

@@ -10,6 +10,7 @@
 #include "wxUI/dialogs/message.hh"
 #include "wxUI/main/calculate-menu.hh"
 #include "wxUI/main/delete-waters.hh"
+#include "wxUI/main/modelling-menu.hh"
 #include "wxUI/widgets/molecule-chooser.hh"
 
 #include <wx/button.h>
@@ -603,6 +604,73 @@ private:
 
 OtherToolsWindow *OtherToolsWindow::shown = nullptr;
 
+// ------------------------------------------------------------ Glyco
+
+// The Modelling > Glyco menu as a window of buttons, one panel per menu section.
+class GlycoWindow : public wxFrame {
+public:
+   explicit GlycoWindow(wxWindow *parent)
+      : wxFrame(parent, wxID_ANY, "Glyco", wxDefaultPosition, wxDefaultSize,
+                wxDEFAULT_FRAME_STYLE & ~(wxMAXIMIZE_BOX)) {
+      SetBackgroundColour(palette::face());
+      wxPanel *p = new wxPanel(this);
+      p->SetBackgroundColour(palette::face());
+      wxBoxSizer *col = new wxBoxSizer(wxVERTICAL);
+
+      typedef std::vector<std::pair<const char *, const char *>> section;
+      const std::vector<section> sections = {
+         { { "N-linked Glycan Addition...",             "BGLYCO_OPEN_DIALOG" } },
+         { { "Set Default N-linked CHO Atoms B-factor", "BGLYCO_SET_DEFAULT_B" },
+           { "N-link add NAG, NAG, BMA",                "BGLYCO_NLINK_NAG_NAG_BMA" } },
+         { { "Add High Mannose",                        "BGLYCO_ADD_HIGH_MANNOSE" },
+           { "Add Hybrid (Mammal)",                     "BGLYCO_ADD_HYBRID_MAMMAL" },
+           { "Add Complex (Mammal)",                    "BGLYCO_ADD_COMPLEX_MAMMAL" },
+           { "Add Complex (Plant)",                     "BGLYCO_ADD_COMPLEX_PLANT" } },
+         { { "Delete All Carbohydrate",                 "BGLYCO_DELETE_ALL" } },
+         { { "Torsion Fit this residue",                "BGLYCO_TORSION_FIT" },
+           { "Torsion Fit & Refine this residue",       "BGLYCO_TORSION_FIT_REFINE" } },
+         { { "Add synthetic pyranose plane restraints", "BGLYCO_SYNTH_PYRANOSE_PLANES" },
+           { "Use Unimodal ring torsion restraints",    "BGLYCO_UNIMODAL_RING_TORSIONS" } },
+         { { "Display Extra Restraints",                "BGLYCO_DISPLAY_EXTRA_REST" },
+           { "Undisplay Extra Restraints",              "BGLYCO_UNDISPLAY_EXTRA_REST" } },
+         { { "Extract this Tree",                       "BGLYCO_EXTRACT_TREE" } },
+      };
+      for (const section &sec : sections) {
+         wxStaticBoxSizer *box = new wxStaticBoxSizer(wxVERTICAL, p, wxEmptyString);
+         wxWindow *sb = box->GetStaticBox();
+         for (const auto &entry : sec) {
+            std::string action = entry.second;
+            BevelButton *b = new BevelButton(sb, wxID_ANY, wxString::FromUTF8(entry.first));
+            // the same actions the menu items run
+            b->Bind(wxEVT_BUTTON, [this, action](wxCommandEvent &) {
+               if (! run_modelling_action(GetParent(), action))
+                  bandicoot_core_modelling_direct(action);
+            });
+            box->Add(b, 0, wxEXPAND | wxALL, 2);
+         }
+         col->Add(box, 0, wxEXPAND | wxBOTTOM, 6);
+      }
+
+      BevelButton *close = new BevelButton(p, wxID_ANY, "Close");
+      close->set_icon(icon("stock-menu-close.png", wxSize(16, 16)));
+      close->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { Close(); });
+      col->Add(close, 0, wxALIGN_RIGHT | wxTOP, 4);
+
+      wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+      outer->Add(col, 1, wxEXPAND | wxALL, 8);
+      p->SetSizer(outer);
+      outer->SetSizeHints(this);
+      Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent &) {
+         shown = nullptr;
+         Destroy();
+      });
+   }
+
+   static GlycoWindow *shown;
+};
+
+GlycoWindow *GlycoWindow::shown = nullptr;
+
 } // namespace
 
 void show_other_tools(wxWindow *parent) {
@@ -612,6 +680,15 @@ void show_other_tools(wxWindow *parent) {
       OtherToolsWindow::shown->Show();
    }
    OtherToolsWindow::shown->Raise();
+}
+
+void show_glyco_tools(wxWindow *parent) {
+   if (! GlycoWindow::shown) {
+      GlycoWindow::shown = new GlycoWindow(parent);
+      GlycoWindow::shown->CentreOnParent();
+      GlycoWindow::shown->Show();
+   }
+   GlycoWindow::shown->Raise();
 }
 
 void release_tools_toggle(const std::string &widget) {

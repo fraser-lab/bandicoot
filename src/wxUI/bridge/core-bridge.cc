@@ -216,12 +216,22 @@ int bandicoot_core_sidebar_style() {
    return model_toolbar_style_state();
 }
 
+// In sidebar order. The core keeps Bandicoot's icons after Coot's, as saved
+// preferences name icons by position.
 std::vector<bandicoot_sidebar_icon> bandicoot_core_sidebar_icons() {
    std::vector<bandicoot_sidebar_icon> v;
-   if (graphics_info_t::model_toolbar_icons)
-      for (const coot::preferences_icon_info_t &i : *graphics_info_t::model_toolbar_icons)
-         v.push_back({ i.icon_widget, i.show_hide_flag == 1, i.default_show_flag == 1,
-                       i.icon_text, i.icon_filename });
+   if (! graphics_info_t::model_toolbar_icons) return v;
+   const std::vector<coot::preferences_icon_info_t> &all = *graphics_info_t::model_toolbar_icons;
+   std::vector<int> order;
+   for (int p = 0; p <= 17; p++) order.push_back(p); // to Place Atom at Pointer
+   for (int p : { 24, 25, 18, 19, 20, 21, 22, 26, 27, 23 }) order.push_back(p);
+   for (int p = 28; p < int(all.size()); p++) order.push_back(p);
+   for (int p : order) {
+      if (p >= int(all.size())) continue;
+      const coot::preferences_icon_info_t &i = all[p];
+      v.push_back({ p, i.icon_widget, i.show_hide_flag == 1, i.default_show_flag == 1,
+                    i.icon_text, i.icon_filename });
+   }
    return v;
 }
 

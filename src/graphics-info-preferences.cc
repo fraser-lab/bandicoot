@@ -1010,19 +1010,15 @@ graphics_info_t::show_hide_toolbar_icon_pos(int pos, int show_hide_flag, int too
       widget_name = item.icon_widget;
       icon_button = lookup_widget(graphics_info_t::glarea, widget_name.c_str());
 
-      if (icon_button) { 
-
-	 if (show_hide_flag == 1) {
-	    preferences_internal_change_value_int2(preferences_index, pos, 1);
-	    (*pall_items)[pos].show();
-	    gtk_widget_show(icon_button);
-	 } else {
-	    preferences_internal_change_value_int2(preferences_index, pos, 0);
-	    (*pall_items)[pos].hide();
-	    gtk_widget_hide(icon_button);
-	 }
-         coot::preferences_icon_info_t item = (*pall_items)[pos];
-         
+      // the flag is kept for icons the GTK toolbar does not have (Bandicoot's)
+      if (show_hide_flag == 1) {
+	 preferences_internal_change_value_int2(preferences_index, pos, 1);
+	 (*pall_items)[pos].show();
+	 if (icon_button) gtk_widget_show(icon_button);
+      } else {
+	 preferences_internal_change_value_int2(preferences_index, pos, 0);
+	 (*pall_items)[pos].hide();
+	 if (icon_button) gtk_widget_hide(icon_button);
       }
 #ifdef BANDICOOT_UI_WX
       if (toolbar_index == MODEL_TOOLBAR)

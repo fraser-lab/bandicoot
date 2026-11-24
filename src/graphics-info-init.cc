@@ -305,10 +305,28 @@ graphics_info_t::init() {
       model_toolbar_icons->push_back(coot::preferences_icon_info_t(22, "",
 								   "---------------------",
 								   "model_toolbar_hsep_toolitem2",
-								   1, 0));
+								   1, 1));
       model_toolbar_icons->push_back(coot::preferences_icon_info_t(23, "azerbaijan.svg",
 								   "Run Refmac...",
 								   "model_toolbar_refmac_button",
+								   1, 0));
+      // Bandicoot's additions. Saved preferences name icons by position, so
+      // these follow Coot's; the sidebar and Preferences show them in place.
+      model_toolbar_icons->push_back(coot::preferences_icon_info_t(24, "glyco.svg",
+								   "Glycosylation Modelling",
+								   "model_toolbar_glyco_button",
+								   1, 1));
+      model_toolbar_icons->push_back(coot::preferences_icon_info_t(25, "",
+								   "---------------------",
+								   "model_toolbar_hsep_toolitem3",
+								   1, 1));
+      model_toolbar_icons->push_back(coot::preferences_icon_info_t(26, "other-modeling-tools.svg",
+								   "Other Modelling Tools",
+								   "model_toolbar_other_tools_button",
+								   1, 1));
+      model_toolbar_icons->push_back(coot::preferences_icon_info_t(27, "",
+								   "---------------------",
+								   "model_toolbar_hsep_toolitem4",
 								   1, 0));
       // for main icons in preferences
       main_toolbar_icons = new std::vector<coot::preferences_icon_info_t>;

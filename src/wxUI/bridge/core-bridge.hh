@@ -57,6 +57,7 @@ int bandicoot_core_sidebar_style();
 
 // The sidebar tools the core can show or hide, by Coot's widget name.
 struct bandicoot_sidebar_icon {
+   int pos;  // the core's position, by which it is shown, hidden and saved
    std::string widget;
    bool shown;
    bool shown_by_default;

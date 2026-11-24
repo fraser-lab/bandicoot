@@ -1123,6 +1123,8 @@ private:
          if (action == "on_model_toolbar_fixed_atoms_button_clicked") { wxui::show_fixed_atoms(this); return; }
          if (action == "on_model_toolbar_find_water_button_clicked") { wxui::show_find_waters(this); return; }
          if (action == "on_model_toolbar_refmac_button_clicked") { wxui::run_refmac(this); return; }
+         if (action == "BSIDEBAR_GLYCO_TOOLS") { wxui::show_glyco_tools(this); return; }
+         if (action == "on_other_modelling_tools1_activate") { wxui::show_other_tools(this); return; }
          if (action == "rot_trans_by") {
             int which = label == "By Chain..." ? 1 : label == "By Molecule..." ? 2 : 0;
             bandicoot_core_rot_trans_by(which);

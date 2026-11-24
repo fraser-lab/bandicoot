@@ -34,7 +34,8 @@ struct SidebarEntry {
 
 typedef SidebarEntry E;
 
-// Coot's model toolbar, in its order.
+// Coot's model toolbar, in its order, plus Bandicoot's Glyco and Other
+// Modelling Tools windows.
 const std::vector<SidebarEntry> entries = {
    { E::Push,       "R/RC",                    nullptr,                "on_model_toolbar_refine_control_button_clicked", "model_toolbar_refine_control_button" },
    { E::Push,       "Map",                     nullptr,                "on_model_toolbar_select_map_button_clicked", "model_toolbar_select_map_button" },
@@ -57,11 +58,15 @@ const std::vector<SidebarEntry> entries = {
    { E::ToggleTool, "Add Terminal Residue...", "add-peptide-1.svg",    "on_model_toolbar_add_terminal_residue_togglebutton_toggled", "model_toolbar_add_terminal_residue_togglebutton" },
    { E::Tool,       "Add Alt Conf...",         "add-alt-conf.svg",     "on_model_toolbar_add_alt_conf_toolbutton_clicked", "model_toolbar_add_alt_conf_toolbutton", true },
    { E::Tool,       "Place Atom At Pointer",   "atom-at-pointer.svg",  "on_model_toolbar_add_atom_button_clicked", "model_toolbar_add_atom_button" },
+   { E::Tool,       "Glycosylation Modelling", "glyco.svg",            "BSIDEBAR_GLYCO_TOOLS", "model_toolbar_glyco_button" },
+   { E::Separator,  nullptr, nullptr, nullptr, "model_toolbar_hsep_toolitem3" },
    { E::Tool,       "Clear Pending Picks",     "stock-clear.png",      "on_model_toolbar_clear_pending_picks_button_clicked", "model_toolbar_clear_pending_picks_button" },
    { E::Tool,       "Delete...",               "stock-delete.png",     "on_model_toolbar_delete_button_clicked", "model_toolbar_delete_button" },
    { E::Tool,       "Undo",                    "stock-undo.png",       "on_model_toolbar_undo_button_clicked", "model_toolbar_undo_button" },
    { E::UndoRedo,   "Redo",                    "stock-redo.png",       "on_model_toolbar_redo_button_clicked", "model_toolbar_redo_button" },
    { E::Separator,  nullptr, nullptr, nullptr, "model_toolbar_hsep_toolitem2" },
+   { E::Tool,       "Other Modelling Tools",   "other-modeling-tools.svg", "on_other_modelling_tools1_activate", "model_toolbar_other_tools_button" },
+   { E::Separator,  nullptr, nullptr, nullptr, "model_toolbar_hsep_toolitem4" },
    { E::Tool,       "Run Refmac...",           "azerbaijan.svg",       "on_model_toolbar_refmac_button_clicked", "model_toolbar_refmac_button" },
    { E::Separator,  nullptr, nullptr, nullptr, nullptr }
 };
